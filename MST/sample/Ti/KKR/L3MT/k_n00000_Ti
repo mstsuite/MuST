@@ -1,0 +1,9 @@
+System Description            : Ti, FCC structure                               
+Number of Atoms in Unit Cell  : 1                                               
+Number of Atomic Species      : 1                                               
+Number of Atoms in Each Type  : 1(Ti)                                           
+Energy Offset                 : -1695                                           
+=======================================================================================
+    Iter     Energy      3PV     Efermi   Rms_rho    Rms_pot   Mix  Alg  Alpha 
+---------------------------------------------------------------------------------------
+**       1  -0.033103  -0.00675  0.62149  0.819E-13  0.278E-09  pot  B   0.1000

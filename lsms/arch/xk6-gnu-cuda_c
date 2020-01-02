@@ -1,0 +1,30 @@
+export USE_OPENMP=1
+# export USE_ACCELERATOR = -DACCELERATOR_CUDA_C -DBUILDKKRMATRIX_GPU
+export USE_ACCELERATOR = -DACCELERATOR_CUDA_C
+
+export USE_LIBXC=1
+
+export LIBS +=
+export ADD_LIBS += $(FPMPI_POST_LINK_OPTS) $(CRAY_CUDA_POST_LINK_OPTS) -lcublas 
+# export ADD_LIBS += $(FPMPI_POST_LINK_OPTS) -L$(CULA_LIB_PATH_64) $(CRAY_CUDA_POST_LINK_OPTS) -lcublas -lcula_core -lcula_lapack -lcula_lapack_fortran
+
+export INC_PATH += -I $(HDF5_INCLUDE_OPTS)
+
+export ADDITIONAL_TARGETS = 
+
+export BOOST_ROOT=$(TOP_DIR)
+
+# export CUDA_CXX=nvcc -arch=sm_35 $(CRAY_CUDA_INCLUDE_OPTS) $(USE_ACCELERATOR) -Xcompiler -fopenmp
+
+ifdef USE_OPENMP
+export CXX=CC -g -std=c++11 -I$(BOOST_ROOT) $(USE_ACCELERATOR) $(OPT_DEFINES) -fopenmp
+export CC=cc -g $(USE_ACCELERATOR) $(OPT_DEFINES) -fopenmp
+export F77=ftn -g $(USE_ACCELERATOR) -fopenmp
+export CUDA_CXX=nvcc -arch=sm_35 $(CRAY_CUDA_INCLUDE_OPTS) $(USE_ACCELERATOR) -Xcompiler -fopenmp 
+else
+export CXX=CC -g -std=c++11 -I$(BOOST_ROOT) $(USE_ACCELERATOR) $(OPT_DEFINES)
+export CC=cc -g $(USE_ACCELERATOR) $(OPT_DEFINES)
+export F77=ftn -g $(USE_ACCELERATOR)
+export CUDA_CXX=nvcc -arch=sm_35 $(CRAY_CUDA_INCLUDE_OPTS) $(USE_ACCELERATOR)
+endif
+

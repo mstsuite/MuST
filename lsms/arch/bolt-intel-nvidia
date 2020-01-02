@@ -1,0 +1,18 @@
+export LIBXC_PATH=/opt/packages/LibXC/libxc-4.3.4/INTEL
+export HDF5_PATH=/opt/packages/HDF5/hdf5-1.10.5
+export LUA_PATH=/opt/packages/Lua/lua-5.3.5
+export USE_OPENMP=1
+export LIBS += -mkl -lifcore
+# export BOOST_ROOT=$(TOP_DIR)
+export CUDA_DIR = /usr/local/cuda
+export USE_ACCELERATOR = -DACCELERATOR_CUDA_C
+export CUDA_CXX=nvcc -arch=sm_37 -I/opt/intel/compilers_and_libraries_2019.3.199/linux/mpi/intel64/include -std=c++11 $(USE_ACCELERATOR)
+
+ifdef USE_OPENMP
+  export OPT_OPENMP=-qopenmp
+endif
+
+export CC=mpiicc -g -O3
+export CXX=mpiicpc -g -O3 -std=c++14
+export F77=mpiifort -g -O3
+export LUACXX = $(CXX)

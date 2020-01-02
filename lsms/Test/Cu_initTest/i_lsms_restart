@@ -1,0 +1,157 @@
+systemid="cu"
+system_title = "Copper (FCC) Test for LSMS 3"
+pot_in_type=1
+-- write potential out. Use this only when xRepeat, yRepeat and zRepeat = 1
+pot_out_type=1
+num_atoms=1
+nspin=1
+mtasa=0
+xcFunctional={0,1} -- von Barth Hedin (LSMS_1)
+-- xcFunctional={1,1,17} -- von Barth Hedin (libxc)
+-- xcFunctional={1,1,12} -- Perdew & Wang
+-- xcFunctional={1,20} -- Teter 93
+-- xcFunctional={1,101,130} -- GGA PBE
+
+iprint=0
+default_iprint=-1
+print_node=0
+-- istop="buildKKRMatrix"
+istop="main"
+
+nscf=100
+rmsTolerance=1.e-16
+
+xRepeat=1
+yRepeat=1
+zRepeat=1
+makeTypesUnique=1
+
+-- energyContour = {npts=1,grid=0,ebot=-0.2,etop=0.0,eitop=0.825,eibot=0.1}
+-- energyContour = {npts=11,grid=2,ebot=-0.3,etop=0.0,eitop=0.825,eibot=0.025,maxGroupSize=5}
+-- energyContour = {npts=25,grid=2,ebot=-0.5,etop=0.0,eitop=0.825,eibot=0.0025}
+energyContour = {npts=35,grid=2,ebot=-0.7,etop=0.0,eitop=0.825,eibot=0.0025}
+
+a = 6.831
+
+bravais = {}
+bravais[1]={0.5*a,0.5*a,0}
+bravais[2]={0,0.5*a,0.5*a}
+bravais[3]={0.5*a,0,0.5*a}
+
+-- site_default={lmax=3,rLIZ=12.5,rsteps={89.5,91.5,93.2,99.9},atom="Cu",Z=29,Zc=10,Zs=8,Zv=11,rad=2}
+site_default={lmax=3,rLIZ=0.5,rsteps={89.5,91.5,93.2,99.9},atom="Cu",Z=29,Zc=10,Zs=8,Zv=11,rad=2}
+
+-- Possible choices of mixing parameters
+-- quantity  : charge, potential, moment_magnitude, moment_direction, noQuantity
+-- algorithm : simple, broyden, noAlgorithm
+mixing = { {quantity = "charge", algorithm = "simple", mixing_parameter = 0.05} }
+-- mixing = { {quantity = "potential", algorithm = "simple", mixing_parameter = 0.0} }
+-- mixing = { {quantity = "potential", algorithm = "broyden", mixing_parameter = 0.05}, {quantity = "moment_magnitude", algorithm = "noAlgorithm", mixing_parameter = 0.01} } 
+-- mixing = { {quantity = "potential", algorithm = "broyden", mixing_parameter = 0.05} }
+
+numberOfMixQuantities = 0
+for k,v in pairs(mixing) do
+  numberOfMixQuantities = numberOfMixQuantities + 1
+end
+
+--[[
+print("Site defaults:")
+for k,v in pairs(site_default) do
+  print(k," : ",v)
+end
+--]]
+
+site = {}
+for i =1,num_atoms do site[i]={} end
+
+site[1].pos={0,0,0}
+site[1].evec={0,0,1}
+
+-- set site defaults
+for i =1,num_atoms do
+  for k,v in pairs(site_default) do
+    if(site[i][k]==nil) then site[i][k]=v end
+  end
+end
+
+
+--[[
+function deepcopy(t)
+if type(t) ~= 'table' then return t end
+local mt = getmetatable(t)
+local res = {}
+for k,v in pairs(t) do
+if type(v) == 'table' then
+v = deepcopy(v)
+end
+res[k] = v
+end
+-- setmetatable(res,mt)
+return res
+end
+
+
+-- repeat nx*ny*nz times
+ntemp=num_atoms
+-- ix==1 first:
+ix=0
+-- iy==1
+iy=0
+for iz=1,nz-1 do
+  for ib=1,num_atoms do
+    ntemp=ntemp+1
+    site[ntemp]={pos={0,0,0},evec={0,0,1}}
+    site[ntemp].pos[1]=site[ib].pos[1]+bravais[1][1]*ix+bravais[2][1]*iy+bravais[3][1]*iz
+    site[ntemp].pos[2]=site[ib].pos[2]+bravais[1][2]*ix+bravais[2][2]*iy+bravais[3][2]*iz
+    site[ntemp].pos[3]=site[ib].pos[3]+bravais[1][3]*ix+bravais[2][3]*iy+bravais[3][3]*iz
+    site[ntemp].evec[1]=site[ib].evec[1]
+    site[ntemp].evec[2]=site[ib].evec[2]
+    site[ntemp].evec[3]=site[ib].evec[3]
+    site[ntemp].type=ib
+  end
+end
+-- iy!=1
+for iy =1,ny-1 do
+  for iz=0,nz-1 do
+    for ib=1,num_atoms do
+      ntemp=ntemp+1
+      site[ntemp]={pos={0,0,0},evec={0,0,1}}
+      site[ntemp].pos[1]=site[ib].pos[1]+bravais[1][1]*ix+bravais[2][1]*iy+bravais[3][1]*iz
+      site[ntemp].pos[2]=site[ib].pos[2]+bravais[1][2]*ix+bravais[2][2]*iy+bravais[3][2]*iz
+      site[ntemp].pos[3]=site[ib].pos[3]+bravais[1][3]*ix+bravais[2][3]*iy+bravais[3][3]*iz
+      site[ntemp].evec[1]=site[ib].evec[1]
+      site[ntemp].evec[2]=site[ib].evec[2]
+      site[ntemp].evec[3]=site[ib].evec[3]
+      site[ntemp].type=ib
+    end
+  end
+end
+-- ix != 1
+for ix=1,nx-1 do
+  for iy =0,ny-1 do
+    for iz=0,nz-1 do
+      for ib=1,num_atoms do
+        ntemp=ntemp+1
+        site[ntemp]={pos={0,0,0},evec={0,0,1}}
+        site[ntemp].pos[1]=site[ib].pos[1]+bravais[1][1]*ix+bravais[2][1]*iy+bravais[3][1]*iz
+        site[ntemp].pos[2]=site[ib].pos[2]+bravais[1][2]*ix+bravais[2][2]*iy+bravais[3][2]*iz
+        site[ntemp].pos[3]=site[ib].pos[3]+bravais[1][3]*ix+bravais[2][3]*iy+bravais[3][3]*iz
+        site[ntemp].evec[1]=site[ib].evec[1]
+        site[ntemp].evec[2]=site[ib].evec[2]
+        site[ntemp].evec[3]=site[ib].evec[3]
+        site[ntemp].type=ib
+      end
+    end
+  end
+end
+num_atoms=ntemp
+bravais[1][1]=bravais[1][1]*nx
+bravais[1][2]=bravais[1][2]*nx
+bravais[1][3]=bravais[1][3]*nx
+bravais[2][1]=bravais[2][1]*ny
+bravais[2][2]=bravais[2][2]*ny
+bravais[2][3]=bravais[2][3]*ny
+bravais[3][1]=bravais[3][1]*nz
+bravais[3][2]=bravais[3][2]*nz
+bravais[3][3]=bravais[3][3]*nz
+--]]

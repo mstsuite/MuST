@@ -1,0 +1,12 @@
+Source Code Version           : Develop                                         
+System Description            : Co, hcp structure                               
+Number of Atoms in Unit Cell  : 2                                               
+Number of Atomic Species      : 1                                               
+Number of Atoms in Each Type  : 2(Co)                                           
+Unit Cell Volume (au^3)       : 0.14603547D+03                                  
+Average Atomic Volume (au^3)  : 73.01774                                        
+Energy Offset                 : -2765                                           
+=======================================================================================
+    Iter     Energy      3PV     Efermi   Rms_rho    Rms_pot   Mix  Alg  Alpha    Mom  
+---------------------------------------------------------------------------------------
+**       1  -0.378120  31.10637  0.72590  0.592E-13  0.457E-07  pot  B   0.1000  1.6345

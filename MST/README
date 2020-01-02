@@ -1,0 +1,166 @@
+Steps to install MST:
+=====================
+1. ln -s arch/architecture_file architecture.h
+2. make
+
+Note -- 
+make clean: delete *.o, *a, and *.mod files under bin/.
+make distclean: delete bin/ directory and architecture.h.
+
+Sub-directories under MST:
+==========================
+01. Accelerator: 
+Contains the interface routines for using the Accelerator written in C 
+
+02. bin: 
+Contains the binaries files generated from the compiling/linking processes
+
+03. arch: 
+Contains architecture files for installation
+
+04. driver: 
+Contains the driver code for testing/utilizing the modules under the src 
+directory
+
+05. iolib: 
+Contains interface routines for using input/output controller written in C
+
+06. lib: 
+Contains general numerical routines
+
+07. plib: 
+Contains interface routines for using MPI library
+
+08. sample: 
+Contains sample input files for the MST code
+
+09. slulib: 
+Contains the Slulib and the interface routines for the screened-KKR code
+
+10. src: 
+Contains the major MST source code directory
+
+11. util:
+Contains some useful utility routines 
+
+
+Selected executables under bin:
+===============================
+1. mst2:
+The corresponding main source code is MST_PATH/src/mst2.F90. It performs ab 
+initio electronic structure calculations for 3-d structures. 
+Main features:
+   * Linear scaling calculation based on LSMS method
+   * Calculations based on KKR, KKR-CPA, or LSMS method
+   * Muffin-tin potential or Full-potential
+   * Non-relativistic, Scalar-relativistic, or Relativistic
+   * Non-spin polarized, Spin-polarized, or Spin-canted
+   * Special k-points method for BZ integration
+   * LDA or GGA for the exchange-correlation potentials
+Input files:
+   * i_* file: The main input file which contains the controling parameters
+     for running the SCF calculation and the parameters defining the system, and
+     position data and potential file names
+   * position data file: The actual file name is specified in the i_* file.
+   * potential file(s): The actual file name and format
+   * info_* file (obsolete): The actual file name is specifiled in the i_* file. It
+     contains atom based controling parameters
+   * kmeshs.inp (optional): This is an optional input file, only used for the testing 
+     purpose.
+   * emeshs.inp (optional): This is an optional input file, only used for the testing
+     purpose.
+   * Evec_* (optional): This is an optional input file, only used in the spin-canted 
+     calculation case.
+Output files:
+   * o_n* file: This file contains the major output information. Note that
+     it will not be created if the output is instructed (in the i_* input file)
+     to be printed out to the screen.
+   * k_n* file: This file contains a brief information of the total energy
+     and the Fermi energy from each SCF iteration
+   * new potential file: The actual file name and format is specified in the
+     i_* or info_* file.
+Execution:
+   mpirun -np number_of_CPU_cores MST_PATH/bin/mst2 < i_file
+Example input files for various structures can be found under MST_PATH/sample/.
+
+2. ssk:
+A driver code (main: MST_PATH/driver/SingleSiteKrein.F90) for MST_PATH/src/SSSolverModule.F90,
+which is a Fortran-90 module for solving the single site scattering matrices and wave
+functions.
+Its features include:
+   * Muffin-tin potential or Full-potential
+   * Non-relativistic or Scalar-relativistic
+   * Partial and total phase shifts as function of energy
+   * DOS and integrated DOS inside/outside of an atomic cell
+Input files: The same as those used for mst2.
+   * i_* file: The main input file which contains the controling parameters.
+   * position data file: The actual file name is specified in the i_* file.
+   * potential file(s): The actual file name and format is specified in the
+     info_* file.
+   * info_* file (optional): The actual file name is specifiled in the i_* file. It
+     contains atom based controling parameters
+   * emeshs.inp (optional): This is an optional input file, only used for the testing
+     purpose.
+Output files: Note that the file name contains the information of the angular
+momentum cut-offs and the energy mesh size.
+   * smd_*: The file contains the general total and partial phase shifts 
+     obtained from the S-matrix.
+   * del_*: The file contains the DOS and the integrated DOS calculated from
+     the Krein formula and Green function formula.
+   * DOS_*: In somewhat different format, the data are essentially the same as
+     that contained in del_* file.
+   * dos_*: In somewhat different format, the data are essentially the same as
+     that contained in del_* file.
+   * fed_*: The file contain the integrated DOS and DOS from the Krein formula
+     and that of the free electron.
+Execution:
+   mpirun -np number_of_CPU_cores MST_PATH/bin/ssk < i_file
+
+3. genap:
+A utility code (main: MST_PATH/util/generateAtomPosition.F90) for generating unit cell sample of
+ordered compounds or disordered alloys (with random distribution or short-range order)
+Execution:
+   $(MST_PATH)/bin/genap
+The input data can be taken at the prompt on computer screen.
+
+4. measureVoronoi
+A utility code (main: MST_PATH/util/measureVoronoi.F90) for determining the geometric properties of
+voronoi polyhedra generated for each atom in a unit cell sample.
+Execution:
+   mpirun -np number_of_CPU_cores $(MST_PATH)/bin/measureVoronoi < i_file
+Note, the input file, i_file, is the same as the one used for running bin/mst.
+
+5. murn
+A utility code (main: MST_PATH/util/murn_new.F90) for determining the ground state properties 
+(lattice constant, unit cell volume, and bulk modulus) of a structure with given data for
+ energy versus volume (or lattice constant).
+Execution:
+   $(MST_PATH)/bin/murn < input_file
+An example input file for murn, inp_murn, can be found under MST_PATH/sample/Co/a0/.
+
+6. newa:
+A utility code (main: MST_PATH/util/newa.F) for generating an initial atomic potential
+Input file:
+   *_a_in: input file specifying the atom type, spin information, output file name, etc
+Output files:
+   *_a_out: standard file, whose name is specified in the input file
+   *_a_pot: potential file, whose name is specified in the input file
+Execution:
+   $(MST_PATH)/bin/newa < input_file
+An example input file for newa, Mg_a_in, for generating Mg atom potential can be found under
+MST_PATH/sample/Mg/Atom/.
+
+7. newss:
+A utility code (main: MST_PATH/util/newss.F) for generating an initial potential for the KKR/KKR-CPA/LSMS 
+based electronic structure calculations.
+Input files:
+   *_ss_in: input file specifying lattice constant, crystal structure, potential file name, etc.
+   *_a_pot: potential file generated from newa
+Output files:
+   *_ss_out: contains major ouput data
+   *_ss_k:   contains a brief information of the total energy and the rms from each SCF iteration
+   *_ss_pot: the starting potential for the KKR/LSMS calculation
+Execution:
+   $(MST_PATH)/bin/newss < input_file
+An example input file for newss, Mg_ss_in, for generating Mg starting potential for KKR/KKR-CPA/LSMS
+can be found under MST_PATH/sample/Mg/Atom/.

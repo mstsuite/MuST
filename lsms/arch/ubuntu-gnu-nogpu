@@ -1,0 +1,31 @@
+export USE_OPENMP=1
+# export USE_LIBXC=1
+# define HAS_BACKTRACE if glibc backtrace functionality is available
+# export HAS_BACKTRACE=1
+
+
+export LIBS += 
+export ADD_LIBS += -L/usr/local/lib -lhdf5_serial -lblas -llapack \
+                   -lgfortran
+
+export INC_PATH += -I/usr/include/hdf5/serial/
+
+# export BOOST_ROOT=$(TOP_DIR)
+
+# export CUDA_CXX=nvcc -arch=sm_20
+
+ifdef USE_OPENMP
+  export CXX=mpicxx -g -std=c++11 -fopenmp -O3  $(OPT_DEFINES)
+  export F77=gfortran -g -fopenmp -O3 
+# export F77=gfortran -g -fopenmp -O3 -fcheck=all 
+else
+  export CXX=mpicxx -g -O3 -std=c++11  $(OPT_DEFINES)
+  export F77=gfortran -g -O3
+# export F77=gfortran -g -O3 -fcheck=all
+endif
+
+# JSON++ requires flex and bison (version>=2.4)
+export FLEX=flex
+export BISON=/usr/local/opt/bison/bin/bison
+
+export LUACXX = $(CXX)

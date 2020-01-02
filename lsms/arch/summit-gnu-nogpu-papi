@@ -1,0 +1,33 @@
+export USE_OPENMP=1
+# export USE_ACCELERATOR = -DACCELERATOR_CUDA_C -DBUILDKKRMATRIX_GPU
+# export USE_ACCELERATOR = -DACCELERATOR_CUDA_C
+
+# export USE_LIBXC=1
+
+export LIBS += -lm -L${OLCF_ESSL_ROOT}/lib64 -lessl 
+export ADD_LIBS +=  -L$(OLCF_HDF5_ROOT)/lib -lhdf5 -lgfortran -L $(OLCF_PAPI_ROOT)/lib -lpapi
+# export ADD_LIBS += $(FPMPI_POST_LINK_OPTS) -L$(CULA_LIB_PATH_64) $(CRAY_CUDA_POST_LINK_OPTS) -lcublas -lcula_core -lcula_lapack -lcula_lapack_fortran
+
+export ESSL_WORKAROUND=1
+
+export INC_PATH += -I $(OLCF_PAPI_ROOT)/include
+# -I $(HDF5_INCLUDE_OPTS)
+
+export ADDITIONAL_TARGETS = 
+
+# export BOOST_ROOT=$(TOP_DIR)
+
+# export CUDA_CXX=nvcc -arch=sm_35 $(CRAY_CUDA_INCLUDE_OPTS) $(USE_ACCELERATOR) -Xcompiler -fopenmp
+
+ifdef USE_OPENMP
+# export CXX=mpicxx -g -O3 -std=c++14 -I$(BOOST_ROOT) $(OPT_DEFINES) -fopenmp
+export CXX=mpicxx -g -O3 -std=c++14 $(OPT_DEFINES) -DUSE_PAPI -fopenmp
+export CC=mpicc -g -O3 $(OPT_DEFINES) -fopenmp
+export F77=mpif77 -g -O3 -fopenmp
+else
+# export CXX=mpicxx -g -O3 -std=c++14 -I$(BOOST_ROOT) $(OPT_DEFINES)
+export CXX=mpicxx -g -O3 -std=c++14 $(OPT_DEFINES) -DUSE_PAPI
+export CC=mpicc -g -O3 $(OPT_DEFINES)
+export F77=mpif77 -g -O3  
+endif
+

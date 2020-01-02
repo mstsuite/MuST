@@ -1,0 +1,22 @@
+#! /usr/bin/env bash
+##PBS -e __resultsdir__
+##PBS -o __resultsdir__
+#PBS -N REWL-LSMS
+#PBS -l walltime=2:00:00
+#PBS -l nodes=6
+#PBS -A MAT020
+
+#-------------------------------------------
+EXECUTABLE=$HOME/LSMS_3/bin/rewl-lsms
+#-------------------------------------------
+
+#--Change directory to the working directory.
+cd $PBS_O_WORKDIR
+
+export OMP_NUM_THREADS=8
+
+#--Run the executable.
+date
+time aprun -n 6 -N 1 -d 8 $EXECUTABLE -i i_lsms -size_lsms 2 -num_window 3 -mode 1d -wl_in WL_start.jsn -num_steps 20 -energy_calculation oneStepEnergy > lsms.out
+date
+

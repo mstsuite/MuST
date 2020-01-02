@@ -1,0 +1,42 @@
+ export USE_OPENMP=1
+# export USE_ACCELERATOR = -DACCELERATOR_CUDA_C -DBUILDKKRMATRIX_GPU
+ export USE_ACCELERATOR = -DACCELERATOR_CUDA_C -DACCELERATOR_CUBLAS
+# export USE_ACCELERATOR = -DACCELERATOR_CUDA_C
+# export USE_ACCELERATOR = -DACCELERATOR_CUDA_C -DUSE_NVTX
+
+# export USE_LIBXC=1
+
+export LIBS += -lm -L${OLCF_ESSL_ROOT}/lib64 -lessl 
+export ADD_LIBS +=  -L$(OLCF_CUDA_ROOT)/lib64 -lcudart -lcublas -L$(OLCF_HDF5_ROOT)/lib -lhdf5 -lgfortran
+
+export ESSL_WORKAROUND=1
+
+export INC_PATH += -I $(OLCF_CUDA_ROOT)/include
+
+export ADDITIONAL_TARGETS = 
+
+# export BOOST_ROOT=$(TOP_DIR)
+
+# export CUDA_CXX=nvcc -arch=sm_35 $(CRAY_CUDA_INCLUDE_OPTS) $(USE_ACCELERATOR) -Xcompiler -fopenmp
+
+# export COMP_OPTIONS = -O3
+# -ffast-math can give wrong results! So avoid -Ofast
+# export COMP_OPTIONS = -mcpu=power8 -Ofast
+
+export COMP_OPTIONS = -mcpu=power9 -mtune=power9 -O3 -g -DLSMS_DEBUG
+
+ifdef USE_OPENMP
+# export LSMS_CXX=mpicxx $(COMP_OPTIONS) -std=c++14 -I$(BOOST_ROOT) $(USE_ACCELERATOR) $(OPT_DEFINES) -fopenmp
+export LSMS_CXX=mpicxx $(COMP_OPTIONS) -std=c++14 $(USE_ACCELERATOR) $(OPT_DEFINES) -fopenmp
+export CC=mpicc  $(COMP_OPTIONS) $(USE_ACCELERATOR) $(OPT_DEFINES) -fopenmp
+export F77=mpif77  $(COMP_OPTIONS) $(USE_ACCELERATOR) -fopenmp
+export CUDA_CXX=nvcc -arch=sm_60 -I $(MPI_ROOT)/include $(USE_ACCELERATOR) -std=c++14 -Xcompiler -fopenmp 
+else
+# export LSMS_CXX=mpicxx $(COMP_OPTIONS) -std=c++14 -I$(BOOST_ROOT) $(USE_ACCELERATOR) $(OPT_DEFINES)
+export LSMS_CXX=mpicxx $(COMP_OPTIONS) -std=c++14 $(USE_ACCELERATOR) $(OPT_DEFINES)
+export CC=mpicc  $(COMP_OPTIONS) $(USE_ACCELERATOR) $(OPT_DEFINES)
+export F77=mpif77 $(COMP_OPTIONS) $(USE_ACCELERATOR)
+export CUDA_CXX=nvcc -arch=sm_60 -I $(MPI_ROOT)/include -std=c++14 $(USE_ACCELERATOR)
+endif
+
+export CXX=$(LSMS_CXX)

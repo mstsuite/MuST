@@ -1,0 +1,172 @@
+# prerequisite modules: pgi, mpi/pgi_openmpi
+CUDA_PATH = /opt/packages/cuda/8.0
+LIBXC_PATH = /opt/packages/libxc/libxc-4.3.3/PGI
+ODIR = $(PWD)/bin_PGI
+#=====================================================================
+# Compilers and archiver tool
+#=====================================================================
+FC=mpif90
+#F77=$(FC)
+F77=mpif90
+CC=mpicc
+CXX=mpicc
+PREPROC = $(FC)
+
+# CUDA_CXX = nvcc -arch=sm_52
+CUDA_CXX = nvcc -gencode=arch=compute_52,code=sm_52
+CUDA_OPT = -I$(CUDA_PATH)/include -I. -DLSMS2 -DCUDA
+
+ARCHV_LSMS = ar
+ARCHV_OPT = -r
+
+XLC_I = 0
+Acceleration = 0
+
+#=====================================================================
+# Linker
+#=====================================================================
+LD=$(FC)
+
+#=====================================================================
+# Compiler flags
+#=====================================================================
+#FFLAGS=-I. -assume byterecl -openmp -O3 -axSSE4.2
+#FFLAGS=-I. -assume byterecl -openmp -g -C -traceback -check all -check nopointer -check noshape #-warn all
+#FFLAGS=-I. -O3 -CB -CU -traceback -ftrapuv -fpe0 -ftz -fp-stack-check
+#FFLAGS=-I. -O3 -traceback
+FFLAGS=-I. -O3
+F77FLAGS=$(FFLAGS)
+FPPDEFS=-Mpreprocess
+CFLAGS= -O3
+CPPDEFS=-Mpreprocess
+CPPFLAGS=-DUnderscore
+
+#=====================================================================
+# Math library (Lapack, Blas, Scalapck) linking flags
+#=====================================================================
+#ADD_LIBS = -L$(MKLPATH) -lmkl_scalapack_lp64 \
+#  -Wl,--start-group -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lmkl_blacs_intelmpi_lp64 -Wl,--end-group \
+#  -lpthread -lm -L$(CUDA_PATH)/lib64 -lcudart -lcuda -lcublas -lstdc++ \
+#  /lvol/intel/composer_xe_2013.1.117/compiler/lib/intel64/libiomp5.a
+ADD_LIBS = -L/opt/packages/pgi/linux86-64-llvm/19.4/lib/scalapack/scalapack-2.0.2/openmpi-3.1.3/lib -lscalapack -llapack -lblas
+
+ifdef LIBXC_PATH
+ADD_LIBS += -L$(LIBXC_PATH)/lib -lxcf90 -lxc
+Use_LibXC = -DLIBXC -I$(LIBXC_PATH)/include
+endif
+
+#=====================================================================
+#                         Preprocessing Flags
+#
+#=====================================================================
+# 1. MPI - flags
+#=====================================================================
+# MSGPASS_FLAG = -DMPI               -   MPI usage
+# MSGPASS_FLAG = -DMPI -DNo_MPI_LOCK -   MPI2 fix when
+#                                        MPI_win_lock/MPI_win_unlock
+#                                        are not supported.
+#                                        (mpich2 on workstations with
+#                                        intel dual core processors)
+# MSGPASS_FLAG =                     -   Do not make use of the
+#                                        interface module to MPI2
+# MSGPASS_FLAG = -DMPI -DOpenMPI     -   point to point - OpenMPI fix
+# MSGPASS_FLAG = -DONESIDED          -   One-sided communication
+#=====================================================================
+  MSGPASS_FLAG = -DMPI
+  MSGPASS_FLAG += -DNo_DataComm
+# MSGPASS_FLAG += -DONESIDED
+ 
+#=====================================================================
+# 2. XDR format flag 
+#    You can turn off XDR format of the output potential data by
+#    uncommenting the following line. So use XDR format is default.
+#=====================================================================
+# Use_XDR = -DNoXDR_format
+
+#=====================================================================
+# 3. Scalapack flag
+#    Use_ScaLapack = -DUSE_SCALAPACK    - Use ScaLapack in KKR method
+#    Use_ScaLapack =                    - DO NOT use ScaLapack in KKR method
+#=====================================================================
+  Use_ScaLapack = -DUSE_SCALAPACK
+
+#=====================================================================
+# 4. SuperLU flag 
+#    SuperLU      = 1, use the SuperLU in screened KKR method
+#                   0, otherwise
+#=====================================================================
+SuperLU = 0
+ifeq "$(SuperLU)" "0"
+   SuperLU_FLAG = -DNo_SuperLU
+endif
+
+#=====================================================================
+# 5 Make Settings
+#   Use_FFTW     = 1, use the FFTW3 package for Fourier transformation
+#                  0, otherwise (This stops working now...)
+#   If p3dfft is available, enable it for running parallel FFT
+#=====================================================================
+Use_FFTW = 1
+ifeq "$(Use_FFTW)" "1"
+#  FFTW_INC = $(MKLROOT)/include/fftw
+#  FFT_FLAG = -DFFTW -I$(FFTW_INC)
+   FFTW_INC = /opt/packages/fftw-3.3.8/PGI/include
+   FFT_FLAG = -DFFTW -I$(FFTW_INC) -DP3DFFT -I/opt/packages/p3dfft/p3dfft-2.7.7/PGI/include
+   ADD_LIBS += -L/opt/packages/p3dfft/p3dfft-2.7.7/PGI/lib -lp3dfft -L/opt/packages/fftw-3.3.8/PGI/lib -lfftw3
+endif
+
+#=====================================================================
+# 6. Synchronization Options for MPI environment
+#    Use_SYNC = -DSync_EiLoop - enables syncronization in the energy loop.
+#                               Ensures MPI2 synchronization of t-matrices
+#               -DSync_MST    - enables syncronization in MST solver, usefull
+#                               on some systems especially for ScreenKKR method
+#=====================================================================
+  Use_SYNC += -DSync_EiLoop
+  Use_SYNC += -DSync_MST
+
+#=====================================================================
+# 7. IO Process flag
+#    In some cases, you may want to specify the maximum number of processes
+#    performing input and and output, by uncommenting and modifying one of
+#    the following lines
+#
+# MaxIO_FLAG = -DMaxOutProcs=1
+# MaxIO_FLAG = -DMaxOutProcs=2 -DMaxInProcs=100
+#=====================================================================
+  MaxIO_FLAG = -DMaxOutProcs=1
+
+#=====================================================================
+# 8. Other flags
+#    You may uncomment out any following lines, if needed.
+#=====================================================================
+# Check_TIMING = -DTIMING
+# Use_DEBUG    = -DDEBUG
+# Use_BLAS     = -DNo_BLAS
+# Use_MiscFlags += -DCheck_XC
+# Use_MiscFlags += -DCHECK_L2M0
+# Use_MiscFlags += -DCHECK_Matrix
+# Use_MiscFlags += -DCheckDOS
+# Use_MiscFlags += -DCHECK_Matrix
+# Use_MiscFlags += -DCHECK_WRONSKIAN
+# Use_MiscFlags += -DNoNOISE
+# Use_MiscFlags += -DNoSCALE
+# Use_MiscFlags += -DDoubleGaunt
+# Use_MiscFlags += -DDEBUG_EPRINT
+#=====================================================================
+
+# FPPFLAGS=-DSync_EiLoop -DSync_MST -DMPI -DNo_DataComm -DNo_SuperLU -DUSE_SCALAPACK -DCheckDOS -DONESIDED
+# FPPFLAGS=-DSync_EiLoop -DSync_MST -DMPI -DNo_DataComm -DNo_SuperLU -DUSE_SCALAPACK -DCheckDOS
+FPPFLAGS=$(SuperLU_FLAG) $(Check_TIMING) $(Use_BLAS) $(Use_DEBUG) $(Use_SYNC) $(FFT_FLAG) $(Use_MiscFlags) $(MSGPASS_FLAG) \
+$(MaxIO_FLAG) $(Use_ScaLapack) $(Use_LibXC)
+
+#=====================================================================
+# Software path ...
+#=====================================================================
+#SLUPATH = $(HOME)/Software/SuperLU_DIST_2.0
+#DSUPERLULIB =$(SLUPATH)/superlu.a
+#HDF5_PATH = /opt/hdf5/1.8.3/gnu_4.4.1
+#MPI2_PATH = /raid1/mpich2
+#MPI2INCLUDE_PATH = $(MPI2_PATH)/include
+
+LDFLAGS+=$(ADD_LIBS)

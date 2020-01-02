@@ -1,0 +1,59 @@
+Documentation for Murnaghan Fit Code
+
+Content of this archive 
+murn.f - the source code of the Fit-Program 
+murn_zero.f - the source code of the fit-code, including zero-point vibrations 
+
+What does it do? 
+The murn.x code fits any given pairs of a_lat/Energy to the Murnaghan Equation
+of state and calculates the equilibrium lattice constant and the bulk modulus. 
+
+How to build the executable?
+    f90 -o murn.x murn.f 
+The code does not need any external libraries, so it should compile 
+cross-platform.
+
+How to setup an input file?
+The general syntax for the murn.f- input is 
+3  : unit of energy for input values (1=Rydberg, 2=EV, 3 = Hartree)  
+0.25  : i.e. volume of unit cell/cell used  
+7.3 8 50  : minimal/maximal value for lattice const., number of points to 
+            calculate (30-50 will do it)  
+11  number of alat/Energy pairs  
+1 0.2  : alat /energy (11 pairs, each pair at a single line)  
+
+How to run it?
+    murn.x <inputfile > outputfile 
+The output file is self-explaining
+
+Whats the difference between murn_zero.f and murn.f ? 
+The murn_zero.f offers the posibility to calculate the zero-point energy. 
+It needs additional input at line 4 of the inputfile. You have to provide, 
+the Grueneisen-constant, the Debye-Temperature and the atomic Volume at the 
+Debye temperature. 
+The syntax is: 
+3  : unit of energy for input values (1=Rydberg, 2=EV, 3 = Hartree)  
+0.25  : i.e. volume of unit cell/cell used  
+7.3 8 50  : minimal/maximal value for lattice const., number of points to 
+            calculate (30-50 will do it)  
+.true. 2.19 428 109.9  : calculate zero-point vibrations (true), 
+                         Grueneisen constant, T(Debye), Volume/atom for 
+                         T(Debye)  
+11  : number of alat/Energy pairs  
+1 0.2  : alat /energy (11 pairs, each pair at a single line)  
+
+
+Note: This code has only been tested for fcc-Al! 
+
+Some values for other materials: Gamma  T(Debye)  Volume/atom for T(Debye) 
+Al: 2.19  428 109.9 
+Fe: 1.66 467  78.95 
+Cu:  2.00 343 78.92 
+
+What kind of strange things can happen? 
+The code is pretty reliable, however with some strange input parameters it can 
+not properly perform the interpolation. The way it reports this error is by 
+giving NaNQ in the output. It happened while calculating Al, using 
+nlcc-Pseudopots at some nlcc-radii and at low cutoff-energies. 
+Check the form of your parabola, sometimes it has "2 minima" and the min/max 
+finder does not find the global one. 

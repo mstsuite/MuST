@@ -1,0 +1,287 @@
+================================================================================
+                           Input parameter data file
+                            LSMS code (version 2.0)
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                            SCF-related Parameters
+===========================+====================================================
+Current File Path          ::  ./
+Current File Name          ::  i_lsms_Mg
+Info Table File Name       ::  info_table_Mg
+No. Iterations (> 0)       ::  50
+Method of SCF Calculation  ::  2
+   -2. Single Site         -----------
+   -1. ScreenKKR-LSMS      -----------(Broken)
+    0. Screen-KKR          -----------(Broken)
+    1. LSMS                -----------
+    2. KKR                 -----------
+    3. KKR-CPA             -----------(Not implemented)
+Output to Screen (y/n)     ::  n
+Output Level (>= -1)       ::  0
+Output Proc. ID (>= -1)    ::  0
+    = -1: Each processor writes data to individual output file
+    >= 0: the logical index of the processor that writes to unit 6
+Output Atom ID (>= 0)      ::  0
+    = 0:  Every atom's info will be written to the output
+    >= 1: the global index of the atom whose info will be written to the output
+Stop-at Routine Name       ::  main  
+No. Iter for Each Pot. Write :: 5
+No. Iter for Each Movie    ::  5
+Calc. Harris Energy (H.E.) ::  0
+    0. Do Not Calc. H.E.   -----------
+    1. H.E. at Updated mu  ----------- 
+    2. H.E. at Fixed mu    -----------
+No. Gauss Pts. along r     ::  80
+No. Gauss Pts. along theta ::  80
+Valence Band Bottom Est.   ::  -0.3
+Temperature Parameter (K)  ::  0.000
+Uniform Grid Parameters    :: 32  32  32
+    > 0: Three intergers used to define the grid numbers along three
+         Bravais lattice vector directions
+Note: Uniform grid is used to generate the new potential,
+      its number of points will affect the accuracy of the Poisson solver.
+Visual Grid Type (0<D<4)   :: 1   
+    1. Define a line               (1D)
+    2. Define a plane              (2D)
+    3. Define a rectilinear region (3D)
+Note:: Points defining the grid boundaries
+    Grid Scale  :: 1.00
+    Origin Grid Vector :: 0.0 0.0 0.0
+    Grid Vector ::  5.42  5.42   5.42
+    Grid Vector ::  0.00  5.42   0.00
+    Grid Vector ::  0.00  0.00   5.42
+    Grid Points:: 500  1  1
+Note:: Visual grid will use only first D parameters for Grid Vectors and Grid Points
+
+Output Potential ID (>= -1) :: 0
+Output Electron Density ID (>= -1) :: -1
+    = -1 do no print
+    = 0  print
+Output Density Format      :: 1
+    = 0: x y z rho format
+    = 1: Legacy ".vtk"  format for ParaView visualization
+
+Generate System Movie     :: 0
+    = 0 - No system movie output(Default)
+    = 1 - generate movie
+DOS Run ID              ::  0
+    =  0 do not output DOS
+    =  1 output DOS (No. Iter. = 1)
+DOS Print ID            ::  0
+    =  0 print total
+    = -1 print each atom and total
+Large sphere radius (a.u.) :: 1000.0
+    = Radius of outershere for calculating 'Outside' SSite GF-Dos
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                             Tolerance Parameters
+===========================+====================================================
+Energy (Ryd) Tol (> 0)     ::  0.0000005
+Potential Tol (> 0)        ::  0.00000001
+Fermi Energy Tol (> 0)     ::  0.00000001
+SuperLU Tol (> 0)          ::  0.0000000001
+K-space Check Tol (> 0)    ::  0.0000000001
+Other RMS Tol (> 0)        ::  0.00000001
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                           System-related Parameters
+===========================+====================================================
+No. Atoms in System (> 0)  ::  1
+Atomic Position File Name  :: position.dat
+     If the name is 'None', the data will be obtained from the info table
+Text Identification        ::  Mg        
+Alloy System Description   ::  Mg, fcc structure
+Val. Electron Rel (>= 0)   ::  0
+     0. Non-relativitic    ---------
+     1. Scalar-relativitic ---------
+     2. Full-relativitic   ---------
+Core Electron Rel (>= 0)   ::  0
+     0. Non-relativitic    ---------
+     1. Full-relativitic   ---------
+Additional Electrons       ::  0.0
+     The additional number of electrons in a unit cell. This is an arbitrary number
+     less, equal, or greater than 0.0. This parameter exists for testing purposes.
+     It might be useful for some adventure. By default this paramater is set to zero.
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                           Sistem Symmetry Parameters
+===========================+====================================================
+Charge Symmetry (>=0)      :: 0
+     0. No symmetry imposed
+     1. Symmetry impossed from spherical scattering calculation
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+             Single Site Scattering Solver-related Parameters
+===========================+====================================================
+Single Site Solver (>= 0)  ::  2
+     0. Spherical Schrodinger --------
+     1. Spherical Dirac       --------
+     2. Full Schrodinger      --------
+     3. Full Dirac            --------
+Single Site Solution Method (>=-1) :: 2
+Note:: This parameter defines how the site potential is used in
+       the iterative coupled integral solver. The solver always enforces
+       a truncated potential if the irregular solutions are used. Default = 0.
+    -1. Untruncated potential in solver, surface integration
+     0. Untruncated potential in solver, Untruncated potential in volume integration
+     1. Untruncated potential in solver, Truncated potential in volume integration
+     2. Truncated potential in solver   --------
+Irregular Solutions (>=0)   ::  0
+     0. Solver does not use the IrrSolulions (default) --------
+     1. Solver does use the IrrSolulions               --------
+Pole Search Step (>0.0)     ::  0.200
+     Defaults to 0.2 for unspecified value, <= 0.0 or > 0.4  
+Solutions Lmax Cutoff       :: -1
+     l<0 - uses the lmax of the wave functions defined in info_table
+     l - finite, the coupled integral solver is used up to this l, while
+         beyond it uses only the radial solutions.
+Compute Phase Shifts (>=0)  ::  0
+     0. Does not print out phase shifts (default)          --------
+     1. generates phase shifts and stops the code after it --------
+SS Lmax Potential Solver    :: -1
+     Defines the potential lmax used in the single site solver
+     If it is less than 0 then defaults to the info_table lmax, otherwise
+     the minimum of this lmax and potential lmax is used.
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                        LDA Potential-related Parameters
+===========================+====================================================
+Potential Type (>= 0)      ::  3
+     0. Muffin-tin         ----------
+     1. ASA                ----------
+     2. Muffin-tin ASA     ----------
+     3. Full               ----------
+     4. Muffin-Tin Test    ----------
+     5. Empty Lattice      ----------
+     6. Mathieu Potential  ----------
+     7. Coulomb Potential  ----------
+Exch-Corr. LDA Type (>= 0) ::  0
+     0. Barth-Hedin        ---------
+     1. Vosk-Wilk-Nusair   ---------
+     2. Perdew-Zunger      ---------
+     3. Perdew-Wang GGA    ---------
+LDA Improvement Scheme     ::  0
+     0. No improvement     ----------
+     1. LDA + U            ----------
+     2. LDA + SIC          ----------
+     3. LDA + DFMT         ----------
+LDA+U Parameter File Name  :: Sm_UJ.dat
+     If the name is 'None', the data will be obtained from other way
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                         Magnetism-related Parameters    
+===========================+====================================================
+Moment Direction File Name ::  Evec_input.dat
+Spin Index Param (>= 1)    ::  1
+     1. No Spin            ---------
+     2. Spin-polarized     ---------
+     3. Spin-canted        ---------
+Interstitial Electron Spin ::  1
+     1. No Spin            ---------
+     2. Spin-polarized     ---------
+Canted Moment Torque Coef. ::  0.0
+Calculate J_ij (y/n)       ::  n
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                        Energy (Ryd.) Contour Parameters
+===========================+====================================================
+Read E-mesh from emeshs.inp ::  0
+     0. No                 ---------
+     1. Yes. In this case, the following data have no effect
+Contour Type (>= 0)        ::  0
+     0. Semi-circle        ---------
+     1. Rectangle Box      ---------
+     2. Horizontal Line    ---------
+     3. Vertical Line      ---------
+Number of Contours (> 0)   ::  1
+Energy Grid Type (>= 0)    ::  1
+     0. Equal Interval     ---------
+     1. Gaussian Points    ---------
+     2. Log Interval       ---------
+No. Energy Grids           ::  30
+No. Extra Energy Points    ::  20
+Offset Energy Point        ::  0 
+Real Axis Bottom, erbot    :: -0.40
+Real Axis Top, ertop       ::  0.00
+Imag Axis Bottom, eibot    ::  0.001
+Imag Axis Top, eitop       ::  0.825
+Iterate Fermi energy       ::  1
+     0. On(default)        ---------
+     1. Off                ---------
+================================================================================
+                      Single site IDOS integration method
+================================================================================
+SS Real Axis Int. Method   ::  0
+      0. Uniform
+      1. Adaptive
+SS Real Axis Int. Points   ::  200
+==============================================================================
+                  * * *              * * *              * * *
+================================================================================
+                         Algorithms-related Parameters  
+===========================+====================================================
+T-matrix inversion (>= 0)  ::  2
+M-matrix inversion (>= 0)  ::  2
+     0. LU method          ---------
+     1.                    ---------
+     2. LU Optimum         ---------
+     3. QMR method         ---------
+     4.                    ---------
+     5.                    ---------
+     6. QMR Optimum        ---------
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                            Spin-dynamics Parameters  
+===========================+====================================================
+No. Time Steps (>= 0)      ::  1
+Time Step                  ::  1.000
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                             Mixing Parameters
+===========================+====================================================
+Mixing quantity type       ::  1
+     0. Charge mixing      ---------
+     1. Potential mixing   ---------
+Mixing algorithm           ::  2
+     0. Simple Mixing      ---------
+     1. D.G.A. Mixing      ---------
+     2. Broyden Mixing     ---------
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                           K-space Related Parameters
+===========================+====================================================
+Lloyd correction           :: 0
+    0 - Off (default)
+    1 - On
+Lloyd mode                 :: 1
+    1 - first method (default) (to be defined by Markus)
+    2 - second method (to be defined by Markus)
+K-space Solver Method      ::  0
+    0. SuperLU             -----------
+    1. SuperLU with direct solve checking  -----------
+    2. Direct ( 1CPU only )-----------
+Read K-mesh from kmeshs.inp ::  0
+     0. No                 ---------
+     1. Yes. In this case, the following data have no effect
+Scheme to Generate K (>=0) ::  0
+       0. Special K-points ---------
+       1. Tetrahedron      ---------
+       2. Direction        ---------
+No. K Meshs in IBZ (> 0)   ::  1
+Kx, Ky, Kz Division (> 0)  :: 16  16  16
+Symmetrize BZ Integration  ::  1
+     0. No                 ---------
+     1. Yes                ---------                             
+    -2. Yes(Equiv. points) ---------
+===========================+====================================================

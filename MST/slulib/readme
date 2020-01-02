@@ -1,0 +1,15 @@
+		Fortran 90 Interface
+
+This directory contains Fortran-90 wrapper routines for SuperLU_DIST.
+The directory contains the following files:
+    f_pddrive.f90      -  An example Fortran driver routine.
+    superlu_mod.f90    -  Fortran 90 module that defines the wrapper functions
+                             to access SuperLU_DIST's data structures.
+    superlupara.f90    -  It contains parameters that correspond to
+                             SuperLU_DIST's enumerate constants.
+    superlu_c2f_wrap.c -  All the C wrapper functions, callable from Fortran.
+    hbcode1.f90        -  Fortran routine to read a Harwell-Boeing matrix.
+
+To compile the code, type 'make'
+To run the code, type 'poe f_pddrive -procs 4'
+   (currently, the example is set up to run on 4 processors.)

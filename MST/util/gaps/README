@@ -1,0 +1,49 @@
+gaps.h:
+	A header file containing a few macros and function prototypes for gaps.c.
+radii.c:
+	This file contains an array mapping elements to their atomic radii.
+	The values for the radii are as of the time of editing, the ones found in:
+		Slater, J C. "Atomic Radii in Crystals." Journal of Chemical Physics. 
+			41.10 (1964): Print.
+	The list must end in NAN or -NAN.
+
+	Note: when updating values, cite the source in a comment after the value
+		ex.		/* H  */  0.25, /* Slater */
+	
+	The values can be changed if needed by passing a -r "Z=A" argument:
+		ex. to change Hydrogen (atomic number 1) to a radius of 0.34 Angstroms,
+			./gaps -r "1=0.34" -i /path/to/input
+	If a -g flag is used, then they are automatically changed to whatever
+	allows them to fit in the crystal, no matter how they have been redefined
+	up to that point.
+structs.h:
+	keeps all of the structs used in the program
+fill.h:
+	function prototypes for fill.c
+gapslib.h:
+	Contains macros and function prototypes that are used in multiple places.
+symbols.c:
+	Contains an array of atomic symbols for lookup purposes on input. The last
+	element in the list must be NULL.
+gapslib.c:
+	Contains helper functions for both gaps.c and fill.c
+gaps.c:
+	The main file containing the UI and I/O code.
+fill.c:
+	The file containing all of the filling algorithms
+gaps.1:
+	The man page for gaps. You may view it with "man ./gaps.1"
+draw.py:
+	A program that creates a 3d image out of the output of gaps.
+makefile:
+	The makefile.
+
+To install:
+	Check the makefile to ensure that BINDIR is the directory you wish to 
+	install in and MANDIR the directory that man pages are stored in (one of
+	the outputs of manpath).
+	To install, the only necessary command is:
+		$ sudo make install
+	If, on the other hand you do not wish to actually install it then the only
+	command needed is
+		$ make all

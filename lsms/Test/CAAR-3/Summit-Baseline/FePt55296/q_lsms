@@ -1,0 +1,16 @@
+#!/bin/bash
+# Begin LSF directives
+#BSUB -P csc380
+#BSUB -J LSMS-FePt55296
+#BSUB -o FePt.stdout
+#BSUB -W 4:00
+#BSUB -nnodes 1024
+# End LSF directives and begin shell commands
+
+export LSMS_ROOT=$HOME/mstsuite/lsms
+# cd $MEMBERWORK/stf006/Fe
+cd $LS_SUBCWD
+
+date
+jsrun -n 6144 -a 1 -g 1 -c 7 -b packed:7 $LSMS_ROOT/bin/lsms i_lsms
+

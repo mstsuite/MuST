@@ -1,0 +1,22 @@
+export USE_ACCELERATOR = -DACCELERATOR_LIBSCI -DBUILDKKRMATRIX_GPU
+export LIBS += 
+# The pointed to the libsci_acc lib directory is a hack, this should be fixed with a software update
+# export ADD_LIBS +=  -L$(TOP_DIR)/libsci_acc/lib $(FPMPI_POST_LINK_OPTS) -lcublas 
+export ADD_LIBS +=  $(FPMPI_POST_LINK_OPTS) -lcublas 
+
+# export INC_PATH += -I $(TOP_DIR)/libsci_acc/include
+export INC_PATH += -I $(HDF5_INCLUDE_OPTS)
+
+export ADDITIONAL_TARGETS = 
+
+export BOOST_ROOT=$(TOP_DIR)
+
+# export CUDA_CXX=nvcc -arch=sm_35 $(CRAY_CUDA_INCLUDE_OPTS) -DBUILDKKRMATRIX_GPU
+
+export CUDA_CXX=nvcc -arch=sm_35 $(CRAY_CUDA_INCLUDE_OPTS) $(USE_ACCELERATOR) -Xcompiler -fopenmp
+
+export CC=cc -I$(BOOST_ROOT) -DACCELERATOR_LIBSCI -fopenmp -DBUILDKKRMATRIX_GPU
+export CXX=CC -std=c++11 -I$(BOOST_ROOT) -DACCELERATOR_LIBSCI -fopenmp -DBUILDKKRMATRIX_GPU
+#export CXX=CC -I$(BOOST_ROOT) -DUSE_PAPI
+export F77=ftn -DACCELERATOR_LIBSCI -fopenmp -DBUILDKKRMATRIX_GPU
+export LUACXX=$(CXX)

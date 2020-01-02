@@ -1,0 +1,18 @@
+Oxigen Single Site Potential
+O_ss_out                Outfput file name. If blank, data will show on screen
+    1                    print level
+    2                    crystal type (1=fcc,2=bcc)
+    3                    lmax
+   3.40000               lattice constant
+    1                    number of spins
+    1                    ex-cor type (1=vb-hedin,2=vosko)
+    1                    number of components
+   8.00000   0.00000     z(at.num),  mom
+   1.00000               concentrations
+   0.00000   0.00000     mt radius, ws radius
+O_a_pot                 pot file  (input)
+O_ss_pot                pot file (output)
+O_ss_k                  keep file
+   10 -1.0000  0.3000    e-grid: ndiv(=#div/0.1Ryd), bott, eimag
+   0.70000   0.70000     ef (est)
+   50   0.10000          num of scf its, mix parameter

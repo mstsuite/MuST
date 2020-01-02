@@ -1,0 +1,7 @@
+Using libxc is default in MuST/LSMS.
+To use libxc, [http://www.tddft.org/programs/octopus/wiki/index.php/Libxc]
+If LIBXC_PATH is not defined in the architecture file, the version of libxc included with
+MuST will be built and installed automatically under external/libxc/LibXC/.
+
+If needed, the script 'build_libxc' can be used (by running "sh build_libxc") to build and install 
+the version of libxc included with MuST under external/libxc/LibXC/.

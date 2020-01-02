@@ -1,0 +1,10 @@
+System Description            : Nb, bcc structure                               
+Number of Atoms in Unit Cell  : 1                                               
+Number of Atomic Species      : 1                                               
+Number of Atoms in Each Type  : 1(Nb)                                           
+Energy Offset                 : -7632                                           
+=======================================================================================
+    Iter     Energy      3PV     Efermi   Rms_rho    Rms_pot   Mix  Alg  Alpha 
+---------------------------------------------------------------------------------------
+**       1  -0.564491  720.1045  0.75448  0.271E-03  0.593E-07  pot  B   0.1000
+         2  -0.564491  720.1045  0.75448  0.403E-09  0.501E-07  pot  B   0.1000

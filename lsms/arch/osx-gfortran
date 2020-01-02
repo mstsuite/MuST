@@ -1,0 +1,41 @@
+#export USE_OPENMP=1
+# export USE_GMP=1
+# export USE_LIBXC=1
+# define HAS_BACKTRACE if glibc backtrace functionality is available
+# export HAS_BACKTRACE=1
+
+#export LIBS +=  -L/opt/local/lib -lhdf5 -lgfortran \
+#         -framework Accelerate $(GPTL_LIB)
+export LIBS +=  -L/usr/local/lib -lhdf5 -framework Accelerate $(GPTL_LIB) \
+                -L/usr/local/lib/gcc/9/ -lgfortran
+#export LIBS +=  -lhdf5 -framework Accelerate $(GPTL_LIB) \
+#                -L/usr/local/lib/gcc/x86_64-apple-darwin12.5.0/4.9.1/ -lgfortran
+
+export INC_PATH += -I /System/Library/Frameworks/Accelerate.framework/Frameworks/vecLib.framework/Headers/ \
+          $(GPTL_INC)
+
+ifdef USE_GMP
+  export LIBS += -lgmp
+  export OPT_DEFINES += -DUSE_GMP
+endif
+
+# export CUDA_CXX=nvcc -arch=sm_20
+export OMPI_CXX=g++-9
+
+ifdef USE_OPENMP
+  # export CXX=mpicxx -cxx=g++-9 -g -std=c++14 -fopenmp -O3 $(GPTL_OPT) $(OPT_DEFINES)
+  export CXX=mpicxx -g -std=c++14 -fopenmp -O3 $(GPTL_OPT) $(OPT_DEFINES)
+  export F77=gfortran -g -fopenmp -O3 $(GPTL_OPT)
+# export F77=gfortran -g -fopenmp -O3 -fcheck=all $(GPTL_OPT)
+else
+  # export CXX=mpicxx -cxx=g++-9 -g -O3 -std=c++14  $(OPT_DEFINES)
+  export CXX=mpicxx -g -O3 -std=c++14  $(OPT_DEFINES)
+  export F77=gfortran -g -O3
+# export F77=gfortran -g -O3 -fcheck=all
+endif
+
+# JSON++ requires flex and bison (version>=2.4)
+export FLEX=flex
+export BISON=/usr/local/opt/bison/bin/bison
+
+export LUACXX = $(CXX)

@@ -1,0 +1,25 @@
+#!/bin/bash
+# Begin LSF directives
+#BSUB -P stf006summitdev
+#BSUB -J LSMS-FePt
+#BSUB -o FePt.stdout
+#BSUB -W 60
+#BSUB -n 2
+# End LSF directives and begin shell commands
+
+export LSMS_ROOT=$HOME/MST_Pack/LSMS_3_summitdev
+
+cd $LSMS_ROOT/Test/Summit-Acceptance/FePt
+#cd $MEMBERWORK/stf006
+date
+
+rm -f w_fept v_fept
+mpirun -np 2 $LSMS_ROOT/bin/lsms i_lsms_start
+
+if [ -f w_fept ]; then
+  mv w_fept v_fept
+  mpirun -np 2 $LSMS_ROOT/bin/lsms i_lsms_restart
+else
+  echo "No 'w_fept' file  after first run of lsms! Check for errors."
+fi
+

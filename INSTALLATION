@@ -1,0 +1,27 @@
+Installation steps:
+===================
+1. Under architecture/ directory, create/modify an architecture file by following an existing example file;
+
+2. In the top directory (MuST/), run the following commands to build executables
+make architecture-file-name (e.g., make linux-intel-nogpu)
+make install
+
+Note --
+make clean: delete the object, library, executable files under lsms and MST from installation
+make distclean: delete the object, library, executable, and architecture.h files under lsms and MST from installation; also
+                delete the executables under bin/.
+
+Alternative steps:
+==================
+The code MST (under MST/) and LSMS/WL-LSMS (under lsms/) can be built separately by running make under MST 
+and lsms. The executables can be found under MST/bin and lsms/bin, respectively. It requires to create 
+archietecture.h under MST and lsms using symbolic link. Steps are as follows:
+* To build MST,
+1. cd MST
+2. set SystemName in Makefile (at line 6) to a proper name, or execute the following command:
+   ln -s arch/architecture_file architecture.h
+3. make
+* To build LSMS/WL-LSMS,
+1. cd lsms
+2. ln -s arch/architecture_file architecture.h
+3. make

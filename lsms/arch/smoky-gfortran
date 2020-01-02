@@ -1,0 +1,38 @@
+# export USE_GPTL=1
+ export USE_OPENMP=1
+
+ifdef USE_GPTL
+  export GPTL_LIB=$(HOME)/Development/gptl-4.0/libgptl_pmpi.a
+  export GPTL_INC=-I $(HOME)/Development/gptl-4.0/
+  export GPTL_OPT=-finstrument-functions
+else
+  export GPTL_LIB=
+  export GPTL_INC=
+  export GPTL_OPT=
+endif
+
+export LIBS +=  -lgfortran \
+         $(ACML_LIB) -lacml_mv $(GPTL_LIB)
+
+export INC_PATH += $(HDF5_CLIB) \
+          $(GPTL_INC)
+
+export ADD_LIBS += $(HDF5_CLIB) -lhdf5
+export ADDITIONAL_TARGETS =
+
+export BOOST_ROOT=$(TOP_DIR)
+
+# export CUDA_CXX=nvcc -arch=sm_20
+
+ifdef USE_OPENMP
+  export CXX=mpicxx -g -fopenmp -O3 -I$(BOOST_ROOT) $(GPTL_OPT)
+  export F77=gfortran -g -fopenmp -O3 $(GPTL_OPT)
+# export F77=gfortran -g -fopenmp -O3 -fcheck=all $(GPTL_OPT)
+else
+  export CXX=mpicxx -g -O3 -I$(BOOST_ROOT)
+  export F77=gfortran -g -O3
+# export F77=gfortran -g -O3 -fcheck=all
+endif
+
+
+export LUACXX = $(CXX)

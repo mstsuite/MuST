@@ -1,0 +1,9 @@
+System Description            : Be, fcc structure                               
+Number of Atoms in Unit Cell  : 1                                               
+Number of Atomic Species      : 1                                               
+Number of Atoms in Each Type  : 1(Be)                                           
+Energy Offset                 : -29                                             
+=======================================================================================
+    Iter     Energy      3PV     Efermi   Rms_rho    Rms_pot   Mix  Alg  Alpha 
+---------------------------------------------------------------------------------------
+**       1  -0.203173  -0.05738  0.82707  0.100E-13  0.268E-09  pot  B   0.0500

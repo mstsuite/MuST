@@ -1,0 +1,53 @@
+#######################
+#  Makefile for gaps  #
+#######################
+
+# Name the mpi compiler here
+CC=mpicc
+CCFLAGS=-W -Wall -Wextra -O2
+
+# Directory to install man pages in.
+MANDIR=/usr/share/man
+# Directory to install in.
+BINDIR=/usr/bin
+
+OBJECTS=fill.o gapslib.o radii.o symbols.o
+
+all: gaps gaps.1.gz
+
+gaps: gaps.c $(OBJECTS) gaps.h 
+	$(CC) $(CCFLAGS) -lm gaps.c $(OBJECTS) -o $@
+
+fill.o: fill.c fill.h
+	$(CC) $(CCFLAGS) -c fill.c
+
+gapslib.o: gapslib.c gapslib.h 
+	$(CC) $(CCFLAGS) -c gapslib.c
+
+radii.o: radii.cpp
+	$(CC) $(CCFLAGS) -c $<
+
+symbols.o: symbols.c
+	$(CC) $(CCFLAGS) -c $<
+
+# activates extra print statements.
+debug: CCFLAGS += -D debug
+debug: gaps 
+
+install: gaps gaps.1.gz
+	cp gaps $(BINDIR)
+	cp gaps.1.gz $(MANDIR)/man1
+
+uninstall:
+	rm $(INSTALLDIR)/gaps $(MANDIR)/man1/gaps.1.gz
+
+# Make the man page
+gaps.1.gz: gaps.1
+	gzip -c $< > $@
+
+# Preview the man page
+man:
+	man ./gaps.1
+
+clean:
+	rm -f gaps gaps.1.gz $(OBJECTS) gaps.tar.gz

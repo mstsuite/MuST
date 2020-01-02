@@ -1,0 +1,77 @@
+Steps to install lsms:
+======================
+1. ln -s arch/architecture_file architecture.h
+2. make
+
+Note -- 
+make clean: delete object, library, and executable files generated from installation
+make distclean: make clean + rm architecture.h
+
+Sub-directories under lsms:
+===========================
+01. bin/ 
+Contains the executable files generated from installation
+
+02. arch/ 
+Contains architecture files for installation
+
+03. doc/ 
+Contains the documentation files for LSMS and WL-LSMS
+
+04. html/ 
+Contains webpage files for LSMS/WL-LSMS
+
+05. include/ 
+Contains header files
+
+06. latex/ 
+Contains tex files for producing PDF manual document
+
+07. lib/ 
+Contains library files (*.a) generated from installation
+
+08. mjson/ 
+Contains mjson package, a JSON parser written by Rui Marciel
+
+09. Potentials/ 
+Contains starting potentials for various elements.
+
+10. scripts/
+Contains testing scripts written in Lua
+
+11. src/ 
+Contains the LSMS/WL-LSMS source codes
+
+12. Test:
+Contains input data examples for various structures
+
+13. Tools:
+Contains some useful utility routines 
+
+
+Executables under bin:
+======================
+1. lsms
+The corresponding main source code is lsms/src/Main/lsms.cpp. It performs ab 
+initio, linear scaling, electronic structure calculations for 3-d structures.
+Main features:
+   * Linear scaling calculation based on LSMS method
+   * Muffin-tin potential
+   * Non-relativistic, or Scalar-relativistic
+   * Non-spin polarized, Spin-polarized, or Spin-canted
+   * LDA or GGA for the exchange-correlation potentials
+Execution:
+   mpirun -np number_of_CPU_cores $(MuST_PATH)/bin/lsms < i_file
+Example input files for various structures can be found under lsms/Test/.
+
+2. wl-lsms
+The corresponding main source code is lsms/src/Main/wl_lsms.cpp. It performs 
+Wang-Landau Monte-Carlo simulation of random unit cell samples with energy data 
+obtained from LSMS electronic structure calculation.
+Main features:
+   * Wang-Landau Monte-Carlo simulation method
+   * Driving linear scaling ab initio calculation of the energy data for the unit 
+     cell samples
+Execution:
+   mpirun -np number_of_CPU_cores $(MuST_PATH)/bin/wl-lsms < i_file
+Example input files for various structures can be found under lsms/Test/.

@@ -1,0 +1,23 @@
+#!/bin/bash
+# Begin LSF directives
+#BSUB -P stf006summitdev
+#BSUB -J LSMS-Fe
+#BSUB -o Fe.stdout
+#BSUB -W 60
+#BSUB -n 2
+# End LSF directives and begin shell commands
+
+# the run will be for  2 x REPEAT^3  Fe atoms
+export REPEAT=2
+export NUM_ATOMS=$(( 2 * $REPEAT * $REPEAT * $REPEAT ))
+
+export LSMS_ROOT=$HOME/MST_Pack/LSMS_3_summitdev
+
+cd $LSMS_ROOT/Test/Summit-Acceptance/Fe
+#cd $MEMBERWORK/stf006
+echo "Running lsms for " $NUM_ATOMS " Fe atoms."
+
+sed "s/REPEAT/$REPEAT/" i_lsms_template > i_lsms_$NUM_ATOMS
+
+date
+mpirun -np 2 $LSMS_ROOT/bin/lsms i_lsms_$NUM_ATOMS

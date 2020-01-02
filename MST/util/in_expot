@@ -1,0 +1,8 @@
+# the number of atoms (num_atoms)__________________________________________
+  4
+# the atom id (if <= 0, all atoms; else 1 <= id <= num_atoms)______________
+  0
+# the path to v_* file_____________________________________________________
+/home/aurelian/LSMS/New_LSMS/LSMS_2.0_Yang/test/Cu4/
+# the v_* file name _______________________________________________________
+w_test

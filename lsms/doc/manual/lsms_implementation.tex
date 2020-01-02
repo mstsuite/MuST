@@ -1,0 +1,32 @@
+\documentclass[12pt]{scrbook}
+\usepackage{makeidx}
+\usepackage{natbib}
+\usepackage{tikz}
+\usepackage{amsmath}
+
+\KOMAoptions{toc=flat}
+
+\newcommand{\LSMS}{\texttt{LSMS}}
+
+\title{\LSMS}
+\subtitle{Implementation Notes}
+\author{M. Eisenbach}
+\publishers{Oak Ridge National Laboratory}
+\date{12-September-2019}
+
+\begin{document}
+\frontmatter
+\maketitle
+\tableofcontents
+
+\mainmatter
+\input{gpu_details.tex}
+
+\backmatter
+\input{units.tex}
+
+\bibliographystyle{plain}
+\bibliography{lsms}
+
+\printindex
+\end{document}

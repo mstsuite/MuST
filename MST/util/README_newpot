@@ -1,0 +1,7 @@
+Procedure to run newa for generating atomic potential
+1. ./newa
+2. Following the on-line instructions to enter data
+
+Procedure to run newss for generating single site atomic potential
+1. ./newss
+2. Following the on-line instructions to enter data

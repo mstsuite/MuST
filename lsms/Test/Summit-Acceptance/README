@@ -1,0 +1,51 @@
+This directory contains input files to be used for Summit Accepance:
+
+Proposed Tests:
+
+1) lsms Fe X
+
+2) lsms FePt X
+
+3) wl-lsms Fe (magnetism)
+
+4) wl-lsms CuZn (alloy)
+
+
+Tests Characteristics:
+* Job sizes should vary from the smallest possible case to the largest case that is appropriate for the application and the problem size
+* Tests should include:
+    * Source code for application
+    * a self-contained build script that loads requires modules and build the application
+    * input files required per test
+    * reference output files for each test (if applicable)
+    * AT will help develop or help you create:
+        * a script to check for correctness and performance, e.g.:
+            * did the job exceed the expected wall time?
+            * did the job produce correct results?
+            * did the job obtained the expected performance?
+        * a script to grab and report application relevant output values
+ 
+Suggested (for Summitdev):
+    * 3-5 for summitdev by the end of Spring, 5 - 10 tests for Summit Phase 1 by the end of Summer
+    * 2 - 3 different problems
+    * Walltimes that range from 10 minutes to up to 2 hours
+        * We will select specific tests to extend up to a walltime of 8+ hours
+    * Include jobs that can run in <18 nodes instead (e.g. 1-4 nodes) - small
+    * Include jobs that can run in 26 to < 54 nodes - medium
+    * Include jobs that can run up to 54 nodes - large
+    * If the code uses different programming models, test cases taking advantage of each one are needed
+    * If you are using threads (e.g. OpenMP), jobs should also test different thread layouts
+    * If the code can select the number of GPUs used, jobs should also test different number of GPUs tested
+ 
+Timeline:
+* February 21, 2017: Complete the App Characteristics spreadsheet
+* March 10, 2017: Planned tests ready to be reviewed. Meet to identify holes, report build status of apps on Summitdev, begin test development
+* April 11, 2017: Status meeting
+* May 2, 2017: Test owners have tested all tests on Summitdev
+* May 2-15, 2017: AT available to help with harness work
+* June 2, 2017: tests for Summitdev scale ready and in the harness
+* Testshot #1 on Summitdev: First half of June
+* June - Aug: develop test cases for up to the size of Summit Phase 1
+* Testshot #2 on Summitdev: First half of Sept
+* Testshot #3 on Summit Phase 1 and Spider 3 TDS in November
+

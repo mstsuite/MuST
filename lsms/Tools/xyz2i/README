@@ -1,0 +1,11 @@
+xyz2i transforms a file of atom positions of the format
+
+x1 y1 z1
+x2 y2 z2
+...
+xN yN zN
+
+to input files for LSMS:
+i_lsms and i_bigcell for LSMS_1.x
+i_lsms for LSMS_3
+

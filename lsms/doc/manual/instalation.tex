@@ -1,0 +1,27 @@
+\chapter{Compiling and running \LSMS}
+\section{Requirements}
+\LSMS\ requires a Unix like environment (\textit{e.g.}
+Linux or MacOS~X) with C++ and Fortran compilers and the following libraries:
+\begin{itemize}
+\item BLAS linear algebra library
+\item LAPACK linear solvers
+\item MPI message passing library for parallelization
+\item CUDA optionally for GPU acceleration, the code can be built without it.
+\end{itemize}
+
+\section{Compilation}
+Building \LSMS\ uses \texttt{make} with the main \texttt{Makefile} in the top level directory of the distribution. This file includes a system specific file, \texttt{architecture.h}, that describes the specific environment. Examples for this file are provided in \texttt{arch}.
+
+
+\section{Running}
+
+The main input to describe the calculation and the system is provided by an
+inputfile. The default name of the input file is \texttt{i\_lsms}.
+The input file uses the \texttt{lua} scripting languange (\texttt{www.lua.org}) whic allows
+powefull pre-processing of the input.
+\LSMS\ will read specially named variables in the \texttt{lua} input that are listed in the chapter describing
+the \LSMS\ input.
+
+\subsection{\texttt{lsms}}
+
+\subsection{\texttt{wl-lsms}}

@@ -1,0 +1,9 @@
+Title: Lanthanum Atomic Potential
+La_a_out                 output file name. If blank, data will show on screen
+  57.00000               zed: atomic number
+   0.00000               moment
+    1                    number of spins
+    1                    ex-cor type (1=vb-hedin,2=vosko)
+   25                    number of iterations
+   0.20000               mixing parameter
+La_a_pot                 pot file (output)

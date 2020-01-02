@@ -1,0 +1,21 @@
+========================================================
+03/14/18
+The following new test case has been added:
+findBoundStates.F90: The code takes standard input from MST and calculates the energy eigenvalues of the bound states in the range
+                     of (-10.0Ryd, 0.0Ryd) and calculates the charge density associated with the states
+Todo: The calculated charge desities show (2,0) and (2,1) components, likely due to some numerical issues arising from the quandratic 
+      expansion of the Jost matrix. It needs to be checked. The code for calculating the density associated with the bound state appears 
+      to be correct algebracally (checked agaist getDOS function from SSSolverModule for e > 0). It also needs to check the symmetry of the
+      regular solution and sine matrix when e < 0, and compare the symmetry to the e > 0 case.
+========================================================
+03/03/04
+The files that have been changed in order to run on T3E:
+
+   testMPP.f90
+   tst_stepfunc.f90
+   Makefile
+
+The following new test cases have been added:
+
+   tst_DataComm.f90
+========================================================

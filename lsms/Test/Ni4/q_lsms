@@ -1,0 +1,19 @@
+#! /usr/bin/env bash
+#PBS -joe
+#PBS -N Ni_LSMS3
+#PBS -l walltime=2:00:00
+#PBS -l nodes=1
+#PBS -l feature=gpu
+#PBS -A MAT020
+
+#-------------------------------------------
+
+
+#--Change directory to the working directory.
+cd $PBS_O_WORKDIR
+
+#--Run the executable.
+date
+export OMP_NUM_THREADS=4
+aprun -n 1 -d 4 $HOME/LSMS_3/bin/lsms i_lsms > o_lsms_ni
+date

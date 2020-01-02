@@ -1,0 +1,252 @@
+\chapter{Input File Format}
+The main input file format of \LSMS\ employes the \texttt{lua} language.
+This allows the processing of the input file before it is read by the
+\LSMS\ code itself. The input parameters are read from the values of
+gloabl variables that are listed in the following sections.
+These variable names should be avoided for any other uses in the \texttt{lua}
+input script to avoid unexpected behavior.
+
+
+\section{Crystal Structure}
+
+All units for atom position and lattice constants are Bohr radii $a_0=0.529177\mathrm{\AA}$.
+\subsection{\texttt{bravais}}
+(no default value)
+
+\subsection{\texttt{num\_atoms}}
+The number of atoms in the unit cell. (no default value) This has to
+be the number of sites described by the \texttt{site} entries in the
+input file.
+
+%%%%%%%
+\subsection{\texttt{site}}
+
+\subsubsection{\texttt{site.pos}}
+
+\subsubsection{\texttt{site.evec}}
+
+\subsubsection{\texttt{site.atom}}
+
+\subsubsection{\texttt{site.pot\_in\_idx}}
+
+\subsubsection{\texttt{site.Z}}
+
+\subsubsection{\texttt{site.Zc}}
+
+\subsubsection{\texttt{site.Zs}}
+
+\subsubsection{\texttt{site.Zv}}
+
+\subsubsection{\texttt{site.lmax}}
+
+\subsubsection{\texttt{site.rLIZ}}
+
+\subsubsection{\texttt{site.rstep}}
+
+\subsubsection{\texttt{site.rad}}
+
+%%%%%%
+\subsection{\texttt{xRepeat, yRepeat, zRepeat}}
+These shoud be integers greater or equal to one (default value: 1)
+that specify the repeat of the unit cell described by
+\texttt{bravais}, \texttt{num\_atoms} and \texttt{site} in the
+\textit{x, y} and \textit{z} directions specified by \texttt{bravais}.
+The total number of atoms in the system will be $\texttt{bravais}
+\times \texttt{xRepeat} \times \texttt{yRepeat} \times \texttt{zRepeat}$.
+
+\subsection{\texttt{makeTypesUnique}}
+Possible values: 0 or 1 (default value: 1). If set to one all sites are forced to have
+independent potentials, thus ignoring equivqlent atom potentials
+specified in the input file or in conjunction with
+\texttt{\{x,y,z\}Repeat} to generate a repeated unit cell (usefull for
+Monte-Carlo simulations).
+
+%%%%%%%%%
+%%%%%%%%%
+%%%%%%%%%
+\section{Control of the Calculation}
+
+\subsection{\texttt{systemid}}
+A short string to identify the system and used to construct the
+default filenames for the input and output potential files.
+
+
+
+\subsection{\texttt{system\_title}}
+
+\subsection{\texttt{potential\_file\_in}}
+default: $\texttt{v\_}\langle\textit{systemid}\rangle$
+
+\subsection{\texttt{potential\_file\_out}}
+default: $\texttt{w\_}\langle\textit{systemid}\rangle$
+
+\subsection{\texttt{pot\_in\_type}}
+The type of the input potential file. The possible values are 0 for
+the LSMS~1 HDF5 file format and 1 for the SSITE text format.
+(default value: 0, i.e. HDF5)
+
+\subsection{\texttt{pot\_out\_type}}
+The file format for the output potential. The file formats are the
+same as for \texttt{pot\_in\_type} with the addition of $-1$ to
+suppress the generation of an output potential.
+(default value: $-1$, no output potential)
+
+\subsection{\texttt{iprint}}
+
+\subsection{\texttt{default\_iprint}}
+
+\subsection{\texttt{print\_node}}
+
+\subsection{\texttt{istop}}
+default: \texttt{main}
+
+\subsection{\texttt{infoEvecFileOut}}
+default: \texttt{info\_evec\_out}
+
+\subsection{\texttt{infoEvecFileIn}}
+default: don't read evecs from a file.
+
+\subsection{\texttt{localAtomDataFile}}
+Write a file that contains local information about the atoms in the system.
+The first line reports the total, band and Fermi energies of the full system.
+The following lines report local data for all sites in the system:
+\begin{itemize}
+\item Atomic number $Z$
+\item Global index of the site
+\item Position $x$, $y$, $z$
+\item Local charge
+\item Local magnetic moment
+\item Moment direction $e_x$, $e_y$, $e_z$
+\item Constraining field $B_x$, $B_y$, $B_z$
+\item vSpinShift
+\item Local volume $\Omega_{WS}$
+\item Local energy
+\end{itemize}
+
+default: don't write the local atom data file.
+
+\subsection{\texttt{gpu\_threads}}
+
+%%%%%
+%%%%%
+\subsection{\texttt{nspin}}
+This parameter selects the treatment of magnetism. Possible values are: 1 for non spin-polarized calculations,
+2 for spin-polarized collinear clacluations and 3 for non-collinear spin polarized calculations.
+The default value fon non relativistic and scalar relativistic
+calculations is 3. In the fully relativistic
+calculations this parameter is ignored and assumed to be 3 (always non-collinear!). Note that this is different from LSMS\_1
+where a fully relativistic calculation was requested by \texttt{nspin=4}, now this is selected by \texttt{relativity="full"}.
+
+\subsection{\texttt{mtasa}}
+This parameter selects between muffin-tin potential or atomix sphere
+approximation treatment of the atomic potentials. Default value: 0 for
+muffin-tin. \textit{This parameter will be replaced by the}
+\texttt{potential} \textit{parameter in a future version.}
+
+\subsection{\texttt{fixRMT}}
+default: 0
+
+\subsection{\texttt{potential} not yet implemented}
+Possible values: \texttt{spherical}, \texttt{muffin-tin},
+\texttt{atomic-sphere-approximation} or \texttt{full-potential}
+
+\subsection{\texttt{xcFunctional}}
+default: \{0, 1\}, Built in von Barth-Hedin
+
+\subsection{\texttt{relativity}}
+This parameter selects the treatment of the valence electrons as non-relativistic, scalar-relativistic
+or full-relativistic (\textit{i.e.} the Dirac equation is solved for the valence electrons.)
+
+Possible values: \texttt{none}, \texttt{scalar} or \texttt{full}.
+
+Default value: \texttt{scalar} 
+
+\subsection{\texttt{core\_relativity}}
+Treatment of the core electrons either as non-relativistic (Schr\"odinger equation)
+or fully relativistic (Dirac equation).
+The \texttt{default} is to solve the Schr\"odinger equation for the core electrons if the valence
+electrons are non-relativistic and the Dirac equation in the scalar and fully relativistic cases.
+ 
+Possible values: \texttt{default}, \texttt{none} or \texttt{full}
+
+Default value: \texttt{default}
+
+\subsection{\texttt{temperature}}
+The temperature in Kelvin for finite electron temperature
+calculations and dynamical mean-field theory calculalations.
+
+Default value: 0
+
+\subsection{\texttt{nscf}}
+The maximum number of selfconsistency steps tp be performed.
+
+\subsection{\texttt{writeSteps}}
+The frequency of writing potentials during a selfconsistent
+calculation. The output potential is written every \texttt{writeSteps}
+iteration steps. Note the potential always is written at the end of
+the calculation (if the output type is not negative.)
+default: 30000 (for practical purposes, the potential never gets
+written with the default!)
+
+\subsection{\texttt{rmsTolerance}}
+The convergence criterion for selfconsistent iterations. The convergence criterion is reached when
+the charge RMS difference is smaller than \texttt{rmsTolerance} for every site.
+
+Default values: $10^{-8}$
+
+\subsection{\texttt{zblockLUSize}}
+default: 0, LSMS tries to find the optimal size for a given architecture.
+
+%%%%%
+\subsection{\texttt{energyContour}}
+
+\subsubsection{\texttt{energyContour.grid}}
+
+\subsubsection{\texttt{energyContour.npts}}
+
+\subsubsection{\texttt{energyContour.ebot}}
+
+\subsubsection{\texttt{energyContour.etop}}
+
+\subsubsection{\texttt{energyContour.eitop}}
+
+\subsubsection{\texttt{energyContour.eibot}}
+
+\subsubsection{\texttt{energyContour.maxGroupSize}}
+
+%%%%
+\subsection{\texttt{numberOfMixingQuantities}}
+
+\subsection{\texttt{mixing}}
+
+\subsubsection{\texttt{mixing.quantity}}
+
+\subsubsection{\texttt{mixing.algorithm}}
+possible values: \texttt{simple}, \texttt{broyden}
+
+\subsubsection{\texttt{mixing.mixing\_parameter}}
+
+%%%% Wang Landau for alloys
+
+\subsection{\texttt{alloy\_file\_in}}
+default: $\texttt{bank\_v\_}\langle\textit{systemid}\rangle$
+
+\subsection{\texttt{alloy\_file\_out}}
+default: $\texttt{bank\_w\_}\langle\textit{systemid}\rangle$
+
+\subsection{\texttt{nalloy\_class}}
+number of site occupation classes.
+default: 0
+
+\subsection{\texttt{alloy\_class}}
+\subsubsection{\texttt{alloy\_class.ncomp}}
+number of possible elements in this alloy class
+\subsubsection{\texttt{alloy\_class.comp.atom}}
+\subsubsection{\texttt{alloy\_class.comp.conc}}
+Concentration
+\subsubsection{\texttt{alloy\_class.comp.Z}}
+\subsubsection{\texttt{alloy\_class.comp.Zc}}
+\subsubsection{\texttt{alloy\_class.comp.Zs}}
+\subsubsection{\texttt{alloy\_class.comp.Zv}}
+
+

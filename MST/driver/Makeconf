@@ -1,0 +1,2 @@
+ODIR = ../bin
+OBJECTDIR = $(ODIR)

@@ -1,0 +1,58 @@
+#=======================================================================
+# makefile to generate library, lsms_core.a, which contains the routines
+# for calculating atomic core states
+#=======================================================================
+
+#Compiler Flags.........................................................
+COM_FLAG=${FFLAGS} ${MODULE_FLAG}
+
+#=======================================================================
+
+MANIFEST_FILES  = $(shell cat manifest)
+SRC_FILES       = $(filter %.c %.f %.F, $(MANIFEST_FILES) )
+CORE            = $(patsubst %.f, $(ODIR)/%.o, $(SRC_FILES))
+
+#=======================================================================
+
+all: cache
+
+echo_symbols:
+	@echo  MANIFEST_FILES = $(MANIFEST_FILES)
+	@echo	
+	@echo  SRC_FILES = $(SRC_FILES)
+	@echo	
+	@echo  CORE   = $(CORE)
+
+cache: $(CORE)
+	ar cr lsms_core.a $(CORE)
+	mv lsms_core.a $(ODIR)/$(LIBNAME)
+	touch cache
+
+$(ODIR)/corslv_c.o: corslv_c.f $(ATOM_PARAM_H)
+	$(F77) $(FFLAGS) corslv_c.f
+	mv corslv_c.o $(ODIR)
+$(ODIR)/deepst_c.o: deepst_c.f $(ATOM_PARAM_H)
+	$(F77) $(FFLAGS) deepst_c.f
+	mv deepst_c.o $(ODIR)
+$(ODIR)/getcor_c.o: getcor_c.f $(ATOM_PARAM_H)
+	@echo ${COM_FLAG}
+	$(F77) $(COM_FLAG) getcor_c.f
+	mv getcor_c.o $(ODIR)
+$(ODIR)/invals_c.o: invals_c.f $(ATOM_PARAM_H)
+	$(F77) $(FFLAGS) invals_c.f
+	mv invals_c.o $(ODIR)
+$(ODIR)/inwhnk_c.o: inwhnk_c.f $(ATOM_PARAM_H)
+	$(F77) $(FFLAGS) inwhnk_c.f
+	mv inwhnk_c.o $(ODIR)
+$(ODIR)/inws_c.o: inws_c.f $(ATOM_PARAM_H)
+	$(F77) $(FFLAGS) inws_c.f
+	mv inws_c.o $(ODIR)
+$(ODIR)/outws_c.o: outws_c.f $(ATOM_PARAM_H)
+	$(F77) $(FFLAGS) outws_c.f
+	mv outws_c.o $(ODIR)
+$(ODIR)/richnk_c.o: richnk_c.f
+	$(F77) $(FFLAGS) richnk_c.f
+	mv richnk_c.o $(ODIR)
+$(ODIR)/semcst_c.o: semcst_c.f $(ATOM_PARAM_H)
+	$(F77) $(FFLAGS) semcst_c.f
+	mv semcst_c.o $(ODIR)

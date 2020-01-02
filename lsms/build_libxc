@@ -1,0 +1,3 @@
+TOP_DIR=`pwd`
+echo $TOP_DIR
+make libxc

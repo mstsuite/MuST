@@ -1,0 +1,234 @@
+#!/bin/sh
+# M. Daene, Oct. 2011, ORNL
+# version 1.00
+
+if [ ! -z $1 ] ; then
+  if [ $1 == "--help" ] ; then
+    echo "usage: $0   or"
+    echo "       $0  <id of atom>"
+    exit 0
+  fi
+fi
+
+CHARGETABLEFILE=ChargeTable
+GNUPLOTFILE=moments_plot.gp
+DATA_FILE_PREFIX=moments
+SPECIFIC_ID=$1
+
+
+
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+
+cat $CHARGETABLEFILE  | awk \
+-v gnuplotfile=$GNUPLOTFILE \
+-v datafileprefix=$DATA_FILE_PREFIX \
+-v specificid=$SPECIFIC_ID \
+' 
+BEGIN{
+ rmode=0
+ myiteration=0
+ myl=0
+ SUBSEP="@"
+ lastiteration=0
+ lastindfile=0
+# gnuplotfile="moments_plot.gp"
+ 
+ if ( specificid == "" ) {
+            doall=1  }
+       else {doall=0
+ }
+
+}
+
+{
+ if (match($0,"# ITERATION :"))
+   {
+     myl=NR
+
+
+     if ( $4-lastindfile < 0 ) {
+         inc=1} else {
+         inc=$4-lastindfile
+      } 
+     if (inc < 1 ) {inc=1}
+#     printf("inc=%d\n",inc)
+
+     myiteration=myiteration+inc;
+
+
+     lastindfile=$4
+
+     rmode=1
+     myid=0
+#     if ( myiteration > 1 ) {printf("\n")}
+
+     idmyit=sprintf("%010d ",myiteration)
+     iterationlist[idmyit]=myiteration
+     lastiteration=myiteration
+
+
+     printf("found new iteration: %-6d    [iteration in file=%-6d]\n",myiteration,$4)
+   }
+
+
+ if (rmode == 1 && NR > myl+3 )
+ {
+    if (match($0,"====")) { 
+       rmode=0
+#       printf("\n")
+    } 
+
+    if ( rmode == 1 )
+    {
+#########    reading data  #########
+#    printf("%s",$1)
+    myid++
+
+
+    atom= $1
+    id  = $2
+    Q   = $3
+    Qmt = $4
+    Qvp = $5
+    dQ  = $6
+    Mmt = $7
+    Mvp = $8
+
+    if ( doall == 1 ) { doit=1} else {
+        if (id == specificid ) {doit=1} else {doit=0}
+    }
+    
+
+    if ( doit == 1 ) {
+       idc=sprintf("%010d ",id)
+       atomlist[atom]=atom
+       idlistnum[idc]=id
+       idlist[id]=atom
+       momentlist[id,myiteration]=Mmt
+    }    
+######### reading data end #########
+    } 
+    
+ }  # end read data mode
+
+
+
+}
+
+
+
+
+
+
+
+
+END{
+
+printf("\n")
+
+
+#### counting atoms of types
+for ( k in idlist ) {
+   counteratom[idlist[k]]++
+}
+
+
+
+#### atoms and data file names
+printf("# different atoms:\n")
+for ( k in atomlist ) {
+   filemoments[k]=sprintf("%s_%s.dat",datafileprefix,k)
+   printf("#%9s %16s %10s\n","iteration","Mmt","id") > filemoments[k]
+   printf("%8s   #atoms:%-6d     data file name=%s\n",k,counteratom[k],filemoments[k])
+
+   ### gnuplot file
+   printf("set title \"moments %s\"\n",k)                  > gnuplotfile
+   printf("set xlabel \"iteration\"\n")                    > gnuplotfile
+   printf("set ylabel \"moment %s [{\\/Symbol m}B ]\"\n",k) > gnuplotfile
+   printf("plot \\\n")                                     > gnuplotfile
+   printf("\"%s\" w l t \"\" \n",filemoments[k])           > gnuplotfile
+   printf("pause -1\n")                                    > gnuplotfile
+   printf("set terminal postscript eps enhanced color lw 1 solid \"Helvetica\" 18\n") > gnuplotfile
+   printf("set out \"%s.eps\"\n",filemoments[k])           > gnuplotfile
+   printf("replot\n")                                      > gnuplotfile
+   printf("set term pop\n\n\n")                            > gnuplotfile
+
+}
+
+
+
+
+
+
+
+### write data file
+nid = asorti(idlistnum, idlistnumsort)
+nit = asorti(iterationlist, iterationlistsort)
+
+for (idd = 1; idd <= nid; idd++) {
+    atomid=idlistnum[idlistnumsort[idd]]
+    atomname=idlist[atomid]
+
+    for (idt = 1; idt <= nit; idt++) {
+        iterid=iterationlist[iterationlistsort[idt]]
+#        printf("ind2=%s %s %s\n",iterationlistsort[idt],idt, iterid)
+        
+        printf("%10d %16.8E %10d\n",iterid,momentlist[atomid,iterid],atomid ) > filemoments[atomname]
+    } 
+    # loop over iterations 
+
+    printf("\n\n") > filemoments[atomname]
+
+
+#    printf("ind=%s %s %s\n",idlistnumsort[idd],idd, atomid)
+} # loop over ids 
+
+
+
+
+### averaged moment per type of last iteration
+for ( k in atomlist ) {
+   nnn[k]=0
+   avmoments[k]=0
+}
+
+for (idd = 1; idd <= nid; idd++) {
+    atomid=idlistnum[idlistnumsort[idd]]
+    atomname=idlist[atomid]
+    if ( momentlist[atomid,lastiteration] != "" ) { 
+       avmoments[atomname]=avmoments[atomname]+momentlist[atomid,lastiteration]
+       nnn[atomname]++
+    }
+} # loop over ids 
+
+   printf("\n")
+for ( k in atomlist ) {
+   if (nnn[k] > 0 ) {
+   avmoments[k]=avmoments[k]/nnn[k]
+   if ( nnn[k] > 1 ) {pll="s"} else {pll=" "}
+   printf("last iteration avaerage moment of %-4s: %16.8f      [%6d atom%1s]\n",k,avmoments[k],nnn[k],pll)
+   }
+}
+
+
+
+}
+'
+
+
+
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+
+echo ""
+echo "#data can be plotted with gnuplot:"
+echo "gnuplot $GNUPLOTFILE"
+
+#which gnuplot && gnuplot $GNUPLOTFILE

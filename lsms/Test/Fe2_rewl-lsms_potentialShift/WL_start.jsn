@@ -1,0 +1,7 @@
+{
+"xMinFullRange" : 8.5,
+"xMaxFullRange" : 10.0,
+"overlap" : 0.75,
+"interval" : 0.01,
+"flatnessCriterion" : 7.50000000e-01
+}

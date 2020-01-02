@@ -1,0 +1,131 @@
+================================================================================
+                           Input parameter data file
+                            LSMS code (version 2.0)
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                           System-related Parameters
+===========================+====================================================
+Text Identification        ::  Co
+Alloy System Description   ::  Co, hcp structure
+No. Atoms in System (> 0)  ::  2
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                       Position and Potential Data Files
+===========================+====================================================
+Atomic Position File Name  :: position.dat
+Default Potential Input File Name  ::  Co_mt_v
+Default Potential Input File Form  ::  1
+   = 0: ASCII Format       ----------
+   = 1: XDR Format         ----------
+   = 2: HDF Format         ----------
+   = 3: Machine Dependent Binary ----
+Default Potential Output File Name ::  Co_mt_w
+Default Potential Output File Form ::  1
+   = 0: ASCII Format       ----------
+   = 1: XDR Format         ----------
+   = 2: HDF Format         ----------
+   = 3: Machine Dependent Binary ----
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                            SCF-related Parameters
+===========================+====================================================
+Stop-at Routine Name       :: main
+No. Iterations (> 0)       ::  60
+Method of SCF Calculation  ::  1
+   -2. Single Site         -----------
+   -1. ScreenKKR-LSMS      -----------(To be implemented)
+    0. Screen-KKR          -----------(To be implemented)
+    1. LSMS                -----------
+    2. KKR                 -----------
+    3. KKR-CPA             -----------
+Output to Screen (y/n)     ::  n
+Temperature Parameter (K)  ::  0.000
+Val. Electron Rel (>= 0)   ::  0
+     0. Non-relativitic    ---------
+     1. Scalar-relativitic ---------
+     2. Full-relativitic   ---------
+Core Electron Rel (>= 0)   ::  0
+     0. Non-relativitic    ---------
+     1. Full-relativitic   ---------
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                       LDA Potential-related Parameters
+===========================+====================================================
+Potential Type (>= 0)      ::  0
+     0. Muffin-tin         ----------
+     1. ASA                ----------
+     2. Muffin-tin ASA     ----------
+     3. Full               ----------
+     4. Muffin-Tin Test    ----------
+     5. Empty Lattice      ----------
+     6. Mathieu Potential  ----------
+Exch-Corr. LDA Type (>= 0) ::  4
+   Note: The input can be either one of the following numbers or, e.g.,
+         LDA_X+LDA_C_HL for Hedin-Lundqvist LDA functional, or GGA_X_PBE+GGA_C_PBE
+         for PBE GGA function, etc.. The naming convention here follows the definition
+         given in LibXC.
+     0. Barth-Hedin        ---------
+     1. Vosk-Wilk-Nusair   ---------
+     2. Perdew-Zunger      ---------
+     3. Perdew-Wang GGA    ---------
+     4. PBE                ---------
+Uniform Grid Parameters    ::  64   64   64
+     = 2^n with n =1, 2, ... Three intergers used to define the grid numbers along
+       three Bravais lattice vector directions
+Note: Uniform grid is used for calculating the non-spherical electrostatic 
+      potential, so it is only used for the full-potential calculation.
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                        Energy (Ryd.) Contour Parameters
+===========================+====================================================
+Read E-mesh from emeshs.inp :: 0
+     0. No                 ---------
+     1. Yes. In this case, the following data have no effect
+No. Energy Grids           ::  30 
+Real Axis Bottom, erbot    ::  -0.40
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                         Magnetism-related Parameters    
+===========================+====================================================
+# Moment Direction File Name ::  Evec_input.dat
+Spin Index Param (>= 1)    ::  2
+     1. No Spin            ---------
+     2. Spin-polarized     ---------
+     3. Spin-canted        ---------
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                  Scattering Theory-related Parameters
+===========================+====================================================
+Default Lmax-T matrix      ::  4
+Default No. Rad Points ndivin  :: 1001
+   = 0: Not specified ---------------
+   > 0: Speciflied. Note:  0  < r(j)=exp(j*hin) <= rmt, j=1,2,...,ndivin
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                      R-space or K-space Related Parameters
+===========================+====================================================
+Default LIZ Cutoff Radius  :: 13.2
+===========================+====================================================
+                  * * *              * * *              * * *
+================================================================================
+                     Mixing and Tolerance Parameters
+===========================+====================================================
+Mixing algorithm           ::  2
+     0. Simple Mixing      ---------
+     1. D.G.A. Mixing      ---------
+     2. Broyden Mixing     ---------
+Mixing quantity type       ::  1
+     0. Charge mixing      ---------
+     1. Potential mixing   ---------
+Default Mixing Parameter   ::  0.1000
+Energy (Ryd) Tol (> 0)     ::  0.000005
+Potential Tol (> 0)        ::  0.0000001
+================================================================================

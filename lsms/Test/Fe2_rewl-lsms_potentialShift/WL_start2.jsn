@@ -1,0 +1,14 @@
+{
+"xMinForEachWindow" : [ 
+8.50,
+8.75,
+9.00
+],
+"xMaxForEachWindow" : [ 
+9.50,
+9.75,
+10.00
+],
+"interval" : 0.01,
+"flatnessCriterion" : 7.50000000e-01
+}

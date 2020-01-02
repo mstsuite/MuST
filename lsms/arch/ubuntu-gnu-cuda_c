@@ -1,0 +1,35 @@
+export USE_OPENMP=1
+export USE_ACCELERATOR = -DACCELERATOR_CUDA_C
+# export USE_LIBXC=1
+# define HAS_BACKTRACE if glibc backtrace functionality is available
+# export HAS_BACKTRACE=1
+
+export CUDA_DIR = /usr/local/cuda
+export LIBS += 
+export ADD_LIBS += -L$(CUDA_DIR)/lib64 -lcudart -lcublas \
+                   -L/usr/local/lib -lhdf5_serial -lblas -llapack \
+                   -lgfortran
+
+export INC_PATH += -I$(CUDA_DIR)/include -I/usr/include/hdf5/serial/
+
+# export BOOST_ROOT=$(TOP_DIR)
+
+# export CUDA_CXX=nvcc -arch=sm_20
+
+ifdef USE_OPENMP
+  export CXX=mpicxx -g -std=c++11 $(USE_ACCELERATOR) -fopenmp -O3  $(OPT_DEFINES)
+  export F77=gfortran -g -fopenmp -O3 $(USE_ACCELERATOR)
+# export F77=gfortran -g -fopenmp -O3 -fcheck=all 
+  export CUDA_CXX=nvcc -arch=sm_60 $(USE_ACCELERATOR) -std=c++11 -Xcompiler -fopenmp
+else
+  export CXX=mpicxx -g -O3 -std=c++11  $(USE_ACCELERATOR) $(OPT_DEFINES)
+  export F77=gfortran -g -O3 $(USE_ACCELERATOR)
+  export CUDA_CXX=nvcc -arch=sm_60 $(USE_ACCELERATOR) -std=c++11
+# export F77=gfortran -g -O3 -fcheck=all
+endif
+
+# JSON++ requires flex and bison (version>=2.4)
+export FLEX=flex
+export BISON=/usr/local/opt/bison/bin/bison
+
+export LUACXX = $(CXX)

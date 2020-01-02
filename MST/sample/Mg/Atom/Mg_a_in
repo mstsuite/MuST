@@ -1,0 +1,9 @@
+Title: Magnesium Atomic Potential
+Mg_a_out                 output file name. If blank, data will show on screen
+  12.00000               zed: atomic number
+   0.00000               moment
+    1                    number of spins
+    1                    ex-cor type (1=vb-hedin,2=vosko)
+   25                    number of iterations
+   0.20000               mixing parameter
+Mg_a_pot                 pot file (output)

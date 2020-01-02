@@ -1,0 +1,35 @@
+!  *******************************************************************
+!  * System: Co                                                      *
+!  * Lattice structure: hcp                                          *
+!  *                                                                 *
+!  * Note: Lines starting with "!" or "#" are considered as comment. *
+!  *       Lines containing space only are also ignored.             *
+!  *       The file may begin with 3 optional 3 lines of rotation    *
+!  *       matrix to be applied to the evec vectors:                 *
+!  *              rot(1,1)  rot(2,1)  rot(3,1)                       *
+!  *              rot(1,2)  rot(2,2)  rot(3,2)                       *
+!  *              rot(1,3)  rot(2,3)  rot(3,3)                       *
+!  *       followed by data in the following format                  *
+!  *          atom_name  evec_x  evec_y  evec_z                      *
+!  *       or with 3 extra columns of constrained field (cf)         *
+!  *         atom_name  evec_x evec_y evec_z cf_x cf_y cf_z          *
+!  *       or with 1 extra mixing parameter                          *
+!  *         atom_name  evec_x evec_y evec_z cf_x cf_y cf_z emix     *
+!  *       or                                                        *
+!  *         atomic_number  evec_x evec_y evec_z                     *
+!  *       or with extra 3 columns of constrained field (cf)         *
+!  *         atomic_number  evec_x evec_y evec_z cf_x cf_y cf_z      *
+!  *       or with extra 1 mixing parameter                          *
+!  *         atomic_number  evec_x evec_y evec_z cf_x cf_y cf_z emix *
+!  *                                                                 *
+!  *       In each line, data should be separated by space, comma or *
+!  *       semicolumn.                                               *
+!  *******************************************************************
+! The following three optional lines are rotation matrix to be applied to
+! the moment vectors
+     1.000000000000000    0.000000000000000    0.000000000000000
+     0.000000000000000    1.000000000000000    0.000000000000000
+     0.000000000000000    0.000000000000000    1.000000000000000
+! Chemical Symbal  ex, ey, ez
+     Co     0.00000000000000   0.00000000000000   1.00000000000000
+     Co     0.00000000000000   0.00000000000000   1.00000000000000

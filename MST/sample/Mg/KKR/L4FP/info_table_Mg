@@ -1,0 +1,58 @@
+================================================================================
+                  * * *              * * *              * * *
+================+===============================================================
+# Default Potential Input File Name  ::  Mg_ss_pot
+Default Potential Input File Name  ::  Mg_mt_v
+Default Potential Input File Form  ::  0
+   = 0: ASCII Format       ----------
+   = 1: XDR Format         ----------
+   = 2: HDF Format         ----------
+   = 3: Machine Dependent Binary ----
+Default Potential Output File Name ::  Mg_fp_w
+Default Potential Output File Form ::  1
+   = 0: ASCII Format       ----------
+   = 1: XDR Format         ----------
+   = 2: HDF Format         ----------
+   = 3: Machine Dependent Binary ----
+Default Moment Direction  ::    0.00000000    0.00000000    1.00000000
+Default Constrain Field   ::    0.00000000    0.00000000    0.00000000
+Note: Lmax-T matrix  - controls the KKR size
+      Lmax-Wave Func - expansion of the solutions of Schrodinger eq. (Lmax= Lmax_T+n*Lmax_Pot, where n is the
+                       number of iterations of the iterative integral equations solver). This is set internally
+                       if is less than 0, otherwise takes the value specified in this file >= Lmax_T).
+      Lmax-Potential - expansion of the LDA potential to be used scf ( 0<= Lmax-Pot <= 2*Lmax-T ).
+      Lmax-Charge    - expansion of the charge density (0<=Lmax-Pot<=2*Lmax-T).
+      Lmax-Step Func - step function expansion used to converge 
+                       the volume integration method of single site solver (0<= Lmax-Step < Infinity).
+Default Lmax-T matrix     :: 4
+Default Lmax-Wave Func    :: 4
+Default Lmax-Potential    :: 8
+Default Lmax-Trunc Pot    :: 8
+Default Lmax-Charge Den   :: 8
+Default Lmax-Step Func    :: 12
+Note: The neighbors number represents the maximum number of neighbors of a site. It can be less than the specified
+      number if the neighbors on the next shell adds up over its maximum set.
+Default LIZ # Neighbors   :: 89
+Default LIZ # NN Shells   :: 8
+Default LIZ Shell Lmax    :: 4  4  4  3  3  3  3  3   1  1  1  1  1  1  1
+Default LIZ Cutoff Radius :: 13.5
+Default Rho  Mix Param.   :: 0.1000
+Default Pot  Mix Param.   :: 0.1000
+Default Mom  Mix Param.   :: 0.1000
+Default Evec Mix Param.   :: 0.0000
+Default Maximum Core Radius       :: 0.0d0
+Default Maximum Muffin-tin Radius :: 0.0d0
+Default No. Rad Points ndivin  :: 1001
+   = 0: Not specified ---------------
+   > 0: Speciflied. Note:  0  < r(j)=exp(j*hin) <= rmt, j=1,2,...,ndivin
+Default No. Rad Points ndivout ::  0
+   = 0: Not specified ---------------
+   > 0: Speciflied. Note: rmt < r(j)=exp(j*hout) <= rmax, j=1,2,...,ndivout
+Default Integer Factor nmult ::  1
+   = 0: Not specified ---------------
+   > 0: Speciflied. Note: r(j) = exp(j*h), hin = nmult*hout
+Default Pseudo Charge Radius :: 0.9
+Default Screen Pot.       ::  3.0
+Default Lmax-Screen       ::  3
+Default Rcut-Screen       ::  4.8
+================================================================================

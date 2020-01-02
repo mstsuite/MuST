@@ -1,0 +1,18 @@
+Hafnium Single Site Potential
+Hf_ss.out                Outfput file name. If blank, data will show on screen
+    1                    print level
+    1                    crystal type (1=fcc,2=bcc)
+    3                    lmax
+   8.00000               lattice constant
+    1                    number of spins
+    1                    ex-cor type (1=vb-hedin,2=vosko)
+    1                    number of components
+  72.00000   0.00000     z(at.num),  mom
+   1.00000               concentrations
+   0.00000   0.00000     mt radius, ws radius
+Hf_a.pot                 pot file  (input)
+Hf_ss.pot                pot file (output)
+Hf_ss.k                  keep file
+   10 -0.4000  0.5000    e-grid: ndiv(=#div/0.1Ryd), bott, eimag
+   0.70000   0.70000     ef (est)
+   50   0.10000          num of scf its, mix parameter

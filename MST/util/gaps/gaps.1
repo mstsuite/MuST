@@ -1,0 +1,140 @@
+.TH gaps 1 "Last Change: June 8,2011" "version 0.1" "USER COMMANDS"
+.SH NAME 
+gaps \- fill the gaps in a crystal lattice
+.SH SYNOPSIS
+.B gaps 
+.BI [-i\  input ]\ [-o\  output ]\ [-u\  units ]\ [-r\  Z=A ].\|.\|.
+.br
+.BI 	[-a\  algorithm ]\ [-t\  type ]\ [-d\ i|o|a|n]\ [-g]\ [-w]
+
+.B gaps 
+.BI [-c\  conf ]
+.SH DESCRIPTION
+.B gaps
+takes as it's argument a crystal lattice of items and identifies the gaps in
+it. Details for formatting of input and output files found in the
+.B FILES
+section below. 
+.SH OPTIONS
+.IP -h
+Display help text and exit successfully.
+.IP -g
+Guess values for atomic radii based on the current radii of the atoms. If the 
+values guessed are smaller than those defined with "-r Z=A" or in a conf file
+then they will be redefined to that new value.
+.IP -w
+Display warnings. This is not possible in a configuration file.
+.IP "-d i|o|a|n"
+Chooses which of input and output files will use direct coordinates. i for
+input, o for output, a for all and n for neither. No matter the option, if the
+input file contains the line DirectCoordinates, it will be read as such from
+that line on.
+.IP "-r Z=A ..."
+Change the value of an atomic radius. Takes one argument of the form "Z=A" 
+where Z is an integer referring to the atomic number that is to be changed or 
+the symbol of that element. A is a floating point representation of the new 
+radius in Angstroms. Can be used multiple times for multiple changes. Units are
+those chosen with the last -u flag preceding this redefinition. 
+Defaults found in 
+.B radii.c
+in the source. 
+.IP "-i /path/to/input"
+Select input file. Defaults to stdin.
+.IP "-o /path/to/output"
+Select output file. Defaults to stdout.
+.IP "-a algorithm"
+Select algorithm to use, a description of each may be found in the
+.B ALGORITHMS
+section below. Defaults to 
+.B gridfill.
+.IP "-t type"
+Type can be an atomic nubler or symbol. It is the type of virtual atom that
+will be used. It defaults to the smallest atom in the crystal.
+.IP "-u units"
+Choose between Angstroms and Atomic Units. The options are "ang", "au" or a
+floating point number conversion factor from angstroms. Specifies the units of 
+any command line options that come after it but not before. The last one will 
+be used to determine the units of the file. Defaults to 
+Angstroms.
+.IP "-c conf_file"
+Use conf_file to provide the arguments. May be used with other arguments but it
+will take priority over anything that comes before it and anything coming after
+will take priority over it. Description is found in 
+.B FILES
+section.
+.SH FILES
+.IP INPUT/OUTPUT
+a_x a_y a_z
+.br 
+b_x b_y b_z
+.br 
+c_x c_y c_z
+.br
+DirectCoordinates?
+.br
+Z_1 x_1 y_1 z_1
+.br 
+Z_2 x_2 y_2 z_2
+.br 
+ ...
+.br 
+Z_n x_n y_n z_n
+
+The input and output are space separated variable files where the first three
+lines are vectors describing the enclosing paralelipiped and the rest of the
+lines each describe a different atom. Z is the atomic number, this determines 
+the radius of the atom. Virtual atoms are identified by a negative value for Z.
+The other 3 items are the cartesian coordinates for the position of the atom.
+Any line which does not start with a number is ignored and can be used for 
+storing comments. The space on each line after the numbers can be used in the 
+same way. Virtual atoms are denoted by negative numbers corresponding to what
+type of atom they are supposed to be (-12 represents a virtual carbon atom). 0
+represents no atom and can be set to anything without a problem.
+If the word DirectCoordinates appears on a line before a comment block, all
+atoms after that will be treated as direct corodinates.
+.IP CONFIGURATION
+set=val
+ ...
+
+The configuration file's format is simple, it consists of multiple lines each
+telling it what to set to what value. The first non-whitespace character of 
+set is checked. If it is an integer, then it is treated as the atomic number of
+the element to be redefined. If it is an 'r', then val should be a Z=A string
+as described above. If the character is an 'a', the algorithm will be set. 
+A 'v' will set the virtual radius. For 'i' and 'o' input file and output file 
+respectively and 'u' sets the units. All of those characters are case 
+insensitive. The rules are the same as for command line arguments.
+.SH ALGORITHMS
+.IP gridfill
+Creates a grid all over the crystal and uses the vertices as starting points 
+for the drift function which looks for the best nearby spot to place it.
+If multiple threads are called, it will split the crystal into multiple
+sections and let each thread fill one of them.
+.SH EXAMPLES
+Using the gridfill algorithm, files infile for input and outfile for
+output, a hydrogen (Z=1) radius of 0.34 Angstroms, a lithium (Li) radius of
+2.47 Atomic units and looking for a virtual Iron (Fe):
+
+.B gaps -a gridfill -i infile -o outfile -r 1=0.34 -u au -r Li=2.47 -u ang 
+.B -t Fe
+
+For multithreaded operation, run through mpiexec:
+
+.B mpiexec [
+.I mpiexec_flags
+.B ] gaps [ 
+.I gaps_flags 
+.B ]
+.SH WARNINGS
+If the user sees the message:
+.IP "WARNING: entry on line 4 of input file corrected."
+Old values: 1.000000, 5.000000, 6.000000
+.br
+New values: 4.000000, 10.000000, 11.000000
+.P
+This means that the atom on line 4 was out of the bounds of the paralelipiped 
+and had to be moved in. 
+.SH SEE ALSO
+mpiexec(1)
+.SH AUTHOR
+George Bargoud <gbargoud@gmail.com>

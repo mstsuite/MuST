@@ -1,0 +1,131 @@
+  
+             ********************************************************
+             *                                                      *
+             *              Fortran 90 Interface Module             *
+             *                                                      *
+             *                         For                          *
+             *                                                      *
+             *              MPI Message Passing Library             *
+             *                                                      *
+             *                   Version No. 2.0k                   *
+             *                                                      *
+             ********************************************************
+  
+ CHARACTER_BYTES =            1
+ INTEGER_BYTES   =            4
+ REAL_BYTES      =            8
+ COMPLEX_BYTES   =           16
+ ADDRESS_BYTES   =            8
+  
+ Number of Procs =           32
+  
+Execution starts at 18:58:06, 11-21-2019 on    32 nodes
+#-------------------------------------------------------------------------------
+#
+#
+#           ********************************************************
+#           *                                                      *
+#           *    Full-Potential Multiple Scattering Theory Based   *
+#           *                                                      *
+#           *  Ab Initio Electronic Structure Calculation Package  *
+#           *                                                      *
+#           ********************************************************
+#
+#
+#   username                 : ywg
+#   system name              : bolt.psc.edu
+#   code compiled            : Thursday, November 21 2019 18:52:11
+#   Source code version      : Develop
+#-------------------------------------------------------------------------------
+
+ The Position Data File: ./position.dat
+
+ The Position Data is read successfully!
+
+
+================================================================================
+
+ The lattice system is: Cubic       
+
+********************************
+* Output from SPACEGRP         *
+********************************
+
+The point group of the crystal is the full cubic        group
+Space group is symmorphic
+--------------------------------------------------------------------------------
+
+********************************
+* Output from CHECKSYMM        *
+********************************
+
+Symmetry is correct
+--------------------------------------------------------------------------------
+
+********************************
+* Output from SPACEGRP         *
+********************************
+
+The point group of the crystal is the full cubic        group
+Space group is symmorphic
+--------------------------------------------------------------------------------
+
+********************************
+* Output from SPKPT            *
+********************************
+
+Wavevector mesh contains   16384 points
+--------------------------------------------------------------------------------
+
+================================================================================
+
+            *********************************************
+            *     Output from createParallelization     *
+            *            in ProcMappingModule           *
+            *********************************************
+
+The number of processors in each box :    1
+The number of repeats along k-dimen. :    8
+The number of repeats along e-dimen. :    4
+Dimension of the box :    1 x    1 x    1
+MyPE =     0, NumEs, NumEsPerBox =    30    9
+MyPE =     0, E index =     1    5    9   13   17   21   25   29   30
+Energy point index =     1    2    3    4    5    6    7    8    9   10   11   12   13   14   15   16   17   18   19   20, ...
+Process in E-group =     0    1    2    3    0    1    2    3    0    1    2    3    0    1    2    3    0    1    2    3, ...
+MyPE =     0, NumKs, NumKsPerBox =   408   51
+MyPE =     0, K index =     1    2    3    4    5    6    7    8    9   10   11   12   13   14   15   16, ...,...
+IBZ K point index  =     1    2    3    4    5    6    7    8    9   10   11   12   13   14   15   16   17   18   19   20, ...,...
+Process in K-group =     0    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0, ...,...
+MyPE =     1, NumEs, NumEsPerBox =    30    9
+MyPE =     1, E index =     2    6   10   14   18   22   26   29   30
+MyPE =     1, NumKs, NumKsPerBox =   408   51
+MyPE =     1, K index =     1    2    3    4    5    6    7    8    9   10   11   12   13   14   15   16, ...,...
+MyPE =     2, NumEs, NumEsPerBox =    30    9
+MyPE =     2, E index =     3    7   11   15   19   23   27   29   30
+MyPE =     2, NumKs, NumKsPerBox =   408   51
+MyPE =     2, K index =     1    2    3    4    5    6    7    8    9   10   11   12   13   14   15   16, ...,...
+MyPE =     3, NumEs, NumEsPerBox =    30    9
+MyPE =     3, E index =     4    8   12   16   20   24   28   29   30
+MyPE =     3, NumKs, NumKsPerBox =   408   51
+MyPE =     3, K index =     1    2    3    4    5    6    7    8    9   10   11   12   13   14   15   16, ...,...
+MyPE =     4, NumEs, NumEsPerBox =    30    9
+MyPE =     4, E index =     1    5    9   13   17   21   25   29   30
+MyPE =     4, NumKs, NumKsPerBox =   408   51
+MyPE =     5, NumEs, NumEsPerBox =    30    9
+MyPE =     5, E index =     2    6   10   14   18   22   26   29   30
+MyPE =     5, NumKs, NumKsPerBox =   408   51
+MyPE =     5, K index =    52   53   54   55   56   57   58   59   60   61   62   63   64   65   66   67, ...,...
+MyPE =     6, NumEs, NumEsPerBox =    30    9
+MyPE =     6, E index =     3    7   11   15   19   23   27   29   30
+MyPE =     6, NumKs, NumKsPerBox =   408   51
+MyPE =     6, K index =    52   53   54   55   56   57   58   59   60   61   62   63   64   65   66   67, ...,...
+MyPE =     7, NumEs, NumEsPerBox =    30    9
+MyPE =     7, E index =     4    8   12   16   20   24   28   29   30
+MyPE =     7, NumKs, NumKsPerBox =   408   51
+MyPE =     7, K index =    52   53   54   55   56   57   58   59   60   61   62   63   64   65   66   67, ...,...
+
+================================================================================
+
+MyPE =     4, K index =    52   53   54   55   56   57   58   59   60   61   62   63   64   65   66   67, ...,...
+The number of processes that write output data:      1
+ Running on            1 threads

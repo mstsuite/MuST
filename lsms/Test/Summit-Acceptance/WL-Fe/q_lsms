@@ -1,0 +1,34 @@
+#!/bin/bash
+# Begin LSF directives
+#BSUB -P stf006summitdev
+#BSUB -J WL-LSMS-Fe
+#BSUB -o Fe.stdout
+#BSUB -W 60
+#BSUB -n 2
+# End LSF directives and begin shell commands
+
+export NUM_LSMS=10
+export STEPS_PER_WALKER=10
+export MPI_PER_LSMS=2
+export NUM_ATOMS=1024
+
+export TOTAL_STEPS=$(($NUM_LSMS $STEPS_PER_WALKER))
+export TOTAL_MPI=$(($NUM_LSMS * $MPI_PER_LSMS + 1))
+
+export LSMS_ROOT=$HOME/MST_Pack/LSMS_3_summitdev
+
+cd $LSMS_ROOT/Test/Summit-Acceptance/FePt
+#cd $MEMBERWORK/stf006
+date
+
+echo "Running wl-lsms with:"
+echo "Number of Atoms: " $NUM_ATOMS
+echo "Number of Walkers: " $NUM_LSMS
+echo "Steps per Walker: " $STEPS_PER_WALKER
+echo "MPI Ranks per Walker: " $MPI_PER_LSMS
+echo "-->"
+echo "Total Steps: " $TOTAL_STEPS
+echo "Total MPI Ranks: " $TOTAL_MPI
+
+mpirun -np $TOTAL_MPI $(LSMS_ROOT)/bin/wl-lsms -i i_lsms -mode 1d -size_lsms $NUM_ATOMS -num_lsms $NUM_LSMS -num_steps $TOTAL_STEPS -energy_calculation multistep
+

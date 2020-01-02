@@ -1,0 +1,25 @@
+#!/bin/bash
+#PBS -joe
+#PBS -N Fe_LSMS3
+#PBS -l walltime=1:00:00
+#PBS -l nodes=2
+#PBS -l feature=gpu
+#PBS -A STF006
+#-------------------------------------------
+
+#--Change directory to the working directory.
+cd $PBS_O_WORKDIR
+
+# the run will be for  2 x REPEAT^3  Fe atoms
+export REPEAT=2
+export NUM_ATOMS=$(( 2 * $REPEAT * $REPEAT * $REPEAT ))
+
+export LSMS_ROOT=$HOME/MST_Pack/LSMS_3
+
+
+echo "Running lsms for " $NUM_ATOMS " Fe atoms."
+
+sed "s/REPEAT/$REPEAT/" i_lsms_template > i_lsms_$NUM_ATOMS
+
+date
+aprun -n 2 $LSMS_ROOT/bin/lsms i_lsms_$NUM_ATOMS

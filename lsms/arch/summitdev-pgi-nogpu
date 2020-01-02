@@ -1,0 +1,28 @@
+ export USE_OPENMP=1
+# export USE_ACCELERATOR = -DACCELERATOR_CUDA_C -DBUILDKKRMATRIX_GPU
+# export USE_ACCELERATOR = -DACCELERATOR_CUDA_C
+
+# export USE_LIBXC=1
+
+export LIBS += -lm -L${OLCF_ESSL_ROOT}/lib64 -lessl -L/sw/summitdev/xl/20161123/xlf/15.1.5/lib/ -lxlfmath -lxl -lxlf90_r -llapack -lblas
+export ADD_LIBS +=  -lpgf90 -lpgf902 -lpgf90_rpm1 -lpgf90rtl -L$(OLCF_HDF5_ROOT)/lib -lhdf5
+
+export INC_PATH += 
+# -I $(HDF5_INCLUDE_OPTS)
+
+export ADDITIONAL_TARGETS = 
+
+export BOOST_ROOT=$(TOP_DIR)
+
+# export CUDA_CXX=nvcc -arch=sm_35 $(CRAY_CUDA_INCLUDE_OPTS) $(USE_ACCELERATOR) -Xcompiler -fopenmp
+
+ifdef USE_OPENMP
+export CXX=mpicxx -g -fast -std=c++11 -I$(BOOST_ROOT) $(OPT_DEFINES) -mp
+export CC=mpicc -g -fast $(OPT_DEFINES) -mp
+export F77=mpif77 -g -fast -mp
+else
+export CXX=mpicxx -g -fast -std=c++11 -I$(BOOST_ROOT) $(OPT_DEFINES)
+export CC=mpicc -g -fast $(OPT_DEFINES)
+export F77=mpif77 -g -fast  
+endif
+

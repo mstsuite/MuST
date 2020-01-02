@@ -1,0 +1,35 @@
+!  *******************************************************************
+!  * System: Co                                                      *
+!  * Lattice structure: hcp                                          *
+!  *                                                                 *
+!  * Note: Lines starting with "!" or "#" are considered as comment. *
+!  *       Lines containing space only are also ignored.             *
+!  *       Except for comments, the first three lines contain the    *
+!  *       Bravais lattice vector, i.e.,                             *
+!  *       bravais(1,1),  bravais(2,1),  bravais(3,1)                *
+!  *       bravais(1,2),  bravais(2,2),  bravais(3,2)                *
+!  *       bravais(1,3),  bravais(2,3),  bravais(3,3)                *
+!  *                                                                 *
+!  *       Optionally, one may choose to add one line containing     *
+!  *       the number of atoms in the system to follow the three     *
+!  *       Bravais vector lines. The rest of the file will be the    *
+!  *       data for atomic position.                                 *
+!  *                                                                 *
+!  *       One can choose four different free FORTRAN format:        *
+!  *        index,  atomic number,   x,   y,    z                    *
+!  *        index,  chemical symbol,   x,   y,    z                  *
+!  *        atomic number,   x,   y,   z                             *
+!  *        chemical symbol,   x,   y,   z                           *
+!  *                                                                 *
+!  *       In each line, data should be separated by space, comma or *
+!  *       semicolumn.                                               *
+!  *******************************************************************
+4.9000
+! The following three lines are Bravais lattice vectors
+            0.50000000000000  -0.86602540378000   0.00000000000000
+            0.50000000000000   0.86602540378000   0.00000000000000
+            0.00000000000000   0.00000000000000   1.62418000000000
+
+! Chemical Symbal       x           y            z
+     Co     0.00000000000000   0000000000000000   0000000000000000
+     Co     0.00000000000000  -0.57735026919000   0.81209000000000

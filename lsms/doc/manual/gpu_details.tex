@@ -1,0 +1,57 @@
+\chapter{GPU Implementation}
+
+\section{Data}
+
+Data on the device includes the KKR matrix $m$ to be inverted to calculate the scattering path matrix $\tau$.
+
+\begin{verbatim}
+class DeviceStorage {
+private:
+  static int nThreads;
+  static Complex *dev_m[MAX_THREADS], *dev_bgij[MAX_THREADS], *dev_tmat_n[MAX_THREADS];
+  static int *dev_ipvt[MAX_THREADS];
+  static cublasHandle_t cublas_h[MAX_THREADS];
+  static cudaEvent_t event[MAX_THREADS];
+  static cudaStream_t stream[MAX_THREADS][2];
+  static DeviceMatrix<Complex> dev_tmat_store;
+  static bool initialized;
+  
+  ...
+  }
+\end{verbatim}
+
+Storage of the LIZ relevant data needed on the device to construct the KKR matrix $m$:
+\begin{itemize}
+\item \texttt{tmatStore} vector of all single scatterer $t$ matrices needed on this node. 
+\item \texttt{tmatLIZIndex} vector of indices mapping tmatStore to LIZ positions
+\item \texttt{LIZPos} the positions of the sites within the LIZ - needed for construction of $G_0$
+\item \texttt{LIZlmax} vector of $l_{max}$ for each $m_{ij}$ block
+\end{itemize}
+
+\section{KKR Matrix}
+
+\begin{equation}
+G^{ij}_{LL'}(E) = 4\pi i^{l-l'} \sum_{L''} C^L_{L' L''} D^{ij}_{L''}(E)
+\end{equation}
+
+where
+\begin{equation}
+D^{ij}_{L}(E) = -i^{l+1} \sqrt{E} h_l(r_{ij} \sqrt{E}) Y_{lm}^*(\hat{r_{ij}})
+\end{equation}
+and the Gaunt coefficients
+\begin{equation}
+C^L_{L' L''} = \int Y_{L'}(\Omega) Y_{L''}(\Omega) Y^*_L(\Omega) d\Omega
+\end{equation}
+
+Storage of Gaunt coefficients
+
+Hankel function storage for $l=0\ldots 2 l_{max} +1$, $ij=0\ldots N_{LIZ}^2-1$
+\textit{E.g.} for $l_{max}=12, N_{LIZ}=300$: 2,160,000 complex numbers or 33MBytes.
+
+90,000 i,j pairs.
+
+24 complex numbers per i,j pair: 384 bytes.
+
+Spherical harmonics storage per i,j pair for l up to 24:
+
+300 complex numbers: 4,800 bytes

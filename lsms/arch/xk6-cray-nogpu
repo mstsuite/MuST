@@ -1,0 +1,14 @@
+export LIBS += 
+export ADD_LIBS += 
+
+export INC_PATH += 
+
+export ADDITIONAL_TARGETS = 
+
+export BOOST_ROOT=$(TOP_DIR)
+
+export CC=cc -I$(BOOST_ROOT)
+export CXX=CC -I$(BOOST_ROOT) -hgnu
+#export CXX=CC -I$(BOOST_ROOT) -DUSE_PAPI
+export LUACXX=g++
+export F77=ftn

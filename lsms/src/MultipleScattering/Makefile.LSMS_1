@@ -1,0 +1,79 @@
+#========================================================================
+# makefile to generate library, lsms_tau00.a, which contains the routines 
+# for calculating tau00 matrix
+#========================================================================
+COM_FLAG=${FFLAGS} ${MODULE_FLAG}
+
+#======================================================================
+#define list of object modules
+#======================================================================
+
+MANIFEST_FILES  = $(shell cat manifest)
+SRC_FILES       = $(filter %.c %.f %.F, $(MANIFEST_FILES) )
+TAU00           = $(patsubst %.f, %.o, $(SRC_FILES))
+
+#================================================================
+# This is the node code for running the atom program on parallel
+# supercomputers.
+#================================================================
+all: cache
+
+echo_symbols:
+	@echo  MANIFEST_FILES = $(MANIFEST_FILES)
+	@echo
+	@echo  SRC_FILES = $(SRC_FILES)
+	@echo
+	@echo  TAU00   = $(TAU00)
+
+#================================================================
+all: cache
+
+cache: $(TAU00)
+	ar cr lsms_tau00.a $(TAU00)
+	mv lsms_tau00.a $(ODIR)/$(LIBNAME)
+	touch cache
+
+#block_inverse.o: block_inverse.f
+#	$(PREPROC) block_inverse.f tmp_block_inverse.f
+#	$(F77) $(FFLAGS) tmp_block_inverse.f
+#	mv tmp_block_inverse.o block_inverse.o
+block_inverse.o: block_inverse.f
+	$(F77) $(FFLAGS) block_inverse.f
+
+#cmtrins.o: cmtrins.f
+#	$(PREPROC) cmtrins.f tmp_cmtrins.f
+#	$(F77) $(FFLAGS) tmp_cmtrins.f
+#	mv tmp_cmtrins.o cmtrins.o
+cmtrins.o: cmtrins.f
+	$(F77) $(FFLAGS) cmtrins.f
+
+#find_sym.o: find_sym.f
+#	$(PREPROC) find_sym.f tmp_find_sym.f
+#	$(F77) $(FFLAGS) tmp_find_sym.f
+#	mv tmp_find_sym.o find_sym.o
+find_sym.o: find_sym.f
+	$(F77) $(FFLAGS) find_sym.f
+
+#gettaucl_c.o: gettaucl_c.f $(ATOM_PARAM_H) $(PARAM_RSP)
+#	$(PREPROC) gettaucl_c.f tmp_gettaucl_c.f
+#	$(F77) $(FFLAGS) tmp_gettaucl_c.f
+#	mv tmp_gettaucl_c.o gettaucl_c.o
+gettaucl_c_bu.o: gettaucl_c_bu.f $(ATOM_PARAM_H) $(PARAM_RSP)
+	$(F77) $(COM_FLAG) gettaucl_c_bu.f
+setgij.o: setgij.f $(ATOM_PARAM_H) $(PARAM_RSP)
+	$(F77) $(FFLAGS) setgij.f
+
+
+scale_tau00.o: scale_tau00.f
+	$(F77) $(FFLAGS) scale_tau00.f
+inv_scale_tau00.o: inv_scale_tau00.f
+	$(F77) $(FFLAGS) inv_scale_tau00.f
+makegij_c.o: makegij_c.f
+	$(F77) $(FFLAGS) makegij_c.f
+relmtrx.o: relmtrx.f
+	$(F77) $(FFLAGS) relmtrx.f
+lmsmtrx.o: lmsmtrx.f
+	$(F77) $(FFLAGS) lmsmtrx.f
+
+clean:
+	rm -f $(TAU00) $(LIBNAME) cache

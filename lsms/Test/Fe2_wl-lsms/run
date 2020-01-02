@@ -1,0 +1,22 @@
+#! /usr/bin/env bash
+##PBS -e __resultsdir__
+##PBS -o __resultsdir__
+#PBS -N WL-LSMS
+#PBS -l walltime=2:00:00
+#PBS -l nodes=7
+#PBS -A MAT020
+
+#-------------------------------------------
+EXECUTABLE=$HOME/LSMS_3/bin/wl-lsms
+#-------------------------------------------
+
+#--Change directory to the working directory.
+cd $PBS_O_WORKDIR
+
+#export OMP_NUM_THREADS=1
+
+#--Run the executable.
+date
+time aprun -n 7 -N 1 -d 1 $EXECUTABLE -i i_lsms -size_lsms 2 -num_lsms 3 -mode 1d -num_steps 20 -energy_calculation scfEnergy > lsms.out
+date
+
