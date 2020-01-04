@@ -483,7 +483,8 @@ contains
       es = cmplx(HALF*(ErBottom+ErTop),EiBottom,CmplxKind)
       do ie=1,NumEs-iLloyd
          phi=PI-dp*(ie-1)
-         EnergyMesh(ie)=er*exp(SQRTm1*phi) + es
+!        EnergyMesh(ie)=er*exp(SQRTm1*phi) + es
+         EnergyMesh(ie)=er*(cos(phi)+SQRTm1*sin(phi)) + es
       enddo
       EiTop = EiBottom + er
    else if (ContourType == RectBox) then
@@ -548,7 +549,8 @@ contains
       es = HALF*(ErBottom-EiBottom) ! center location of the 1st circle
       do ie = 1, NumEs_sc1
          phi=PI-dp*(ie-1)
-         EnergyMesh(ie)=er*exp(SQRTm1*phi) + es
+!        EnergyMesh(ie)=er*exp(SQRTm1*phi) + es
+         EnergyMesh(ie)=er*(cos(phi)+SQRTm1*sin(phi)) + es
       enddo
 !
       dp = PI/real(NumEs_sc2-1-iLloyd,kind=RealKind)
@@ -556,7 +558,8 @@ contains
       es = HALF*(ErTop-EiBottom) ! center location of the 2nd circle
       do ie=1,NumEs_sc2-iLloyd
          phi=PI-dp*(ie-1)
-         EnergyMesh(NumEs_sc1+ie)=er*exp(SQRTm1*phi) + es
+!        EnergyMesh(NumEs_sc1+ie)=er*exp(SQRTm1*phi) + es
+         EnergyMesh(NumEs_sc1+ie)=er*(cos(phi)+SQRTm1*sin(phi)) + es
       enddo
       EiTop = er
    else

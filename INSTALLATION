@@ -25,3 +25,12 @@ archietecture.h under MST and lsms using symbolic link. Steps are as follows:
 1. cd lsms
 2. ln -s arch/architecture_file architecture.h
 3. make
+
+Notes to the user of Fedora systems
+===================================
+MST may require using External Data Representation (XDR) library to store potential and charge density data. 
+Unfortunately, the latest Fedora Linux system does not place the library in conventional locations. Therefore, 
+before installing MuST or MST, please make sure that /usr/include/tirpc and /usr/include/tirpc/rpc exist. If not, 
+you need to ask your system administrator to istall libtirpc and librirpc-devel for you, or to run the following command 
+if you have the sys-admin privilige:
+   sudo dnf install libtirpc libtirpc-devel
