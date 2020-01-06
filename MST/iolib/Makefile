@@ -38,7 +38,7 @@ OBJS = iotk.o
 	   
 #=====================================================================
 $(IOLIB): $(OBJS)
-	$(ARCHV_LSMS) $(ARCHV_OPT) $(IOLIB) $(OBJS); ranlib $(IOLIB)
+	$(ARCHV) $(IOLIB) $(OBJS); ranlib $(IOLIB)
 
 clear: $(OBJS)
 	cd $(ODIR); rm -f $(OBJS)
