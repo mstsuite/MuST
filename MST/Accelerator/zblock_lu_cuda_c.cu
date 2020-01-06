@@ -20,7 +20,7 @@ extern "C" int zmatinv_prep1_ (void **a, void **b, int *n, int *lda, cudaStream_
 extern "C" int zmatinv_batch_ (cuDoubleComplex **A, cuDoubleComplex **Ainv, int *n, int *batch, cudaStream_t thisstream);
 extern "C" int ilaenv_(int*,char*,char*,int*,int*,int*,int*);
 
-void handle_cuda_error ( cudaError_t cerr, char *errmsg ) 
+void handle_cuda_error ( cudaError_t cerr, const char *errmsg ) 
 {
   if ( cerr ) {
     printf ("CUDA ERROR %s \n", errmsg);
@@ -31,7 +31,7 @@ void handle_cuda_error ( cudaError_t cerr, char *errmsg )
   }
 }
 
-void handle_cublas_error ( cublasStatus_t cs, char *errmsg ) 
+void handle_cublas_error ( cublasStatus_t cs, const char *errmsg ) 
 {
   if ( cs ) {
     printf ("cuBLAS ERROR %s \n", errmsg);
@@ -124,7 +124,7 @@ void zblock_lu_cuda_c_ ( std::complex<double> *a, int *lda, int *blk_sz, int *nb
     //printf("Performing initiliaztion in zblock_lu_cuda_c!\n");
     //calculate optimial work size for zgetri
     int one=1;  int mone=-1;
-    int NB = ilaenv_(&one,"ZGETRI","",&max_blk_sz,&mone,&mone,&mone);
+    int NB = ilaenv_(&one,(char *)"ZGETRI",(char *)"",&max_blk_sz,&mone,&mone,&mone);
     lwork= max_blk_sz * NB; 
 
     // allocate space on device

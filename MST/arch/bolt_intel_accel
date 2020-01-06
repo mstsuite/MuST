@@ -1,20 +1,29 @@
-#LIBXC_PATH = /usr/local/packages/LibXC/libxc-4.2.3
-FFTW_PATH = /usr/local/packages/FFTW/fftw-3.3.8
+ACCEL_PATH = /usr/local/cuda
+MKLROOT = /opt/intel/compilers_and_libraries_2019.3.199/linux/mkl
+MKLPATH = $(MKLROOT)/lib/intel64
+LIBXC_PATH = /usr/local/libxc/libxc-4.3.4/INTEL
+FFTW_PATH = /usr/local/fftw/fftw-3.3.8/INTEL
+P3DFFT_PATH = /usr/local/p3dfft/p3dfft-2.7.9/INTEL
 #=====================================================================
 # Compilers and archiver tool
 #=====================================================================
-FC=gfortran
+FC=mpiifort
 #F77=$(FC)
-F77=gfortran
-CC=gcc
-CXX=gcc
+F77=mpiifort
+CC=mpiicc
+CXX=mpiicpc -O3 -std=c++14 $(OPT_OPENMP) $(OPT_DEFINES)
 PREPROC = $(FC)
+EXEC_NAME = mst2_accel
 
-ARCHV_LSMS = ar
+ACCEL     = CUDA
+ACCEL_CXX = nvcc -arch=sm_35
+ACCEL_OPT = -I$(ACCEL_PATH)/include -I. -DLSMS2 -DCUDA
+
+ARCHV_LSMS = xiar
 ARCHV_OPT = -r
 
 XLC_I = 0
-Acceleration = 0
+Acceleration = 1
 
 #=====================================================================
 # Linker
@@ -24,10 +33,12 @@ LD=$(FC)
 #=====================================================================
 # Compiler flags
 #=====================================================================
-#FFLAGS=-ffree-form -J./ -O3 -fbounds-check -ftrapv -fvar-tracking-uninit -fstack-check
-FFLAGS=-ffree-form -J./ -O3
-F77FLAGS=-ffixed-form -J./ -O3
-FPPDEFS=-cpp
+#FFLAGS=-I. -assume byterecl -openmp -O3 -axSSE4.2
+#FFLAGS=-I. -assume byterecl -openmp -g -C -traceback -check all -check nopointer -check noshape #-warn all
+FFLAGS=-I. -O3 -CB -CU -traceback -ftrapuv -fpe0 -ftz -fp-stack-check
+#FFLAGS=-I. -O3
+F77FLAGS=$(FFLAGS)
+FPPDEFS=-fpp
 CFLAGS= -O3
 CPPDEFS=
 CPPFLAGS=-DUnderscore
@@ -35,14 +46,18 @@ CPPFLAGS=-DUnderscore
 #=====================================================================
 # Math library (Lapack, Blas, Scalapck) linking flags
 #=====================================================================
-#ADD_LIBS = -faltivec -framework Accelerate
-ADD_LIBS = -framework Accelerate
+#ADD_LIBS = -L$(MKLPATH) -lmkl_scalapack_lp64 \
+#  -Wl,--start-group -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lmkl_blacs_intelmpi_lp64 -Wl,--end-group \
+#  -lpthread -lm -L$(ACCEL_PATH)/lib64 -lcudart -lcuda -lcublas -lstdc++ \
+#  /lvol/intel/composer_xe_2013.1.117/compiler/lib/intel64/libiomp5.a
+ADD_LIBS = -L$(MKLPATH) -lmkl_scalapack_lp64 \
+         -Wl,--start-group -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lmkl_blacs_intelmpi_lp64 -Wl,--end-group \
+         -lpthread -lm /opt/intel/compilers_and_libraries_2019.3.199/linux/compiler/lib/intel64/libiomp5.a
 
 ifdef LIBXC_PATH
 ADD_LIBS += -L$(LIBXC_PATH)/lib -lxcf90 -lxc
 Use_LibXC = -DLIBXC -I$(LIBXC_PATH)/include
 endif
-
 #=====================================================================
 #                         Preprocessing Flags
 #
@@ -60,7 +75,7 @@ endif
 # MSGPASS_FLAG = -DMPI -DOpenMPI     -   point to point - OpenMPI fix
 # MSGPASS_FLAG = -DONESIDED          -   One-sided communication
 #=====================================================================
-# MSGPASS_FLAG = -DMPI
+  MSGPASS_FLAG = -DMPI
   MSGPASS_FLAG += -DNo_DataComm
 # MSGPASS_FLAG += -DONESIDED
  
@@ -76,10 +91,10 @@ endif
 #    Use_ScaLapack = -DUSE_SCALAPACK    - Use ScaLapack in KKR method
 #    Use_ScaLapack =                    - DO NOT use ScaLapack in KKR method
 #=====================================================================
-# Use_ScaLapack = -DUSE_SCALAPACK
+  Use_ScaLapack = -DUSE_SCALAPACK
 
 #=====================================================================
-# 4. SuperLU flag
+# 4. SuperLU flag 
 #    SuperLU      = 1, use the SuperLU in screened KKR method
 #                   0, otherwise
 #=====================================================================
@@ -89,21 +104,27 @@ ifeq "$(SuperLU)" "0"
 endif
 
 #=====================================================================
-# 5. Make Settings
-#    Use_FFTW     = 1, use the FFTW3 package for Fourier transformation
-#                   0, otherwise
+# 5 Make Settings
+#   Use_FFTW     = 1, use the FFTW3 package for Fourier transformation
+#                  0, otherwise (This stops working now...)
+#   If p3dfft is available, enable it for running parallel FFT
 #=====================================================================
 Use_FFTW = 1
 ifeq "$(Use_FFTW)" "1"
-#  FFTW_PATH = /opt/local
-#  FFTW_PATH = /usr/local/packages/fftw-3.3.8
+#  FFTW_INC = $(MKLROOT)/include/fftw
+#  FFT_FLAG = -DFFTW -I$(FFTW_INC)
+#  ------
    FFTW_INC = $(FFTW_PATH)/include
-   FFT_FLAG = -DFFTW -I$(FFTW_INC)
-   ADD_LIBS += -L$(FFTW_PATH)/lib -lfftw3
+   FFT_FLAG = -DFFTW -I$(FFTW_INC) -DP3DFFT -I$(P3DFFT_PATH)/include
+   ADD_LIBS += -L$(FFTW_PATH)/lib -lfftw3_mpi -lfftw3 -L$(P3DFFT_PATH)/lib -lp3dfft
+#  ------
+#  FFT_FLAG = -DFFTW -I$(FFTW_INC)
+#  ADD_LIBS += -L/lvol/packages/fftw-3.3.6-pl2/lib -lfftw3_mpi -lfftw3
+#  ------
 endif
 
 #=====================================================================
-# 5. Synchronization Options for MPI environment
+# 6. Synchronization Options for MPI environment
 #    Use_SYNC = -DSync_EiLoop - enables syncronization in the energy loop.
 #                               Ensures MPI2 synchronization of t-matrices
 #               -DSync_MST    - enables syncronization in MST solver, usefull
@@ -113,7 +134,7 @@ endif
   Use_SYNC += -DSync_MST
 
 #=====================================================================
-# 6. IO Process flag
+# 7. IO Process flag
 #    In some cases, you may want to specify the maximum number of processes
 #    performing input and and output, by uncommenting and modifying one of
 #    the following lines
@@ -124,7 +145,7 @@ endif
   MaxIO_FLAG = -DMaxOutProcs=1
 
 #=====================================================================
-# 7. Other flags
+# 8. Other flags
 #    You may uncomment out any following lines, if needed.
 #=====================================================================
 # Check_TIMING = -DTIMING

@@ -1,4 +1,4 @@
-CUDA_PATH =$(CUDAPATH)
+ACCEL_PATH =$(CUDAPATH)
 LIBXC_PATH = /ccs/proj/mat020/libxc-4.2.3/Summit_PGI
 ODIR = $(PWD)/bin_Summit
 #=====================================================================
@@ -17,9 +17,10 @@ EXEC_NAME = mst2_summit_pgi_accel
 #=====================================================================
 Acceleration = 1
 
-CUDA_CXX = nvcc -arch=sm_70
-# CUDA_OPT = -I$(CUDA_PATH)/include -I. -DLSMS2 -Xcompiler "-Warray-bounds -O2 -Woverlength-strings"
-CUDA_OPT = -I$(CUDA_PATH)/include -I. -DLSMS2 -O3
+ACCEL     = CUDA
+ACCEL_CXX = nvcc -arch=sm_70
+# ACCEL_OPT = -I$(ACCEL_PATH)/include -I. -DLSMS2 -Xcompiler "-Warray-bounds -O2 -Woverlength-strings"
+ACCEL_OPT = -I$(ACCEL_PATH)/include -I. -DLSMS2 -O3
 
 ARCHV_LSMS = ar
 ARCHV_OPT = -r
@@ -47,8 +48,8 @@ CPPFLAGS=-DUnderscore
 #=====================================================================
 # Math library (Lapack, Blas, Scalapck) linking flags
 #=====================================================================
-#ADD_LIBS = -lm -L$(CUDA_PATH)/lib64 -lcudart -lcuda -lcublas -lstdc++
-ADD_LIBS = -llapack -lblas -lm -L$(CUDA_PATH)/lib64 -lcudart -lcuda -lcublas -lstdc++
+#ADD_LIBS = -lm -L$(ACCEL_PATH)/lib64 -lcudart -lcuda -lcublas -lstdc++
+ADD_LIBS = -llapack -lblas -lm -L$(ACCEL_PATH)/lib64 -lcudart -lcuda -lcublas -lstdc++
 
 ifdef LIBXC_PATH
 ADD_LIBS += -L$(LIBXC_PATH)/lib -lxcf90 -lxc
@@ -167,7 +168,7 @@ endif
 # FPPFLAGS=-DSync_EiLoop -DSync_MST -DMPI -DNo_DataComm -DNo_SuperLU -DUSE_SCALAPACK -DCheckDOS -DONESIDED
 # FPPFLAGS=-DSync_EiLoop -DSync_MST -DMPI -DNo_DataComm -DNo_SuperLU -DUSE_SCALAPACK -DCheckDOS
 FPPFLAGS=$(SuperLU_FLAG) $(Check_TIMING) $(Use_BLAS) $(Use_DEBUG) $(Use_SYNC) $(FFT_FLAG) $(Use_MiscFlags) $(MSGPASS_FLAG) \
-$(MaxIO_FLAG) $(Use_ScaLapack) $(FFLAGS_ACC) $(Use_LibXC)
+$(MaxIO_FLAG) $(Use_ScaLapack)
 
 #=====================================================================
 # Software path ...

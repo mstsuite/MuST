@@ -3,7 +3,7 @@
 #=====================================================================
 # SystemName is the filename found under ./arch
 #=====================================================================
-SystemName = bolt_intel
+SystemName = bolt_intel_accel
 
 #=====================================================================
 # Paths and internal libraries setup - This unlikely needs to be changed
@@ -63,6 +63,7 @@ ERROR_MESSAGE = "ACCEL_CXX is undefined..."
 endif
 ACCEL_OPT = -I$(ACCEL_PATH)/include -I. -DLSMS2 -D$(ACCEL)
 ADD_LIBS += $(ACCLIB)
+FPPFLAGS += -DACCEL -DCUDA
 endif
 
 ifdef ARCHV_LSMS
@@ -86,7 +87,7 @@ ADDITIONAL_TARGETS = libxc
 LIBXC_PATH = $(EXTERN_LIB_PATH)/libxc/LibXC
 endif
 ADD_LIBS  += -L$(LIBXC_PATH)/lib -lxcf90 -lxc
-FPP_FLAGS += -DLIBXC -I$(LIBXC_PATH)/include
+FPPFLAGS += -DLIBXC -I$(LIBXC_PATH)/include
 
 ifndef Use_FFTW
 Use_FFTW = 1

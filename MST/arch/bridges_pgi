@@ -1,5 +1,5 @@
 # prerequisite modules: pgi, mpi/pgi_openmpi
-CUDA_PATH = /opt/packages/cuda/8.0
+ACCEL_PATH = /opt/packages/cuda/8.0
 LIBXC_PATH = /opt/packages/libxc/libxc-4.3.3/PGI
 ODIR = $(PWD)/bin_PGI
 #=====================================================================
@@ -12,9 +12,10 @@ CC=mpicc
 CXX=mpicc
 PREPROC = $(FC)
 
-# CUDA_CXX = nvcc -arch=sm_52
-CUDA_CXX = nvcc -gencode=arch=compute_52,code=sm_52
-CUDA_OPT = -I$(CUDA_PATH)/include -I. -DLSMS2 -DCUDA
+ACCEL     = CUDA
+# ACCEL_CXX = nvcc -arch=sm_52
+ACCEL_CXX = nvcc -gencode=arch=compute_52,code=sm_52
+ACCEL_OPT = -I$(ACCEL_PATH)/include -I. -DLSMS2 -DCUDA
 
 ARCHV_LSMS = ar
 ARCHV_OPT = -r
@@ -46,7 +47,7 @@ CPPFLAGS=-DUnderscore
 #=====================================================================
 #ADD_LIBS = -L$(MKLPATH) -lmkl_scalapack_lp64 \
 #  -Wl,--start-group -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lmkl_blacs_intelmpi_lp64 -Wl,--end-group \
-#  -lpthread -lm -L$(CUDA_PATH)/lib64 -lcudart -lcuda -lcublas -lstdc++ \
+#  -lpthread -lm -L$(ACCEL_PATH)/lib64 -lcudart -lcuda -lcublas -lstdc++ \
 #  /lvol/intel/composer_xe_2013.1.117/compiler/lib/intel64/libiomp5.a
 ADD_LIBS = -L/opt/packages/pgi/linux86-64-llvm/19.4/lib/scalapack/scalapack-2.0.2/openmpi-3.1.3/lib -lscalapack -llapack -lblas
 
@@ -158,7 +159,7 @@ endif
 # FPPFLAGS=-DSync_EiLoop -DSync_MST -DMPI -DNo_DataComm -DNo_SuperLU -DUSE_SCALAPACK -DCheckDOS -DONESIDED
 # FPPFLAGS=-DSync_EiLoop -DSync_MST -DMPI -DNo_DataComm -DNo_SuperLU -DUSE_SCALAPACK -DCheckDOS
 FPPFLAGS=$(SuperLU_FLAG) $(Check_TIMING) $(Use_BLAS) $(Use_DEBUG) $(Use_SYNC) $(FFT_FLAG) $(Use_MiscFlags) $(MSGPASS_FLAG) \
-$(MaxIO_FLAG) $(Use_ScaLapack) $(Use_LibXC)
+$(MaxIO_FLAG) $(Use_ScaLapack)
 
 #=====================================================================
 # Software path ...
