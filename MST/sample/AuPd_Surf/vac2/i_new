@@ -1,0 +1,197 @@
+================================================================================
+                           Input parameter data file
+                            LSMS code (version 2.0)
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                           System-related Parameters
+===========================+====================================================
+Text Identification        ::  AuPd
+Alloy System Description   ::  AuPd, 001 surface
+No. Atoms in System (> 0)  ::  64
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                       Position and Potential Data Files
+===========================+====================================================
+Atomic Position File Name  :: position.dat
+# Default Potential Input File Name  ::  Au_mt_v, Pd_mt_v
+# Default Potential Input File Name  ::  AuPd_mt_v
+Potential Input File Name  ::  1 AuPd_mt_v3_0001x1
+Potential Input File Name  ::  2 AuPd_mt_v3_0002x1
+Potential Input File Name  ::  3 AuPd_mt_v3_0003x1
+Potential Input File Name  ::  4 AuPd_mt_v3_0004x1
+Potential Input File Name  ::  5 AuPd_mt_v3_0005x1
+Potential Input File Name  ::  6 AuPd_mt_v3_0006x1
+Potential Input File Name  ::  7 AuPd_mt_v3_0007x1
+Potential Input File Name  ::  8 AuPd_mt_v3_0008x1
+Potential Input File Name  ::  9 AuPd_mt_v3_0009x1
+Potential Input File Name  :: 10 AuPd_mt_v3_0010x1
+Potential Input File Name  :: 11 AuPd_mt_v3_0011x1
+Potential Input File Name  :: 12 AuPd_mt_v3_0012x1
+Potential Input File Name  :: 13 AuPd_mt_v3_0013x1
+Potential Input File Name  :: 14 AuPd_mt_v3_0014x1
+Potential Input File Name  :: 15 AuPd_mt_v3_0015x1
+Potential Input File Name  :: 16 AuPd_mt_v3_0016x1
+Potential Input File Name  :: 17 AuPd_mt_v3_0017x1
+Potential Input File Name  :: 18 AuPd_mt_v3_0018x1
+Potential Input File Name  :: 19 AuPd_mt_v3_0019x1
+Potential Input File Name  :: 20 AuPd_mt_v3_0020x1
+Potential Input File Name  :: 21 AuPd_mt_v3_0021x1
+Potential Input File Name  :: 22 AuPd_mt_v3_0022x1
+Potential Input File Name  :: 23 AuPd_mt_v3_0023x1
+Potential Input File Name  :: 24 AuPd_mt_v3_0024x1
+Potential Input File Name  :: 25 AuPd_mt_v3_0025x1
+Potential Input File Name  :: 26 AuPd_mt_v3_0026x1
+Potential Input File Name  :: 27 AuPd_mt_v3_0027x1
+Potential Input File Name  :: 28 AuPd_mt_v3_0028x1
+Potential Input File Name  :: 29 AuPd_mt_v3_0029x1
+Potential Input File Name  :: 30 AuPd_mt_v3_0030x1
+Potential Input File Name  :: 31 AuPd_mt_v3_0031x1
+Potential Input File Name  :: 32 AuPd_mt_v3_0032x1
+Potential Input File Name  :: 33 AuPd_mt_v3_0033x1
+Potential Input File Name  :: 34 AuPd_mt_v3_0034x1
+Potential Input File Name  :: 35 AuPd_mt_v3_0035x1
+Potential Input File Name  :: 36 AuPd_mt_v3_0036x1
+Potential Input File Name  :: 37 AuPd_mt_v3_0037x1
+Potential Input File Name  :: 38 AuPd_mt_v3_0038x1
+Potential Input File Name  :: 39 AuPd_mt_v3_0039x1
+Potential Input File Name  :: 40 AuPd_mt_v3_0040x1
+Potential Input File Name  :: 41 AuPd_mt_v3_0041x1
+Potential Input File Name  :: 42 AuPd_mt_v3_0042x1
+Potential Input File Name  :: 43 AuPd_mt_v3_0043x1
+Potential Input File Name  :: 44 AuPd_mt_v3_0044x1
+Potential Input File Name  :: 45 AuPd_mt_v3_0045x1
+Potential Input File Name  :: 46 AuPd_mt_v3_0046x1
+Potential Input File Name  :: 47 AuPd_mt_v3_0047x1
+Potential Input File Name  :: 48 AuPd_mt_v3_0048x1
+Potential Input File Name  :: 49 AuPd_mt_v3_0049x1
+Potential Input File Name  :: 50 AuPd_mt_v3_0050x1
+Potential Input File Name  :: 51 AuPd_mt_v3_0051x1
+Potential Input File Name  :: 52 AuPd_mt_v3_0052x1
+Potential Input File Name  :: 53 AuPd_mt_v3_0053x1
+Potential Input File Name  :: 54 AuPd_mt_v3_0054x1
+Potential Input File Name  :: 55 AuPd_mt_v3_0055x1
+Potential Input File Name  :: 56 AuPd_mt_v3_0056x1
+Potential Input File Name  :: 57 AuPd_mt_v3_0057x1
+Potential Input File Name  :: 58 AuPd_mt_v3_0058x1
+Potential Input File Name  :: 59 AuPd_mt_v3_0059x1
+Potential Input File Name  :: 60 AuPd_mt_v3_0060x1
+Potential Input File Name  :: 61 AuPd_mt_v3_0061x1
+Potential Input File Name  :: 62 AuPd_mt_v3_0062x1
+Potential Input File Name  :: 63 AuPd_mt_v3_0063x1
+Potential Input File Name  :: 64 AuPd_mt_v3_0064x1
+# Default Potential Input File Name  ::  AuPd_mt_v2x
+Default Potential Input File Form  ::  0
+   = 0: ASCII Format       ----------
+   = 1: XDR Format         ----------
+   = 2: HDF Format         ----------
+   = 3: Machine Dependent Binary ----
+Default Potential Output File Name ::  AuPd_mt_v3a
+Default Potential Output File Form ::  0
+   = 0: ASCII Format       ----------
+   = 1: XDR Format         ----------
+   = 2: HDF Format         ----------
+   = 3: Machine Dependent Binary ----
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                            SCF-related Parameters
+===========================+====================================================
+Stop-at Routine Name       :: main
+No. Iterations (> 0)       ::  50
+Method of SCF Calculation  ::  1
+   -2. Single Site         -----------
+   -1. ScreenKKR-LSMS      -----------(To be implemented)
+    0. Screen-KKR          -----------(To be implemented)
+    1. LSMS                -----------
+    2. KKR                 -----------
+    3. KKR-CPA             -----------
+Output to Screen (y/n)     ::  n
+Temperature Parameter (K)  ::  0.000
+Val. Electron Rel (>= 0)   ::  1
+     0. Non-relativitic    ---------
+     1. Scalar-relativitic ---------
+     2. Full-relativitic   ---------
+Core Electron Rel (>= 0)   ::  1
+     0. Non-relativitic    ---------
+     1. Full-relativitic   ---------
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                       LDA Potential-related Parameters
+===========================+====================================================
+Potential Type (>= 0)      ::  0
+     0. Muffin-tin         ----------
+     1. ASA                ----------
+     2. Muffin-tin ASA     ----------
+     3. Full               ----------
+     4. Muffin-Tin Test    ----------
+     5. Empty Lattice      ----------
+     6. Mathieu Potential  ----------
+Exch-Corr. LDA Type (>= 0) ::  0
+   Note: The input can be either one of the following numbers or, e.g.,
+         LDA_X+LDA_C_HL for Hedin-Lundqvist LDA functional, or GGA_X_PBE+GGA_C_PBE
+         for PBE GGA function, etc.. The naming convention here follows the definition
+         given in LibXC.
+     0. Barth-Hedin        ---------
+     1. Vosk-Wilk-Nusair   ---------
+     2. Perdew-Zunger      ---------
+     3. Perdew-Wang GGA    ---------
+     4. PBE                ---------
+Uniform Grid Parameters    ::  64   64   64
+     = 2^n with n =1, 2, ... Three intergers used to define the grid numbers along
+       three Bravais lattice vector directions
+Note: Uniform grid is used for calculating the non-spherical electrostatic 
+      potential, so it is only used for the full-potential calculation.
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                        Energy (Ryd.) Contour Parameters
+===========================+====================================================
+Read E-mesh from emeshs.inp :: 0
+     0. No                 ---------
+     1. Yes. In this case, the following data have no effect
+No. Energy Grids           ::  60 
+Real Axis Bottom, erbot    ::  -2.00
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                         Magnetism-related Parameters    
+===========================+====================================================
+# Moment Direction File Name ::  Evec_input.dat
+Spin Index Param (>= 1)    ::  1
+     1. No Spin            ---------
+     2. Spin-polarized     ---------
+     3. Spin-canted        ---------
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                  Scattering Theory-related Parameters
+===========================+====================================================
+Default Lmax-T matrix      ::  4
+Default No. Rad Points ndivin  :: 1001
+   = 0: Not specified ---------------
+   > 0: Speciflied. Note:  0  < r(j)=exp(j*hin) <= rmt, j=1,2,...,ndivin
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                      R-space or K-space Related Parameters
+===========================+====================================================
+Default LIZ Cutoff Radius :: 12.5
+===========================+====================================================
+                  * * *              * * *              * * *
+================================================================================
+                     Mixing and Tolerance Parameters
+===========================+====================================================
+Mixing algorithm           ::  2
+     0. Simple Mixing      ---------
+     1. D.G.A. Mixing      ---------
+     2. Broyden Mixing     ---------
+Mixing quantity type       ::  1
+     0. Charge mixing      ---------
+     1. Potential mixing   ---------
+Default Mixing Parameter   ::  0.100
+Energy (Ryd) Tol (> 0)     ::  0.000005
+Potential Tol (> 0)        ::  0.0000001
+================================================================================

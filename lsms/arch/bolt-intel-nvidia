@@ -7,7 +7,8 @@ export LIBS += -mkl -lifcore
 # export BOOST_ROOT=$(TOP_DIR)
 export CUDA_DIR = /usr/local/cuda
 export USE_ACCELERATOR = -DACCELERATOR_CUDA_C
-export CUDA_CXX=nvcc -arch=sm_35 -I$(CUDA_DIR)/include -std=c++14 $(USE_ACCELERATOR)
+# On bolt, the default gcc is version 4.8.5, does not support -std=c++14. We use icc as the host compiler for nvcc
+export CUDA_CXX=nvcc -ccbin=icc -arch=sm_35 -I$(CUDA_DIR)/include -std=c++14 $(USE_ACCELERATOR)
 
 ifdef USE_OPENMP
   export OPT_OPENMP=-qopenmp

@@ -2572,8 +2572,10 @@ contains
 !
          write(ounit,'(a,t18,a2,t25,a,f4.0,t35,a,f10.5)')             &
                   ' LSMS:',atname,'z=',ztotss,'xvalws=',xvalws(ns)
-!        write(ounit,'(f5.0,17x,f12.5,1x,f5.0,1x,d20.13)')            &
-         write(ounit,'(f5.0,17x,f12.5,f5.0,d20.13)')            &
+!        The old format for writing this line become problematic if Ef < 0.
+!        I am changing the format ... Yang - 01/11/2020
+!        write(ounit,'(f5.0,17x,f12.5,f5.0,d20.13)')                  &
+         write(ounit,'(f5.0,17x,f12.5,1x,f5.0,1x,d20.13)')            &
                     ztotss,rmt,zcorss,efermi
          write(ounit,'(17x,2d20.13,2i5)') xstart,xmt,jmt,jws
 !

@@ -125,8 +125,8 @@
    n = n + 1; Keys(n) = 'Real Axis Top, ertop';                  Values(n) = '0.00'
    n = n + 1; Keys(n) = 'Imag Axis Bottom, eibot';               Values(n) = '0.001'
    n = n + 1; Keys(n) = 'Imag Axis Top, eitop';                  Values(n) = '1.000'
-   n = n + 1; Keys(n) = 'Iterate Fermi energy';                  Values(n) = '1'
-!                     = 0: On; = 1: Off
+   n = n + 1; Keys(n) = 'Iterate Fermi energy';                  Values(n) = '0'
+!                     = 1: On; = 0: Off
    n = n + 1; Keys(n) = 'SS Real Axis Int. Method';              Values(n) = '0'
 !                     = 0: Unimesh; = 1: Adaptive; = 2: Uniform
    n = n + 1; Keys(n) = 'SS Real Axis Int. Points';              Values(n) = '300'

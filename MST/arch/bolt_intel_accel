@@ -52,7 +52,8 @@ CPPFLAGS=-DUnderscore
 #  /lvol/intel/composer_xe_2013.1.117/compiler/lib/intel64/libiomp5.a
 ADD_LIBS = -L$(MKLPATH) -lmkl_scalapack_lp64 \
          -Wl,--start-group -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lmkl_blacs_intelmpi_lp64 -Wl,--end-group \
-         -lpthread -lm /opt/intel/compilers_and_libraries_2019.3.199/linux/compiler/lib/intel64/libiomp5.a
+         -lpthread -L$(ACCEL_PATH)/lib64 -lcudart -lcuda -lcublas -lstdc++ \
+         -lm /opt/intel/compilers_and_libraries_2019.3.199/linux/compiler/lib/intel64/libiomp5.a
 
 ifdef LIBXC_PATH
 ADD_LIBS += -L$(LIBXC_PATH)/lib -lxcf90 -lxc

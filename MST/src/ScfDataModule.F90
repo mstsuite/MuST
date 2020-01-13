@@ -883,7 +883,7 @@ contains
       endif
    endif
 !
-   if (iterateEf == 1 ) then
+   if (iterateEf == 0 ) then
       isEfIterOn = .false.
    else
       isEfIterOn = .true.

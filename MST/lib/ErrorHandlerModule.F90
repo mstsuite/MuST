@@ -5,10 +5,12 @@ module ErrorHandlerModule
    use KindParamModule, only : CmplxKind
 !
 !  define generic procedure for ErrorHandler, StopHandler, WarningHandler
+!         and MessageHandler
 !
 public :: ErrorHandler, &
           StopHandler,  &
           WarningHandler, &
+          MessageHandler, &
           setErrorOutput
 !
    interface ErrorHandler
@@ -34,6 +36,14 @@ public :: ErrorHandler, &
                        WarningHandlerCmplx, WarningHandlerCmplx2, & 
                        WarningHandlerChar , WarningHandlerChar2 , &
                        WarningHandlerMsg  , WarningHandler0msg
+   end interface
+!
+   interface MessageHandler
+      module procedure MessageHandlerInt  , MessageHandlerInt2  , &
+                       MessageHandlerReal , MessageHandlerReal2 , &
+                       MessageHandlerCmplx, MessageHandlerCmplx2, & 
+                       MessageHandlerChar , MessageHandlerChar2 , &
+                       MessageHandlerMsg  , MessageHandler0msg
    end interface
 !
 private
@@ -1031,6 +1041,330 @@ contains
    endif
 !
    end subroutine WarningHandler0msg
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine MessageHandlerInt(rname,warning_message,value,force_to_print)
+!  ===================================================================
+   implicit none
+   character (len=*), intent(in) :: rname,warning_message
+   integer (kind=IntKind), intent(in) :: value
+   logical :: pr
+!
+   logical, optional, intent(in) :: force_to_print
+!
+   if (present(force_to_print)) then
+      pr = force_to_print
+   else if (PrintLevel > 0) then
+      pr = .true.
+   else
+      pr = .false.
+   endif
+!
+   if (pr) then
+      write(FileUnit,'(/,1x,78(''!''))')
+      write(FileUnit,'(1x,a1,t79,a1)')'!','!'
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+      write(FileUnit,'(a,i8,t79,a1)')' ! VALUE: ',value,'!'
+      write(FileUnit,'(a,a)') ' ! AT: ',rname
+      write(FileUnit,'(1x,a1,t79,a1)')'!','!'
+      write(FileUnit,'(1x,78(''!''),/)')
+   endif
+!
+   end subroutine MessageHandlerInt
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine MessageHandlerInt2(rname,warning_message,value1,value2,force_to_print)
+!  ===================================================================
+   implicit none
+   character (len=*), intent(in) :: rname,warning_message
+   integer (kind=IntKind), intent(in) :: value1,value2
+   logical :: pr
+!
+   logical, optional, intent(in) :: force_to_print
+!
+   if (present(force_to_print)) then
+      pr = force_to_print
+   else if (PrintLevel > 0) then
+      pr = .true.
+   else
+      pr = .false.
+   endif
+!
+   if (pr) then
+      write(FileUnit,'(/,1x,78(''!''))')
+      write(FileUnit,'(1x,a1,t79,a1)')'!','!'
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+      write(FileUnit,'(a,i8,2x,i8,t79,a1)')' ! VALUE: ',value1,value2,'!'
+      write(FileUnit,'(a,a)') ' ! AT: ',rname
+      write(FileUnit,'(1x,a1,t79,a1)')'!','!'
+      write(FileUnit,'(1x,78(''!''),/)')
+   endif
+!
+   end subroutine MessageHandlerInt2
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine MessageHandlerReal(rname,warning_message,value,force_to_print)
+!  ===================================================================
+   implicit none
+   character (len=*), intent(in) :: rname,warning_message
+   real (kind=RealKind), intent(in) :: value
+   logical :: pr
+!
+   logical, optional, intent(in) :: force_to_print
+!
+   if (present(force_to_print)) then
+      pr = force_to_print
+   else if (PrintLevel > 0) then
+      pr = .true.
+   else
+      pr = .false.
+   endif
+!
+   if (pr) then
+      write(FileUnit,'(/,1x,78(''!''))')
+      write(FileUnit,'(1x,a1,t79,a1)')'!','!'
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+      write(FileUnit,'(a,d20.13,t79,a1)')' ! VALUE: ',value,'!'
+      write(FileUnit,'(a,a)') ' ! AT: ',rname
+      write(FileUnit,'(1x,a1,t79,a1)')'!','!'
+      write(FileUnit,'(1x,78(''!''),/)')
+   endif
+!
+   end subroutine MessageHandlerReal
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine MessageHandlerReal2(rname,warning_message,value1,value2,force_to_print)
+!  ===================================================================
+   implicit none
+   character (len=*), intent(in) :: rname,warning_message
+   real (kind=RealKind), intent(in) :: value1,value2
+   logical :: pr
+!
+   logical, optional, intent(in) :: force_to_print
+!
+   if (present(force_to_print)) then
+      pr = force_to_print
+   else if (PrintLevel > 0) then
+      pr = .true.
+   else
+      pr = .false.
+   endif
+!
+   if (pr) then
+      write(FileUnit,'(/,1x,78(''!''))')
+      write(FileUnit,'(1x,a1,t79,a1)')'!','!'
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+      write(FileUnit,'(a,d20.13,2x,d20.13,t79,a1)')' ! VALUE: ',value1,value2,'!'
+      write(FileUnit,'(a,a)') ' ! AT: ',rname
+      write(FileUnit,'(1x,a1,t79,a1)')'!','!'
+      write(FileUnit,'(1x,78(''!''),/)')
+   endif
+!
+   end subroutine MessageHandlerReal2
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine MessageHandlerCmplx(rname,warning_message,value,force_to_print)
+!  ===================================================================
+   implicit none
+   character (len=*), intent(in) :: rname,warning_message
+   complex (kind=CmplxKind), intent(in) :: value
+   logical :: pr
+!
+   logical, optional, intent(in) :: force_to_print
+!
+   if (present(force_to_print)) then
+      pr = force_to_print
+   else if (PrintLevel > 0) then
+      pr = .true.
+   else
+      pr = .false.
+   endif
+!
+   if (pr) then
+      write(FileUnit,'(/,1x,78(''!''))')
+      write(FileUnit,'(1x,a1,t79,a1)')'!','!'
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+      write(FileUnit,'(a,2d15.8,t79,a1)')' ! VALUE: ',value,'!'
+      write(FileUnit,'(a,a)') ' ! AT: ',rname
+      write(FileUnit,'(1x,a1,t79,a1)')'!','!'
+      write(FileUnit,'(1x,78(''!''),/)')
+   endif
+!
+   end subroutine MessageHandlerCmplx
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine MessageHandlerCmplx2(rname,warning_message,value1,value2,force_to_print)
+!  ===================================================================
+   implicit none
+   character (len=*), intent(in) :: rname,warning_message
+   complex (kind=CmplxKind), intent(in) :: value1,value2
+   logical :: pr
+!
+   logical, optional, intent(in) :: force_to_print
+!
+   if (present(force_to_print)) then
+      pr = force_to_print
+   else if (PrintLevel > 0) then
+      pr = .true.
+   else
+      pr = .false.
+   endif
+!
+   if (pr) then
+      write(FileUnit,'(/,1x,78(''!''))')
+      write(FileUnit,'(1x,a1,t79,a1)')'!','!'
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+      write(FileUnit,'(a,2d15.8,2x,2d15.8,t79,a1)')' ! VALUE: ',value1,value2,'!'
+      write(FileUnit,'(a,a)') ' ! AT: ',rname
+      write(FileUnit,'(1x,a1,t79,a1)')'!','!'
+      write(FileUnit,'(1x,78(''!''),/)')
+   endif
+!
+   end subroutine MessageHandlerCmplx2
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine MessageHandlerChar(rname,warning_message,value,force_to_print)
+!  ===================================================================
+   implicit none
+   character (len=*), intent(in) :: rname,warning_message,value
+   logical :: pr
+!
+   logical, optional, intent(in) :: force_to_print
+!
+   if (present(force_to_print)) then
+      pr = force_to_print
+   else if (PrintLevel > 0) then
+      pr = .true.
+   else
+      pr = .false.
+   endif
+!
+   if (pr) then
+      write(FileUnit,'(/,1x,78(''!''))')
+      write(FileUnit,'(1x,a1,t79,a1)')'!','!'
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+      write(FileUnit,'(a,a,t79,a1)')' ! VALUE: ',trim(value),'!'
+      write(FileUnit,'(a,a)') ' ! AT: ',rname
+      write(FileUnit,'(1x,a1,t79,a1)')'!','!'
+      write(FileUnit,'(1x,78(''!''),/)')
+   endif
+!
+   end subroutine MessageHandlerChar
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine MessageHandlerChar2(rname,warning_message,value1,value2,force_to_print)
+!  ===================================================================
+   implicit none
+   character (len=*), intent(in) :: rname,warning_message,value1,value2
+   logical :: pr
+!
+   logical, optional, intent(in) :: force_to_print
+!
+   if (present(force_to_print)) then
+      pr = force_to_print
+   else if (PrintLevel > 0) then
+      pr = .true.
+   else
+      pr = .false.
+   endif
+!
+   if (pr) then
+      write(FileUnit,'(/,1x,78(''!''))')
+      write(FileUnit,'(1x,a1,t79,a1)')'!','!'
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+      write(FileUnit,'(a,a,a,t79,a1)')' ! VALUE: ',trim(value1),trim(value2),'!'
+      write(FileUnit,'(a,a)') ' ! AT: ',rname
+      write(FileUnit,'(1x,a1,t79,a1)')'!','!'
+      write(FileUnit,'(1x,78(''!''),/)')
+   endif
+!
+   end subroutine MessageHandlerChar2
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine MessageHandlerMsg(rname,warning_message,force_to_print)
+!  ===================================================================
+   implicit none
+   character (len=*), intent(in) :: rname,warning_message
+   logical :: pr
+!
+   logical, optional, intent(in) :: force_to_print
+!
+   if (present(force_to_print)) then
+      pr = force_to_print
+   else if (PrintLevel > 0) then
+      pr = .true.
+   else
+      pr = .false.
+   endif
+!
+   if (pr) then
+      write(FileUnit,'(/,1x,78(''!''))')
+      write(FileUnit,'(1x,a1,t79,a1)')'!','!'
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+      write(FileUnit,'(a,a)') ' ! AT: ',rname
+      write(FileUnit,'(1x,a1,t79,a1)')'!','!'
+      write(FileUnit,'(1x,78(''!''),/)')
+   endif
+!
+   end subroutine MessageHandlerMsg
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine MessageHandler0msg(rname,force_to_print)
+!  ===================================================================
+   implicit none
+   character (len=*), intent(in) :: rname
+   logical :: pr
+!
+   logical, optional, intent(in) :: force_to_print
+!
+   if (present(force_to_print)) then
+      pr = force_to_print
+   else if (PrintLevel > 0) then
+      pr = .true.
+   else
+      pr = .false.
+   endif
+!
+   if (pr) then
+      write(FileUnit,'(/,1x,78(''!''))')
+      write(FileUnit,'(1x,a1,t79,a1)')'!','!'
+      write(FileUnit,'(a,t79,a1)')' ! MESSAGE: ','!'
+      write(FileUnit,'(a,a)') ' ! AT: ',rname
+      write(FileUnit,'(1x,a1,t79,a1)')'!','!'
+      write(FileUnit,'(1x,78(''!''),/)')
+   endif
+!
+   end subroutine MessageHandler0msg
 !  ===================================================================
 !
 end module ErrorHandlerModule

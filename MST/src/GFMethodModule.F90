@@ -474,6 +474,8 @@ contains
       enddo
    endif
 !
+   call random_seed()
+!
    end subroutine initGFMethod
 !  ===================================================================
 !
@@ -1805,7 +1807,7 @@ contains
 !     Solve the multiple scattering problem for e = eLast, which is
 !     set to be (efermi,0.001) in KKR case.
 !     ===============================================================
-      if (isKKR() .or. isKKRCPA()) then
+      if (isKKR() .or. isKKRCPA() .or. efermi < ZERO) then
          eLast = cmplx(efermi,0.001d0,kind=CmplxKind)
       else
          eLast = cmplx(efermi,0.000d0,kind=CmplxKind)
@@ -4882,6 +4884,7 @@ contains
    real (kind=RealKind) :: efdif
    real (kind=RealKind) :: dosefpa
    real (kind=RealKind) :: ztdif
+   real (kind=RealKind) :: r
    real (kind=RealKind) :: N_Green_Contour(2)
    real (kind=RealKind) :: wspace(6)
 !
@@ -4966,15 +4969,35 @@ contains
 !  In code revision 788, the above lines are commented out and are replaced
 !  with the following lines, so that in the case when Fermi energy
 !  falls into a band gap, where the DOS is very small, the new Fermi
-!  energy is adjusted by an amount <= 0.05.
+!  energy is adjusted by an amount <= 0.01.
 !  +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
    if (iharris > 1) then
       efermi = efermi_old
-   else if (abs(xtws/tnen) > 0.05d0) then
+   else if (tnen < 0.0001d0) then
+      efermi = efermi_old
+      if (node_print_level >= 0) then
+         write(6,'(/,a,d17.8,/)')'WARNING :: tnen = ',tnen
+      endif
+   else if (abs(xtws/tnen) > 0.01d0) then
+!     ----------------------------------------------------------------
+      call random_number(r) ! Use random number as a scaling factor to 
+                            ! set the estimate of the next Fermi energy.
+                            ! This could help to avoid charge sloshing problem.
+!     ----------------------------------------------------------------
       if (xtws > ZERO) then
-         efermi = efermi_old - min(0.01d0,xtws)
+         efdif =-r*min(0.01d0,xtws)
       else
-         efermi = efermi_old + min(0.01d0,-xtws)
+         efdif = r*min(0.01d0,-xtws)
+      endif
+!     ================================================================
+!     An average of efdif is needed since r may be different on different
+!     processors
+!     ----------------------------------------------------------------
+      call GlobalSumInGroup(aGID,efdif)
+!     ----------------------------------------------------------------
+      efermi = efermi_old + efdif/real(NumPEsInAGroup,kind=RealKind)
+      if ( node_print_level >= 0) then
+         write(6,'(/,a,4d17.8,/)')'tnen,xtws,x/t,r = ',tnen,xtws,xtws/tnen,r
       endif
    else
       efermi = efermi_old - xtws/tnen

@@ -1,6 +1,6 @@
 module AtomModule
    use KindParamModule, only : IntKind, RealKind
-   use ErrorHandlerModule, only : ErrorHandler, WarningHandler
+   use ErrorHandlerModule, only : ErrorHandler, WarningHandler, MessageHandler
    use PublicTypeDefinitionsModule, only : LizLmaxStruct
    use PublicParamDefinitionsModule, only : MaxLenFileName
    use ChemElementModule, only : MaxLenOfAtomName
@@ -217,11 +217,14 @@ contains
    character (len=*) :: istop
    character (len=1) :: dummy
    character (len=2) :: s2
+   character (len=7) :: ci
    character (len=50) :: fname
    character (len=160) :: path_fname
    character (len=150), allocatable :: lmax_shell(:)
    character (len=150), allocatable :: potinname(:)
    character (len=50), allocatable :: potoutname(:)
+!
+   logical :: f_exist, pr
 !
    integer (kind=IntKind), intent(in) :: info_id, iprint
    integer (kind=IntKind) :: i, j, ig, n, nt, GlobalNumAtoms
@@ -351,17 +354,45 @@ contains
 !  -------------------------------------------------------------------
 !  rstatus = getKeyValue(info_id,'Atom Index',atom_index,GlobalNumAtoms)
 !  -------------------------------------------------------------------
-   if (getKeyValue(info_id,'Default Potential Input File Name',potinname(0)) /= 0) then
-      call ErrorHandler('initAtom','Input potential file name is missing from input')
+   f_exist = .false.
+   if (MyPE == 0) then
+      pr = .true.
+   else
+      pr = .false.
    endif
-   rstatus = getKeyIndexValue(info_id,'Potential Input File Name',    &
-                              ind_potinname,potinname(1:GlobalNumAtoms),GlobalNumAtoms)
+   if (getKeyValue(info_id,'Default Potential Input File Name',potinname(0),default_param=.false.) /= 0) then
+      call WarningHandler('initAtom','Default Input potential file name is missing from input',force_to_print=pr)
+   else
+      f_exist = .true.
+   endif
+   if (getKeyIndexValue(info_id,'Potential Input File Name',          &
+                        ind_potinname,potinname(1:GlobalNumAtoms),GlobalNumAtoms) == 0) then
+      do i = 1, GlobalNumAtoms
+         write(ci,'(i5,a)') i,', '
+         call MessageHandler('initAtom','Input potential file name: ',ci,potinname(i),force_to_print=pr)
+      enddo
+      f_exist = .true.
+   endif
+   if (.not.f_exist) then
+      call ErrorHandler('initAtom','Input potential files are not given as input')
+   endif
 !
-   if (getKeyValue(info_id,'Default Potential Input File Form',potinform(0)) /= 0) then
-      call ErrorHandler('initAtom','Input potential file form is missing from input')
+   f_exist = .false.
+   if (getKeyValue(info_id,'Default Potential Input File Form',potinform(0),default_param=.false.) /= 0) then
+      call MessageHandler('initAtom','Input potential file form is missing from input')
+   else
+      f_exist = .true.
    endif
-   rstatus = getKeyIndexValue(info_id,'Potential Input File Form',    &
-                              ind_potinform,potinform(1:GlobalNumAtoms),GlobalNumAtoms)
+   if (getKeyIndexValue(info_id,'Potential Input File Form',          &
+                        ind_potinform,potinform(1:GlobalNumAtoms),GlobalNumAtoms) == 0) then
+      do i = 1, GlobalNumAtoms
+         call MessageHandler('initAtom','Input potential file format: ',i,potinform(i),force_to_print=pr)
+      enddo
+      f_exist = .true.
+   endif
+   if (.not.f_exist) then
+      call ErrorHandler('initAtom','Input potential file format is not given as input')
+   endif
 !
    if (getKeyValue(info_id,'Default Potential Output File Name',potoutname(0)) /= 0) then
       call ErrorHandler('initAtom','Output potential file name is missing from input')
