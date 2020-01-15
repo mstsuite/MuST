@@ -1,4 +1,4 @@
-ACCEL_PATH = /opt/packages/cuda/8.0
+ACCEL_PATH = /opt/packages/cuda/10.1
 MKLROOT = /opt/packages/intel/mkl
 MKLPATH = $(MKLROOT)/lib/intel64
 LIBXC_PATH = /opt/packages/libxc/libxc-4.0.4

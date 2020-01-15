@@ -72,7 +72,7 @@ private
    integer (kind=IntKind), allocatable :: lofj(:), mofj(:), kofj(:)
    integer (kind=IntKind), allocatable :: lofk(:), mofk(:), jofk(:)
    integer (kind=IntKind), allocatable :: m1m(:)
-   integer (kind=IntKind) :: GroupID
+   integer (kind=IntKind) :: GroupID, NumPEsInGroup
    integer (kind=IntKind) :: ClusterIndexOfGroup
 !
 !  ===================================================================
@@ -128,7 +128,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine initPotential(na,lmax,lmax_step,npola,ncant,istop,iprint)
 !  ===================================================================
-   use GroupCommModule, only : getGroupID, GlobalMaxInGroup
+   use GroupCommModule, only : getGroupID, GlobalMaxInGroup, getNumPEsInGroup
    use GroupCommModule, only : GlobalSumInGroup, getMyClusterIndex
    use ChemElementModule, only : MaxLenOfAtomName, getNumCoreStates
    use SystemModule, only : getAtomName, getNumAtoms, getNumAlloyElements, &
@@ -183,6 +183,7 @@ contains
    GlobalNumAtoms = getNumAtoms()
 !
    GroupID = getGroupID('Unit Cell')
+   NumPEsInGroup = getNumPEsInGroup(GroupID)
    ClusterIndexOfGroup = getMyClusterIndex(GroupID)
 !
 !  if ( getSingleSiteSolverMethod() > 0 ) then
@@ -502,7 +503,7 @@ contains
    deallocate( DataSize )
 !
    Initialized = .true.
-   efermi=100.0d0
+   efermi=ZERO
    vdif(1) = ZERO
 !
    end subroutine initPotential
@@ -1612,7 +1613,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine readPotential()
 !  ===================================================================
-   use GroupCommModule, only : GlobalMinInGroup
+   use GroupCommModule, only : GlobalMinInGroup, GlobalSumInGroup
 !
    use ChemElementModule, only : getZtot
 !
@@ -1703,8 +1704,9 @@ contains
    endif
 !
 !  -------------------------------------------------------------------
-   call GlobalMinInGroup(GroupID,efermi)
+   call GlobalSumInGroup(GroupID,efermi)
 !  -------------------------------------------------------------------
+   efermi = efermi/real(NumPEsInGroup,kind=RealKind)
 !
 !  ===================================================================
 !  The starting potential may come with different fermi energy.
@@ -1811,7 +1813,7 @@ contains
 !
    integer (kind=IntKind), parameter :: funit=91
 !
-   integer (kind=IntKind) :: is, ig, js, n, ia
+   integer (kind=IntKind) :: is, ig, js, n, ia, nef
    integer (kind=IntKind) :: j_inter, irp
    integer (kind=IntKind) :: ns,j,jmt,nrrho,nrcor,jmax
    integer (kind=IntKind) :: numc,jz,jc,ios,lmax,jend,jl,nr,ir,jm,jlr
@@ -1862,7 +1864,7 @@ contains
                              nr+1, NumSpecies(id), RealMark )
    endif
 !
-   efermi = 100.0d0
+   efermi = ZERO; nef = 0
    do ia = 1, NumSpecies(id)
       filename = getInPotFileName(id,ia)
 !     ----------------------------------------------------------------
@@ -2153,10 +2155,12 @@ contains
             enddo
          enddo
       endif
-      efermi=min(efermi,efermi_in(ia,id))
+!     efermi=min(efermi,efermi_in(ia,id))
+      efermi = efermi + efermi_in(ia,id); nef = nef + 1
 !
       close(unit=funit)
    enddo
+   efermi = efermi/real(nef,kind=RealKind) ! Average Ef on current processor.
    deallocate(rhotot)
 !
    end subroutine readFormattedData
@@ -2198,7 +2202,7 @@ contains
    character (len=MaxLenOfAtomName) :: atname(MaxNumSpecies)
 !
    integer (kind=IntKind) :: na, id_g, nspin
-   integer (kind=IntKind) :: jmt, jws, i, is, nr, nrmax, n, ia
+   integer (kind=IntKind) :: jmt, jws, i, is, nr, nrmax, n, ia, nef
    integer (kind=IntKind) :: numc(MaxNumSpecies), DataSize(LocalNumAtoms)
    integer (kind=IntKind) :: nc(numcmax,n_spin_pola,MaxNumSpecies)
    integer (kind=IntKind) :: lc(numcmax,n_spin_pola,MaxNumSpecies)
@@ -2296,7 +2300,7 @@ contains
                              nr+1, NumSpecies(id), RealMark )
    endif
 !
-   efermi = 100.0d0
+   efermi = ZERO; nef = 0
    do ia = 1, NumSpecies(id)
       ThisP%ztss(ia) = ztotss(ia)
       if ( numc(ia) > getNumCoreStates(atname(ia)) ) then
@@ -2313,7 +2317,8 @@ contains
          call setNumCoreStates(atname(ia),numc(ia))
       endif
 !
-      efermi = min(efermi, efermi_in(ia,id))
+!     efermi = min(efermi, efermi_in(ia,id))
+      efermi = efermi + efermi_in(ia,id); nef = nef + 1
 !
       do is = 1, n_spin_pola
          do i = 1, numc(ia)
@@ -2348,6 +2353,7 @@ contains
       endif
    enddo
 !
+   efermi = efermi/real(nef,kind=RealKind)
    nullify(ec0,pc0,rho0,mom0)
    deallocate( rhotot )
 !

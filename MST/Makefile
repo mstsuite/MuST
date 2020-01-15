@@ -118,11 +118,12 @@ FFLAGS += -c
 ACCEL_OPT += -c
 F77FLAGS = $(FFLAGS)
 
+UNAME_S := $(shell uname -s)
 ifneq (,$(wildcard /usr/include/rpc/xdr.h))
 else ifneq (,$(wildcard /usr/include/tirpc/rpc/xdr.h))
 CFLAGS += -I/usr/include/tirpc
 ADD_LIBS += -ltirpc
-else
+else ifneq ($(UNAME_S),Darwin)
 ERROR_CODE = error
 ERROR_MESSAGE = "In your system, /usr/include/rpc or /usr/include/tirpc is missing. Please install librpc or libtirpc."
 endif

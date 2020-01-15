@@ -17,7 +17,7 @@ Acceleration = 0
 #=====================================================================
 HDF5_PATH   = /opt/packages/hdf5/intel/1.8.21
 ACCEL       = CUDA
-ACCEL_PATH  = /usr/local/cuda/8.0
+ACCEL_PATH  = /opt/packages/cuda/10.1
 LIBXC_PATH  = /opt/packages/libxc/libxc-4.0.4
 FFTW_PATH   = /opt/packages/fftw-3.3.6-pl2
 P3DFFT_PATH = /opt/packages/p3dfft/p3dfft-2.7.5
