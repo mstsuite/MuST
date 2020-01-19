@@ -4980,10 +4980,11 @@ contains
       endif
    else if (abs(xtws/tnen) > 0.01d0) then
 !     ----------------------------------------------------------------
-      call random_number(r) ! Use random number as a scaling factor to 
-                            ! set the estimate of the next Fermi energy.
-                            ! This could help to avoid charge sloshing problem.
+!     call random_number(r) ! Use random number as a scaling factor to 
+!                           ! set the estimate of the next Fermi energy.
+!                           ! This could help to avoid charge sloshing problem.
 !     ----------------------------------------------------------------
+      r = HALF
       if (xtws > ZERO) then
          efdif =-r*min(0.01d0,xtws)
       else
