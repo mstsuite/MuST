@@ -83,7 +83,7 @@ program testSineMatrixPole
    use AtomModule, only : initAtom, endAtom
    use AtomModule, only : printAtom, getStepFuncLmax
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
-   use AtomModule, only : getGridData, getLocalEvecOld, getAtomMuffinTinRad
+   use AtomModule, only : getGridData, getLocalEvecOld, getMuffinTinRadius
    use AtomModule, only : getLocalNumSpecies, getLocalAtomicNumber
 !
    use SphericalHarmonicsModule, only : initSphericalHarmonics
@@ -293,7 +293,7 @@ program testSineMatrixPole
       endif
       rend =  getOutscrSphRadius(i)
       if (isMuffinTinPotential() .or. isMuffinTinTestPotential()) then
-         rmt = getAtomMuffinTinRad(i)
+         rmt = getMuffinTinRadius(i)
          rinsc = getInscrSphRadius(i)
          if ( rmt < 0.010d0 ) then
             rmt = rinsc
@@ -307,7 +307,7 @@ program testSineMatrixPole
 !        -------------------------------------------------------------
       else if ( isASAPotential() ) then
          rend =  getWignerSeitzRadius(i)
-         rmt = getAtomMuffinTinRad(i)
+         rmt = getMuffinTinRadius(i)
          rinsc = getWignerSeitzRadius(i)
          if ( rmt < 0.010d0 ) then
             rmt = rinsc
@@ -317,7 +317,7 @@ program testSineMatrixPole
 !        -------------------------------------------------------------
       else if (isMuffinTinASAPotential()) then
          rend =  getWignerSeitzRadius(i)
-         rmt = getAtomMuffinTinRad(i)
+         rmt = getMuffinTinRadius(i)
          rinsc = getWignerSeitzRadius(i)
          if ( rmt < 0.010d0 ) then
             rmt = rinsc
@@ -333,7 +333,7 @@ program testSineMatrixPole
                      getNeighborDistance(i,1),getOutscrSphRadius(i))
 !           ----------------------------------------------------------
          endif
-         rmt = getAtomMuffinTinRad(i)
+         rmt = getMuffinTinRadius(i)
          rinsc = getInscrSphRadius(i)
          if ( rmt < 0.010d0 ) then
             rmt = getInscrSphRadius(i)

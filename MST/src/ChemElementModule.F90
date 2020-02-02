@@ -16,6 +16,9 @@ public :: getAtomInfo,      &
           getCoreStateKappa,&
           getCoreStateIndex,&
           getCoreStateSymbol,&
+          getAtomicRadius,  &
+          getImplicitMuffinTinRadius,  &
+          getImplicitCoreRadius,  &
           getDebyeTemperature
 !
    interface setNumCoreStates
@@ -58,6 +61,22 @@ public :: getAtomInfo,      &
       module procedure getCoreStateSymbol_a, getCoreStateSymbol_n
    end interface
 !
+   interface getDebyeTemperature
+      module procedure getDebyeTemperature_a, getDebyeTemperature_n
+   end interface
+!
+   interface getAtomicRadius
+      module procedure getAtomicRadius_a, getAtomicRadius_n
+   end interface
+!
+   interface getImplicitMuffinTinRadius
+      module procedure getImplicitMuffinTinRadius_a, getImplicitMuffinTinRadius_n
+   end interface
+!
+   interface getImplicitCoreRadius
+      module procedure getImplicitCoreRadius_a, getImplicitCoreRadius_n
+   end interface
+!
    integer (kind=IntKind), parameter, public :: MaxLenOfAtomName = 16
 !
 private
@@ -69,14 +88,17 @@ private
       integer (kind=IntKind) :: NumValenceElectrons
       integer (kind=IntKind) :: NumCoreStates
       integer (kind=IntKind) :: NumVariations
-      integer (kind=IntKind) :: DebyeT
+      real (kind=RealKind) :: DebyeT
+      real (kind=RealKind) :: AtomicRadius
+      real (kind=RealKind) :: ImplicitMuffinTinRadius
+      real (kind=RealKind) :: ImplicitCoreRadius
       type (ElementStruc), pointer :: Variation(:)
 !     integer (kind=IntKind), pointer :: QuantumNumber_n(:)
 !     integer (kind=IntKind), pointer :: QuantumNumber_l(:)
 !     integer (kind=IntKind), pointer :: QuantumNumber_kappa(:)
    end type ElementStruc
 !
-   integer (kind=IntKind), parameter :: NumElements = 94
+   integer (kind=IntKind), parameter :: NumElements = 103
    integer (kind=IntKind), parameter :: MinZtot = -1
 !
    type (ElementStruc), save :: Element(MinZtot:NumElements)
@@ -99,6 +121,8 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine initChemElement()
 !  ===================================================================
+   use MathParamModule, only : ZERO
+   use PhysParamModule, only : Angstrom2Bohr
 !
    implicit none
 !
@@ -235,6 +259,14 @@ contains
    CoreState(26)%kappa = -2
 !
 !  ===================================================================
+!  Note: Atomic radius values are mostly taken from the "empirical" 
+!    column of the table in Atomic radii of the elements (data page) page
+!    (except for few that no data available in the "empirical" column)
+!    https://en.wikipedia.org/wiki/Atomic_radii_of_the_elements_(data_page)
+!  where the empirical data in the page are taken from 
+!    J.C. Slater (1964). "Atomic Radii in Crystals". J. Chem. Phys. 41: 3199.
+!    doi:10.1063/1.1725697
+!  ===================================================================
 !
    Element( MinZtot)%AtomName='CPA'
    Element( MinZtot)%AtomicNumber=MinZtot
@@ -243,6 +275,8 @@ contains
    Element( MinZtot)%NumValenceElectrons=0
    Element( MinZtot)%NumCoreStates=0
    Element( MinZtot)%NumVariations=0
+   Element( MinZtot)%DebyeT=ZERO
+   Element( MinZtot)%AtomicRadius=ZERO
 !
    Element(  0)%AtomName='Va'
    Element(  0)%AtomicNumber=0
@@ -251,6 +285,8 @@ contains
    Element(  0)%NumValenceElectrons=0
    Element(  0)%NumCoreStates=0
    Element(  0)%NumVariations=0
+   Element(  0)%DebyeT=ZERO
+   Element(  0)%AtomicRadius=ZERO
 !
    Element(  1)%AtomName='H '
    Element(  1)%AtomicNumber=1
@@ -259,6 +295,10 @@ contains
    Element(  1)%NumValenceElectrons=1
    Element(  1)%NumCoreStates=0
    Element(  1)%NumVariations=0
+   Element(  1)%DebyeT=ZERO
+   Element(  1)%AtomicRadius=0.25d0*Angstrom2Bohr
+   Element(  1)%ImplicitMuffinTinRadius=0.75d0*Element(  1)%AtomicRadius
+   Element(  1)%ImplicitCoreRadius=0.75d0*Element(  1)%AtomicRadius
 !
    Element(  2)%AtomName='He'
    Element(  2)%AtomicNumber=2
@@ -267,6 +307,10 @@ contains
    Element(  2)%NumValenceElectrons=0
    Element(  2)%NumCoreStates=1
    Element(  2)%NumVariations=0
+   Element(  2)%DebyeT=ZERO
+   Element(  2)%AtomicRadius=1.20d0*Angstrom2Bohr
+   Element(  2)%ImplicitMuffinTinRadius=0.75d0*Element(  2)%AtomicRadius
+   Element(  2)%ImplicitCoreRadius=0.75d0*Element(  2)%AtomicRadius
 !
    Element(  3)%AtomName='Li'
    Element(  3)%AtomicNumber=3
@@ -275,6 +319,10 @@ contains
    Element(  3)%NumValenceElectrons=1
    Element(  3)%NumCoreStates=1
    Element(  3)%NumVariations=0
+   Element(  3)%DebyeT=ZERO
+   Element(  3)%AtomicRadius=1.45d0*Angstrom2Bohr
+   Element(  3)%ImplicitMuffinTinRadius=0.75d0*Element(  3)%AtomicRadius
+   Element(  3)%ImplicitCoreRadius=0.75d0*Element(  3)%AtomicRadius
 !
    Element(  4)%AtomName='Be'
    Element(  4)%AtomicNumber=4
@@ -283,6 +331,10 @@ contains
    Element(  4)%NumValenceElectrons=2
    Element(  4)%NumCoreStates=1
    Element(  4)%NumVariations=0
+   Element(  4)%DebyeT=ZERO
+   Element(  4)%AtomicRadius=1.05d0*Angstrom2Bohr
+   Element(  4)%ImplicitMuffinTinRadius=0.75d0*Element(  4)%AtomicRadius
+   Element(  4)%ImplicitCoreRadius=0.75d0*Element(  4)%AtomicRadius
 !
    Element(  5)%AtomName='B '
    Element(  5)%AtomicNumber=5
@@ -291,6 +343,10 @@ contains
    Element(  5)%NumValenceElectrons=3
    Element(  5)%NumCoreStates=1
    Element(  5)%NumVariations=0
+   Element(  5)%DebyeT=ZERO
+   Element(  5)%AtomicRadius=0.85d0*Angstrom2Bohr
+   Element(  5)%ImplicitMuffinTinRadius=0.75d0*Element(  5)%AtomicRadius
+   Element(  5)%ImplicitCoreRadius=0.75d0*Element(  5)%AtomicRadius
 !
    Element(  6)%AtomName='C '
    Element(  6)%AtomicNumber=6
@@ -299,6 +355,10 @@ contains
    Element(  6)%NumValenceElectrons=4
    Element(  6)%NumCoreStates=1
    Element(  6)%NumVariations=0
+   Element(  6)%DebyeT=ZERO
+   Element(  6)%AtomicRadius=0.70d0*Angstrom2Bohr
+   Element(  6)%ImplicitMuffinTinRadius=0.75d0*Element(  6)%AtomicRadius
+   Element(  6)%ImplicitCoreRadius=0.75d0*Element(  6)%AtomicRadius
 !
    Element(  7)%AtomName='N '
    Element(  7)%AtomicNumber=7
@@ -307,6 +367,10 @@ contains
    Element(  7)%NumValenceElectrons=5
    Element(  7)%NumCoreStates=1
    Element(  7)%NumVariations=0
+   Element(  7)%DebyeT=ZERO
+   Element(  7)%AtomicRadius=0.65d0*Angstrom2Bohr
+   Element(  7)%ImplicitMuffinTinRadius=0.75d0*Element(  7)%AtomicRadius
+   Element(  7)%ImplicitCoreRadius=0.75d0*Element(  7)%AtomicRadius
 !
    Element(  8)%AtomName='O '
    Element(  8)%AtomicNumber=8
@@ -315,6 +379,10 @@ contains
    Element(  8)%NumValenceElectrons=6
    Element(  8)%NumCoreStates=1
    Element(  8)%NumVariations=0
+   Element(  8)%DebyeT=ZERO
+   Element(  8)%AtomicRadius=0.60d0*Angstrom2Bohr
+   Element(  8)%ImplicitMuffinTinRadius=0.75d0*Element(  8)%AtomicRadius
+   Element(  8)%ImplicitCoreRadius=0.75d0*Element(  8)%AtomicRadius
 !
    Element(  9)%AtomName='F '
    Element(  9)%AtomicNumber=9
@@ -323,6 +391,10 @@ contains
    Element(  9)%NumValenceElectrons=7
    Element(  9)%NumCoreStates=1
    Element(  9)%NumVariations=0
+   Element(  9)%DebyeT=ZERO
+   Element(  9)%AtomicRadius=0.50d0*Angstrom2Bohr
+   Element(  9)%ImplicitMuffinTinRadius=0.75d0*Element(  9)%AtomicRadius
+   Element(  9)%ImplicitCoreRadius=0.75d0*Element(  9)%AtomicRadius
 !
    Element( 10)%AtomName='Ne'
    Element( 10)%AtomicNumber=10
@@ -331,6 +403,10 @@ contains
    Element( 10)%NumValenceElectrons=0
    Element( 10)%NumCoreStates=4
    Element( 10)%NumVariations=0
+   Element( 10)%DebyeT=ZERO
+   Element( 10)%AtomicRadius=1.60d0*Angstrom2Bohr
+   Element( 10)%ImplicitMuffinTinRadius=0.75d0*Element( 10)%AtomicRadius
+   Element( 10)%ImplicitCoreRadius=0.75d0*Element( 10)%AtomicRadius
 !
    Element( 11)%AtomName='Na'
    Element( 11)%AtomicNumber=11
@@ -339,6 +415,10 @@ contains
    Element( 11)%NumValenceElectrons=1
    Element( 11)%NumCoreStates=4
    Element( 11)%NumVariations=0
+   Element( 11)%DebyeT=ZERO
+   Element( 11)%AtomicRadius=1.80d0*Angstrom2Bohr
+   Element( 11)%ImplicitMuffinTinRadius=0.75d0*Element( 11)%AtomicRadius
+   Element( 11)%ImplicitCoreRadius=0.75d0*Element( 11)%AtomicRadius
 !
    Element( 12)%AtomName='Mg'
    Element( 12)%AtomicNumber=12
@@ -347,6 +427,10 @@ contains
    Element( 12)%NumValenceElectrons=2
    Element( 12)%NumCoreStates=4
    Element( 12)%NumVariations=0
+   Element( 12)%DebyeT=ZERO
+   Element( 12)%AtomicRadius=1.50d0*Angstrom2Bohr
+   Element( 12)%ImplicitMuffinTinRadius=0.75d0*Element( 12)%AtomicRadius
+   Element( 12)%ImplicitCoreRadius=0.75d0*Element( 12)%AtomicRadius
 !
    Element( 13)%AtomName='Al'
    Element( 13)%AtomicNumber=13
@@ -355,6 +439,10 @@ contains
    Element( 13)%NumValenceElectrons=3
    Element( 13)%NumCoreStates=4
    Element( 13)%NumVariations=0
+   Element( 13)%DebyeT=ZERO
+   Element( 13)%AtomicRadius=1.25d0*Angstrom2Bohr
+   Element( 13)%ImplicitMuffinTinRadius=0.75d0*Element( 13)%AtomicRadius
+   Element( 13)%ImplicitCoreRadius=0.75d0*Element( 13)%AtomicRadius
 !
    Element( 14)%AtomName='Si'
    Element( 14)%AtomicNumber=14
@@ -363,6 +451,10 @@ contains
    Element( 14)%NumValenceElectrons=4
    Element( 14)%NumCoreStates=4
    Element( 14)%NumVariations=0
+   Element( 14)%DebyeT=ZERO
+   Element( 14)%AtomicRadius=1.10d0*Angstrom2Bohr
+   Element( 14)%ImplicitMuffinTinRadius=0.75d0*Element( 14)%AtomicRadius
+   Element( 14)%ImplicitCoreRadius=0.75d0*Element( 14)%AtomicRadius
 !
    Element( 15)%AtomName='P '
    Element( 15)%AtomicNumber=15
@@ -371,6 +463,10 @@ contains
    Element( 15)%NumValenceElectrons=5
    Element( 15)%NumCoreStates=4
    Element( 15)%NumVariations=0
+   Element( 15)%DebyeT=ZERO
+   Element( 15)%AtomicRadius=1.00d0*Angstrom2Bohr
+   Element( 15)%ImplicitMuffinTinRadius=0.75d0*Element( 15)%AtomicRadius
+   Element( 15)%ImplicitCoreRadius=0.75d0*Element( 15)%AtomicRadius
 !
    Element( 16)%AtomName='S '
    Element( 16)%AtomicNumber=16
@@ -379,6 +475,10 @@ contains
    Element( 16)%NumValenceElectrons=6
    Element( 16)%NumCoreStates=4
    Element( 16)%NumVariations=0
+   Element( 16)%DebyeT=ZERO
+   Element( 16)%AtomicRadius=1.00d0*Angstrom2Bohr
+   Element( 16)%ImplicitMuffinTinRadius=0.75d0*Element( 16)%AtomicRadius
+   Element( 16)%ImplicitCoreRadius=0.75d0*Element( 16)%AtomicRadius
 !
    Element( 17)%AtomName='Cl'
    Element( 17)%AtomicNumber=17
@@ -387,6 +487,10 @@ contains
    Element( 17)%NumValenceElectrons=7
    Element( 17)%NumCoreStates=4
    Element( 17)%NumVariations=0
+   Element( 17)%DebyeT=ZERO
+   Element( 17)%AtomicRadius=1.00d0*Angstrom2Bohr
+   Element( 17)%ImplicitMuffinTinRadius=0.75d0*Element( 17)%AtomicRadius
+   Element( 17)%ImplicitCoreRadius=0.75d0*Element( 17)%AtomicRadius
 !
    Element( 18)%AtomName='Ar'
    Element( 18)%AtomicNumber=18
@@ -395,6 +499,10 @@ contains
    Element( 18)%NumValenceElectrons=0
    Element( 18)%NumCoreStates=7
    Element( 18)%NumVariations=0
+   Element( 18)%DebyeT=ZERO
+   Element( 18)%AtomicRadius=0.71d0*Angstrom2Bohr
+   Element( 18)%ImplicitMuffinTinRadius=0.75d0*Element( 18)%AtomicRadius
+   Element( 18)%ImplicitCoreRadius=0.75d0*Element( 18)%AtomicRadius
 !
    Element( 19)%AtomName='K '
    Element( 19)%AtomicNumber=19
@@ -403,6 +511,10 @@ contains
    Element( 19)%NumValenceElectrons=1
    Element( 19)%NumCoreStates=7
    Element( 19)%NumVariations=0
+   Element( 19)%DebyeT=ZERO
+   Element( 19)%AtomicRadius=2.20d0*Angstrom2Bohr
+   Element( 19)%ImplicitMuffinTinRadius=0.75d0*Element( 19)%AtomicRadius
+   Element( 19)%ImplicitCoreRadius=0.75d0*Element( 19)%AtomicRadius
 !
    Element( 20)%AtomName='Ca'
    Element( 20)%AtomicNumber=20
@@ -411,6 +523,10 @@ contains
    Element( 20)%NumValenceElectrons=2
    Element( 20)%NumCoreStates=7
    Element( 20)%NumVariations=0
+   Element( 20)%DebyeT=ZERO
+   Element( 20)%AtomicRadius=1.80d0*Angstrom2Bohr
+   Element( 20)%ImplicitMuffinTinRadius=0.75d0*Element( 20)%AtomicRadius
+   Element( 20)%ImplicitCoreRadius=0.75d0*Element( 20)%AtomicRadius
 !
    Element( 21)%AtomName='Sc'
    Element( 21)%AtomicNumber=21
@@ -419,6 +535,10 @@ contains
    Element( 21)%NumValenceElectrons=3
    Element( 21)%NumCoreStates=7
    Element( 21)%NumVariations=0
+   Element( 21)%DebyeT=ZERO
+   Element( 21)%AtomicRadius=1.60d0*Angstrom2Bohr
+   Element( 21)%ImplicitMuffinTinRadius=0.75d0*Element( 21)%AtomicRadius
+   Element( 21)%ImplicitCoreRadius=0.75d0*Element( 21)%AtomicRadius
 !
    Element( 22)%AtomName='Ti'
    Element( 22)%AtomicNumber=22
@@ -427,6 +547,10 @@ contains
    Element( 22)%NumValenceElectrons=4
    Element( 22)%NumCoreStates=7
    Element( 22)%NumVariations=0
+   Element( 22)%DebyeT=ZERO
+   Element( 22)%AtomicRadius=1.40d0*Angstrom2Bohr
+   Element( 22)%ImplicitMuffinTinRadius=0.75d0*Element( 22)%AtomicRadius
+   Element( 22)%ImplicitCoreRadius=0.75d0*Element( 22)%AtomicRadius
 !
    Element( 23)%AtomName='V '
    Element( 23)%AtomicNumber=23
@@ -435,6 +559,10 @@ contains
    Element( 23)%NumValenceElectrons=5
    Element( 23)%NumCoreStates=7
    Element( 23)%NumVariations=0
+   Element( 23)%DebyeT=ZERO
+   Element( 23)%AtomicRadius=1.35d0*Angstrom2Bohr
+   Element( 23)%ImplicitMuffinTinRadius=0.75d0*Element( 23)%AtomicRadius
+   Element( 23)%ImplicitCoreRadius=0.75d0*Element( 23)%AtomicRadius
 !
    Element( 24)%AtomName='Cr'
    Element( 24)%AtomicNumber=24
@@ -443,6 +571,10 @@ contains
    Element( 24)%NumValenceElectrons=6
    Element( 24)%NumCoreStates=7
    Element( 24)%NumVariations=0
+   Element( 24)%DebyeT=ZERO
+   Element( 24)%AtomicRadius=1.40d0*Angstrom2Bohr
+   Element( 24)%ImplicitMuffinTinRadius=0.75d0*Element( 24)%AtomicRadius
+   Element( 24)%ImplicitCoreRadius=0.75d0*Element( 24)%AtomicRadius
 !
    Element( 25)%AtomName='Mn'
    Element( 25)%AtomicNumber=25
@@ -451,6 +583,10 @@ contains
    Element( 25)%NumValenceElectrons=7
    Element( 25)%NumCoreStates=7
    Element( 25)%NumVariations=0
+   Element( 25)%DebyeT=ZERO
+   Element( 25)%AtomicRadius=1.40d0*Angstrom2Bohr
+   Element( 25)%ImplicitMuffinTinRadius=0.75d0*Element( 25)%AtomicRadius
+   Element( 25)%ImplicitCoreRadius=0.75d0*Element( 25)%AtomicRadius
 !
    Element( 26)%AtomName='Fe'
    Element( 26)%AtomicNumber=26
@@ -459,6 +595,10 @@ contains
    Element( 26)%NumValenceElectrons=8
    Element( 26)%NumCoreStates=7
    Element( 26)%NumVariations=0
+   Element( 26)%DebyeT=ZERO
+   Element( 26)%AtomicRadius=1.40d0*Angstrom2Bohr
+   Element( 26)%ImplicitMuffinTinRadius=0.75d0*Element( 26)%AtomicRadius
+   Element( 26)%ImplicitCoreRadius=0.75d0*Element( 26)%AtomicRadius
 !
    Element( 27)%AtomName='Co'
    Element( 27)%AtomicNumber=27
@@ -467,6 +607,10 @@ contains
    Element( 27)%NumValenceElectrons=9
    Element( 27)%NumCoreStates=7
    Element( 27)%NumVariations=0
+   Element( 27)%DebyeT=ZERO
+   Element( 27)%AtomicRadius=1.35d0*Angstrom2Bohr
+   Element( 27)%ImplicitMuffinTinRadius=0.75d0*Element( 27)%AtomicRadius
+   Element( 27)%ImplicitCoreRadius=0.75d0*Element( 27)%AtomicRadius
 !
    Element( 28)%AtomName='Ni'
    Element( 28)%AtomicNumber=28
@@ -475,6 +619,10 @@ contains
    Element( 28)%NumValenceElectrons=10
    Element( 28)%NumCoreStates=7
    Element( 28)%NumVariations=2
+   Element( 28)%DebyeT=ZERO
+   Element( 28)%AtomicRadius=1.35d0*Angstrom2Bohr
+   Element( 28)%ImplicitMuffinTinRadius=0.75d0*Element( 28)%AtomicRadius
+   Element( 28)%ImplicitCoreRadius=0.75d0*Element( 28)%AtomicRadius
    allocate( Element( 28)%Variation(1:Element( 28)%NumVariations) )
 !
    Element( 28)%Variation(1)%AtomName='Ni&3p'
@@ -500,6 +648,10 @@ contains
    Element( 29)%NumValenceElectrons=11
    Element( 29)%NumCoreStates=7
    Element( 29)%NumVariations=0
+   Element( 29)%DebyeT=343.0
+   Element( 29)%AtomicRadius=1.35d0*Angstrom2Bohr
+   Element( 29)%ImplicitMuffinTinRadius=0.75d0*Element( 29)%AtomicRadius
+   Element( 29)%ImplicitCoreRadius=0.75d0*Element( 29)%AtomicRadius
 !
    Element( 30)%AtomName='Zn'
    Element( 30)%AtomicNumber=30
@@ -508,6 +660,10 @@ contains
    Element( 30)%NumValenceElectrons=12
    Element( 30)%NumCoreStates=7
    Element( 30)%NumVariations=0
+   Element( 30)%DebyeT=ZERO
+   Element( 30)%AtomicRadius=1.35d0*Angstrom2Bohr
+   Element( 30)%ImplicitMuffinTinRadius=0.75d0*Element( 30)%AtomicRadius
+   Element( 30)%ImplicitCoreRadius=0.75d0*Element( 30)%AtomicRadius
 !
    Element( 31)%AtomName='Ga'
    Element( 31)%AtomicNumber=31
@@ -516,6 +672,10 @@ contains
    Element( 31)%NumValenceElectrons=13
    Element( 31)%NumCoreStates=7
    Element( 31)%NumVariations=0
+   Element( 31)%DebyeT=ZERO
+   Element( 31)%AtomicRadius=1.30d0*Angstrom2Bohr
+   Element( 31)%ImplicitMuffinTinRadius=0.75d0*Element( 31)%AtomicRadius
+   Element( 31)%ImplicitCoreRadius=0.75d0*Element( 31)%AtomicRadius
 !
    Element( 32)%AtomName='Ge'
    Element( 32)%AtomicNumber=32
@@ -524,6 +684,10 @@ contains
    Element( 32)%NumValenceElectrons=14
    Element( 32)%NumCoreStates=7
    Element( 32)%NumVariations=0
+   Element( 32)%DebyeT=ZERO
+   Element( 32)%AtomicRadius=1.25d0*Angstrom2Bohr
+   Element( 32)%ImplicitMuffinTinRadius=0.75d0*Element( 32)%AtomicRadius
+   Element( 32)%ImplicitCoreRadius=0.75d0*Element( 32)%AtomicRadius
 !
    Element( 33)%AtomName='As'
    Element( 33)%AtomicNumber=33
@@ -532,6 +696,10 @@ contains
    Element( 33)%NumValenceElectrons=15
    Element( 33)%NumCoreStates=7
    Element( 33)%NumVariations=0
+   Element( 33)%DebyeT=ZERO
+   Element( 33)%AtomicRadius=1.15d0*Angstrom2Bohr
+   Element( 33)%ImplicitMuffinTinRadius=0.75d0*Element( 33)%AtomicRadius
+   Element( 33)%ImplicitCoreRadius=0.75d0*Element( 33)%AtomicRadius
 !
    Element( 34)%AtomName='Se'
    Element( 34)%AtomicNumber=34
@@ -540,6 +708,10 @@ contains
    Element( 34)%NumValenceElectrons=6
    Element( 34)%NumCoreStates=9
    Element( 34)%NumVariations=0
+   Element( 34)%DebyeT=ZERO
+   Element( 34)%AtomicRadius=1.15d0*Angstrom2Bohr
+   Element( 34)%ImplicitMuffinTinRadius=0.75d0*Element( 34)%AtomicRadius
+   Element( 34)%ImplicitCoreRadius=0.75d0*Element( 34)%AtomicRadius
 !
    Element( 35)%AtomName='Br'
    Element( 35)%AtomicNumber=35
@@ -548,6 +720,10 @@ contains
    Element( 35)%NumValenceElectrons=17
    Element( 35)%NumCoreStates=7
    Element( 35)%NumVariations=0
+   Element( 35)%DebyeT=ZERO
+   Element( 35)%AtomicRadius=1.15d0*Angstrom2Bohr
+   Element( 35)%ImplicitMuffinTinRadius=0.75d0*Element( 35)%AtomicRadius
+   Element( 35)%ImplicitCoreRadius=0.75d0*Element( 35)%AtomicRadius
 !
    Element( 36)%AtomName='Kr'
    Element( 36)%AtomicNumber=36
@@ -556,6 +732,10 @@ contains
    Element( 36)%NumValenceElectrons=0
    Element( 36)%NumCoreStates=12
    Element( 36)%NumVariations=0
+   Element( 36)%DebyeT=ZERO
+   Element( 36)%AtomicRadius=1.10d0*Angstrom2Bohr
+   Element( 36)%ImplicitMuffinTinRadius=0.75d0*Element( 36)%AtomicRadius
+   Element( 36)%ImplicitCoreRadius=0.75d0*Element( 36)%AtomicRadius
 !
    Element( 37)%AtomName='Rb'
    Element( 37)%AtomicNumber=37
@@ -564,6 +744,10 @@ contains
    Element( 37)%NumValenceElectrons=1
    Element( 37)%NumCoreStates=12
    Element( 37)%NumVariations=0
+   Element( 37)%DebyeT=ZERO
+   Element( 37)%AtomicRadius=2.35d0*Angstrom2Bohr
+   Element( 37)%ImplicitMuffinTinRadius=0.75d0*Element( 37)%AtomicRadius
+   Element( 37)%ImplicitCoreRadius=0.75d0*Element( 37)%AtomicRadius
 !
    Element( 38)%AtomName='Sr'
    Element( 38)%AtomicNumber=38
@@ -572,6 +756,10 @@ contains
    Element( 38)%NumValenceElectrons=2
    Element( 38)%NumCoreStates=12
    Element( 38)%NumVariations=0
+   Element( 38)%DebyeT=ZERO
+   Element( 38)%AtomicRadius=2.00d0*Angstrom2Bohr
+   Element( 38)%ImplicitMuffinTinRadius=0.75d0*Element( 38)%AtomicRadius
+   Element( 38)%ImplicitCoreRadius=0.75d0*Element( 38)%AtomicRadius
 !
    Element( 39)%AtomName='Y '
    Element( 39)%AtomicNumber=39
@@ -580,6 +768,10 @@ contains
    Element( 39)%NumValenceElectrons=3
    Element( 39)%NumCoreStates=12
    Element( 39)%NumVariations=0
+   Element( 39)%DebyeT=ZERO
+   Element( 39)%AtomicRadius=1.80d0*Angstrom2Bohr
+   Element( 39)%ImplicitMuffinTinRadius=0.75d0*Element( 39)%AtomicRadius
+   Element( 39)%ImplicitCoreRadius=0.75d0*Element( 39)%AtomicRadius
 !
    Element( 40)%AtomName='Zr'
    Element( 40)%AtomicNumber=40
@@ -588,6 +780,10 @@ contains
    Element( 40)%NumValenceElectrons=4
    Element( 40)%NumCoreStates=12
    Element( 40)%NumVariations=0
+   Element( 40)%DebyeT=ZERO
+   Element( 40)%AtomicRadius=1.55d0*Angstrom2Bohr
+   Element( 40)%ImplicitMuffinTinRadius=0.75d0*Element( 40)%AtomicRadius
+   Element( 40)%ImplicitCoreRadius=0.75d0*Element( 40)%AtomicRadius
 !
    Element( 41)%AtomName='Nb'
    Element( 41)%AtomicNumber=41
@@ -596,6 +792,10 @@ contains
    Element( 41)%NumValenceElectrons=5
    Element( 41)%NumCoreStates=12
    Element( 41)%NumVariations=0
+   Element( 41)%DebyeT=ZERO
+   Element( 41)%AtomicRadius=1.45d0*Angstrom2Bohr
+   Element( 41)%ImplicitMuffinTinRadius=0.75d0*Element( 41)%AtomicRadius
+   Element( 41)%ImplicitCoreRadius=0.75d0*Element( 41)%AtomicRadius
 !
    Element( 42)%AtomName='Mo'
    Element( 42)%AtomicNumber=42
@@ -604,6 +804,10 @@ contains
    Element( 42)%NumValenceElectrons=6
    Element( 42)%NumCoreStates=12
    Element( 42)%NumVariations=0
+   Element( 42)%DebyeT=ZERO
+   Element( 42)%AtomicRadius=1.45d0*Angstrom2Bohr
+   Element( 42)%ImplicitMuffinTinRadius=0.75d0*Element( 42)%AtomicRadius
+   Element( 42)%ImplicitCoreRadius=0.75d0*Element( 42)%AtomicRadius
 !
    Element( 43)%AtomName='Tc'
    Element( 43)%AtomicNumber=43
@@ -612,6 +816,10 @@ contains
    Element( 43)%NumValenceElectrons=7
    Element( 43)%NumCoreStates=12
    Element( 43)%NumVariations=0
+   Element( 43)%DebyeT=ZERO
+   Element( 43)%AtomicRadius=1.35d0*Angstrom2Bohr
+   Element( 43)%ImplicitMuffinTinRadius=0.75d0*Element( 43)%AtomicRadius
+   Element( 43)%ImplicitCoreRadius=0.75d0*Element( 43)%AtomicRadius
 !
    Element( 44)%AtomName='Ru'
    Element( 44)%AtomicNumber=44
@@ -620,6 +828,10 @@ contains
    Element( 44)%NumValenceElectrons=8
    Element( 44)%NumCoreStates=12
    Element( 44)%NumVariations=0
+   Element( 44)%DebyeT=ZERO
+   Element( 44)%AtomicRadius=1.30d0*Angstrom2Bohr
+   Element( 44)%ImplicitMuffinTinRadius=0.75d0*Element( 44)%AtomicRadius
+   Element( 44)%ImplicitCoreRadius=0.75d0*Element( 44)%AtomicRadius
 !
    Element( 45)%AtomName='Rh'
    Element( 45)%AtomicNumber=45
@@ -628,6 +840,10 @@ contains
    Element( 45)%NumValenceElectrons=9
    Element( 45)%NumCoreStates=12
    Element( 45)%NumVariations=0
+   Element( 45)%DebyeT=ZERO
+   Element( 45)%AtomicRadius=1.35d0*Angstrom2Bohr
+   Element( 45)%ImplicitMuffinTinRadius=0.75d0*Element( 45)%AtomicRadius
+   Element( 45)%ImplicitCoreRadius=0.75d0*Element( 45)%AtomicRadius
 !
    Element( 46)%AtomName='Pd'
    Element( 46)%AtomicNumber=46
@@ -636,6 +852,10 @@ contains
    Element( 46)%NumValenceElectrons=10
    Element( 46)%NumCoreStates=12
    Element( 46)%NumVariations=0
+   Element( 46)%DebyeT=ZERO
+   Element( 46)%AtomicRadius=1.40d0*Angstrom2Bohr
+   Element( 46)%ImplicitMuffinTinRadius=0.75d0*Element( 46)%AtomicRadius
+   Element( 46)%ImplicitCoreRadius=0.75d0*Element( 46)%AtomicRadius
 !
    Element( 47)%AtomName='Ag'
    Element( 47)%AtomicNumber=47
@@ -644,6 +864,10 @@ contains
    Element( 47)%NumValenceElectrons=11
    Element( 47)%NumCoreStates=12
    Element( 47)%NumVariations=0
+   Element( 47)%DebyeT=ZERO
+   Element( 47)%AtomicRadius=1.60d0*Angstrom2Bohr
+   Element( 47)%ImplicitMuffinTinRadius=0.75d0*Element( 47)%AtomicRadius
+   Element( 47)%ImplicitCoreRadius=0.75d0*Element( 47)%AtomicRadius
 !
    Element( 48)%AtomName='Cd'
    Element( 48)%AtomicNumber=48
@@ -652,6 +876,10 @@ contains
    Element( 48)%NumValenceElectrons=12
    Element( 48)%NumCoreStates=12
    Element( 48)%NumVariations=0
+   Element( 48)%DebyeT=ZERO
+   Element( 48)%AtomicRadius=1.55d0*Angstrom2Bohr
+   Element( 48)%ImplicitMuffinTinRadius=0.75d0*Element( 48)%AtomicRadius
+   Element( 48)%ImplicitCoreRadius=0.75d0*Element( 48)%AtomicRadius
 !
    Element( 49)%AtomName='In'
    Element( 49)%AtomicNumber=49
@@ -660,6 +888,10 @@ contains
    Element( 49)%NumValenceElectrons=3
    Element( 49)%NumCoreStates=14
    Element( 49)%NumVariations=0
+   Element( 49)%DebyeT=ZERO
+   Element( 49)%AtomicRadius=1.55d0*Angstrom2Bohr
+   Element( 49)%ImplicitMuffinTinRadius=0.75d0*Element( 49)%AtomicRadius
+   Element( 49)%ImplicitCoreRadius=0.75d0*Element( 49)%AtomicRadius
 !
    Element( 50)%AtomName='Sn'
    Element( 50)%AtomicNumber=50
@@ -668,6 +900,10 @@ contains
    Element( 50)%NumValenceElectrons=4
    Element( 50)%NumCoreStates=14
    Element( 50)%NumVariations=0
+   Element( 50)%DebyeT=ZERO
+   Element( 50)%AtomicRadius=1.45d0*Angstrom2Bohr
+   Element( 50)%ImplicitMuffinTinRadius=0.75d0*Element( 50)%AtomicRadius
+   Element( 50)%ImplicitCoreRadius=0.75d0*Element( 50)%AtomicRadius
 !
    Element( 51)%AtomName='Sb'
    Element( 51)%AtomicNumber=51
@@ -676,6 +912,10 @@ contains
    Element( 51)%NumValenceElectrons=5
    Element( 51)%NumCoreStates=14
    Element( 51)%NumVariations=0
+   Element( 51)%DebyeT=ZERO
+   Element( 51)%AtomicRadius=1.45d0*Angstrom2Bohr
+   Element( 51)%ImplicitMuffinTinRadius=0.75d0*Element( 51)%AtomicRadius
+   Element( 51)%ImplicitCoreRadius=0.75d0*Element( 51)%AtomicRadius
 !
    Element( 52)%AtomName='Te'
    Element( 52)%AtomicNumber=52
@@ -684,6 +924,10 @@ contains
    Element( 52)%NumValenceElectrons=6
    Element( 52)%NumCoreStates=14
    Element( 52)%NumVariations=0
+   Element( 52)%DebyeT=ZERO
+   Element( 52)%AtomicRadius=1.40d0*Angstrom2Bohr
+   Element( 52)%ImplicitMuffinTinRadius=0.75d0*Element( 52)%AtomicRadius
+   Element( 52)%ImplicitCoreRadius=0.75d0*Element( 52)%AtomicRadius
 !
    Element( 53)%AtomName='I '
    Element( 53)%AtomicNumber=53
@@ -692,6 +936,10 @@ contains
    Element( 53)%NumValenceElectrons=7
    Element( 53)%NumCoreStates=14
    Element( 53)%NumVariations=0
+   Element( 53)%DebyeT=ZERO
+   Element( 53)%AtomicRadius=1.40d0*Angstrom2Bohr
+   Element( 53)%ImplicitMuffinTinRadius=0.75d0*Element( 53)%AtomicRadius
+   Element( 53)%ImplicitCoreRadius=0.75d0*Element( 53)%AtomicRadius
 !
    Element( 54)%AtomName='Xe'
    Element( 54)%AtomicNumber=54
@@ -700,6 +948,10 @@ contains
    Element( 54)%NumValenceElectrons=0
    Element( 54)%NumCoreStates=17
    Element( 54)%NumVariations=0
+   Element( 54)%DebyeT=ZERO
+   Element( 54)%AtomicRadius=1.30d0*Angstrom2Bohr
+   Element( 54)%ImplicitMuffinTinRadius=0.75d0*Element( 54)%AtomicRadius
+   Element( 54)%ImplicitCoreRadius=0.75d0*Element( 54)%AtomicRadius
 !
    Element( 55)%AtomName='Cs'
    Element( 55)%AtomicNumber=55
@@ -708,6 +960,10 @@ contains
    Element( 55)%NumValenceElectrons=1
    Element( 55)%NumCoreStates=17
    Element( 55)%NumVariations=0
+   Element( 55)%DebyeT=ZERO
+   Element( 55)%AtomicRadius=2.60d0*Angstrom2Bohr
+   Element( 55)%ImplicitMuffinTinRadius=0.75d0*Element( 55)%AtomicRadius
+   Element( 55)%ImplicitCoreRadius=0.75d0*Element( 55)%AtomicRadius
 !
    Element( 56)%AtomName='Ba'
    Element( 56)%AtomicNumber=56
@@ -716,6 +972,10 @@ contains
    Element( 56)%NumValenceElectrons=2
    Element( 56)%NumCoreStates=17
    Element( 56)%NumVariations=0
+   Element( 56)%DebyeT=ZERO
+   Element( 56)%AtomicRadius=2.15d0*Angstrom2Bohr
+   Element( 56)%ImplicitMuffinTinRadius=0.75d0*Element( 56)%AtomicRadius
+   Element( 56)%ImplicitCoreRadius=0.75d0*Element( 56)%AtomicRadius
 !
    Element( 57)%AtomName='La'
    Element( 57)%AtomicNumber=57
@@ -724,6 +984,10 @@ contains
    Element( 57)%NumValenceElectrons=3
    Element( 57)%NumCoreStates=17
    Element( 57)%NumVariations=3
+   Element( 57)%DebyeT=ZERO
+   Element( 57)%AtomicRadius=1.95d0*Angstrom2Bohr
+   Element( 57)%ImplicitMuffinTinRadius=0.75d0*Element( 57)%AtomicRadius
+   Element( 57)%ImplicitCoreRadius=0.75d0*Element( 57)%AtomicRadius
 !
    allocate( Element( 57)%Variation(1:Element( 57)%NumVariations) )
 !
@@ -758,6 +1022,10 @@ contains
    Element( 58)%NumValenceElectrons=4
    Element( 58)%NumCoreStates=17
    Element( 58)%NumVariations=3
+   Element( 58)%DebyeT=ZERO
+   Element( 58)%AtomicRadius=1.85d0*Angstrom2Bohr
+   Element( 58)%ImplicitMuffinTinRadius=0.75d0*Element( 58)%AtomicRadius
+   Element( 58)%ImplicitCoreRadius=0.75d0*Element( 58)%AtomicRadius
 !
    allocate( Element( 58)%Variation(1:Element( 58)%NumVariations) )
 !
@@ -792,6 +1060,10 @@ contains
    Element( 59)%NumValenceElectrons=2
    Element( 59)%NumCoreStates=19
    Element( 59)%NumVariations=0
+   Element( 59)%DebyeT=ZERO
+   Element( 59)%AtomicRadius=1.85d0*Angstrom2Bohr
+   Element( 59)%ImplicitMuffinTinRadius=0.75d0*Element( 59)%AtomicRadius
+   Element( 59)%ImplicitCoreRadius=0.75d0*Element( 59)%AtomicRadius
 !
    Element( 60)%AtomName='Nd'
    Element( 60)%AtomicNumber=60
@@ -800,6 +1072,10 @@ contains
    Element( 60)%NumValenceElectrons=2
    Element( 60)%NumCoreStates=19
    Element( 60)%NumVariations=0
+   Element( 60)%DebyeT=ZERO
+   Element( 60)%AtomicRadius=1.85d0*Angstrom2Bohr
+   Element( 60)%ImplicitMuffinTinRadius=0.75d0*Element( 60)%AtomicRadius
+   Element( 60)%ImplicitCoreRadius=0.75d0*Element( 60)%AtomicRadius
 !
    Element( 61)%AtomName='Pm'
    Element( 61)%AtomicNumber=61
@@ -808,6 +1084,10 @@ contains
    Element( 61)%NumValenceElectrons=2
    Element( 61)%NumCoreStates=19
    Element( 61)%NumVariations=0
+   Element( 61)%DebyeT=ZERO
+   Element( 61)%AtomicRadius=1.85d0*Angstrom2Bohr
+   Element( 61)%ImplicitMuffinTinRadius=0.75d0*Element( 61)%AtomicRadius
+   Element( 61)%ImplicitCoreRadius=0.75d0*Element( 61)%AtomicRadius
 !
    Element( 62)%AtomName='Sm'
    Element( 62)%AtomicNumber=62
@@ -816,6 +1096,10 @@ contains
    Element( 62)%NumValenceElectrons=14
    Element( 62)%NumCoreStates=15
    Element( 62)%NumVariations=2
+   Element( 62)%DebyeT=ZERO
+   Element( 62)%AtomicRadius=1.85d0*Angstrom2Bohr
+   Element( 62)%ImplicitMuffinTinRadius=0.75d0*Element( 62)%AtomicRadius
+   Element( 62)%ImplicitCoreRadius=0.75d0*Element( 62)%AtomicRadius
 !
    allocate( Element( 62)%Variation(1:Element( 62)%NumVariations) )
 !
@@ -842,6 +1126,10 @@ contains
    Element( 63)%NumValenceElectrons=2
    Element( 63)%NumCoreStates=19
    Element( 63)%NumVariations=0
+   Element( 63)%DebyeT=ZERO
+   Element( 63)%AtomicRadius=1.85d0*Angstrom2Bohr
+   Element( 63)%ImplicitMuffinTinRadius=0.75d0*Element( 63)%AtomicRadius
+   Element( 63)%ImplicitCoreRadius=0.75d0*Element( 63)%AtomicRadius
 !
    Element( 64)%AtomName='Gd'
    Element( 64)%AtomicNumber=64
@@ -850,6 +1138,10 @@ contains
    Element( 64)%NumValenceElectrons=18
    Element( 64)%NumCoreStates=14
    Element( 64)%NumVariations=0
+   Element( 64)%DebyeT=ZERO
+   Element( 64)%AtomicRadius=1.80d0*Angstrom2Bohr
+   Element( 64)%ImplicitMuffinTinRadius=0.75d0*Element( 64)%AtomicRadius
+   Element( 64)%ImplicitCoreRadius=0.75d0*Element( 64)%AtomicRadius
 !
    Element( 65)%AtomName='Tb'
    Element( 65)%AtomicNumber=65
@@ -858,6 +1150,10 @@ contains
    Element( 65)%NumValenceElectrons=2
    Element( 65)%NumCoreStates=19
    Element( 65)%NumVariations=0
+   Element( 65)%DebyeT=ZERO
+   Element( 65)%AtomicRadius=1.75d0*Angstrom2Bohr
+   Element( 65)%ImplicitMuffinTinRadius=0.75d0*Element( 65)%AtomicRadius
+   Element( 65)%ImplicitCoreRadius=0.75d0*Element( 65)%AtomicRadius
 !
    Element( 66)%AtomName='Dy'
    Element( 66)%AtomicNumber=66
@@ -866,6 +1162,10 @@ contains
    Element( 66)%NumValenceElectrons=2
    Element( 66)%NumCoreStates=19
    Element( 66)%NumVariations=0
+   Element( 66)%DebyeT=ZERO
+   Element( 66)%AtomicRadius=1.75d0*Angstrom2Bohr
+   Element( 66)%ImplicitMuffinTinRadius=0.75d0*Element( 66)%AtomicRadius
+   Element( 66)%ImplicitCoreRadius=0.75d0*Element( 66)%AtomicRadius
 !
    Element( 67)%AtomName='Ho'
    Element( 67)%AtomicNumber=67
@@ -874,6 +1174,10 @@ contains
    Element( 67)%NumValenceElectrons=2
    Element( 67)%NumCoreStates=19
    Element( 67)%NumVariations=0
+   Element( 67)%DebyeT=ZERO
+   Element( 67)%AtomicRadius=1.75d0*Angstrom2Bohr
+   Element( 67)%ImplicitMuffinTinRadius=0.75d0*Element( 67)%AtomicRadius
+   Element( 67)%ImplicitCoreRadius=0.75d0*Element( 67)%AtomicRadius
 !
    Element( 68)%AtomName='Er'
    Element( 68)%AtomicNumber=68
@@ -882,6 +1186,10 @@ contains
    Element( 68)%NumValenceElectrons=2
    Element( 68)%NumCoreStates=19
    Element( 68)%NumVariations=0
+   Element( 68)%DebyeT=ZERO
+   Element( 68)%AtomicRadius=1.75d0*Angstrom2Bohr
+   Element( 68)%ImplicitMuffinTinRadius=0.75d0*Element( 68)%AtomicRadius
+   Element( 68)%ImplicitCoreRadius=0.75d0*Element( 68)%AtomicRadius
 !
    Element( 69)%AtomName='Tm'
    Element( 69)%AtomicNumber=69
@@ -890,6 +1198,10 @@ contains
    Element( 69)%NumValenceElectrons=2
    Element( 69)%NumCoreStates=19
    Element( 69)%NumVariations=0
+   Element( 69)%DebyeT=ZERO
+   Element( 69)%AtomicRadius=1.75d0*Angstrom2Bohr
+   Element( 69)%ImplicitMuffinTinRadius=0.75d0*Element( 69)%AtomicRadius
+   Element( 69)%ImplicitCoreRadius=0.75d0*Element( 69)%AtomicRadius
 !
    Element( 70)%AtomName='Yb'
    Element( 70)%AtomicNumber=70
@@ -898,6 +1210,10 @@ contains
    Element( 70)%NumValenceElectrons=2
    Element( 70)%NumCoreStates=19
    Element( 70)%NumVariations=0
+   Element( 70)%DebyeT=ZERO
+   Element( 70)%AtomicRadius=1.75d0*Angstrom2Bohr
+   Element( 70)%ImplicitMuffinTinRadius=0.75d0*Element( 70)%AtomicRadius
+   Element( 70)%ImplicitCoreRadius=0.75d0*Element( 70)%AtomicRadius
 !
    Element( 71)%AtomName='Lu'
    Element( 71)%AtomicNumber=71
@@ -906,6 +1222,10 @@ contains
    Element( 71)%NumValenceElectrons=3
    Element( 71)%NumCoreStates=19
    Element( 71)%NumVariations=0
+   Element( 71)%DebyeT=ZERO
+   Element( 71)%AtomicRadius=1.75d0*Angstrom2Bohr
+   Element( 71)%ImplicitMuffinTinRadius=0.75d0*Element( 71)%AtomicRadius
+   Element( 71)%ImplicitCoreRadius=0.75d0*Element( 71)%AtomicRadius
 !
    Element( 72)%AtomName='Hf'
    Element( 72)%AtomicNumber=72
@@ -914,6 +1234,10 @@ contains
    Element( 72)%NumValenceElectrons=4
    Element( 72)%NumCoreStates=19
    Element( 72)%NumVariations=0
+   Element( 72)%DebyeT=ZERO
+   Element( 72)%AtomicRadius=1.55d0*Angstrom2Bohr
+   Element( 72)%ImplicitMuffinTinRadius=0.75d0*Element( 72)%AtomicRadius
+   Element( 72)%ImplicitCoreRadius=0.75d0*Element( 72)%AtomicRadius
 !
    Element( 73)%AtomName='Ta'
    Element( 73)%AtomicNumber=73
@@ -922,6 +1246,10 @@ contains
    Element( 73)%NumValenceElectrons=5
    Element( 73)%NumCoreStates=19
    Element( 73)%NumVariations=0
+   Element( 73)%DebyeT=ZERO
+   Element( 73)%AtomicRadius=1.45d0*Angstrom2Bohr
+   Element( 73)%ImplicitMuffinTinRadius=0.75d0*Element( 73)%AtomicRadius
+   Element( 73)%ImplicitCoreRadius=0.75d0*Element( 73)%AtomicRadius
 !
    Element( 74)%AtomName='W '
    Element( 74)%AtomicNumber=74
@@ -930,6 +1258,10 @@ contains
    Element( 74)%NumValenceElectrons=6
    Element( 74)%NumCoreStates=19
    Element( 74)%NumVariations=0
+   Element( 74)%DebyeT=ZERO
+   Element( 74)%AtomicRadius=1.35d0*Angstrom2Bohr
+   Element( 74)%ImplicitMuffinTinRadius=0.75d0*Element( 74)%AtomicRadius
+   Element( 74)%ImplicitCoreRadius=0.75d0*Element( 74)%AtomicRadius
 !
    Element( 75)%AtomName='Re'
    Element( 75)%AtomicNumber=75
@@ -938,6 +1270,10 @@ contains
    Element( 75)%NumValenceElectrons=7
    Element( 75)%NumCoreStates=19
    Element( 75)%NumVariations=0
+   Element( 75)%DebyeT=ZERO
+   Element( 75)%AtomicRadius=1.35d0*Angstrom2Bohr
+   Element( 75)%ImplicitMuffinTinRadius=0.75d0*Element( 75)%AtomicRadius
+   Element( 75)%ImplicitCoreRadius=0.75d0*Element( 75)%AtomicRadius
 !
    Element( 76)%AtomName='Os'
    Element( 76)%AtomicNumber=76
@@ -946,6 +1282,10 @@ contains
    Element( 76)%NumValenceElectrons=8
    Element( 76)%NumCoreStates=19
    Element( 76)%NumVariations=0
+   Element( 76)%DebyeT=ZERO
+   Element( 76)%AtomicRadius=1.30d0*Angstrom2Bohr
+   Element( 76)%ImplicitMuffinTinRadius=0.75d0*Element( 76)%AtomicRadius
+   Element( 76)%ImplicitCoreRadius=0.75d0*Element( 76)%AtomicRadius
 !
    Element( 77)%AtomName='Ir'
    Element( 77)%AtomicNumber=77
@@ -954,6 +1294,10 @@ contains
    Element( 77)%NumValenceElectrons=9
    Element( 77)%NumCoreStates=19
    Element( 77)%NumVariations=0
+   Element( 77)%DebyeT=ZERO
+   Element( 77)%AtomicRadius=1.35d0*Angstrom2Bohr
+   Element( 77)%ImplicitMuffinTinRadius=0.75d0*Element( 77)%AtomicRadius
+   Element( 77)%ImplicitCoreRadius=0.75d0*Element( 77)%AtomicRadius
 !
    Element( 78)%AtomName='Pt'
    Element( 78)%AtomicNumber=78
@@ -962,6 +1306,10 @@ contains
    Element( 78)%NumValenceElectrons=10
    Element( 78)%NumCoreStates=19
    Element( 78)%NumVariations=0
+   Element( 78)%DebyeT=ZERO
+   Element( 78)%AtomicRadius=1.35d0*Angstrom2Bohr
+   Element( 78)%ImplicitMuffinTinRadius=0.75d0*Element( 78)%AtomicRadius
+   Element( 78)%ImplicitCoreRadius=0.75d0*Element( 78)%AtomicRadius
 !
    Element( 79)%AtomName='Au'
    Element( 79)%AtomicNumber=79
@@ -970,6 +1318,10 @@ contains
    Element( 79)%NumValenceElectrons=11
    Element( 79)%NumCoreStates=19
    Element( 79)%NumVariations=0
+   Element( 79)%DebyeT=ZERO
+   Element( 79)%AtomicRadius=1.35d0*Angstrom2Bohr
+   Element( 79)%ImplicitMuffinTinRadius=0.75d0*Element( 79)%AtomicRadius
+   Element( 79)%ImplicitCoreRadius=0.75d0*Element( 79)%AtomicRadius
 !
    Element( 80)%AtomName='Hg'
    Element( 80)%AtomicNumber=80
@@ -978,6 +1330,10 @@ contains
    Element( 80)%NumValenceElectrons=12
    Element( 80)%NumCoreStates=19
    Element( 80)%NumVariations=0
+   Element( 80)%DebyeT=ZERO
+   Element( 80)%AtomicRadius=1.50d0*Angstrom2Bohr
+   Element( 80)%ImplicitMuffinTinRadius=0.75d0*Element( 80)%AtomicRadius
+   Element( 80)%ImplicitCoreRadius=0.75d0*Element( 80)%AtomicRadius
 !
    Element( 81)%AtomName='Tl'
    Element( 81)%AtomicNumber=81
@@ -986,6 +1342,10 @@ contains
    Element( 81)%NumValenceElectrons=3
    Element( 81)%NumCoreStates=19
    Element( 81)%NumVariations=0
+   Element( 81)%DebyeT=ZERO
+   Element( 81)%AtomicRadius=1.90d0*Angstrom2Bohr
+   Element( 81)%ImplicitMuffinTinRadius=0.75d0*Element( 81)%AtomicRadius
+   Element( 81)%ImplicitCoreRadius=0.75d0*Element( 81)%AtomicRadius
 !
    Element( 82)%AtomName='Pb'
    Element( 82)%AtomicNumber=82
@@ -994,6 +1354,10 @@ contains
    Element( 82)%NumValenceElectrons=4
    Element( 82)%NumCoreStates=21
    Element( 82)%NumVariations=0
+   Element( 82)%DebyeT=ZERO
+   Element( 82)%AtomicRadius=1.80d0*Angstrom2Bohr
+   Element( 82)%ImplicitMuffinTinRadius=0.75d0*Element( 82)%AtomicRadius
+   Element( 82)%ImplicitCoreRadius=0.75d0*Element( 82)%AtomicRadius
 !
    Element( 83)%AtomName='Bi'
    Element( 83)%AtomicNumber=83
@@ -1002,6 +1366,10 @@ contains
    Element( 83)%NumValenceElectrons=5
    Element( 83)%NumCoreStates=21
    Element( 83)%NumVariations=0
+   Element( 83)%DebyeT=ZERO
+   Element( 83)%AtomicRadius=1.60d0*Angstrom2Bohr
+   Element( 83)%ImplicitMuffinTinRadius=0.75d0*Element( 83)%AtomicRadius
+   Element( 83)%ImplicitCoreRadius=0.75d0*Element( 83)%AtomicRadius
 !
    Element( 84)%AtomName='Po'
    Element( 84)%AtomicNumber=84
@@ -1010,6 +1378,10 @@ contains
    Element( 84)%NumValenceElectrons=6
    Element( 84)%NumCoreStates=21
    Element( 84)%NumVariations=0
+   Element( 84)%DebyeT=ZERO
+   Element( 84)%AtomicRadius=1.90d0*Angstrom2Bohr
+   Element( 84)%ImplicitMuffinTinRadius=0.75d0*Element( 84)%AtomicRadius
+   Element( 84)%ImplicitCoreRadius=0.75d0*Element( 84)%AtomicRadius
 !
    Element( 85)%AtomName='At'
    Element( 85)%AtomicNumber=85
@@ -1018,6 +1390,10 @@ contains
    Element( 85)%NumValenceElectrons=7
    Element( 85)%NumCoreStates=21
    Element( 85)%NumVariations=0
+   Element( 85)%DebyeT=ZERO
+   Element( 85)%AtomicRadius=1.38d0*Angstrom2Bohr
+   Element( 85)%ImplicitMuffinTinRadius=0.75d0*Element( 85)%AtomicRadius
+   Element( 85)%ImplicitCoreRadius=0.75d0*Element( 85)%AtomicRadius
 !
    Element( 86)%AtomName='Rn'
    Element( 86)%AtomicNumber=86
@@ -1026,6 +1402,10 @@ contains
    Element( 86)%NumValenceElectrons=8
    Element( 86)%NumCoreStates=21
    Element( 86)%NumVariations=0
+   Element( 86)%DebyeT=ZERO
+   Element( 86)%AtomicRadius=1.33d0*Angstrom2Bohr
+   Element( 86)%ImplicitMuffinTinRadius=0.75d0*Element( 86)%AtomicRadius
+   Element( 86)%ImplicitCoreRadius=0.75d0*Element( 86)%AtomicRadius
 !
    Element( 87)%AtomName='Fr'
    Element( 87)%AtomicNumber=87
@@ -1034,6 +1414,10 @@ contains
    Element( 87)%NumValenceElectrons=9
    Element( 87)%NumCoreStates=21
    Element( 87)%NumVariations=0
+   Element( 87)%DebyeT=ZERO
+   Element( 87)%AtomicRadius=3.48d0*Angstrom2Bohr
+   Element( 87)%ImplicitMuffinTinRadius=0.75d0*Element( 87)%AtomicRadius
+   Element( 87)%ImplicitCoreRadius=0.75d0*Element( 87)%AtomicRadius
 !
    Element( 88)%AtomName='Ra'
    Element( 88)%AtomicNumber=88
@@ -1042,6 +1426,10 @@ contains
    Element( 88)%NumValenceElectrons=10
    Element( 88)%NumCoreStates=21
    Element( 88)%NumVariations=0
+   Element( 88)%DebyeT=ZERO
+   Element( 88)%AtomicRadius=2.15d0*Angstrom2Bohr
+   Element( 88)%ImplicitMuffinTinRadius=0.75d0*Element( 88)%AtomicRadius
+   Element( 88)%ImplicitCoreRadius=0.75d0*Element( 88)%AtomicRadius
 !
    Element( 89)%AtomName='Ac'
    Element( 89)%AtomicNumber=89
@@ -1050,6 +1438,10 @@ contains
    Element( 89)%NumValenceElectrons=11
    Element( 89)%NumCoreStates=21
    Element( 89)%NumVariations=0
+   Element( 89)%DebyeT=ZERO
+   Element( 89)%AtomicRadius=1.95d0*Angstrom2Bohr
+   Element( 89)%ImplicitMuffinTinRadius=0.75d0*Element( 89)%AtomicRadius
+   Element( 89)%ImplicitCoreRadius=0.75d0*Element( 89)%AtomicRadius
 !
    Element( 90)%AtomName='Th'
    Element( 90)%AtomicNumber=90
@@ -1058,6 +1450,10 @@ contains
    Element( 90)%NumValenceElectrons=12
    Element( 90)%NumCoreStates=21
    Element( 90)%NumVariations=0
+   Element( 90)%DebyeT=ZERO
+   Element( 90)%AtomicRadius=1.80d0*Angstrom2Bohr
+   Element( 90)%ImplicitMuffinTinRadius=0.75d0*Element( 90)%AtomicRadius
+   Element( 90)%ImplicitCoreRadius=0.75d0*Element( 90)%AtomicRadius
 !
    Element( 91)%AtomName='Pa'
    Element( 91)%AtomicNumber=91
@@ -1066,6 +1462,10 @@ contains
    Element( 91)%NumValenceElectrons=13
    Element( 91)%NumCoreStates=21
    Element( 91)%NumVariations=0
+   Element( 91)%DebyeT=ZERO
+   Element( 91)%AtomicRadius=1.80d0*Angstrom2Bohr
+   Element( 91)%ImplicitMuffinTinRadius=0.75d0*Element( 91)%AtomicRadius
+   Element( 91)%ImplicitCoreRadius=0.75d0*Element( 91)%AtomicRadius
 !
    Element( 92)%AtomName='U'
    Element( 92)%AtomicNumber=92
@@ -1074,6 +1474,10 @@ contains
    Element( 92)%NumValenceElectrons=14
    Element( 92)%NumCoreStates=21
    Element( 92)%NumVariations=0
+   Element( 92)%DebyeT=ZERO
+   Element( 92)%AtomicRadius=1.75d0*Angstrom2Bohr
+   Element( 92)%ImplicitMuffinTinRadius=0.75d0*Element( 92)%AtomicRadius
+   Element( 92)%ImplicitCoreRadius=0.75d0*Element( 92)%AtomicRadius
 !
    Element( 93)%AtomName='Np'
    Element( 93)%AtomicNumber=93
@@ -1082,6 +1486,10 @@ contains
    Element( 93)%NumValenceElectrons=15
    Element( 93)%NumCoreStates=21
    Element( 93)%NumVariations=0
+   Element( 93)%DebyeT=ZERO
+   Element( 93)%AtomicRadius=1.75d0*Angstrom2Bohr
+   Element( 93)%ImplicitMuffinTinRadius=0.75d0*Element( 93)%AtomicRadius
+   Element( 93)%ImplicitCoreRadius=0.75d0*Element( 93)%AtomicRadius
 !
    Element( 94)%AtomName='Pu'
    Element( 94)%AtomicNumber=94
@@ -1090,6 +1498,118 @@ contains
    Element( 94)%NumValenceElectrons=16
    Element( 94)%NumCoreStates=21
    Element( 94)%NumVariations=0
+   Element( 94)%DebyeT=ZERO
+   Element( 94)%AtomicRadius=1.75d0*Angstrom2Bohr
+   Element( 94)%ImplicitMuffinTinRadius=0.75d0*Element( 94)%AtomicRadius
+   Element( 94)%ImplicitCoreRadius=0.75d0*Element( 94)%AtomicRadius
+!
+   Element( 95)%AtomName='Am'
+   Element( 95)%AtomicNumber=95
+   Element( 95)%NumDeepCoreElectrons=68
+   Element( 95)%NumSemiCoreElectrons=10
+   Element( 95)%NumValenceElectrons=17
+   Element( 95)%NumCoreStates=21
+   Element( 95)%NumVariations=0
+   Element( 95)%DebyeT=ZERO
+   Element( 95)%AtomicRadius=1.75d0*Angstrom2Bohr
+   Element( 95)%ImplicitMuffinTinRadius=0.75d0*Element( 95)%AtomicRadius
+   Element( 95)%ImplicitCoreRadius=0.75d0*Element( 95)%AtomicRadius
+!
+   Element( 96)%AtomName='Cm'
+   Element( 96)%AtomicNumber=96
+   Element( 96)%NumDeepCoreElectrons=68
+   Element( 96)%NumSemiCoreElectrons=10
+   Element( 96)%NumValenceElectrons=18
+   Element( 96)%NumCoreStates=21
+   Element( 96)%NumVariations=0
+   Element( 96)%DebyeT=ZERO
+   Element( 96)%AtomicRadius=1.74d0*Angstrom2Bohr
+   Element( 96)%ImplicitMuffinTinRadius=0.75d0*Element( 96)%AtomicRadius
+   Element( 96)%ImplicitCoreRadius=0.75d0*Element( 96)%AtomicRadius
+!
+   Element( 97)%AtomName='Bk'
+   Element( 97)%AtomicNumber=97
+   Element( 97)%NumDeepCoreElectrons=68
+   Element( 97)%NumSemiCoreElectrons=10
+   Element( 97)%NumValenceElectrons=19
+   Element( 97)%NumCoreStates=21
+   Element( 97)%NumVariations=0
+   Element( 97)%DebyeT=ZERO
+   Element( 97)%AtomicRadius=1.70d0*Angstrom2Bohr
+   Element( 97)%ImplicitMuffinTinRadius=0.75d0*Element( 97)%AtomicRadius
+   Element( 97)%ImplicitCoreRadius=0.75d0*Element( 97)%AtomicRadius
+!
+   Element( 98)%AtomName='Cf'
+   Element( 98)%AtomicNumber=98
+   Element( 98)%NumDeepCoreElectrons=68
+   Element( 98)%NumSemiCoreElectrons=10
+   Element( 98)%NumValenceElectrons=20
+   Element( 98)%NumCoreStates=21
+   Element( 98)%NumVariations=0
+   Element( 98)%DebyeT=ZERO
+   Element( 98)%AtomicRadius=1.86d0*Angstrom2Bohr
+   Element( 98)%ImplicitMuffinTinRadius=0.75d0*Element( 98)%AtomicRadius
+   Element( 98)%ImplicitCoreRadius=0.75d0*Element( 98)%AtomicRadius
+!
+   Element( 99)%AtomName='Es'
+   Element( 99)%AtomicNumber=99
+   Element( 99)%NumDeepCoreElectrons=68
+   Element( 99)%NumSemiCoreElectrons=10
+   Element( 99)%NumValenceElectrons=21
+   Element( 99)%NumCoreStates=21
+   Element( 99)%NumVariations=0
+   Element( 99)%DebyeT=ZERO
+   Element( 99)%AtomicRadius=1.86d0*Angstrom2Bohr
+   Element( 99)%ImplicitMuffinTinRadius=0.75d0*Element( 99)%AtomicRadius
+   Element( 99)%ImplicitCoreRadius=0.75d0*Element( 99)%AtomicRadius
+!
+   Element(100)%AtomName='Fm'
+   Element(100)%AtomicNumber=100
+   Element(100)%NumDeepCoreElectrons=68
+   Element(100)%NumSemiCoreElectrons=10
+   Element(100)%NumValenceElectrons=22
+   Element(100)%NumCoreStates=21
+   Element(100)%NumVariations=0
+   Element(100)%DebyeT=ZERO
+   Element(100)%AtomicRadius=ZERO
+   Element(100)%ImplicitMuffinTinRadius=0.75d0*Element(100)%AtomicRadius
+   Element(100)%ImplicitCoreRadius=0.75d0*Element(100)%AtomicRadius
+!
+   Element(101)%AtomName='Md'
+   Element(101)%AtomicNumber=101
+   Element(101)%NumDeepCoreElectrons=68
+   Element(101)%NumSemiCoreElectrons=10
+   Element(101)%NumValenceElectrons=22
+   Element(101)%NumCoreStates=21
+   Element(101)%NumVariations=0
+   Element(101)%DebyeT=ZERO
+   Element(101)%AtomicRadius=ZERO
+   Element(101)%ImplicitMuffinTinRadius=0.75d0*Element(101)%AtomicRadius
+   Element(101)%ImplicitCoreRadius=0.75d0*Element(101)%AtomicRadius
+!
+   Element(102)%AtomName='No'
+   Element(102)%AtomicNumber=102
+   Element(102)%NumDeepCoreElectrons=68
+   Element(102)%NumSemiCoreElectrons=10
+   Element(102)%NumValenceElectrons=23
+   Element(102)%NumCoreStates=21
+   Element(102)%NumVariations=0
+   Element(102)%DebyeT=ZERO
+   Element(102)%AtomicRadius=ZERO
+   Element(102)%ImplicitMuffinTinRadius=0.75d0*Element(102)%AtomicRadius
+   Element(102)%ImplicitCoreRadius=0.75d0*Element(102)%AtomicRadius
+!
+   Element(103)%AtomName='Lr'
+   Element(103)%AtomicNumber=103
+   Element(103)%NumDeepCoreElectrons=68
+   Element(103)%NumSemiCoreElectrons=10
+   Element(103)%NumValenceElectrons=23
+   Element(103)%NumCoreStates=21
+   Element(103)%NumVariations=0
+   Element(103)%DebyeT=ZERO
+   Element(103)%AtomicRadius=ZERO
+   Element(103)%ImplicitMuffinTinRadius=0.75d0*Element(103)%AtomicRadius
+   Element(103)%ImplicitCoreRadius=0.75d0*Element(103)%AtomicRadius
 !
    Initialized=.true.
 !
@@ -1775,7 +2295,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getDebyeTemperature(AtomNumber) result(t)
+   function getDebyeTemperature_n(AtomNumber) result(t)
 !  ===================================================================
    implicit none
 !
@@ -1791,7 +2311,177 @@ contains
    endif
 !
    t=Element(AtomNumber)%DebyeT
-   end function getDebyeTemperature
+!
+   end function getDebyeTemperature_n
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getDebyeTemperature_a(AtomName) result(t)
+!  ===================================================================
+   implicit none
+!
+   character (len=*), intent(in) :: AtomName
+   integer (kind=IntKind) :: z
+   real (kind=RealKind) :: t
+!
+   if (.not.Initialized) then
+      call initChemElement()
+   endif
+!
+   z=getZtot(AtomName)
+   if (z < MinZtot .or. z > NumElements) then
+      call ErrorHandler('getDebyeTemperature','Invalid Atom Name',AtomName)
+   endif
+!
+   t=Element(z)%DebyeT
+!
+   end function getDebyeTemperature_a
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getAtomicRadius_n(AtomNumber) result(r)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: AtomNumber
+   real (kind=RealKind) :: r
+!
+   if (.not.Initialized) then
+      call initChemElement()
+   endif
+!
+   if (AtomNumber < MinZtot .or. AtomNumber > NumElements) then
+      call ErrorHandler('getAtomicRadius','Invalid Atom Number',AtomNumber)
+   endif
+!
+   r=Element(AtomNumber)%AtomicRadius
+!
+   end function getAtomicRadius_n
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getAtomicRadius_a(AtomName) result(r)
+!  ===================================================================
+   implicit none
+!
+   character (len=*), intent(in) :: AtomName
+   integer (kind=IntKind) :: z
+   real (kind=RealKind) :: r
+!
+   if (.not.Initialized) then
+      call initChemElement()
+   endif
+!
+   z=getZtot(AtomName)
+   if (z < MinZtot .or. z > NumElements) then
+      call ErrorHandler('getAtomicRadius','Invalid Atom Number',AtomName)
+   endif
+!
+   r=Element(z)%AtomicRadius
+!
+   end function getAtomicRadius_a
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getImplicitMuffinTinRadius_n(AtomNumber) result(r)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: AtomNumber
+   real (kind=RealKind) :: r
+!
+   if (.not.Initialized) then
+      call initChemElement()
+   endif
+!
+   if (AtomNumber < MinZtot .or. AtomNumber > NumElements) then
+      call ErrorHandler('getImplicitMuffinTinRadius','Invalid Atom Number',AtomNumber)
+   endif
+!
+   r=Element(AtomNumber)%ImplicitMuffinTinRadius
+!
+   end function getImplicitMuffinTinRadius_n
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getImplicitMuffinTinRadius_a(AtomName) result(r)
+!  ===================================================================
+   implicit none
+!
+   character (len=*), intent(in) :: AtomName
+   integer (kind=IntKind) :: z
+   real (kind=RealKind) :: r
+!
+   if (.not.Initialized) then
+      call initChemElement()
+   endif
+!
+   z=getZtot(AtomName)
+   if (z < MinZtot .or. z > NumElements) then
+      call ErrorHandler('getImplicitMuffinTinRadius','Invalid Atom Number',AtomName)
+   endif
+!
+   r=Element(z)%ImplicitMuffinTinRadius
+!
+   end function getImplicitMuffinTinRadius_a
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getImplicitCoreRadius_n(AtomNumber) result(r)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: AtomNumber
+   real (kind=RealKind) :: r
+!
+   if (.not.Initialized) then
+      call initChemElement()
+   endif
+!
+   if (AtomNumber < MinZtot .or. AtomNumber > NumElements) then
+      call ErrorHandler('getImplicitCoreRadius','Invalid Atom Number',AtomNumber)
+   endif
+!
+   r=Element(AtomNumber)%ImplicitCoreRadius
+!
+   end function getImplicitCoreRadius_n
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getImplicitCoreRadius_a(AtomName) result(r)
+!  ===================================================================
+   implicit none
+!
+   character (len=*), intent(in) :: AtomName
+   integer (kind=IntKind) :: z
+   real (kind=RealKind) :: r
+!
+   if (.not.Initialized) then
+      call initChemElement()
+   endif
+!
+   z=getZtot(AtomName)
+   if (z < MinZtot .or. z > NumElements) then
+      call ErrorHandler('getImplicitCoreRadius','Invalid Atom Number',AtomName)
+   endif
+!
+   r=Element(z)%ImplicitCoreRadius
+!
+   end function getImplicitCoreRadius_a
 !  ===================================================================
 !
 !  *******************************************************************

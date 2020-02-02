@@ -1,7 +1,9 @@
-ACCEL_PATH = /opt/packages/cuda/8.0
-MKLROOT = /opt/packages/intel/mkl
+ACCEL_PATH = /opt/packages/cuda/10.1
+MKLROOT = /opt/packages/compilers_and_libraries_2019.5.281/linux/mkl
 MKLPATH = $(MKLROOT)/lib/intel64
 LIBXC_PATH = /opt/packages/libxc/libxc-4.0.4
+FFTW_PATH = /opt/packages/fftw-3.3.6-pl2
+P3DFFT_PATH = /opt/packages/p3dfft/p3dfft-2.7.5
 #=====================================================================
 # Compilers and archiver tool
 #=====================================================================
@@ -113,9 +115,9 @@ Use_FFTW = 1
 ifeq "$(Use_FFTW)" "1"
 #  FFTW_INC = $(MKLROOT)/include/fftw
 #  FFT_FLAG = -DFFTW -I$(FFTW_INC)
-   FFTW_INC = /opt/packages/fftw-3.3.6-pl2/include
-   FFT_FLAG = -DFFTW -I$(FFTW_INC) -DP3DFFT -I/opt/packages/p3dfft/p3dfft-2.7.5/include
-   ADD_LIBS += -L/opt/packages/p3dfft/p3dfft-2.7.5/lib -lp3dfft -L/opt/packages/fftw-3.3.6-pl2/lib -lfftw3
+   FFTW_INC = $(FFTW_PATH)/include
+   FFT_FLAG = -DFFTW -I$(FFTW_INC) -DP3DFFT -I$(P3DFFT_PATH)/include
+   ADD_LIBS += -L$(P3DFFT_PATH)/lib -lp3dfft -L$(FFTW_PATH)/lib -lfftw3
 endif
 
 #=====================================================================

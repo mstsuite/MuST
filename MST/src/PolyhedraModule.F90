@@ -105,7 +105,7 @@ private
                                                        ! share the same plane
       real (kind=RealKind) :: Volume           ! volume of the polyhedron
       real (kind=RealKind) :: SurfArea         ! surface area of the polyhedron
-      real (kind=RealKind) :: rmt              ! inscribed sphere radius
+      real (kind=RealKind) :: rinsc            ! inscribed sphere radius
       real (kind=RealKind) :: rws              ! inscribed sphere radius
       real (kind=RealKind) :: rcirc            ! circumscribed sphere radius
    end type PolyhedronStruct
@@ -274,7 +274,7 @@ contains
    call getparea(GlobalIndex)
 !  ------------------------------------------------------------------
 !
-   Polyhedron(this)%rmt   = sqrt(Polyhedron(this)%vpsq(1))
+   Polyhedron(this)%rinsc = sqrt(Polyhedron(this)%vpsq(1))
    Polyhedron(this)%rws   = (THREE*Polyhedron(this)%Volume/(FOUR*PI))**THIRD
    Polyhedron(this)%rcirc =   &
       sqrt(Polyhedron(this)%cornsq(Polyhedron(this)%NumCorners))
@@ -370,7 +370,7 @@ contains
    call getparea(GlobalIndex)
 !  ------------------------------------------------------------------
 !
-   Polyhedron(this)%rmt   = sqrt(Polyhedron(this)%vpsq(1))
+   Polyhedron(this)%rinsc = sqrt(Polyhedron(this)%vpsq(1))
    Polyhedron(this)%rws   = (THREE*Polyhedron(this)%Volume/(FOUR*PI))**THIRD
    Polyhedron(this)%rcirc =   &
       sqrt(Polyhedron(this)%cornsq(Polyhedron(this)%NumCorners))
@@ -435,7 +435,7 @@ contains
    write(6,'(a,i5)')   'Number of edges:            ',p%NumEdges
    write(6,'(a,f10.5)')'Cell volume:                ',p%Volume
    write(6,'(a,f10.5)')'Cell surface area:          ',p%SurfArea
-   write(6,'(a,f10.5)')'Inscribed sphere radius:    ',p%rmt
+   write(6,'(a,f10.5)')'Inscribed sphere radius:    ',p%rinsc
    write(6,'(a,f10.5)')'Wigner-Seitz sphere radius: ',p%rws
    write(6,'(a,f10.5)')'Bounding sphere radius:     ',p%rcirc
 !
@@ -559,7 +559,7 @@ contains
       IntBuffer(3,ig) = p%NumEdges
       RealBuffer(1,ig) = p%Volume
       RealBuffer(2,ig) = p%SurfArea
-      RealBuffer(3,ig) = p%rmt
+      RealBuffer(3,ig) = p%rinsc
       RealBuffer(4,ig) = p%rws
       RealBuffer(5,ig) = p%rcirc
       RealBuffer(6,ig) = minval( p%NeighborDist(1:p%NumPlanes) )
@@ -2258,19 +2258,19 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getInscrSphRadius(poly) result(rmt)
+   function getInscrSphRadius(poly) result(rinsc)
 !  ===================================================================
    implicit none
 !
    integer (kind=IntKind), intent(in) :: poly
 !
-   real (kind=RealKind) :: rmt
+   real (kind=RealKind) :: rinsc
 !
    if (poly < 1 .or. poly > NumLocalPolyhedra) then
       call ErrorHandler('getInscrSphRadius','Invalid polyhedron index',poly)
    endif
 !
-   rmt = Polyhedron(poly)%rmt
+   rinsc = Polyhedron(poly)%rinsc
 !
    end function getInscrSphRadius
 !  ===================================================================
@@ -2396,7 +2396,7 @@ contains
       call ErrorHandler('getInscrSphVolume','Invalid polyhedron index',poly)
    endif
 !
-   v = PI4*THIRD*Polyhedron(poly)%rmt**3
+   v = PI4*THIRD*Polyhedron(poly)%rinsc**3
 !
    end function getInscrSphVolume
 !  ===================================================================

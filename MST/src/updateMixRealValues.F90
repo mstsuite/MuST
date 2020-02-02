@@ -25,7 +25,7 @@
    use ChargeDensityModule, only : getSphChargeDensity, &
                                    getSphMomentDensity
 !
-   use PublicTypeDefinitionsModule, only : MixListRealStruct
+   use PublicTypeDefinitionsModule, only : MixListStruct
 !
    use WriteMatrixModule, only : writeMatrix
 !
@@ -37,8 +37,8 @@
    real (kind=RealKind), pointer :: pStore_old(:,:), pStore_new(:,:)
    real (kind=RealKind), pointer :: ptmp1(:), ptmp2(:)
 !
-   type (MixListRealStruct), target :: RealArrayList
-   type (MixListRealStruct), pointer :: p_RAL
+   type (MixListStruct), target :: RealArrayList
+   type (MixListStruct), pointer :: p_RAL
 !
    data_size = 0; num_items = 0
    do id = 1,LocalNumAtoms

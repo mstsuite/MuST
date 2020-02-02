@@ -79,7 +79,7 @@ program pot_average
 !
    use RadialGridModule, only : initRadialGrid, endRadialGrid
    use RadialGridModule, only : genRadialGrid, printRadialGrid
-   use RadialGridModule, only : getNumRmesh, getRmesh, getGrid, getGridRadius
+   use RadialGridModule, only : getNumRmesh, getRmesh, getGrid
 !
 !  ===================================================================
    use SurfElementsModule, only : initSurfElements, endSurfElements

@@ -21,7 +21,7 @@ subroutine setupRadGridAndCell(LocalNumAtoms,lmax_max)
    use StepFunctionModule, only : initStepFunction
    use StepFunctionModule, only : printStepFunction, testStepFunction
 !
-   use AtomModule, only : getGridData, getAtomMuffinTinRad
+   use AtomModule, only : getGridData, getMuffinTinRadius
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax, getStepFuncLmax
 !
    use OutputModule, only : getStandardOutputLevel
@@ -53,7 +53,7 @@ subroutine setupRadGridAndCell(LocalNumAtoms,lmax_max)
       endif
       rend =  getOutscrSphRadius(i)
       if (isMuffinTinPotential()) then
-         rmt = getAtomMuffinTinRad(i)
+         rmt = getMuffinTinRadius(i)
          rinsc = getInscrSphRadius(i)
          if ( rmt < 0.010d0 ) then
             rmt = rinsc
@@ -67,7 +67,7 @@ subroutine setupRadGridAndCell(LocalNumAtoms,lmax_max)
 !        -------------------------------------------------------------
       else if ( isASAPotential() ) then
          rend =  getWignerSeitzRadius(i)
-         rmt = getAtomMuffinTinRad(i)
+         rmt = getMuffinTinRadius(i)
          rinsc = getWignerSeitzRadius(i)
          if ( rmt < 0.010d0 ) then
             rmt = rinsc
@@ -77,7 +77,7 @@ subroutine setupRadGridAndCell(LocalNumAtoms,lmax_max)
 !        -------------------------------------------------------------
       else if (isMuffinTinASAPotential()) then
          rend =  getWignerSeitzRadius(i)
-         rmt = getAtomMuffinTinRad(i)
+         rmt = getMuffinTinRadius(i)
          rinsc = getWignerSeitzRadius(i)
          if ( rmt < 0.010d0 ) then
             rmt = rinsc
@@ -93,7 +93,7 @@ subroutine setupRadGridAndCell(LocalNumAtoms,lmax_max)
                                 getNeighborDistance(i,1),getOutscrSphRadius(i))
 !           ----------------------------------------------------------
          endif
-         rmt = getAtomMuffinTinRad(i)
+         rmt = getMuffinTinRadius(i)
          rinsc = getInscrSphRadius(i)
          if ( rmt < 0.010d0 ) then
             rmt = getInscrSphRadius(i)

@@ -22,8 +22,7 @@ program mst2
                                        endDataServiceCenter, &
                                        getDataStorage, RealMark
 !
-   use PublicTypeDefinitionsModule, only : MixListRealStruct,  &
-                                           MixListCmplxStruct, &
+   use PublicTypeDefinitionsModule, only : MixListStruct,  &
                                            UniformGridStruct
 !
    use PublicParamDefinitionsModule, only : PrintDOSswitchOff, ButterFly
@@ -141,7 +140,7 @@ program mst2
    use AtomModule, only : getMaxLmax, printAtom, getStepFuncLmax
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
    use AtomModule, only : getTruncPotLmax
-   use AtomModule, only : getGridData, getAtomMuffinTinRad
+   use AtomModule, only : getGridData, getMuffinTinRadius, setMuffinTinRadius
    use AtomModule, only : getLocalAtomName, getLocalAtomicNumber
    use AtomModule, only : getLocalNumSpecies, getLocalSpeciesContent
    use AtomModule, only : getLocalAtomNickName, printAtomMomentInfo
@@ -340,8 +339,7 @@ program mst2
 !  ===================================================================
 !  Mixing quantity
 !  ===================================================================
-   type (MixListRealStruct), target :: RealArrayList
-   type (MixListCmplxStruct), target :: CmplxArrayList
+   type (MixListStruct), target :: ArrayList
 !
 !  type (UniformGridStruct), pointer:: fftgp
 !
@@ -356,38 +354,38 @@ program mst2
 !
       subroutine setupMixRealArrayList(NLA, nsp, RAList, r_rms, p_rms)
          use KindParamModule, only : IntKind, RealKind
-         use PublicTypeDefinitionsModule, only : MixListRealStruct
+         use PublicTypeDefinitionsModule, only : MixListStruct
          implicit none
          integer (kind=IntKind), intent(in) :: NLA,nsp
          real (kind=RealKind), intent(in) :: r_rms(:,:)
          real (kind=RealKind), intent(in) :: p_rms(:,:)
-         type (MixListRealStruct), target :: RAList
+         type (MixListStruct), target :: RAList
       end subroutine setupMixRealArrayList
 !
       subroutine setupMixCmplxArrayList(NLA, nsp, CAList, r_rms, p_rms)
          use KindParamModule, only : IntKind, RealKind
-         use PublicTypeDefinitionsModule, only : MixListCmplxStruct
+         use PublicTypeDefinitionsModule, only : MixListStruct
          implicit none
          integer (kind=IntKind), intent(in) :: NLA,nsp
          real (kind=RealKind), intent(in) :: r_rms(:,:)
          real (kind=RealKind), intent(in) :: p_rms(:,:)
-         type (MixListCmplxStruct), target :: CAList
+         type (MixListStruct), target :: CAList
       end subroutine setupMixCmplxArrayList
 !
       subroutine updateMixRealValues( NLA, nsp, RAList )
          use KindParamModule, only : IntKind, RealKind
-         use PublicTypeDefinitionsModule, only : MixListRealStruct
+         use PublicTypeDefinitionsModule, only : MixListStruct
          implicit none
          integer (kind=IntKind), intent(in) :: NLA,nsp
-         type (MixListRealStruct), target :: RAList
+         type (MixListStruct), target :: RAList
       end subroutine updateMixRealValues
 !
       subroutine updateMixCmplxValues( NLA, nsp, CAList)
          use KindParamModule, only : IntKind, RealKind
-         use PublicTypeDefinitionsModule, only : MixListCmplxStruct
+         use PublicTypeDefinitionsModule, only : MixListStruct
          implicit none
          integer (kind=IntKind), intent(in) :: NLA,nsp
-         type (MixListCmplxStruct), target :: CAList
+         type (MixListStruct), target :: CAList
       end subroutine updateMixCmplxValues
 !
       function getValBandEnergy(na,ia,is) result(be)
@@ -767,13 +765,26 @@ program mst2
    call initAtom(info_id,istop,node_print_level)
 !  -------------------------------------------------------------------
    do i = 1,LocalNumAtoms
-      rmt   = getAtomMuffinTinRad(i)
+      rmt   = getMuffinTinRadius(i)
       rinsc = getInscrSphRadius(i)
-      if ( rinsc-rmt>Ten2m3 .and. rmt>TEN2m6 ) then
+      if (abs(rmt) < TEN2m6) then
+!        =============================================================
+!        The muffin-tin radius is set to be the inscribed radius.
+!        -------------------------------------------------------------
+         call setMuffinTinRadius(i,rinsc)
+!        -------------------------------------------------------------
+         isRmtExternal = .false.
+      else if ( abs(rinsc-rmt) > Ten2m6 .and. rmt > TEN2m6 ) then
+!        =============================================================
+!        The muffin-tin radius is set to be other than the inscribed radius.
 !        -------------------------------------------------------------
          call setSystemVolumeMT(i,rmt)
 !        -------------------------------------------------------------
          isRmtExternal = .true.
+      else
+!        -------------------------------------------------------------
+         call ErrorHandler('main','Invalid rmt value',rmt)
+!        -------------------------------------------------------------
       endif
    enddo
 !
@@ -884,14 +895,14 @@ program mst2
 !        -------------------------------------------------------------
       endif
 !
-      rend =  getOutscrSphRadius(i)
+      rend = getOutscrSphRadius(i)
+      rmt = getMuffinTinRadius(i)
+      if ( rmt < 0.010d0 ) then
+         call ErrorHandler('main','rmt < 0.01',rmt)
+      endif
 !
       if (isMuffinTinPotential() .or. isMuffinTinTestPotential()) then
-         rmt = getAtomMuffinTinRad(i)
          rinsc = getInscrSphRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = rinsc
-         endif
          rws = getWignerSeitzRadius(i)
 !         volume = PI4*THIRD*(rws**3)
 !         call setAtomVolWS(i,volume)
@@ -913,11 +924,11 @@ program mst2
          endif
 !        ========================================================
 !        -------------------------------------------------------------
-         call genRadialGrid( i, xstart, rmt, rinsc, rws, rend, ndivin)
+!011820  call genRadialGrid( i, xstart, rmt, rinsc, rws, rend, ndivin)
+         call genRadialGrid( i, rmt, rend, ndivin)
 !        -------------------------------------------------------------
       else if (isASAPotential() ) then
 !        rend =  getWignerSeitzRadius(i)
-!        rmt = getAtomMuffinTinRad(i)
          rinsc = getWignerSeitzRadius(i)
          rmt = rinsc
 !        if ( rmt < 0.010d0 ) then
@@ -929,11 +940,7 @@ program mst2
 !        -------------------------------------------------------------
       else if ( isMuffinTinASAPotential() ) then
          rend =  getWignerSeitzRadius(i)
-         rmt = getAtomMuffinTinRad(i)
          rinsc = getWignerSeitzRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = rinsc
-         endif
 !         volume = PI4*THIRD*(rend**3)
 !         call setAtomVolWS(i,volume)
 !         volume = PI4*THIRD*(rmt**3)
@@ -954,11 +961,7 @@ program mst2
                      getNeighborDistance(i,1),getOutscrSphRadius(i))
 !           ----------------------------------------------------------
          endif
-         rmt = getAtomMuffinTinRad(i)
          rinsc = getInscrSphRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = getInscrSphRadius(i)
-         endif
          rws = getWignerSeitzRadius(i)
 !         volume = PI4*THIRD*(rws**3)
 !         call setAtomVolWS(i,volume)
@@ -969,8 +972,9 @@ program mst2
 !         volume = getAtomicVPVolume(i)
 !         call setAtomVolVP(i,volume)
 !        -------------------------------------------------------------
-!!!       call genRadialGrid( i, xstart, rmt, rinsc, rws, rend, ndivin )
-         call genRadialGrid( i, rmt, rinsc, rws, rend, ndivin, ndivout, nmult)
+!!!      call genRadialGrid( i, xstart, rmt, rinsc, rws, rend, ndivin )
+!01252020call genRadialGrid( i, rmt, rinsc, rws, rend, ndivin, ndivout, nmult)
+         call genRadialGrid( i, rmt, rend, ndivin)
 !        -------------------------------------------------------------
       endif
       if (atom_print_level(i) >= 0) then
@@ -1328,15 +1332,8 @@ program mst2
    do i = 1,LocalNumAtoms
       NumMix(1) = NumMix(1) + getLocalNumSpecies(i)
    enddo
-   if ( .not.isFullPotential() ) then
-!     ----------------------------------------------------------------
-      call initMixing( 1, NumMix, RealArrayList )
-!     ----------------------------------------------------------------
-   else
-!     ----------------------------------------------------------------
-      call initMixing( 1, NumMix, CmplxArrayList )
-!     ----------------------------------------------------------------
-   endif
+!  -------------------------------------------------------------------
+   call initMixing( 1, NumMix, ArrayList )
 !  -------------------------------------------------------------------
    call setupMixingScheme(LocalNumAtoms,n_spin_pola)
 !  -------------------------------------------------------------------
@@ -1849,23 +1846,23 @@ program mst2
          if ( .not. isFullPotential() ) then
 !           ----------------------------------------------------------
             call setupMixRealArrayList( LocalNumAtoms, n_spin_pola,    &
-                                     RealArrayList, rho_rms, pot_rms )
+                                        ArrayList, rho_rms, pot_rms )
 !           ----------------------------------------------------------
-            call mixValues(RealArrayList)
+            call mixValues(ArrayList)
 !           ----------------------------------------------------------
             call updateMixRealValues( LocalNumAtoms, n_spin_pola,      &
-                                      RealArrayList )
+                                      ArrayList )
 !           ----------------------------------------------------------
          else
 !           ----------------------------------------------------------
             call setupMixCmplxArrayList( LocalNumAtoms, n_spin_pola,   &
-                                    CmplxArrayList, rho_rms, pot_rms )
+                                         ArrayList, rho_rms, pot_rms )
 !           ----------------------------------------------------------
             if ( .not.( (isSphericalInputFile() .or. isChargeMixing()) .and. iscf==1) ) then
-               call mixValues(CmplxArrayList )
+               call mixValues(ArrayList )
             endif
 !           ----------------------------------------------------------
-            call updateMixCmplxValues(LocalNumAtoms,n_spin_pola,CmplxArrayList)
+            call updateMixCmplxValues(LocalNumAtoms,n_spin_pola,ArrayList)
 !           ----------------------------------------------------------
          endif
 !        =============================================================

@@ -215,8 +215,14 @@
    n = n + 1; Keys(n) = 'Effective Medium Mixing eSwitch Value'; Values(n) = '0.003'
 !             Note: If Re[E] > 0 and Im[E] < eSwitch, the effective medium iteration is switched to the conservative mode
    n = n + 1; Keys(n) = 'Effective Medium T-matrix Tol (> 0)';   Values(n) = '0.0000001'
-   n = n + 1; Keys(n) = 'Desired Core Radius';                   Values(n) = '0.000'
-   n = n + 1; Keys(n) = 'Desired Muffin-tin Radius';             Values(n) = '0.000'
+   n = n + 1; Keys(n) = 'Default Core Radius';                   Values(n) = '0'
+!                     = 0: Using the muffin-tin radius
+!                     = 1: Using the implicit core radius defined in ChemElementModule
+!                     = A specific real value (> 0.0, in atomic units)
+   n = n + 1; Keys(n) = 'Default Muffin-tin Radius';             Values(n) = '0'
+!                     = 0: Using the inscribed sphere radius
+!                     = 1: Using the implicit muffin-tin radius defined in ChemElementModule
+!                     = A specific real value (> 0.0, in atomic units)
    n = n + 1; Keys(n) = 'Default Radical Plane Ratio';           Values(n) = '0.000'
 !  =============================================================================
 !  Additional input parameters can be added to this table using the 

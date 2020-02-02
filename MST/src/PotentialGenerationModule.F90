@@ -43,7 +43,7 @@ private
       integer (kind=IntKind) :: jmt
       integer (kind=IntKind) :: jend
       integer (kind=IntKind) :: n_Rpts
-      integer (kind=IntKind) :: ifit_XC
+!11920integer (kind=IntKind) :: ifit_XC
       integer (kind=IntKind) :: NumFlagJl
       real (kind=RealKind) :: Madelung_Shift
       real (kind=RealKind) :: VcoulombR0(3)
@@ -128,7 +128,7 @@ private
 !
    real (kind=RealKind), allocatable, target :: DF_Pseudo(:,:)
 !
-   real (kind=RealKind), parameter :: rmt_fraction = 0.70d0
+!  real (kind=RealKind), parameter :: rmt_fraction = 0.70d0
    real (kind=RealKind), parameter :: pot_tol = TEN2m8
 !
    real (kind=RealKind), allocatable :: vmt1(:)
@@ -209,7 +209,7 @@ contains
    use ParallelFFTModule, only : initParallelFFT, allocateFunctionSpace
    use ParallelFFTModule, only : getGlobalGridIndexRange, getProcessorMesh
 !
-   use RadialGridModule, only : getGrid, getNumRmesh, getGridRadius
+   use RadialGridModule, only : getGrid, getNumRmesh, getRadialGridRadius
 !
    use PolyhedraModule, only : getVolume
    use PolyhedraModule, only : getPointLocationFlag, getOutscrSphRadius
@@ -502,11 +502,11 @@ contains
       jend_max = max(jend_max,jend)
       jmt = Grid%jmt
       r_mesh => Grid%r_mesh(1:jend)
-      r = rmt_fraction*r_mesh(jmt)
+!11920r = rmt_fraction*r_mesh(jmt)
 !     ----------------------------------------------------------------
-      call hunt(jmt,r_mesh(1:jmt),r,ir)
+!11920call hunt(jmt,r_mesh(1:jmt),r,ir)
 !     ----------------------------------------------------------------
-      p_Pot%ifit_XC = ir
+!11920p_Pot%ifit_XC = ir
 !     ================================================================
       p_Pot%potr_sph => getDataStorage( id, 'NewSphericalPotential',  &
                                         jend, n_spin_pola, num_species, RealMark )
@@ -594,7 +594,7 @@ contains
       GlobalIndex(id) = getGlobalIndex(id)
       LocalAtomPosi(1:3,id)=getLocalAtomPosition(id)
 !     radius(id) = getOutscrSphRadius(id)
-      radius(id) = getGridRadius(id)
+      radius(id) = getRadialGridRadius(id)
    enddo
 !
 !  ===================================================================
@@ -2021,6 +2021,7 @@ contains
 !  ===================================================================
 !
    do na = 1, LocalNumAtoms
+      rmt = Potential(na)%Grid%rmt
       jmt = Potential(na)%jmt
       n_Rpts = Potential(na)%n_Rpts
       r_mesh => Potential(na)%Grid%r_mesh(1:n_Rpts)
@@ -4642,6 +4643,8 @@ contains
 !
    use SystemModule, only : getAtomPosition
 !
+   use PolyhedraModule, only : getInscrSphRadius
+!
    implicit none
 !
    integer (kind=IntKind), intent(in) :: kpow, ninterp
@@ -4649,7 +4652,7 @@ contains
    integer (kind=IntKind) :: lmax, jmax, kl, jl, l, m, i, nr
    integer (kind=IntKind) :: ir_lsq, na, ia, id, ig
 !
-   real (kind=RealKind) :: dummy, k2, rmt, kfact_r, kfact_i, r0
+   real (kind=RealKind) :: dummy, k2, rinsc, kfact_r, kfact_i, r0
    real (kind=RealKind) :: posi(3), kvec(3)
    real (kind=RealKind), pointer :: r_interp(:)
    real (kind=RealKind), target :: r_interp_global(n_interp_max*nr_int_max,GlobalNumAtoms)
@@ -4705,7 +4708,8 @@ contains
       lmax   = Potential(id)%lmax
       n_rmesh = Potential(id)%jend
       rmesh => Potential(id)%Grid%r_mesh
-      rmt = rmesh(Potential(id)%jmt)
+!     rmt = rmesh(Potential(id)%jmt)
+      rinsc = getInscrSphRadius(id)
 !
       ig = GlobalIndex(id)
       r_interp => r_interp_global(:,ig)
@@ -4719,12 +4723,12 @@ contains
       if (lmax > 8) then
          nr_int = 3
          dr_int(1) = rmesh(1)
-         dr_int(2) = HALF*rmt
-         dr_int(3) = rmt
+         dr_int(2) = HALF*rinsc
+         dr_int(3) = rinsc
       else if (lmax > 4) then
          nr_int = 2
          dr_int(1) = rmesh(1)
-         dr_int(2) = HALF*rmt
+         dr_int(2) = HALF*rinsc
       else
          nr_int = 1
          dr_int(1) = rmesh(1)

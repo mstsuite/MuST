@@ -171,7 +171,7 @@ contains
    use GroupCommModule, only : getMyPEinGroup, getGroupID, getNumPEsInGroup
 !
    use SystemModule, only : getNumAtoms, getNumAlloyElements
-   use RadialGridModule, only : getGrid
+   use RadialGridModule, only : getGrid, getRadialGridPoint
    use DataServiceCenterModule, only : createDataStorage,     &
                                        getDataStorage,        &
                                        setDataStorage2Value,  &
@@ -180,7 +180,7 @@ contains
                                        RealType, ComplexType, &
                                        RealMark, ComplexMark
    use AtomModule, only : getAtomCoreRad, setAtomCoreRad
-   use PolyhedraModule, only : getVolume
+   use PolyhedraModule, only : getVolume, getInscrSphRadius
 !
    use GroupCommModule, only : GlobalSumInGroup
 !
@@ -239,9 +239,14 @@ contains
       ig = getGlobalIndex(id)
       Core(id)%Grid => getGrid(id)
       if ( Core(id)%Grid%nmult>1 ) then
-         ntmp = (Core(id)%Grid%jend_plus_n-Core(id)%Grid%jinsc)/Core(id)%Grid%nmult
-         if ( LargeRs-Core(id)%Grid%jinsc>ntmp) then
-            nlrs = Core(id)%Grid%jinsc+(LargeRs-Core(id)%Grid%jinsc)*Core(id)%Grid%nmult
+!012620===============================
+!011820  ntmp = (Core(id)%Grid%jend_plus_n-Core(id)%Grid%jinsc)/Core(id)%Grid%nmult
+         ntmp = (Core(id)%Grid%jend_plus_n-Core(id)%Grid%jmt)/Core(id)%Grid%nmult
+!011820  if ( LargeRs-Core(id)%Grid%jinsc>ntmp) then
+         if ( LargeRs-Core(id)%Grid%jmt>ntmp) then
+!011820     nlrs = Core(id)%Grid%jinsc+(LargeRs-Core(id)%Grid%jinsc)*Core(id)%Grid%nmult
+            nlrs = Core(id)%Grid%jmt+(LargeRs-Core(id)%Grid%jmt)*Core(id)%Grid%nmult
+!012620===============================
             LargeRsMult = nlrs
          else
             LargeRsMult = Core(id)%Grid%jend_plus_n
@@ -253,25 +258,38 @@ contains
       r_mesh => Core(id)%Grid%r_mesh
       Core(id)%NumSpecies = getNumAlloyElements(ig)
       Core(id)%rsize = last
-      jcore = Core(id)%Grid%jmt
+!     ================================================================
+!     If "Core Radius" is not set from the input, its default value will 
+!     be taken as the the inscribed sphere radius of the atomic cell.
+!     ================================================================
       if ( getAtomCoreRad(id) < 0.10d0 ) then
+!012620===============================
+!012620  jcore = Core(id)%Grid%jmt
+!        jcore = Core(id)%Grid%jinsc
+         jcore = getRadialGridPoint(id, getInscrSphRadius(id))
+!012620===============================
          Core(id)%rcore_mt = Core(id)%Grid%r_mesh(jcore)
          Core(id)%jcore    = jcore
          call setAtomCoreRad(id,Core(id)%rcore_mt)
       else
-         Core(id)%rcore_mt = getAtomCoreRad(id)
+!012620===============================
+!        jcore = Core(id)%Grid%jmt
+!        Core(id)%rcore_mt = getAtomCoreRad(id)
 !        Find the first point on the radial grid that is smaller
 !        than the input rcore_mt
-         jend = Core(id)%Grid%jend
-         call hunt(jend,r_mesh,Core(id)%rcore_mt,jcore)
-         if (r_mesh(jcore)>Core(id)%rcore_mt) then
-            Core(id)%rcore_mt = r_mesh(jcore-1)
-            Core(id)%jcore = jcore-1
-         else
-            Core(id)%rcore_mt = r_mesh(jcore)
-            Core(id)%jcore = jcore
-         endif
-!
+!        jend = Core(id)%Grid%jend
+!        call hunt(jend,r_mesh,Core(id)%rcore_mt,jcore)
+!        if (r_mesh(jcore)>Core(id)%rcore_mt) then
+!           Core(id)%rcore_mt = r_mesh(jcore-1)
+!           Core(id)%jcore = jcore-1
+!        else
+!           Core(id)%rcore_mt = r_mesh(jcore)
+!           Core(id)%jcore = jcore
+!        endif
+         jcore = getRadialGridPoint(id,getAtomCoreRad(id))
+         Core(id)%jcore = jcore
+         Core(id)%rcore_mt = r_mesh(jcore)
+!012620===============================
       endif
       Core(id)%vol_core = PI4*THIRD*(Core(id)%rcore_mt**3)
       Core(id)%vol_coreint = getVolume(id)-Core(id)%vol_core
@@ -854,7 +872,7 @@ contains
    integer (kind=IntKind) :: block_size(2,GlobalNumAtoms)
 !
    integer (kind=IntKind), allocatable :: imsgbuf(:)
-   integer (kind=IntKind) :: rsize, jcore, jinsc
+   integer (kind=IntKind) :: rsize, jcore, jinsc, jmt
    integer (kind=IntKind) :: j_inter, irp, jrp, j
 !
    real (kind=RealKind), allocatable :: fmsgbuf(:) , x_mesh(:)
@@ -970,7 +988,10 @@ contains
       Core(id)%MaxNumc = imsgbuf(3)
       rsize = imsgbuf(4)
       jcore = imsgbuf(5)
-      jinsc = imsgbuf(6)
+!012620===============================
+!     jinsc = imsgbuf(6)
+      jmt = imsgbuf(6)
+!012620===============================
       isize = 6
 !
       xstart = fmsgbuf(1)
@@ -991,7 +1012,10 @@ contains
           abs(hin-Core(id)%Grid%hin) > TEN2m6 .or.                    &
           abs(hout-Core(id)%Grid%hout) > TEN2m6 .or.                  &
           abs(rcore_mt-Core(id)%rcore_mt) > TEN2m6 .or.               &
-          jinsc /= Core(id)%Grid%jinsc .or.                           &
+!012620===============================
+!         jinsc /= Core(id)%Grid%jinsc .or.                           &
+          jmt /= Core(id)%Grid%jmt .or.                             &
+!012620===============================
           rsize /= Core(id)%rsize) then
 !        =============================================================
 !        generate radial grid for the Core density read-in ...........
@@ -1304,7 +1328,10 @@ contains
       imsgbuf(3) = Core(id)%MaxNumc
       imsgbuf(4) = Core(id)%rsize
       imsgbuf(5) = Core(id)%jcore
-      imsgbuf(6) = Core(id)%Grid%jinsc
+!012620===============================
+!     imsgbuf(6) = Core(id)%Grid%jinsc
+      imsgbuf(6) = Core(id)%Grid%jmt
+!012620===============================
       isize = 6
 !
       fmsgbuf(1) = Core(id)%Grid%xstart
@@ -1461,10 +1488,9 @@ contains
 !
    use AtomModule, only : getLocalSpeciesContent
 !
-   use SystemVolumeModule, only : getTotalInterstitialMTVolume,        &
-                                  getSystemVolume, getAtomicMTVolume
+   use SystemVolumeModule, only : getSystemVolume, getAtomicMTVolume
 !
-   use PolyhedraModule, only : getVolume
+   use PolyhedraModule, only : getVolume, getWignerSeitzRadius
 !
    use PotentialTypeModule, only : isMuffinTinPotential, isASAPotential, &
                                    isMuffinTinASAPotential, isFullPotential
@@ -1482,6 +1508,8 @@ contains
 !
    use InterpolationModule, only : FitInterp
 !
+   use RadialGridModule, only : getRadialGridPoint
+!
    implicit   none
 !
    character (len=13), parameter ::  sname='calCoreStates'
@@ -1497,7 +1525,7 @@ contains
    real (kind=RealKind), optional, intent(out) :: evb
    real (kind=RealKind), allocatable :: wrk1(:),wrk2(:)
    real (kind=RealKind), parameter :: tolch=TEN2m5
-   real (kind=RealKind) :: h, hout, efact, dps
+   real (kind=RealKind) :: h, hout, efact, dps, rws
    real (kind=RealKind) :: qint_semi, qint_deep, msgbuf(2)
    real (kind=RealKind), allocatable :: vr_t(:)
    real (kind=RealKind), allocatable :: memtemp(:,:)
@@ -1538,7 +1566,11 @@ contains
    do id =1, LocalNumAtoms
       jend_plus_n=Core(id)%Grid%jend_plus_n
       jmt=Core(id)%jcore
-      nws=Core(id)%Grid%jws
+      rws = getWignerSeitzRadius(id)
+!012620===============================
+!11820nws=Core(id)%Grid%jws
+      nws = getRadialGridPoint(id,rws)
+!012620===============================
       last=Core(id)%rsize      ! Definition of last: the final mesh point.
 !
 !     ----------------------------------------------------------------

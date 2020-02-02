@@ -31,7 +31,7 @@
    use ChargeDensityModule, only : getSphChargeDensity, &
                                    getSphMomentDensity
 !
-   use PublicTypeDefinitionsModule, only : MixListRealStruct
+   use PublicTypeDefinitionsModule, only : MixListStruct
 !
    use MixingModule, only : resetMixing
 !
@@ -43,7 +43,7 @@
    real (kind=RealKind), intent(in) :: r_rms(:,:)
    real (kind=RealKind), intent(in) :: p_rms(:,:)
 !
-   type (MixListRealStruct), target :: RealArrayList
+   type (MixListStruct), target :: RealArrayList
 !
    integer (kind=IntKind), save :: data_size_save = 0
 !
@@ -54,7 +54,7 @@
    real (kind=RealKind), pointer :: pStore_old(:,:), pStore_new(:,:)
    real (kind=RealKind), pointer :: ptmp1(:), ptmp2(:)
 !
-   type (MixListRealStruct), pointer :: p_RAL
+   type (MixListStruct), pointer :: p_RAL
 !
    data_size = 0; num_items = 0
    do id = 1,LocalNumAtoms

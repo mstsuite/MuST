@@ -15,7 +15,7 @@
 !
    use SystemModule, only : getAtomName, getNumAtoms
 !
-   use RadialGridModule, only : getGridRadius
+   use RadialGridModule, only : getRadialGridRadius
 !
    implicit none
 !
@@ -70,7 +70,7 @@
 !
    if ( print_pe ) then
       ig = getGlobalIndex(id)
-      rg = getGridRadius(id)
+      rg = getRadialGridRadius(id)
       if ( getKeyValue(TableID,'Grid Vector', 3, vec, num_vectors) /= 0 ) then
          call ErrorHandler('printDataOnLine','Grid Vector','Invalid data')
       endif

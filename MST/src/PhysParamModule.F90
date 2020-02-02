@@ -18,4 +18,7 @@ module PhysParamModule
    real (kind=RealKind), parameter :: BohrMagneton = 4.2543545d-10
    real (kind=RealKind), parameter :: Ryd2eV = 13.6054000d0
 !
+   real (kind=RealKind), parameter :: Bohr2Angstrom = 0.529177210903d0
+   real (kind=RealKind), parameter :: Angstrom2Bohr = 1.0d0/Bohr2Angstrom
+!
 end module PhysParamModule

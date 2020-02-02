@@ -29,25 +29,15 @@ public
 !
 !  MixingModule
 !
-   type MixListRealStruct
+   type MixListStruct
       integer (kind=IntKind) :: size
       real (kind=RealKind) :: rms
       real (kind=RealKind) :: weight
       real (kind=RealKind), pointer :: mesh(:)
       real (kind=RealKind), pointer :: vector_old(:)
       real (kind=RealKind), pointer :: vector_new(:)
-      type (MixListRealStruct), pointer :: next
-   end type MixListRealStruct
-!
-   type MixListCmplxStruct
-      integer (kind=IntKind) :: size
-      real (kind=RealKind) :: rms
-      real (kind=RealKind) :: weight
-      real (kind=RealKind), pointer :: mesh(:)
-      complex (kind=CmplxKind), pointer :: vector_old(:)
-      complex (kind=CmplxKind), pointer :: vector_new(:)
-      type (MixListCmplxStruct), pointer :: next
-   end type MixListCmplxStruct
+      type (MixListStruct), pointer :: next
+   end type MixListStruct
 !
 !  NeighborModule
 !
@@ -100,14 +90,17 @@ public
 !  RadialGridModule
 !
    type GridStruct
+!     integer (kind=IntKind) :: jws         ! the r-mesh point closest to rws
+!     real (kind=RealKind) :: rws           ! the Wigner-Seitz sphere radius
+!     real (kind=RealKind) :: rinsc         ! the inscribed sphere radius 
+!     real (kind=RealKind) :: xinsc         ! log(rinsc)
+!     integer (kind=IntKind) :: jinsc       ! Num. of r-mesh on and inside
+!                                           ! the inscribed radius.
       real (kind=RealKind) :: rend          ! the terminal sphere radius
                                             ! = rmt, rws, or rcirc
-      real (kind=RealKind) :: rinsc         ! the inscribed sphere radius 
       real (kind=RealKind) :: rmt           ! the muffin-tin sphere radius
-      real (kind=RealKind) :: rws           ! the Wigner-Seitz sphere radius
       real (kind=RealKind) :: rstart        ! the near origin starting point
       real (kind=RealKind) :: xend          ! log(rend)
-      real (kind=RealKind) :: xinsc         ! log(rinsc)
       real (kind=RealKind) :: xmt           ! log(rmt)
       real (kind=RealKind) :: xstart        ! the near origin starting point
       real (kind=RealKind) :: hout          ! x-step bwteen xmt and xcirc
@@ -118,10 +111,7 @@ public
                                             ! inside rend (including rend)
       integer (kind=IntKind) :: jmt         ! Num. of r-mesh on and inside
                                             ! the Muffin-tin radius.
-      integer (kind=IntKind) :: jinsc       ! Num. of r-mesh on and inside
-                                            ! the inscribed radius.
       integer (kind=IntKind) :: jend_plus_n ! = jend+n_extra
-      integer (kind=IntKind) :: jws         ! the r-mesh point closest to rws
 !
       real (kind=RealKind), pointer :: x_mesh(:)
       real (kind=RealKind), pointer :: r_mesh(:)

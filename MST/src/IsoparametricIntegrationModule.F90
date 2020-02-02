@@ -99,8 +99,8 @@ contains
    Nqp = 8
    do i = 1,LocalNumAtoms
 !
-      r(i) = getInscrSphRadius(i) ! MT radius
-      rmt(i) = r(i)! MT radius
+      r(i) = getInscrSphRadius(i) ! Inscribed sphere radius
+      rmt(i) = r(i)! Inscribed sphere radius
       iType(i) = i
       nfaces(i)   = getNumPlanes(i)
       nVertex1(i) = getNumCorners(i)

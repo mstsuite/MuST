@@ -1,6 +1,6 @@
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine setupMixCmplxArrayList( LocalNumAtoms, n_spin_pola,      &
-                                      CmplxArrayList, r_rms, p_rms )
+                                      ArrayList, r_rms, p_rms )
 !  ===================================================================
    use KindParamModule, only : IntKind, RealKind, CmplxKind
 !
@@ -15,7 +15,7 @@
    use RadialGridModule, only : getNumRmesh, getRmesh, getGrid
 !
    use DataServiceCenterModule, only : getDataStorage,                 &
-                                       ComplexType, ComplexMark,       &
+                                       RealType, RealMark,             &
                                        createDataStorage,              &
                                        isDataStorageExisting,          &
                                        setDataStorageLDA,              &
@@ -37,7 +37,7 @@
    use PotentialGenerationModule, only : getPotLmax
    use PotentialGenerationModule, only : getPotComponentFlag
 !
-   use PublicTypeDefinitionsModule, only : MixListCmplxStruct
+   use PublicTypeDefinitionsModule, only : MixListStruct
 !
    use MixingModule, only : resetMixing
 !
@@ -49,7 +49,7 @@
    real (kind=RealKind), intent(in) :: r_rms(:,:)
    real (kind=RealKind), intent(in) :: p_rms(:,:)
 !
-   type (MixListCmplxStruct), target :: CmplxArrayList
+   type (MixListStruct), target :: ArrayList
 !
    integer (kind=IntKind), save :: data_size_save = 0
 !
@@ -59,10 +59,11 @@
 !
    real (kind=RealKind) :: factor
    real (kind=RealKind), pointer :: rptmp(:)
+   real (kind=RealKind), pointer :: pStore_old(:,:), pStore_new(:,:)
 !
    complex (kind=CmplxKind), pointer :: ptmp1(:), ptmp2(:)
-   complex (kind=CmplxKind), pointer :: pStore_old(:,:), pStore_new(:,:)
-   type (MixListCmplxStruct), pointer :: p_CAL
+!
+   type (MixListStruct), pointer :: p_CAL
 !
    data_size = 0
    num_items = 0
@@ -86,7 +87,8 @@
       data_size = max(data_size,nr*jl_nonZero)
       num_items = num_items + getLocalNumSpecies(id)
    enddo
-   data_size_ns = data_size*n_spin_pola+n_spin_pola
+!  Note: a factor 2 is present because complex data are stored in a real array
+   data_size_ns = 2*data_size*n_spin_pola+n_spin_pola
 !
    reset_flag = 0
    if ( data_size_save/=0 .and. data_size_save/=data_size_ns) then
@@ -98,7 +100,7 @@
 !  -------------------------------------------------------------------
    if (reset_flag > 0) then
 !     ----------------------------------------------------------------
-      call resetMixing(CmplxArrayList)
+      call resetMixing(ArrayList)
       call deleteDataStorage("MixingVectorOld")
       call deleteDataStorage("MixingVectorNew")
 !     ----------------------------------------------------------------
@@ -107,24 +109,24 @@
 !
    if (.not.isDataStorageExisting('MixingVectorOld')) then
 !     ----------------------------------------------------------------
-      call createDataStorage('MixingVectorOld',num_items*data_size_ns,ComplexType)
-      call setDataStorage2Value('MixingVectorOld',CZERO)
+      call createDataStorage('MixingVectorOld',num_items*data_size_ns,RealType)
+      call setDataStorage2Value('MixingVectorOld',ZERO)
 !     ----------------------------------------------------------------
       call setDataStorageLDA('MixingVectorOld',data_size_ns)
 !     ----------------------------------------------------------------
    endif
    if (.not.isDataStorageExisting('MixingVectorNew')) then
-      call createDataStorage('MixingVectorNew',num_items*data_size_ns,ComplexType)
-      call setDataStorage2Value('MixingVectorNew',CZERO)
+      call createDataStorage('MixingVectorNew',num_items*data_size_ns,RealType)
+      call setDataStorage2Value('MixingVectorNew',ZERO)
 !     ----------------------------------------------------------------
       call setDataStorageLDA('MixingVectorNew',data_size_ns)
 !     ----------------------------------------------------------------
    endif
 !
-   pStore_old => getDataStorage('MixingVectorOld',data_size_ns,num_items,ComplexMark)
-   pStore_new => getDataStorage('MixingVectorNew',data_size_ns,num_items,ComplexMark)
+   pStore_old => getDataStorage('MixingVectorOld',data_size_ns,num_items,RealMark)
+   pStore_new => getDataStorage('MixingVectorNew',data_size_ns,num_items,RealMark)
 !
-   p_CAL => CmplxArrayList
+   p_CAL => ArrayList
    p_item = 0
    do id = 1, LocalNumAtoms
       nr = getNumRmesh(id)
@@ -140,8 +142,8 @@
 !!!!!!   p_CAL%weight = getLocalSpeciesContent(id,ia)
          p_CAL%weight = ONE
          flag_jl => getPotComponentFlag(id)
+         ind_jl = 0
          do is = 1, n_spin_pola
-            ind_jl = data_size*(is-1)+is-1
             if (isPotentialMixing()) then
                lmax = getPotLmax(id)
                jmax = (lmax+1)*(lmax+2)/2
@@ -149,10 +151,12 @@
                do jl = 1, jmax
                   if ( flag_jl(jl) /= 0 ) then
                      ptmp1 => getOldPotential(id,ia,is,jl)
-                     p_CAL%vector_old(ind_jl+1:ind_jl+nr) = ptmp1(1:nr)
+                     p_CAL%vector_old(ind_jl+1:ind_jl+2*nr) = transfer(ptmp1(1:nr),p_CAL%vector_old,2*nr)
+!                    call dcopy(2*nr,ptmp1,1,p_CAL%vector_old(ind_jl+1:),1)
                      ptmp1 => getNewPotential("Total",id,ia,is,jl)
-                     p_CAL%vector_new(ind_jl+1:ind_jl+nr) = ptmp1(1:nr)
-                     ind_jl = ind_jl+ nr
+                     p_CAL%vector_new(ind_jl+1:ind_jl+2*nr) = transfer(ptmp1(1:nr),p_CAL%vector_new,2*nr)
+!                    call dcopy(2*nr,ptmp1,1,p_CAL%vector_new(ind_jl+1:),1)
+                     ind_jl = ind_jl + 2*nr
                   endif
                enddo
                rptmp => getOldVdif()
@@ -174,20 +178,22 @@
                      ptmp1 => getChargeDensity('TotalOld', id, ia, jl)
                      if (n_spin_pola==2) then
                         ptmp2 => getMomentDensity('TotalOld', id, ia, jl)
-                        p_CAL%vector_old(ind_jl+1:ind_jl+nr) = (ptmp1(1:nr)+ &
-                                                    factor*ptmp2(1:nr))*half
+                        p_CAL%vector_old(ind_jl+1:ind_jl+2*nr) = transfer((ptmp1(1:nr)+              &
+                                                                           factor*ptmp2(1:nr))*half, &
+                                                                          p_CAL%vector_old,2*nr)
                      else
-                        p_CAL%vector_old(ind_jl+1:ind_jl+nr) = ptmp1(1:nr)
+                        p_CAL%vector_old(ind_jl+1:ind_jl+2*nr) = transfer(ptmp1(1:nr),p_CAL%vector_old,2*nr)
                      endif
                      ptmp1 => getChargeDensity('TotalNew', id, ia, jl)
                      if (n_spin_pola==2) then
                         ptmp2 => getMomentDensity('TotalNew', id, ia, jl)
-                        p_CAL%vector_new(ind_jl+1:ind_jl+nr) = (ptmp1(1:nr)+ &
-                                                    factor*ptmp2(1:nr))*half
+                        p_CAL%vector_new(ind_jl+1:ind_jl+2*nr) = transfer((ptmp1(1:nr)+              &
+                                                                           factor*ptmp2(1:nr))*half, &
+                                                                          p_CAL%vector_new,2*nr)
                      else
-                        p_CAL%vector_new(ind_jl+1:ind_jl+nr) = ptmp1(1:nr)
+                        p_CAL%vector_new(ind_jl+1:ind_jl+2*nr) = transfer(ptmp1(1:nr),p_CAL%vector_new,2*nr)
                      endif
-                     ind_jl = ind_jl+ nr
+                     ind_jl = ind_jl + 2*nr
                   endif
                enddo
                if (n_spin_pola==2) then
@@ -202,15 +208,16 @@
                   p_CAL%rms = r_rms(is,p_item)
                endif
             endif
+            ind_jl = ind_jl + 1
          enddo
          if (associated(p_CAL%next)) then
             p_CAL => p_CAL%next
          else if ( id/=LocalNumAtoms ) then
             call ErrorHandler('setupMixCmplxArrayList',                  &
-                              'CmplxArrayList is not set up properly', id)
+                              'ArrayList is not set up properly', id)
          endif
       enddo
    enddo
-!   nullify(p_CAL, ptmp1, ptmp2, rptmp, flag_jl, pStore_old, pStore_new)
+   nullify(p_CAL, ptmp1, ptmp2, rptmp, flag_jl, pStore_old, pStore_new)
 !
    end subroutine setupMixCmplxArrayList

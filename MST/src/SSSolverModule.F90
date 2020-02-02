@@ -5533,9 +5533,9 @@ use MPPModule, only : MyPE, syncAllPEs
 !
    if (present(rs)) then
       if (rs < getInscrSphRadius(id)) then
-         call ErrorHandler('getDOSoutside','rs < Rmt',rs,getInscrSphRadius(id))
+         call ErrorHandler('getDOSoutside','rs < Rinscr',rs,getInscrSphRadius(id))
       else if (rs < getOutscrSphRadius(id) .and. .not.isPotZeroOutsideRmt) then
-         call ErrorHandler('getDOSoutside','rs < Rc',rs,getOutscrSphRadius(id))
+         call ErrorHandler('getDOSoutside','rs < Routsc',rs,getOutscrSphRadius(id))
       else
          outside_rs = .true.
          rc = rs

@@ -1,19 +1,19 @@
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine updateMixCmplxValues(LocalNumAtoms,n_spin_pola,CmplxArrayList)
+   subroutine updateMixCmplxValues(LocalNumAtoms,n_spin_pola,ArrayList)
 !  ===================================================================
    use KindParamModule, only : IntKind, RealKind, CmplxKind
    use ErrorHandlerModule, only : ErrorHandler
 !
    use MathParamModule, only : ZERO, HALF
 !
-   use PublicTypeDefinitionsModule, only : MixListCmplxStruct
+   use PublicTypeDefinitionsModule, only : MixListStruct
 !
    use ScfDataModule, only : isPotentialMixing, isChargeMixing
 !
    use RadialGridModule, only : getNumRmesh, getRmesh, getGrid
 !
    use DataServiceCenterModule, only : getDataStorage,                &
-                                       ComplexType, ComplexMark,      &
+                                       RealType, RealMark,            &
                                        createDataStorage,             &
                                        isDataStorageExisting
 !
@@ -39,17 +39,18 @@
 !
    integer (kind=IntKind), intent(in) :: LocalNumAtoms,n_spin_pola
 !
-   type (MixListCmplxStruct), target :: CmplxArrayList
+   type (MixListStruct), target :: ArrayList
 !
    integer (kind=IntKind) :: id, nr, is, data_size, data_size_ns, ia
    integer (kind=IntKind) :: lmax, jl, jl_nonZero, ind_jl, num_items, p_item
    integer (kind=IntKind), pointer :: flag_jl(:)
 !
    real (kind=RealKind) :: factor, chg, mom
-   complex (kind=CmplxKind), pointer :: pStore_old(:,:), pStore_new(:,:)
+   real (kind=RealKind), pointer :: pStore_old(:,:), pStore_new(:,:)
+!
    complex (kind=CmplxKind), pointer :: ptmp1(:), ptmp2(:)
 !
-   type (MixListCmplxStruct), pointer :: p_CAL
+   type (MixListStruct), pointer :: p_CAL
 !
    data_size = 0
    num_items = 0
@@ -80,7 +81,8 @@
       endif
       num_items = num_items + getLocalNumSpecies(id)
    enddo
-   data_size_ns = data_size*n_spin_pola+n_spin_pola
+!  Note: a factor 2 is present because complex data are stored in a real array
+   data_size_ns = 2*data_size*n_spin_pola+n_spin_pola
    if (.not.isDataStorageExisting('MixingVectorOld')) then
       call ErrorHandler('updateMixCmplxValues','MixingVectorOld not defined')
    endif
@@ -88,9 +90,9 @@
       call ErrorHandler('updateMixCmplxValues','MixingVectorNew not defined')
    endif
 !
-   pStore_old => getDataStorage('MixingVectorOld',data_size_ns,num_items,ComplexMark)
-   pStore_new => getDataStorage('MixingVectorNew',data_size_ns,num_items,ComplexMark)
-   p_CAL => CmplxArrayList
+   pStore_old => getDataStorage('MixingVectorOld',data_size_ns,num_items,RealMark)
+   pStore_new => getDataStorage('MixingVectorNew',data_size_ns,num_items,RealMark)
+   p_CAL => ArrayList
    p_item = 0
    do id = 1, LocalNumAtoms
       nr = getNumRmesh(id)
@@ -99,20 +101,20 @@
          p_item = p_item + 1
          p_CAL%vector_old => pStore_old(1:data_size_ns,p_item)
          p_CAL%vector_new => pStore_new(1:data_size_ns,p_item)
+         ind_jl = 0
          do is = 1, n_spin_pola
-            ind_jl = data_size*(is -1)+is-1
             if (isPotentialMixing()) then
                lmax = getPotLmax(id)
                do jl = 1, (lmax+1)*(lmax+2)/2
                   if ( flag_jl(jl) /= 0 ) then
                      ptmp2 => getNewPotential("Total",id,ia,is,jl)
-                     ptmp2(1:nr) = p_CAL%vector_new(ind_jl+1:ind_jl+nr)
-                     ind_jl = ind_jl+ nr
+                     ptmp2 = transfer(p_CAL%vector_new(ind_jl+1:ind_jl+2*nr),ptmp2)
+                     ind_jl = ind_jl + 2*nr
                   endif
                enddo
                if (is == 1) then
-                  call setOldVdif( real(p_CAL%vector_new(ind_jl+1),kind=RealKind) )
-                  call setNewVdif( real(p_CAL%vector_new(ind_jl+1),kind=RealKind) )
+                  call setOldVdif( p_CAL%vector_new(ind_jl+1) )
+                  call setNewVdif( p_CAL%vector_new(ind_jl+1) )
                endif
             else
                lmax = getRhoLmax(id)
@@ -121,41 +123,40 @@
                do jl = 1, (lmax+1)*(lmax+2)/2
                   if ( flag_jl(jl) /=0  ) then
                      ptmp1 => getChargeDensity('TotalNew', id, ia, jl)
-                     if ( n_spin_pola==2 ) then
-                        ptmp2 => getMomentDensity('TotalNew', id, ia, jl)
-                     endif
-                     if ( n_spin_pola==2 ) then
-                        if ( is == 1 ) then
-                           ptmp1(1:nr) = p_CAL%vector_new(ind_jl+1:ind_jl+nr)
-                        else
-                           ptmp1(1:nr) = ptmp1+p_CAL%vector_new(nr*(is-1)+1:nr*is)
-                        endif
-                        if ( is == 1 ) then
-                           ptmp2(1:nr) = p_CAL%vector_new(ind_jl+1:ind_jl+nr)
-                        else
-                          ptmp2(1:nr) = ptmp2-p_CAL%vector_new(ind_jl+1:ind_jl+nr)
-                        endif
+                     if ( n_spin_pola==1 ) then
+                        ptmp1 = transfer(p_CAL%vector_new(ind_jl+1:ind_jl+2*nr),ptmp1)
                      else
-                        ptmp1(1:nr) = p_CAL%vector_new(ind_jl+1:ind_jl+nr)
+                        if ( is == 1 ) then
+                           ptmp1 = transfer(p_CAL%vector_new(ind_jl+1:ind_jl+2*nr),ptmp1)
+                        else
+                           ptmp1 = ptmp1 + transfer(p_CAL%vector_new(ind_jl+1:ind_jl+2*nr),ptmp1)
+                        endif
+                        ptmp2 => getMomentDensity('TotalNew', id, ia, jl)
+                        if ( is == 1 ) then
+                           ptmp2 = transfer(p_CAL%vector_new(ind_jl+1:ind_jl+2*nr),ptmp2)
+                        else
+                           ptmp2 = ptmp2 - transfer(p_CAL%vector_new(ind_jl+1:ind_jl+2*nr),ptmp2)
+                        endif
                      endif
-                     ind_jl = ind_jl+ nr
+                     ind_jl = ind_jl + 2*nr
                   endif
                enddo
                if (n_spin_pola==2) then
                   if ( is == 1 ) then
-                     chg = real(p_CAL%vector_new(ind_jl+1),kind=RealKind)
-                     mom = real(p_CAL%vector_new(ind_jl+1),kind=RealKind)
+                     chg = p_CAL%vector_new(ind_jl+1)
+                     mom = p_CAL%vector_new(ind_jl+1)
                   else
-                     chg = chg + real(p_CAL%vector_new(ind_jl+1),kind=RealKind)
-                     mom = mom - real(p_CAL%vector_new(ind_jl+1),kind=RealKind)
+                     chg = chg + p_CAL%vector_new(ind_jl+1)
+                     mom = mom - p_CAL%vector_new(ind_jl+1)
                      call setNewVPCharge(chg,id,ia)
                      call setNewVPMom(mom,id,ia)
                   endif
                else
-                  chg = real(p_CAL%vector_new(ind_jl+1),kind=RealKind)
+                  chg = p_CAL%vector_new(ind_jl+1)
                   call setNewVPCharge(chg,id,ia)
                endif
             endif
+            ind_jl = ind_jl + 1
          enddo
          p_CAL => p_CAL%next
       enddo

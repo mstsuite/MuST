@@ -15,8 +15,7 @@ public :: initSystemVolume,           &
           getAtomicVPVolume,          &
           getAtomicInscribedVolume,   &  ! Note: for ASA case, this still returns Inscribed volume
           getAtomicMTVolume,          &  ! Note: for ASA case, this still returns muffin-tin volume
-          getTotalInterstitialVolume, &
-          getTotalInterstitialMTVolume
+          getTotalInterstitialVolume
 !
    interface getAtomicVPVolume
       module procedure getAtomicVPVolume_one, getAtomicVPVolume_all
@@ -35,7 +34,6 @@ private
    real (kind=RealKind) :: TotalInscribedVolume
    real (kind=RealKind) :: TotalVoronoiPolyhedraVolume
    real (kind=RealKind) :: TotalInterstitialVolume
-   real (kind=RealKind) :: TotalInterstitialMTVolume
    real (kind=RealKind) :: Bravais(3,3)
    real (kind=RealKind), allocatable, target :: AtomicVoronoiPolyhedraVolume(:)
    real (kind=RealKind), allocatable, target :: AtomicInscribedVolume(:)
@@ -123,7 +121,6 @@ contains
    TotalMuffintinVolume = TotalInscribedVolume
    TotalVoronoiPolyhedraVolume = msgbuf(2)
    TotalInterstitialVolume = msgbuf(3)
-   TotalInterstitialMTVolume = TotalInterstitialVolume
 !
    allocate(AtomicVoronoiPolyhedraVolume(GlobalNumAtoms))
    allocate(AtomicMuffintinVolume(GlobalNumAtoms))
@@ -235,19 +232,6 @@ contains
    v = TotalInterstitialVolume
 !
    end function getTotalInterstitialVolume
-!  ===================================================================
-!  
-!  *******************************************************************
-!
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getTotalInterstitialMTVolume() result(v)
-!  ===================================================================
-   implicit none
-   real (kind=RealKind) :: v
-!
-   v = TotalInterstitialMTVolume
-!
-   end function getTotalInterstitialMTVolume
 !  ===================================================================
 !
 !  *******************************************************************
@@ -396,17 +380,17 @@ contains
       AtomicMuffintinVolume(ig) = memtemp(ig)
    enddo
 !
-   TotalInterstitialMTVolume = ZERO
+   TotalInterstitialVolume = ZERO
    do i=1,LocalNumAtoms
       ig=getGlobalIndex(i,MyPEinGroup)
-      TotalInterstitialMTVolume = AtomicVoronoiPolyhedraVolume(ig) - &
+      TotalInterstitialVolume = AtomicVoronoiPolyhedraVolume(ig) -    &
                                   AtomicMuffintinVolume(ig)
    enddo
 !  -------------------------------------------------------------------
-   call GlobalSumInGroup(id,TotalInterstitialMTVolume)
+   call GlobalSumInGroup(id,TotalInterstitialVolume)
 !  -------------------------------------------------------------------
    TotalMuffintinVolume = TotalVoronoiPolyhedraVolume - &
-                          TotalInterstitialMTVolume
+                          TotalInterstitialVolume
 !  -------------------------------------------------------------------
    deallocate(memtemp)
 !
@@ -429,9 +413,8 @@ contains
    write(6,'(''Total Voronoi Polyhedra Volume: '',f19.8)')              &
                                            TotalVoronoiPolyhedraVolume
    write(6,'(''Total Inscribed Sphere Volume : '',f19.8)')TotalInscribedVolume
-   write(6,'(''Total Interstitial Volume     : '',f19.8)')TotalInterstitialVolume
    write(6,'(''Total Muffintin Sphere Volume : '',f19.8)')TotalMuffintinVolume
-   write(6,'(''Total Interstitial MT Volume  : '',f19.8)')TotalInterstitialMTVolume
+   write(6,'(''Total Interstitial Volume     : '',f19.8)')TotalInterstitialVolume
    write(6,'(80(''=''))')
 !
    end subroutine printSystemVolume
