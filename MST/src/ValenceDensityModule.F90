@@ -476,7 +476,7 @@ contains
 !  ===================================================================
    use IntegrationModule, only : calIntegration
 !
-   use AtomModule, only : getLocalEvecNew, getLocalSpeciesContent
+   use AtomModule, only : getLocalEvec, getLocalSpeciesContent
 !
    use StepFunctionModule, only : getVolumeIntegration
 !
@@ -947,7 +947,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getSphRho_is(id,ia,is,isDerivative) result(p_rho0)
 !  ===================================================================
-   use AtomModule, only : getLocalEvecOld
+   use AtomModule, only : getLocalEvec
 !
    implicit none
 !
@@ -1001,7 +1001,7 @@ contains
                            +isig*Density(id)%mom_0(1:iend,1,ia) )*HALF
          endif
       else
-         evec(1:3) = getLocalEvecOld(id)
+         evec(1:3) = getLocalEvec(id,'old')
          isig = 3-2*is
          rho0(1:iend) = ZERO
          if (deriv) then
@@ -1158,7 +1158,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getSphMom_tot(id,ia,isDerivative) result(p_mom0)
 !  ===================================================================
-   use AtomModule, only : getLocalEvecOld
+   use AtomModule, only : getLocalEvec
    implicit none
 !
    integer (kind=IntKind), intent(in) :: id, ia
@@ -1198,7 +1198,7 @@ contains
          p_mom0 => Density(id)%mom_0(:,1,ia)
       endif
    else
-      evec(1:3) = getLocalEvecOld(id)
+      evec(1:3) = getLocalEvec(id,'old')
       mom0(1:iend) = ZERO
       if (deriv) then
          do is = 1,3
@@ -2033,7 +2033,7 @@ contains
 !
    use StepFunctionModule, only : getVolumeIntegration
 !
-   use AtomModule, only : getLocalEvecOld
+   use AtomModule, only : getLocalEvec
 !
    implicit none
 !
@@ -2100,7 +2100,7 @@ contains
          enddo
       enddo
    else  
-      evec = getLocalEvecOld(id)
+      evec = getLocalEvec(id,'old')
       ns = 3-2*is
       do jl = 1,jmax_rho
          do ir = 1,jend
@@ -2191,7 +2191,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine updateValenceCharge(id,ia,dos,dos_mt)
 !  ===================================================================
-   use AtomModule, only : getLocalEvecNew
+   use AtomModule, only : getLocalEvec
 !
    implicit none
 !
@@ -2206,7 +2206,7 @@ contains
       call ErrorHandler('updateValenceCharge','Invalid species index',ia)
    endif
 !
-   evec = getLocalEvecNew(id)
+   evec = getLocalEvec(id,'new')
    if (n_spin_cant == 2) then
       Density(id)%ChargeVP(ia) = dos(1)
       Density(id)%ChargeMT(ia) = dos_mt(1)
@@ -2247,7 +2247,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine updateValenceEnergy(id,ia,evalsum,exc)
 !  ===================================================================
-   use AtomModule, only : getLocalEvecOld
+   use AtomModule, only : getLocalEvec
 !
    implicit none
 !
@@ -2263,7 +2263,7 @@ contains
       call ErrorHandler('updateValenceEnergy','Invalid species index',ia)
    endif
 !
-   evec = getLocalEvecOld(id) ! Should use EvecOld, not EvecNew
+   evec = getLocalEvec(id,'old') ! Should use EvecOld, not EvecNew
    if (n_spin_cant == 2) then
       ev0 = evalsum(1)
       evm = evalsum(2)*evec(1)+evalsum(3)*evec(2)+evalsum(4)*evec(3)
@@ -2298,7 +2298,7 @@ contains
 !
    use ScfDataModule, only : Harris
 !
-   use AtomModule, only : getLocalEvecNew, getLocalSpeciesContent
+   use AtomModule, only : getLocalEvec, getLocalSpeciesContent
 !
    use PotentialTypeModule, only : isASAPotential, isFullPotential,   &
                                    isMuffinTinFullPotential, isMuffinTinPotential
@@ -2333,7 +2333,7 @@ contains
    mint_vec(1:3) = ZERO 
    BandEnergy = ZERO
    do id = 1, LocalNumAtoms
-      evec(1:3) = getLocalEvecNew(id)
+      evec(1:3) = getLocalEvec(id,'new')
       do ia = 1, Density(id)%NumSpecies
          cfac = getLocalSpeciesContent(id,ia)
          if(n_spin_pola == 2) then
@@ -2857,11 +2857,10 @@ contains
 !  ===================================================================
    use Atom2ProcModule, only : getGlobalIndex
 !
-   use SystemModule, only : setMomentDirection, setMomentDirectionOld
+   use SystemModule, only : setMomentDirection
 !
-   use AtomModule, only : getMixingParam4Evec, getLocalEvecOld,       &
-                          setLocalEvecNew, setLocalMoment,            &
-                          getLocalEvecOut, getLocalSpeciesContent
+   use AtomModule, only : getMixingParam4Evec, setLocalEvec, getLocalEvec, &
+                          setLocalMoment, getLocalSpeciesContent
 !
    use ScfDataModule, only : getCantedMomentTorqueFactor
 !
@@ -2875,6 +2874,7 @@ contains
 !
    integer (kind=IntKind) :: i, ig, ia
 !
+   real (kind=RealKind) :: evec_out(3)
    real (kind=RealKind) :: evec_new(3)
    real (kind=RealKind) :: moment(3)
    real (kind=RealKind) :: alpev
@@ -2892,7 +2892,7 @@ contains
    ig = getGlobalIndex(id)
    alpev = getMixingParam4Evec(id)
    ctq = getCantedMomentTorqueFactor()
-   evec_old(1:3) = getLocalEvecOld(id)
+   evec_old(1:3) = getLocalEvec(id,'old')
 !
    moment = ZERO
    do ia = 1, Density(id)%NumSpecies
@@ -2903,10 +2903,16 @@ contains
       endif
    enddo
 !
-   call setLocalMoment(id,moment)
+!  -------------------------------------------------------------------
+   call setLocalMoment(id,moment,mtol,'out')
+!  -------------------------------------------------------------------
 !
 !  ===================================================================
 !  determine evec_new according to moment..........................
+!        evec is the moment orientation:
+!             evec(1) = the x-component of e-vector
+!             evec(2) = the y-component of e-vector
+!             evec(3) = the z-component of e-vector
 !  ===================================================================
    emag=sqrt(moment(1)*moment(1)+moment(2)*moment(2)+moment(3)*moment(3))
    if(node_print_level.ge.0) then
@@ -2916,25 +2922,13 @@ contains
        write(6,'(4x,a,t40,''='',1f11.6)')'magnetic moment magnitude', &
             emag
    endif
-   if(emag > mtol) then
-!     ================================================================
-!        evec is the new moment orientation:
-!             evec(1) = the x-component of e-vector
-!             evec(2) = the y-component of e-vector
-!             evec(3) = the z-component of e-vector
-!        it is determined by the total moment inside the muffin-tin
-!        sphare
-!     ================================================================
-      evec_new(1:3)=moment(1:3)/emag
-   else
-      evec_new(1:3)=evec_old(1:3)
-   endif
+   evec_out = getLocalEvec(id,'out')
 !
 !  ===================================================================
 !     add precession motion to evec_new...............................
 !     Note, an arbitary constant ctq is multiplied to torque..........
 !  ===================================================================
-   evec_new(1:3)=evec_new(1:3)+ctq*torque(1:3)
+   evec_new(1:3)=evec_out(1:3)+ctq*torque(1:3)
    emag=sqrt(evec_new(1)*evec_new(1)+evec_new(2)*evec_new(2)          &
              +evec_new(3)*evec_new(3))
 !
@@ -2966,18 +2960,15 @@ contains
    evec_new(1:3)=evec_new(1:3)/emag
 !
 !  -------------------------------------------------------------------
-   call setLocalEvecNew(id,evec_new)
+   call setLocalEvec(id,evec_new,'new')
 !  -------------------------------------------------------------------
    if(node_print_level.ge.0) then
       write(6,'(4x,a,t40,''='',3f11.6)')                              &
             'Moment direc. new        ',evec_new(1),evec_new(2),evec_new(3)
    endif
 !  -------------------------------------------------------------------
-   evec_new(1:3) = getLocalEvecOut(id)
-!  -------------------------------------------------------------------
    call setMomentDirection(ig,evec_new)
-!  -------------------------------------------------------------------
-   call setMomentDirectionOld(ig,evec_old)
+!  call setExchangeFieldDirection(ig,evec_new)
 !  -------------------------------------------------------------------
 !
    if(node_print_level.ge.0) then

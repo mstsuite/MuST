@@ -10,7 +10,7 @@
                              n_spin_pola, n_spin_cant, NumSS_IntEs
    use SystemModule, only : printSystem, getAtomPosition, getAtomName, &
                      getNumAtoms, getForce, getRMSInfo, getAtomEnergy, &
-                     getMomentDirection, getMomentDirectionOld, &
+                     getMomentDirection, getExchangeFieldDirection,    &
                      getConstrainField, getSiteLIZ
    use PotentialTypeModule, only : printPotentialType
    use SystemVolumeModule, only : getAtomicVPVolume, &
@@ -51,7 +51,7 @@
    rms    => getRMSInfo()
 
    if (n_spin_cant==2) then
-      evec_old   => getMomentDirectionOld()
+      evec_old   => getExchangeFieldDirection()
       evec   => getMomentDirection()
    endif
    bcon   => getConstrainField()

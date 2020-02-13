@@ -208,7 +208,7 @@ include '../lib/arrayTools.F90'
 ! Relativistic solver currently supports only spherically symmetric potentials.
 ! lmax_phi and lmax_pot need to be added as arguments to implement full solver.
 
-   use AtomModule, only : getLocalEvecOld
+   use AtomModule, only : getLocalEvec
    use RadialGridModule, only : getGrid
 
    implicit none
@@ -315,7 +315,7 @@ include '../lib/arrayTools.F90'
       Scatter(ia)%d_mat => aliasArray2_c(p1, kkrsz*n_spin_cant, kkrsz*n_spin_cant)
       p1 => wks_dmatp(inda:indb)
       Scatter(ia)%d_matp => aliasArray2_c(p1, kkrsz*n_spin_cant, kkrsz*n_spin_cant)
-      evec_l(1:3) = getLocalEvecOld(ia)
+      evec_l(1:3) = getLocalEvec(ia,'old')
       call matrot1(r_global, evec_l, lmax(ia), Scatter(ia)%d_mat, Scatter(ia)%d_matp)
       inda = ind_nuz(ia)
       indb = inda + (2*kkrsz) - 1
@@ -384,7 +384,6 @@ include '../lib/arrayTools.F90'
 
 ! tmat_g is the t-matrix in the global frame of reference.
 
-   use AtomModule, only : getLocalEvecOld
    use PhysParamModule, only : LightSpeed
    use PotentialModule, only : getSphPotr
    use RelativityToolsModule, only : gjinv, tripmt, outmat1

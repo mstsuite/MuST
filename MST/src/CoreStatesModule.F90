@@ -179,13 +179,15 @@ contains
                                        isDataStorageExisting, &
                                        RealType, ComplexType, &
                                        RealMark, ComplexMark
-   use AtomModule, only : getAtomCoreRad, setAtomCoreRad
-   use PolyhedraModule, only : getVolume, getInscrSphRadius
+   use AtomModule, only : getAtomCoreRad, setAtomCoreRad, getMuffinTinRadius
+   use PolyhedraModule, only : getVolume, getInscrSphRadius, getOutscrSphRadius
 !
    use GroupCommModule, only : GlobalSumInGroup
 !
    use Atom2ProcModule, only : getLocalIndex, getAtom2ProcInGroup
    use Atom2ProcModule, only : getMaxLocalNumAtoms, getGlobalIndex
+!
+   use PotentialTypeModule, only : isFullPotential
 !
    implicit none
 !
@@ -260,17 +262,22 @@ contains
       Core(id)%rsize = last
 !     ================================================================
 !     If "Core Radius" is not set from the input, its default value will 
-!     be taken as the the inscribed sphere radius of the atomic cell.
+!     be taken as the muffin-tin radius if the calculation is muffin-tin or ASA,
+!     otherwise, the value is chosen to be either the inscribed sphere radius 
+!     or the circumscribed sphere radius of the atomic cell.
 !     ================================================================
-      if ( getAtomCoreRad(id) < 0.10d0 ) then
+      if ( getAtomCoreRad(id) < ZERO .and. isFullPotential()) then
+         jcore = getRadialGridPoint(id, getOutscrSphRadius(id))
+      else if ( getAtomCoreRad(id) < 0.10d0 ) then
 !012620===============================
 !012620  jcore = Core(id)%Grid%jmt
 !        jcore = Core(id)%Grid%jinsc
-         jcore = getRadialGridPoint(id, getInscrSphRadius(id))
+         if (isFullPotential() .or. getMuffinTinRadius(id) < 0.10d0) then
+            jcore = getRadialGridPoint(id, getInscrSphRadius(id))
+         else
+            jcore = getRadialGridPoint(id, getMuffinTinRadius(id))
+         endif
 !012620===============================
-         Core(id)%rcore_mt = Core(id)%Grid%r_mesh(jcore)
-         Core(id)%jcore    = jcore
-         call setAtomCoreRad(id,Core(id)%rcore_mt)
       else
 !012620===============================
 !        jcore = Core(id)%Grid%jmt
@@ -287,10 +294,13 @@ contains
 !           Core(id)%jcore = jcore
 !        endif
          jcore = getRadialGridPoint(id,getAtomCoreRad(id))
-         Core(id)%jcore = jcore
-         Core(id)%rcore_mt = r_mesh(jcore)
 !012620===============================
       endif
+      Core(id)%rcore_mt = r_mesh(jcore)
+      Core(id)%jcore    = jcore
+!     ----------------------------------------------------------------
+      call setAtomCoreRad(id,Core(id)%rcore_mt)
+!     ----------------------------------------------------------------
       Core(id)%vol_core = PI4*THIRD*(Core(id)%rcore_mt**3)
       Core(id)%vol_coreint = getVolume(id)-Core(id)%vol_core
       DataSize(id)  = last*n_spin_pola*Core(id)%NumSpecies
@@ -1992,6 +2002,7 @@ contains
 !
    write(6,'(''Local Atom Index: '',i6)')id
    write(6,'(''jend, jcore     : '',2i6)')Core(id)%Grid%jend,Core(id)%jcore
+   write(6,'(''Core radius     : '',f12.8)')Core(id)%Rcore_mt
    write(6,'(''Upper limit of core level'',t31,''='',f20.11)')etopcor
    do ia = 1, Core(id)%NumSpecies
       write(6,'(80(''=''))')
@@ -2193,7 +2204,7 @@ contains
 !     ----------------------------------------------------------------
       call calIntegration(last2+1,sqrt_r(0:last2),ftmp(0:last2),qmp(0:last2),3)
 !     ----------------------------------------------------------------
-#ifdef CORE_NORM2INFINITY
+#ifndef CoreNorm2Rc
       call IntegrateSphHankelSq(Core(id)%lc(i,ia),r(last2),Core(id)%ec(i,is,ia),norm_frac)
 !     ----------------------------------------------------------------
       if (print_level >= 0) then
@@ -2798,7 +2809,7 @@ contains
 !               h:        exp. step;
 !               z:        atomic number;
 !               jmt:      muffin-tin radius index;
-!               nws:      bopunding sphere radius index;
+!               nws:      bounding sphere radius index;
 !               drg,drf:  wavefunctions derivatives times r;
 !               gam:      first power for small r expansion;
 !               slp:      slope at the origin;

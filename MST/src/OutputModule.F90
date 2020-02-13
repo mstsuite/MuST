@@ -133,7 +133,7 @@ contains
    wavePrintFormat = -1
 !
 !  -------------------------------------------------------------------
-   rstatus = getKeyValue(tbl_id,'Output Atom ID (>= 0)',str_atom)
+   rstatus = getKeyValue(tbl_id,'Output Atom ID (>= -1)',str_atom)
 !  -------------------------------------------------------------------
 !
    num_o_atom = 0
@@ -147,32 +147,33 @@ contains
       allocate(o_atom(1:num_o_atom), p_lvl(1:num_o_lvl))
       read(str_atom,*)o_atom(1:num_o_atom)
       read(str_lvl,*)p_lvl(1:num_o_lvl)
-      LOOP_i: do i=1,num_o_atom
-         if (o_atom(i) < 0) then
-            if (i <= num_o_lvl) then
-               j = i
-            else
-               j = num_o_lvl
-            endif
-            ATOM_based_print_level(1) = p_lvl(j)
-            ATOM_based_print_level(2:LocalNumAtoms) = ATOM_based_print_level(1)
-            exit LOOP_i
-         else if (o_atom(i) == 0) then
-            ATOM_based_print_level = undefined_lvl
-         else  ! if (o_atom(i) > 0) then
-            if (i <= num_o_lvl) then
-               j = i
-            else
-               j = num_o_lvl
-            endif
-            LOOP_id: do id = 1, LocalNumAtoms
-               if (o_atom(i) ==getGlobalIndex(id)) then
-                  ATOM_based_print_level(id) = p_lvl(j)
-                  exit LOOP_id
+      if (o_atom(1) == -1 .and. num_o_atom == 1) then
+         ATOM_based_print_level = p_lvl(1)
+      else if (o_atom(1) == 0 .and. num_o_atom == 1) then
+         ATOM_based_print_level = undefined_lvl
+      else
+         do i = 1, num_o_atom
+            if (o_atom(i) <= 0) then
+!              -------------------------------------------------------
+               call ErrorHandler('initOutput',                             &
+                                 'Invalid output specification for atoms', &
+                                 str_atom)
+!              -------------------------------------------------------
+            else ! if (o_atom(i) > 0) then
+               if (i <= num_o_lvl) then
+                  j = i
+               else
+                  j = num_o_lvl
                endif
-            enddo LOOP_id
-         endif
-      enddo LOOP_i
+               LOOP_id: do id = 1, LocalNumAtoms
+                  if (o_atom(i) == getGlobalIndex(id)) then
+                     ATOM_based_print_level(id) = p_lvl(j)
+                     exit LOOP_id
+                  endif
+               enddo LOOP_id
+            endif
+         enddo
+      endif
       deallocate(o_atom, p_lvl)
       if ( maxval(ATOM_based_print_level)>=0 ) then
          AtomBasedPrintDefined = .true.
@@ -216,38 +217,46 @@ contains
       num_o_pe = min(getNumTokens(), NumPEs)
       call endString()
 !     ----------------------------------------------------------------
-!
-      if (num_o_pe <= 0) then
-!        -------------------------------------------------------------
-         call ErrorHandler('initOutput','No data entry for Output Proc. ID')
-!        -------------------------------------------------------------
-      endif
-!
       allocate(o_pe(1:num_o_pe), p_lvl(1:num_o_pe))
       read(str_pe,*)o_pe(1:num_o_pe)
       read(str_lvl,*)p_lvl(1:num_o_pe)
-      do i=1,num_o_pe
-         if (i <= num_o_lvl) then
-            j = i
-         else
-            j = num_o_lvl
-         endif
-         if (o_pe(i) == MyPE .or. o_pe(i) == -1) then
-            CPU_based_print_level = p_lvl(j)
-            exit
-         endif
-      enddo
+      if (o_pe(1) == -1 .and. num_o_pe == 1) then
+         CPU_based_print_level = p_lvl(1)
+      else
+         do i = 1, num_o_pe
+            if (o_pe(i) < 0) then
+!              -------------------------------------------------------
+               call ErrorHandler('initOutput',                            &
+                                 'Invalid output specification for CPUs', &
+                                 str_pe)
+!              -------------------------------------------------------
+            else ! if (o_pe(i) >= 0) then
+               if (i <= num_o_lvl) then
+                  j = i
+               else
+                  j = num_o_lvl
+               endif
+               if (o_pe(i) == MyPE) then
+                  CPU_based_print_level = p_lvl(j)
+                  exit
+               endif
+            endif
+         enddo
+      endif
       deallocate(o_pe, p_lvl)
-      if (.not.AtomBasedPrintDefined .and. CPU_based_print_level>=0 .and. &
-          minval(ATOM_based_print_level) == undefined_lvl ) then
+      if (AtomBasedPrintDefined) then
+         CPU_based_print_level = max(maxval(ATOM_based_print_level),CPU_based_print_level)
+         ATOM_based_print_level = CPU_based_print_level
+      else if (CPU_based_print_level >= 0 .and.                       &
+               minval(ATOM_based_print_level) == undefined_lvl ) then
          ATOM_based_print_level = CPU_based_print_level
 !        AtomBasedPrintDefined = .true.
       endif
-!   else if (AtomBasedPrintDefined) then
-!      do id = 1, LocalNumAtoms
-!         CPU_based_print_level = max(CPU_based_print_level,           &
-!                                     ATOM_based_print_level(id))
-!      enddo
+!  else if (AtomBasedPrintDefined) then
+!     do id = 1, LocalNumAtoms
+!        CPU_based_print_level = max(CPU_based_print_level,           &
+!                                    ATOM_based_print_level(id))
+!     enddo
    else if (MyPE == 0) then
       CPU_based_print_level = 0
    endif

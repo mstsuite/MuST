@@ -86,7 +86,7 @@ program mst2
    use ScfDataModule, only : isExchangeParamNeeded
    use ScfDataModule, only : getPotentialTypeParam
    use ScfDataModule, only : isChargeMixing, isPotentialMixing
-   use ScfDataModule, only : excorr_name, eftol, etol, ptol, rmstol
+   use ScfDataModule, only : excorr_name, rmstol
    use ScfDataModule, only : isLdaCorrectionNeeded, getUJfile
    use ScfDataModule, only : getSingleSiteSolverType, getDOSrunID
    use ScfDataModule, only : NumSS_IntEs, isSSIrregularSolOn
@@ -99,13 +99,13 @@ program mst2
                                    printPotentialType, isSphericalPotential, &
                                    isMuffinTinFullPotential, setIsSphericalPotential
 !
-   use SystemModule, only : initSystem, endSystem, printSysMovie
+   use SystemModule, only : initSystem, endSystem
    use Systemmodule, only : printSystem, getBravaisLattice, getLatticeConstant
    use SystemModule, only : getNumAtoms, getAtomPosition, getAtomicNumber,   &
                             getNumVacancies
    use SystemModule, only : getUniformGridParam
    use SystemModule, only : getSystemID, getNumAtomTypes
-   use SystemModule, only : updateSystem, setRMSInfo
+   use SystemModule, only : updateSystem
    use SystemModule, only : writeMomentDirectionData, writeAtomPositionData
    use SystemModule, only : writeMomentMovie, writeAtomPositionMovie
    use SystemModule, only : updateSystemMovie, resetSystemMovie
@@ -146,8 +146,8 @@ program mst2
    use AtomModule, only : getLocalAtomNickName, printAtomMomentInfo
 !   use AtomModule, only : setAtomVolMT, setAtomVolVP
 !   use AtomModule, only : setAtomVolWS, setAtomVolINSC
-   use AtomModule, only : getLocalAtomPosition, getLocalEvecOld
-   use AtomModule, only : getLocalConstrainField
+   use AtomModule, only : getLocalAtomPosition, getLocalEvec, getAtomCoreRad
+   use AtomModule, only : getLocalConstrainField, updateLocalExchangeFieldDir
    use AtomModule, only : getMixingParam4Evec ! , resetCompFlags, getCompFlags
 !
    use SphericalHarmonicsModule, only : initSphericalHarmonics
@@ -172,8 +172,9 @@ program mst2
    use IBZRotationModule, only : initIBZRotation, endIBZRotation, computeRotationMatrix, &
                                  printIBZRotationMatrix, checkCrystalSymmetry
 !
+   use SpinRotationModule, only :  initSpinRotation, endSpinRotation
+!
    use ValenceDensityModule, only : initValenceDensity, getFermiEnergy, endValenceDensity
-   use ValenceDensityModule, only : printRho_L
    use ValenceDensityModule, only : setValenceVPCharge, setValenceVPMomentSize
    use ValenceDensityModule, only : getExchangeEnergy
 !
@@ -195,15 +196,11 @@ program mst2
    use ChargeDistributionModule, only : initChargeDistribution,     &
                                         endChargeDistribution,      &
                                         updateChargeDistribution,   &
-                                        printChargeDistribution,    &
                                         getGlobalVPCellMomentTable
 !
    use PotentialGenerationModule, only : initPotentialGeneration,  &
                                          endPotentialGeneration,   &
-                                         computeNewPotential,      &
-                                         printPotentialGeneration, &
-                                         printMadelungShiftTable
-   use PotentialGenerationModule, only : printNewPot_L => printPot_L
+                                         computeNewPotential
 !
    use TotalEnergyModule, only : initTotalEnergy, endTotalEnergy,     &
                                  computeEnergyFunctional, printTotalEnergy, &
@@ -226,10 +223,7 @@ program mst2
                                           endConstrainLM,             &
                                           printConstrainMoment,       &
                                           calConstrainLM,             &
-                                          getFieldRms,                &
                                           updateConstrainLM
-!
-   use SpinRotationModule, only: printSpinRotation
 !
    use BookKeepingModule, only : initBookKeeping, endBookKeeping
 !
@@ -241,9 +235,6 @@ program mst2
                                    endChargeDensity,          &
                                    constructChargeDensity,    &
                                    isChargeComponentZero,     &
-                                   printChargeDensity,        &
-                                   printChargeDensity_L,      &
-                                   printMomentDensity_L,      &
                                    updateTotalDensity
 !
    use LdaCorrectionModule, only : initLdaCorrection, endLdaCorrection, &
@@ -261,7 +252,6 @@ program mst2
    logical :: ScfConverged = .false.
    logical :: FileNamed = .false.
    logical :: isRmtExternal = .false.
-   logical :: initSystemMovie=.true.
    logical :: IsoParamVINT = .false.
    logical :: FrozenCoreFileExist = .false.
    logical :: StandardInputExist = .false.
@@ -277,11 +267,11 @@ program mst2
    character (len=50) :: FrozenCoreFileName = 'FrozenCoreDensity.dat'
 !
    integer (kind=IntKind) :: MyPE, NumPEs
-   integer (kind=IntKind) :: funit, funit_sysmov, en_movie
+   integer (kind=IntKind) :: funit_sysmov, en_movie
    integer (kind=IntKind) :: def_id, info_id
    integer (kind=IntKind) :: i, id, ig, is, jl, nk, ne, n, na, ia
    integer (kind=IntKind) :: iscf, itstep, niter, sdstep_new
-   integer (kind=IntKind) :: n_chgtab, n_madtab, n_potwrite, n_visual, n_sysmov
+   integer (kind=IntKind) :: n_write, n_potwrite
    integer (kind=IntKind) :: lmax_max, lmax_kkr_max, GlobalNumAtoms, jmax_pot
    integer (kind=IntKind) :: lmax_rho_max, lmax_pot_max, lmax_gaunt
    integer (kind=IntKind) :: ndivin, ndivout, nmult
@@ -289,7 +279,6 @@ program mst2
    integer (kind=IntKind) :: LocalNumAtoms
    integer (kind=IntKind) :: node_print_level
 !  integer (kind=IntKind) :: ng_uniform(3)
-   integer (kind=IntKind) :: InitMode
    integer (kind=IntKind), pointer :: AtomicNumber(:)
    integer (kind=IntKind), allocatable :: atom_print_level(:)
    integer (kind=IntKind), allocatable :: GlobalIndex(:)
@@ -314,12 +303,10 @@ program mst2
    real (kind=RealKind), allocatable :: LocalEvec(:,:)
    real (kind=RealKind), allocatable :: radius(:)
 !
-   real (kind=RealKind) :: rho_rms_av(2), pot_rms_av(2)
    real (kind=RealKind), allocatable :: rho_rms(:,:), pot_rms(:,:)
    real (kind=RealKind), allocatable :: evec_rms(:), bcon_rms(:)
    real (kind=RealKind), allocatable :: bcon_sd(:,:)
-   real (kind=RealKind) :: ef_diff, tote_diff
-   real (kind=RealKind) :: max_rms(8), keep_rms(4), rms, rms_sys(4)
+   real (kind=RealKind) :: max_rms(8), keep_rms(4)
 !
    real (kind=RealKind) :: vcell(3,3), vorigin(3)
    real (kind=RealKind) :: bravais(3,3)
@@ -399,6 +386,14 @@ program mst2
          integer (kind=IntKind), intent(in) :: na, ia, is
          real (kind=RealKind), pointer :: rho(:)
       end function getSphValDensity
+!
+      subroutine printScfResults(gna, lna, np, ap, nw, mov, i, n, c)
+         use KindParamModule, only : IntKind
+         logical, intent(in) :: c
+         integer (kind=IntKind), intent(in) :: gna, lna, np, mov, i, n
+         integer (kind=IntKind), intent(in) :: ap(lna)
+         integer (kind=IntKind), intent(inout) :: nw
+      end subroutine printScfResults
 !
    end interface
 !
@@ -859,7 +854,7 @@ program mst2
 !
    do id=1,LocalNumAtoms
       LocalAtomPosi(1:3,id)=getLocalAtomPosition(id)
-      LocalEvec(1:3,id)=getLocalEvecOld(id)
+      LocalEvec(1:3,id)=getLocalEvec(id,'old')
       GlobalIndex(id)=getGlobalIndex(id)
    enddo
 !
@@ -895,7 +890,7 @@ program mst2
 !        -------------------------------------------------------------
       endif
 !
-      rend = getOutscrSphRadius(i)
+      rend = max(getOutscrSphRadius(i),getAtomCoreRad(i))
       rmt = getMuffinTinRadius(i)
       if ( rmt < 0.010d0 ) then
          call ErrorHandler('main','rmt < 0.01',rmt)
@@ -903,6 +898,9 @@ program mst2
 !
       if (isMuffinTinPotential() .or. isMuffinTinTestPotential()) then
          rinsc = getInscrSphRadius(i)
+         if (rmt - rinsc > TEN2m6) then
+            call WarningHandler('main','rinsc < rmt',rinsc,rmt)
+         endif
          rws = getWignerSeitzRadius(i)
 !         volume = PI4*THIRD*(rws**3)
 !         call setAtomVolWS(i,volume)
@@ -1110,7 +1108,7 @@ program mst2
                      lmax_rho_max,lmax_pot_max,bravais,AtomPosition,  &
                      node_print_level)
 !  -------------------------------------------------------------------
-   if (MyPE == 0) then
+   if (node_print_level >= 0) then
       write(6,'(/,a,f10.5,/)')'Time:: initMadelung: ',getTime()-t2
    endif
 !
@@ -1297,6 +1295,8 @@ program mst2
 !  *******************************************************************
 !
 !  -------------------------------------------------------------------
+   call initSpinRotation(LocalNumAtoms)
+!  -------------------------------------------------------------------
    call initValenceDensity(LocalNumAtoms,LocalNumValenceElectrons,    &
                            lmax_rho,n_spin_pola,n_spin_cant,Efermi,   &
                            istop,atom_print_level,                    &
@@ -1360,7 +1360,8 @@ program mst2
 !  *******************************************************************
 !
 !  ===================================================================
-   call initConvergenceCheck(LocalNumAtoms,n_spin_pola,atom_print_level)
+   call initConvergenceCheck(LocalNumAtoms,n_spin_pola,n_spin_cant,   &
+                             atom_print_level)
 !  -------------------------------------------------------------------
    n = 0
    do id = 1, LocalNumAtoms
@@ -1391,24 +1392,13 @@ program mst2
       write(6,'(80(''-''))')
    endif
 !
-   if (GlobalNumAtoms > 100) then
-      funit = 21     ! if tooo many atoms, charge table is written to a file
-   else
-      funit = 6
-   endif
-   n_chgtab = 0
-   n_madtab = 0
-   n_potwrite = 0
-   n_visual = 0
-   n_sysmov = 0
-!
    if (MyPE == 0) then
 !     ----------------------------------------------------------------
       call initBookKeeping(info_path,getSystemID(),MyPE)
 !     ----------------------------------------------------------------
    endif
 !
-   if ( printSysMovie==1 ) then
+   if ( movie > 0 ) then
 !     ----------------------------------------------------------------
       call updateSystem('LIZ Size',getAtom2ProcInGroup)
 !     ----------------------------------------------------------------
@@ -1420,7 +1410,6 @@ program mst2
 !     reset the Initialization for calculating charge density on uniform grids
 !     This needs to be done every time the atom positions are modified
 !     ================================================================
-      InitMode = 0
 !
       sdstep_new = 1
       rho_rms(:,:) = ZERO
@@ -1430,12 +1419,18 @@ program mst2
       do i = 1,LocalNumAtoms
          bcon_sd(1:3,i) = getLocalConstrainField(i)
       enddo
-      rms = ZERO
+      if (ntstep > 1 .and. node_print_level >= 0) then
+         write(6,'(/,80(''*''))')
+         write(6,'(/,a,i5,/)') 'SD_Loop :', itstep
+      endif
+!
       if (node_print_level >= 0) then
-         write(6,*) "SD_Loop::", itstep
          call printAtomMomentInfo()
       endif
 !
+      n_potwrite = 0
+      n_write = 0
+      ScfConverged = .false.
       SCF_LOOP: do iscf = 1, nscf
 !
          if (isDOSCalculationOnly) then
@@ -1512,12 +1507,12 @@ program mst2
             endif
          endif
 !        =============================================================
-!        generate new evec direction and set constrain field to the
-!        potential.
+!        At the beginning of each spin-dynamics time step, generate new 
+!        evec direction and set constrain field to the potential.
 !        =============================================================
          if ( n_spin_cant == 2 ) then
 !           ----------------------------------------------------------
-            call calConstrainLM(itstep)
+            call calConstrainLM(itstep,iscf)
 !           ----------------------------------------------------------
          endif
 !
@@ -1591,24 +1586,8 @@ program mst2
 !        -------------------------------------------------------------
          call computeNewPotential()
 !        -------------------------------------------------------------
-         if (MyPE == 0) then
+         if (node_print_level >= 0) then
             write(6,'(/,a,f10.5,/)')'Time:: computeNewPotential: ',getTime()-t2
-         endif
-!
-         if (iscf < 10) then
-            write(anm,'(a,i1,a)')'scf',iscf,'post_'
-         else if (iscf < 100) then
-            write(anm,'(a,i2,a)')'scf',iscf,'post_'
-         else if (iscf < 1000) then
-            write(anm,'(a,i3,a)')'scf',iscf,'post_'
-         else
-            write(anm,'(a,i4,a)')'scf',iscf,'post_'
-         endif
-!
-         if (node_print_level >= 1) then
-            do id = 1,LocalNumAtoms
-               call printRho_L(id,aux_name=anm)
-            enddo
          endif
 !
 !        =============================================================
@@ -1642,201 +1621,28 @@ program mst2
 !        =============================================================
 !        check for convergence
 !        -------------------------------------------------------------
-         call checkConvergence( rho_rms, pot_rms, ef_diff, tote_diff, &
+         call checkConvergence( rho_rms, pot_rms,                     &
                                 evec_rms, bcon_rms, getFermiEnergy(), &
-                                getEnergyPerAtom() )
+                                getEnergyPerAtom(), itstep, iscf, max_rms, ScfConverged)
 !        -------------------------------------------------------------
-         if ( node_print_level >= 0 .and. GlobalNumAtoms <= 64 ) then
-!           ----------------------------------------------------------
-            call printChargeDistribution(iscf,funit)
-!           ----------------------------------------------------------
-         endif
 !
 !        =============================================================
-         max_rms(:) = ZERO
-         rms_sys=ZERO
-         n = 0
-         do id = 1, LocalNumAtoms
-            rho_rms_av = 0
-            pot_rms_av = 0
-            do ia = 1, getLocalNumSpecies(id)
-               n = n + 1
-               cfac = getLocalSpeciesContent(id,ia)
-               rho_rms_av(1:n_spin_pola) = rho_rms_av(1:n_spin_pola) + &
-                                           cfac*rho_rms(1:n_spin_pola,n)
-               pot_rms_av(1:n_spin_pola) = pot_rms_av(1:n_spin_pola) + &
-                                           cfac*pot_rms(1:n_spin_pola,n)
-            enddo
-            rms_sys(1) = maxval(rho_rms_av(1:n_spin_pola))
-            rms_sys(2) = maxval(pot_rms_av(1:n_spin_pola))
-            if ( n_spin_cant==2 ) then
-               rms_sys(3:4) = getFieldRms(id)
-            endif
-            max_rms(1) = max(max_rms(1),rho_rms_av(1))
-            max_rms(3) = max(max_rms(3),pot_rms_av(1))
-            if (n_spin_pola==2) then
-               max_rms(2) = max(max_rms(2),rho_rms_av(2))
-               max_rms(4) = max(max_rms(4),pot_rms_av(2))
-            endif
-            max_rms(5) = max(max_rms(5),ef_diff)
-            max_rms(6) = max(max_rms(6),tote_diff)
-            call setRMSInfo(getGlobalIndex(id),rms_sys)
-         enddo
-         if ( n_spin_cant==2 ) then
-            max_rms(7:8) = getFieldRms()
-         endif
+         call updateSystem('RMS Info',getAtom2ProcInGroup)
 !        -------------------------------------------------------------
-         call GlobalMax(max_rms,8)
+         call updateSystem('Energy Pressure',getAtom2ProcInGroup)
 !        -------------------------------------------------------------
-         rms = maxval(max_rms)
-         if ( (max(max_rms(1),max_rms(n_spin_pola)) <= ptol .and.     &
-               max(max_rms(3),max_rms(2+n_spin_pola)) <= ptol .and.   &
-               max_rms(5) <= eftol .and. max_rms(6) <= etol) .or.     &
-              (max_rms(7) <= rmstol .and. itstep>1 &
-               .and. n_spin_cant==2)) then
-            if (node_print_level >= 0) then
-               write(6,'(//,80(''=''))')
-               write(6,'(a,78x,a)')'#','#'
-               write(6,'(a,24x,a,24x,a)')'#','SCF Convergence is reached !!!','#'
-               write(6,'(a,78x,a)')'#','#'
-               write(6,'(80(''=''))')
-               write(6,'(//,a)')                                         &
-'     Iteration   RMS of Rho      RMS of Pot        Diff Ef        Diff Etot      Diff Evec'
-               write(6,'(80(''-''))')
-               write(6,'(5x,i5,6(4x,f12.8))')iscf,max(max_rms(1),max_rms(2)), &
-                      max(max_rms(3),max_rms(4)),max_rms(5:7)
-               write(6,'(80(''=''),/)')
-            endif
-            ScfConverged = .true.
-         endif
-!
-         if ( printSysMovie==1 .and. ( (n_sysmov+1)==movie .or.       &
-                                  iscf==nscf .or. ScfConverged) ) then
-!           ==========================================================
-!           ----------------------------------------------------------
-            call updateSystem('RMS Info',getAtom2ProcInGroup)
-!           ----------------------------------------------------------
-            call updateSystem('Energy Pressure',getAtom2ProcInGroup)
-!           ----------------------------------------------------------
-            if ( isFullPotential() ) then
-!              -------------------------------------------------------
-               call updateSystem('Force Data',getAtom2ProcInGroup)
-!              -------------------------------------------------------
-            endif
-!           ----------------------------------------------------------
-            if (n_spin_cant == 2) then
-!              -------------------------------------------------------
-               call updateSystem('Old Moment Direction',getAtom2ProcInGroup)
-               call updateSystem('Moment Direction',getAtom2ProcInGroup)
-               call updateSystem('Constrain Field',getAtom2ProcInGroup)
-!              -------------------------------------------------------
-            endif
-         endif
-!        =============================================================
-!
-!        *************************************************************
-!
-!        =============================================================
-!        output potential and electron density
-!        =============================================================
-         n_potwrite = n_potwrite + 1
-         if ( potwrite > 0 .and. (n_potwrite==potwrite .or. iscf==nscf &
-                                  .or. ScfConverged) ) then
-!           ----------------------------------------------------------
-            call writePotential()
-!           ----------------------------------------------------------
-            n_potwrite = 0
-         endif
-!        output the charge density and magnetic moment (added by xianglin)
          if ( isFullPotential() ) then
-            if ( getDensityPrintFlag()==0 .and. (iscf==nscf .or. &
-                                                ScfConverged) ) then
-               do id = 1,LocalNumAtoms
-!                 ----------------------------------------------------------
-                  call printChargeDensity_L(id,"TotalNew")
-                  call printChargeDensity_L(id,"Valence")
-!                 ----------------------------------------------------------
-                  if ( n_spin_pola==2 ) then
-                     call printMomentDensity_L(id,"Valence")
-                     call printMomentDensity_L(id,"TotalNew")
-                  endif
-!                 ----------------------------------------------------------
-               enddo
-            endif
+!           ----------------------------------------------------------
+            call updateSystem('Force Data',getAtom2ProcInGroup)
+!           ----------------------------------------------------------
          endif
-!
-         if ( isFullPotential() ) then
-!           if ( node_print_level >=0 .and. getDensityPrintFlag()>=0 ) then
-            if ( getPotentialPrintFlag() >= 0 .and. node_print_level >= 1 ) then
-               do id = 1,LocalNumAtoms
-!                 call printNewPot_L(id,-1,"Coulomb",aux_name=anm)
-                  call printNewPot_L(id,-1,"Total",aux_name=anm)
-!                 call printNewPot_L(id,-1,"Exchg",aux_name=anm)
-                  if ( atom_print_level(id) >= 0 ) then
-!                    call printNewPot_L(id,-1,"Total",1,aux_name=anm)
-!                    call printNewPot_L(id,-1,"Coulomb",1,aux_name=anm)
-!                    call printNewPot_L(id,-1,"Exchg",1,aux_name=anm)
-!                    ----------------------------------
-!                    Components of Coulomb potential
-!                    ----------------------------------
-!                    call printNewPot_L(id,-1,"Tilda",aux_name=anm)
-!                    call printNewPot_L(id,-1,"Madelung",aux_name=anm)
-!                    if (.not.isMuffinTinFullPotential()) then
-!                       call printNewPot_L(id,-1,"Pseudo",aux_name=anm)
-!                    endif
-!                    call printNewPot_L(id,-1,"Tilda",1,aux_name=anm)
-!                    call printNewPot_L(id,-1,"Madelung",1,aux_name=anm)
-!                    if (.not.isMuffinTinFullPotential()) then
-!                       call printNewPot_L(id,-1,"Pseudo",1,aux_name=anm)
-!                    endif
-                  endif
-               enddo
-            endif
+         if (n_spin_cant == 2) then
+!           ----------------------------------------------------------
+            call updateSystem('Exchange Field Direction',getAtom2ProcInGroup)
+            call updateSystem('Moment Direction',getAtom2ProcInGroup)
+            call updateSystem('Constrain Field',getAtom2ProcInGroup)
+!           ----------------------------------------------------------
          endif
-!
-         n_visual = n_visual + 1
-         if ( n_visual==movie .or. iscf==nscf .or. ScfConverged ) then
-!
-            t2 = getTime()
-!
-            if ( node_print_level >=1 ) then
-               do id = 1,LocalNumAtoms
-                  if ( atom_print_level(id) >= 0 ) then
-                     call printChargeDensity_L(id,"Valence")
-                     call printChargeDensity_L(id,"TotalNew")
-                     if ( n_spin_pola==2 ) then
-                        call printMomentDensity_L(id,"Valence")
-                        call printMomentDensity_L(id,"TotalNew")
-                     endif
-                     if ( isFullPotential().and.atom_print_level(id)>=1) then
-                        call printChargeDensity_L(id,"Valence",1)
-                        if (.not.isMuffinTinFullPotential()) then
-                           call printChargeDensity_L(id,"Pseudo")
-                           call printChargeDensity_L(id,"Pseudo",1)
-                        endif
-                     endif
-                  endif
-               enddo
-            endif
-!
-            if ( getDensityPrintFlag()>=1 .and. MyPE == 0 ) then
-               call printDensityOnGrid(LocalNumAtoms,node_print_level)
-            endif
-!
-            if ( getPotentialPrintFlag()>=1 .and. MyPE == 0 ) then
-               call printPotentialOnGrid(LocalNumAtoms,node_print_level)
-            endif
-!
-            n_visual = 0
-            if ( node_print_level >= 0 ) then
-               write(6,'(/,80(''=''))')
-               write(6,'(''Time:: IO for VisualGrid :'',f12.5,''Sec'')') &
-                     getTime() - t2
-               write(6,'(80(''=''))')
-            endif
-         endif
-!
-!        =============================================================
 !
 !        *************************************************************
 !
@@ -1865,6 +1671,26 @@ program mst2
             call updateMixCmplxValues(LocalNumAtoms,n_spin_pola,ArrayList)
 !           ----------------------------------------------------------
          endif
+!
+         if ( movie > 0 .and. MyPE == 0) then
+            if (iscf == 1 .and. itstep == 1) then
+!              -------------------------------------------------------
+               call driverSystemMovie( .true., getEnergyPerAtom(), funit_sysmov, en_movie )
+!              -------------------------------------------------------
+            endif
+            if ( n_write+1 == movie ) then
+               call printSystemMovie(iscf,itstep,funit_sysmov,en_movie)
+            endif
+         endif
+!
+         if (n_spin_cant == 2) then
+!           ----------------------------------------------------------
+            call updateLocalExchangeFieldDir()
+            call updateSystem('Exchange Field Direction',getAtom2ProcInGroup)
+            call updateSystem('Moment Direction',getAtom2ProcInGroup)
+            call updateSystem('Constrain Field',getAtom2ProcInGroup)
+!           ----------------------------------------------------------
+         endif
 !        =============================================================
 !
 !        *************************************************************
@@ -1886,51 +1712,6 @@ program mst2
             call computeNewPotential()
 !           ----------------------------------------------------------
          endif
-!
-         if ( node_print_level >= 0 ) then
-!           ----------------------------------------------------------
-            call printPotentialGeneration()
-!           ----------------------------------------------------------
-         endif
-!
-         n_madtab = n_madtab + 1
-         if ( (printSysMovie==1 .and. n_madtab == movie) .or.         &
-              iscf == nscf .or. ScfConverged) then
-            call syncAllPEs()
-            if ( node_print_level >= 0 ) then
-!              -------------------------------------------------------
-               call printMadelungShiftTable(iscf,funit)
-!              -------------------------------------------------------
-               if (n_spin_pola == 2) then
-!                 ----------------------------------------------------
-                  call printMomentVsCoreSplit(iscf,funit)
-!                 ----------------------------------------------------
-               endif
-            endif
-            n_madtab = 0
-         endif
-!
-         n_chgtab = n_chgtab + 1
-         if (n_chgtab==movie .or. iscf==nscf .or. ScfConverged) then
-!            if (node_print_level >= 0) then
-!              -------------------------------------------------------
-!               call printChargeDistribution(iscf,funit)
-!              -------------------------------------------------------
-!            endif
-!            if (n_spin_cant == 2) then
-!              -------------------------------------------------------
-!               mom_table => getGlobalVPCellMomentTable()
-!              -------------------------------------------------------
-!               call updateSystemMovie(mom_table)
-!              -------------------------------------------------------
-!              call writeMomentMovie(iscf,itstep)
-!              -------------------------------------------------------
-!            endif
-            n_chgtab = 0
-         endif
-!        =============================================================
-!
-!        *************************************************************
 !
 !        =============================================================
 !        update potentials and desities
@@ -1973,24 +1754,30 @@ program mst2
                     getTime()-t0
             write(6,'(80(''=''))')
          endif
+!        =============================================================
 !
-         if ( printSysMovie==1 ) then
-            if (  MyPE==0 .and. initSystemMovie ) then
-               call driverSystemMovie( initSystemMovie, getEnergyPerAtom(), &
-                                       funit_sysmov, en_movie )
-               initSystemMovie=.false.
-            endif
-            n_sysmov = n_sysmov+1
-            if ( n_sysmov==movie .or. (iscf==nscf .or. ScfConverged) ) then
-               if ( MyPE==0 ) then
-                  call printSystemMovie(iscf,itstep,funit_sysmov,en_movie)
-               endif
-               n_sysmov = 0
-            endif
+!        -------------------------------------------------------------
+         call  printScfResults(GlobalNumAtoms,LocalNumAtoms,             &
+                               node_print_level,atom_print_level,n_write,&
+                               movie,iscf,nscf,ScfConverged)
+!        -------------------------------------------------------------
+!
+!        *************************************************************
+!
+!        =============================================================
+!        output potential and electron density
+!        =============================================================
+         n_potwrite = n_potwrite + 1
+         if ( potwrite > 0 .and. (n_potwrite==potwrite .or. iscf==nscf &
+                                  .or. ScfConverged) ) then
+!           ----------------------------------------------------------
+            call writePotential()
+!           ----------------------------------------------------------
+            n_potwrite = 0
          endif
 !
-         if ( ScfConverged .or. nscf == 1 ) then
-            if ( .not.isRelativisticValence() ) then
+         if (ScfConverged .or. nscf == 1) then
+            if ( .not.isRelativisticValence() .and. node_print_level >= 1) then
 !              changed by xianglin because calPartialDOS has not been implemented for REL
 !              -------------------------------------------------------
                call calPartialDOS(getFermiEnergy())
@@ -2001,7 +1788,6 @@ program mst2
 !
       enddo SCF_LOOP
 !
-      ScfConverged = .false.
       do i = 1,LocalNumAtoms
          bcon_sd(1:3,i) = getLocalConstrainField(i)-bcon_sd(1:3,i)
          bcon_rms(i) = sqrt( bcon_sd(1,i)**2 + &
@@ -2019,10 +1805,8 @@ program mst2
       endif
    enddo SD_LOOP
 !
-   if ( MyPE==0 .and. printSysMovie==1) then
-      call driverSystemMovie( initSystemMovie, getEnergyPerAtom(), &
-                              funit_sysmov, en_movie )
-      initSystemMovie=.true.
+   if ( MyPE==0 .and. movie > 0) then
+      call driverSystemMovie( .false., getEnergyPerAtom(), funit_sysmov, en_movie )
    endif
 !
    deallocate(LocalEvec)
@@ -2145,6 +1929,7 @@ stop 'Under construction...'
    call endExchCorrFunctional()
    call endValenceDensity()
    call endGFMethod()
+   call endSpinRotation()
    call endPotential()
    call endStepFunction()
    call endRadialGrid()

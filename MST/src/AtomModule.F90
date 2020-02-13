@@ -9,12 +9,9 @@ public :: initAtom,    &
           endAtom,     &
           setLocalMoment, &
           getLocalMoment, &
-          setLocalEvecOld,   &
-          getLocalEvecOld,   &
-          setLocalEvecNew,   &
-          getLocalEvecNew,   &
-          setLocalEvecOut,   &
-          getLocalEvecOut,   &
+          setLocalEvec,   &
+          getLocalEvec,   &
+          updateLocalExchangeFieldDir, &
           setLocalConstrainField, &
           getLocalConstrainField, &
           getLocalAtomicNumber, &
@@ -174,9 +171,9 @@ private
 !  -------------------------------------------------------------------
    type LocalMomentStruct
       real (kind=RealKind) :: moment
-      real (kind=RealKind) :: evec_old(3)
-      real (kind=RealKind) :: evec_new(3)
-      real (kind=RealKind) :: evec_out(3)
+      real (kind=RealKind) :: evec_old(3)  ! The exchange field direction
+      real (kind=RealKind) :: evec_out(3)  ! The magnetic moment direction due to the exchange field
+      real (kind=RealKind) :: evec_new(3)  ! The updated magnetic moment direction
       real (kind=RealKind) :: b_con(3)
    end type LocalMomentStruct
    type (LocalMomentStruct), allocatable :: LocalMoment(:)
@@ -196,7 +193,7 @@ private
 contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine initAtom(info_id,istop,iprint,rinsc)
+   subroutine initAtom(info_id,istop,iprint,rinsc,rcirc)
 !  ===================================================================
    use MathParamModule, only : ZERO, ONE, TEN2m3
    use ChemElementModule, only : getZtot, getImplicitMuffinTinRadius
@@ -229,7 +226,7 @@ contains
 !
    integer (kind=IntKind), intent(in) :: info_id, iprint
    integer (kind=IntKind) :: i, j, ig, n, nt, GlobalNumAtoms, ri
-   integer (kind=IntKind) :: anum, funit, flen, lmax_n, ia, rstatus
+   integer (kind=IntKind) :: anum, funit, flen, lmax_n, ia, rstatus, lmax_diff
    integer (kind=IntKind), allocatable :: potinform(:)
    integer (kind=IntKind), allocatable :: potoutform(:)
    integer (kind=IntKind), allocatable :: lmax_kkr(:)
@@ -282,6 +279,7 @@ contains
    real (kind=RealKind) :: Za, Rav
 !
    real (kind=RealKind), optional, intent(in) :: rinsc(:)
+   real (kind=RealKind), optional, intent(in) :: rcirc(:)
 !
    character (len=50), allocatable :: rmt_input(:)
    character (len=50), allocatable :: rcr_input(:)
@@ -315,6 +313,13 @@ contains
       if (size(rinsc) /= LocalNumAtoms) then
          call ErrorHandler('initAtom','size of rinsc <> LocalNumAtoms', &
                            size(rinsc), LocalNumAtoms)
+      endif
+   endif
+!
+   if (present(rcirc)) then
+      if (size(rcirc) /= LocalNumAtoms) then
+         call ErrorHandler('initAtom','size of rcirc <> LocalNumAtoms', &
+                           size(rcirc), LocalNumAtoms)
       endif
    endif
 !
@@ -511,6 +516,10 @@ contains
       do i = 2, num_shells(0)
          lmax_shell(0) = trim(lmax_shell(0))//' '//s2
       enddo
+   else 
+      call initString(lmax_shell(0))
+      num_shells(0) = getNumTokens()
+      call endString()
    endif
    ind_lmax_shell = 0
    rstatus = getKeyIndexValue(info_id,'LIZ Shell Lmax',               &
@@ -782,36 +791,53 @@ contains
                            rmt_input(ind_rmt_input(ig)) )
 !        -------------------------------------------------------------
       endif
-!     if ( rcr_input(ind_rcr_input(ig)) > 0.10d0 ) then
-!        AtomProperty(n)%Rcore=rcr_input(ind_rcr_input(ig))
-!     else
-!        AtomProperty(n)%Rcore=ZERO
-!     endif
-      if ( isInteger( rcr_input(ind_rcr_input(ig)) ) ) then
-         read(rcr_input(ind_rcr_input(ig)),*)ri
-         if (ri == 0) then
-            AtomProperty(n)%Rcore=AtomProperty(n)%Rmt ! Using the muffin-tin radius
-         else if (ri == 1) then
-!           Using the internal core radius
-            Rav = ZERO
-            do ia = 1, AtomProperty(n)%NumSpecies
-               Rav = max(Rav,getImplicitCoreRadius(AtomProperty(n)%AtomName(ia)))
-            enddo
-            AtomProperty(n)%Rmt=Rav
+!     ================================================================
+!     For muffin-tin, ASA, or Muffin-tin ASA(?) calculations, since
+!     potential outside the muffin-tin sphere is 0, we set the core
+!     radius to the muffin-tin radius and ignore the input parameter
+!     ================================================================
+      if (getPotentialTypeParam() == ASA .or. getPotentialTypeParam() == MuffinTin .or. &
+          getPotentialTypeParam() == MuffinTinASA) then
+         AtomProperty(n)%Rcore=AtomProperty(n)%Rmt
+      else
+         if ( isInteger( rcr_input(ind_rcr_input(ig)) ) ) then
+            read(rcr_input(ind_rcr_input(ig)),*)ri
+            if (ri == -1) then
+               if (present(rcirc)) then
+                  AtomProperty(n)%Rcore=rcirc(n)
+               else
+                  AtomProperty(n)%Rcore=-ONE ! Will be set to the circumscribed sphere radius
+               endif                         ! later once the radius is known
+            else if (ri == 0) then
+               if (present(rinsc)) then
+                  AtomProperty(n)%Rcore=rinsc(n)
+               else
+                  AtomProperty(n)%Rcore=ZERO ! Will be set to the inscribed sphere radius
+               endif                         ! later once the radius is known
+            else if (ri == 1) then
+!              Using the internal core radius
+               Rav = ZERO
+               do ia = 1, AtomProperty(n)%NumSpecies
+                  Rav = max(Rav,getImplicitCoreRadius(AtomProperty(n)%AtomName(ia)))
+               enddo
+               AtomProperty(n)%Rcore=Rav
+            else
+!              -------------------------------------------------------
+               call ErrorHandler('initAtom','Invalid core radius parameter', &
+                                 rcr_input(ind_rcr_input(ig)) )
+!              -------------------------------------------------------
+            endif
+         else if ( isRealNumber( rcr_input(ind_rcr_input(ig)) ) ) then
+!           Using the specified value as the core radius
+            read(rcr_input(ind_rcr_input(ig)),*)AtomProperty(n)%Rcore
          else
 !           ----------------------------------------------------------
             call ErrorHandler('initAtom','Invalid core radius parameter', &
                               rcr_input(ind_rcr_input(ig)) )
 !           ----------------------------------------------------------
          endif
-      else if ( isRealNumber( rcr_input(ind_rcr_input(ig)) ) ) then
-         read(rcr_input(ind_rcr_input(ig)),*)AtomProperty(n)%Rcore
-      else
-!        -------------------------------------------------------------
-         call ErrorHandler('initAtom','Invalid core radius parameter', &
-                           rcr_input(ind_rcr_input(ig)) )
-!        -------------------------------------------------------------
       endif
+!     ================================================================
 !
       if ( pseudo_r(ind_pseudo_r(ig)) >= 0.5d0 ) then
          AtomProperty(n)%Rcut_pseudo=pseudo_r(ind_pseudo_r(ig))
@@ -840,6 +866,15 @@ contains
       allocate( LizLmax(n)%lmax_shell( 1:LizLmax(n)%NumShells ) )
       read(lmax_shell(ind_lmax_shell(ig)),*) &
           LizLmax(n)%lmax_shell(1:LizLmax(n)%NumShells)
+      lmax_diff = Lmax(n)%lmax_kkr - LizLmax(n)%lmax_shell(1)
+      do i = 1, LizLmax(n)%NumShells
+         LizLmax(n)%lmax_shell(i) = LizLmax(n)%lmax_shell(i) + lmax_diff
+         if (LizLmax(n)%lmax_shell(i) > Lmax(n)%lmax_kkr) then
+            LizLmax(n)%lmax_shell(i) = Lmax(n)%lmax_kkr
+         else if (LizLmax(n)%lmax_shell(i) < 0) then
+            LizLmax(n)%lmax_shell(i) = 0
+         endif
+      enddo
       MixParam(n)%alpha_rho=alpha_rho(ind_alpha_rho(ig))
       MixParam(n)%alpha_pot=alpha_pot(ind_alpha_pot(ig))
       MixParam(n)%alpha_mom=alpha_mom(ind_alpha_mom(ig))
@@ -943,26 +978,52 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine setLocalMoment_v(id,moment)
+   subroutine setLocalMoment_v(id,moment,mtol,mtype)
 !  ===================================================================
    use MathParamModule, only : TEN2m4, ZERO, ONE
 !
    implicit none
+! 
+   character (len=*), intent(in) :: mtype
+!
    integer (kind=IntKind), intent(in) :: id
 !
-   real (kind=RealKind), intent(in) :: moment(3)
+   real (kind=RealKind), intent(in) :: moment(3), mtol
    real (kind=RealKind) :: m
+!
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         implicit none
+         logical :: t
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+      end function nocaseCompare
+   end interface
+!
+   if (len(mtype) < 3) then
+!     ----------------------------------------------------------------
+      call ErrorHandler('setLocalMoment','Invalid mtype',mtype)
+!     ----------------------------------------------------------------
+   else if (mtol < ZERO .or. mtol > ONE) then
+!     ----------------------------------------------------------------
+      call ErrorHandler('setLocalMoment','Invalid mtol',mtol)
+!     ----------------------------------------------------------------
+   endif
 !
    m=sqrt( moment(1)*moment(1)+moment(2)*moment(2)+moment(3)*moment(3))
    LocalMoment(id)%moment=m
-   if (m < TEN2m4) then
-      LocalMoment(id)%evec_out(1)=LocalMoment(id)%evec_old(1)
-      LocalMoment(id)%evec_out(2)=LocalMoment(id)%evec_old(2)
-      LocalMoment(id)%evec_out(3)=LocalMoment(id)%evec_old(3)
-   else
-      LocalMoment(id)%evec_out(1)=moment(1)/m
-      LocalMoment(id)%evec_out(2)=moment(2)/m
-      LocalMoment(id)%evec_out(3)=moment(3)/m
+   if (m > mtol) then
+      if (nocaseCompare(mtype,'new')) then
+         LocalMoment(id)%evec_new(1:3)=moment(1:3)/m
+      else if (nocaseCompare(mtype,'out')) then
+         LocalMoment(id)%evec_out(1:3)=moment(1:3)/m
+      else if (nocaseCompare(mtype,'old')) then
+         LocalMoment(id)%evec_old(1:3)=moment(1:3)/m
+      else
+!        -------------------------------------------------------------
+         call ErrorHandler('setLocalMoment','Invalid mtype',mtype)
+!        -------------------------------------------------------------
+      endif
    endif
 !
    end subroutine setLocalMoment_v
@@ -986,103 +1047,111 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine setLocalEvecOld(id,evec)
+   subroutine setLocalEvec(id,evec,mtype)
 !  ===================================================================
    implicit none
+! 
+   character (len=*), intent(in) :: mtype
+!
    integer (kind=IntKind), intent(in) :: id
 !
    real (kind=RealKind), intent(in) :: evec(3)
 !
-   LocalMoment(id)%evec_old(1)=evec(1)
-   LocalMoment(id)%evec_old(2)=evec(2)
-   LocalMoment(id)%evec_old(3)=evec(3)
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         implicit none
+         logical :: t
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+      end function nocaseCompare
+   end interface
 !
-   end subroutine setLocalEvecOld
+   if (len(mtype) < 3) then
+!     ----------------------------------------------------------------
+      call ErrorHandler('setLocalEvec','Invalid mtype',mtype)
+!     ----------------------------------------------------------------
+   endif
+!
+   if (nocaseCompare(mtype,'new')) then
+      LocalMoment(id)%evec_new(1:3)=evec(1:3) ! set the updated magnetic moment direction
+   else if (nocaseCompare(mtype,'out')) then
+      LocalMoment(id)%evec_out(1:3)=evec(1:3) ! set the magnetic moment direction due to the exchange field
+   else if (nocaseCompare(mtype,'old')) then
+      LocalMoment(id)%evec_old(1:3)=evec(1:3) ! Set the exchange field direction
+   else
+!     ----------------------------------------------------------------
+      call ErrorHandler('setLocalEvec','Invalid mtype',mtype)
+!     ----------------------------------------------------------------
+   endif
+!
+   end subroutine setLocalEvec
 !  ===================================================================
 !
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getLocalEvecOld(id) result(evec)
+   function getLocalEvec(id,mtype) result(evec)
 !  ===================================================================
    implicit none
+! 
+   character (len=*), intent(in) :: mtype
+!
    integer (kind=IntKind), intent(in) :: id
 !
    real (kind=RealKind) :: evec(3)
 !
-   evec(1)=LocalMoment(id)%evec_old(1)
-   evec(2)=LocalMoment(id)%evec_old(2)
-   evec(3)=LocalMoment(id)%evec_old(3)
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         implicit none
+         logical :: t
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+      end function nocaseCompare
+   end interface
 !
-   end function getLocalEvecOld
+   if (len(mtype) < 3) then
+!     ----------------------------------------------------------------
+      call ErrorHandler('getLocalEvec','Invalid mtype',mtype)
+!     ----------------------------------------------------------------
+   endif
+!
+   if (nocaseCompare(mtype,'new')) then
+      evec(1:3)=LocalMoment(id)%evec_new(1:3) ! get the updated magnetic moment direction
+   else if (nocaseCompare(mtype,'out')) then
+      evec(1:3)=LocalMoment(id)%evec_out(1:3) ! get the magnetic moment direction due to the exchange field
+   else if (nocaseCompare(mtype,'old')) then
+      evec(1:3)=LocalMoment(id)%evec_old(1:3) ! get the exchange field direction
+   else
+!     ----------------------------------------------------------------
+      call ErrorHandler('getLocalEvec','Invalid mtype',mtype)
+!     ----------------------------------------------------------------
+   endif
+!
+   end function getLocalEvec
 !  ===================================================================
 !
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine setLocalEvecNew(id,evec)
+   subroutine updateLocalExchangeFieldDir()
 !  ===================================================================
+   use SystemModule, only : setExchangeFieldDirection
+!
+   use Atom2ProcModule, only : getGlobalIndex
+!
    implicit none
-   integer (kind=IntKind), intent(in) :: id
 !
-   real (kind=RealKind), intent(in) :: evec(3)
+   integer (kind=IntKind) :: id, ig
 !
-   LocalMoment(id)%evec_new(1)=evec(1)
-   LocalMoment(id)%evec_new(2)=evec(2)
-   LocalMoment(id)%evec_new(3)=evec(3)
+   do id = 1, LocalNumAtoms
+      LocalMoment(id)%evec_old = LocalMoment(id)%evec_new
+      ig = getGlobalIndex(id)
+!     ----------------------------------------------------------------
+      call setExchangeFieldDirection(ig,LocalMoment(id)%evec_old)
+!     ----------------------------------------------------------------
+   enddo
 !
-   end subroutine setLocalEvecNew
-!  ===================================================================
-!
-!  *******************************************************************
-!
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getLocalEvecNew(id) result(evec)
-!  ===================================================================
-   implicit none
-   integer (kind=IntKind), intent(in) :: id
-!
-   real (kind=RealKind) :: evec(3)
-!
-   evec(1)=LocalMoment(id)%evec_new(1)
-   evec(2)=LocalMoment(id)%evec_new(2)
-   evec(3)=LocalMoment(id)%evec_new(3)
-!
-   end function getLocalEvecNew
-!  ===================================================================
-!
-!  *******************************************************************
-!
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine setLocalEvecOut(id,evec)
-!  ===================================================================
-   implicit none
-   integer (kind=IntKind), intent(in) :: id
-!
-   real (kind=RealKind), intent(in) :: evec(3)
-!
-   LocalMoment(id)%evec_out(1)=evec(1)
-   LocalMoment(id)%evec_out(2)=evec(2)
-   LocalMoment(id)%evec_out(3)=evec(3)
-!
-   end subroutine setLocalEvecOut
-!  ===================================================================
-!
-!  *******************************************************************
-!
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getLocalEvecOut(id) result(evec)
-!  ===================================================================
-   implicit none
-   integer (kind=IntKind), intent(in) :: id
-!
-   real (kind=RealKind) :: evec(3)
-!
-   evec(1)=LocalMoment(id)%evec_out(1)
-   evec(2)=LocalMoment(id)%evec_out(2)
-   evec(3)=LocalMoment(id)%evec_out(3)
-!
-   end function getLocalEvecOut
+   end subroutine updateLocalExchangeFieldDir
 !  ===================================================================
 !
 !  *******************************************************************

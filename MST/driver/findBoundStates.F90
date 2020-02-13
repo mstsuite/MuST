@@ -27,7 +27,7 @@ program findBoundStates
 !
    use MadelungModule, only : initMadelung, endMadelung
 !
-   use SpinRotationModule, only : initSpinRotation, endSpinRotation
+   use SpinRotationModule, only : initSpinRotation, calSpinRotation, endSpinRotation
 !
    use SystemSymmetryModule, only : initSystemSymmetry, endSystemSymmetry,   &
                                     calSymmetryFlags
@@ -397,7 +397,7 @@ contains
    use ScfDataModule, only : isScalarRelativisticValence
    use ScfDataModule, only : getSingleSiteSolverMethod
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax, getStepFuncLmax
-   use AtomModule, only : setTruncPotLmax, getTruncPotLmax, setPotLmax, getLocalEvecOld
+   use AtomModule, only : setTruncPotLmax, getTruncPotLmax, setPotLmax, getLocalEvec
    use PotentialTypeModule, only : isTestPotential, isFullPotential
    use TestPotentialModule, only : initTestPotential, endTestPotential,      &
                                    readTestPotential, getTestPotential,      &
@@ -665,12 +665,14 @@ contains
       Efermi=getPotEf()
    endif
 !
+   call initSpinRotation(LocalNumAtoms)
    allocate(evec(3,LocalNumAtoms))
    do i = 1,LocalNumAtoms
-      evec(1:3,i) = getLocalEvecOld(i)
+      evec(1:3,i) = getLocalEvec(i,'old')
+!     ----------------------------------------------------------------
+      call calSpinRotation(i,evec(1:3,i))
+!     ----------------------------------------------------------------
    enddo
-!  -------------------------------------------------------------------
-   call initSpinRotation(LocalNumAtoms,evec)
 !  -------------------------------------------------------------------
    call setupContour( ErBottom, Efermi, EiBottom, EiTop )
 !  -------------------------------------------------------------------

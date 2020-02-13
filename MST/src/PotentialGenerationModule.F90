@@ -2806,6 +2806,7 @@ contains
    else
       write(fu,'(a)')' Atom  Site  Species    Q          Qmt        dQ        Vmad        Local Energy'
    endif
+   write(fu,'(80(''-''))')
    global_table_line => getGlobalTableLine()
    Q_Table => getGlobalOnSiteElectronTableOld()
    Qmt_Table => getGlobalMTSphereElectronTableOld()

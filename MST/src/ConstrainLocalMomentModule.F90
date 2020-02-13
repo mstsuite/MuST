@@ -19,7 +19,6 @@ private
    integer (kind=IntKind) :: n_spin_pola
    integer (kind=IntKind) :: n_spin_cant
    integer (kind=IntKind) :: tstep
-   integer (kind=IntKind) :: itstep_save
    integer (kind=IntKind) :: max_Nrpts
    integer (kind=IntKind), allocatable :: print_level(:)
    integer (kind=IntKind), allocatable :: Nrpts(:)
@@ -50,7 +49,7 @@ contains
 !  ===================================================================
    use PublicTypeDefinitionsModule, only : GridStruct
    use RadialGridModule, only : getGrid
-   use AtomModule, only : getLocalEvecOld, getLocalNumSpecies
+   use AtomModule, only : getLocalEvec, getLocalNumSpecies
 !
    implicit none
 !
@@ -93,8 +92,8 @@ contains
          SiteConstrains(n)%b_con_mag = ZERO
          SiteConstrains(n)%b_con_g(1:3) = ZERO
          do ia = 1, NumSpecies(n)
-            evec = getLocalEvecOld(n)
-            call set_b_basis(n,ia,evec)
+            evec = getLocalEvec(n,'old')
+            call set_b_basis(n,evec)
          enddo
       enddo
    else
@@ -179,22 +178,22 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calConstrainLM(itstep)
+   subroutine calConstrainLM(itstep,iscf)
 !  ===================================================================
-   use SpinRotationModule, only : resetSpinRotation
+!  use SpinRotationModule, only : calSpinRotation, printSpinRotation
    use PotentialModule, only : getSphPotr, setSphPotr
-   use AtomModule, only : getLocalEvecOld, setLocalEvecOld,               &
-                          getLocalConstrainField, setLocalConstrainField, &
-                          getMixingParam4Evec
+   use AtomModule, only : getLocalEvec, setLocalEvec,                 &
+                          getLocalConstrainField, getMixingParam4Evec,&
+                          getLocalSpeciesContent
 !
    implicit none
 !
-   integer (kind=IntKind), intent(in) :: itstep
+   integer (kind=IntKind), intent(in) :: itstep, iscf
 !
    integer (kind=IntKind) :: j, i, n, ia
 !
-   real (kind=RealKind) :: evec_rms
-   real (kind=RealKind) :: evec(3)
+   real (kind=RealKind) :: evec_rms, norm
+   real (kind=RealKind) :: evec(3), mvec(3), mvec_ave(3)
    real (kind=RealKind) :: evec_r(3)
 !
    real (kind=RealKind) :: c
@@ -208,52 +207,23 @@ contains
    real (kind=RealKind), allocatable :: vvr(:), br(:)
 !
    allocate( vvr(max_Nrpts), br(max_Nrpts) )
+!
 !  ===================================================================
 !  Check to see if B_con=0: if so then set evec_r=evec and return..
 !  ===================================================================
 !
    NumSitesLoop: do n = 1,LocalNumAtoms
-!
-      Loop_ia: do ia = 1, NumSpecies(n)
-!
-         evec = getLocalEvecOld(n)
-         if ( itstep > 1 .and. itstep/=itstep_save ) then
-            call resetSpinRotation( n, evec )
-            b_con = getLocalConstrainField(n)
-            b_basis = SiteConstrains(n)%b_basis
-            b_con_mag = ZERO
-            do i = 1,3
-               b_con_g(i) = b_con(1)*b_basis(i,1) +                   &
-                            b_con(2)*b_basis(i,2) +                   &
-                            b_con(3)*b_basis(i,3)
-               b_con_mag  = b_con_mag + b_con_g(i)*b_con_g(i)
-               SiteConstrains(n)%b_con_g(i) = b_con_g(i)
-            enddo
-            b_con_mag = sqrt(b_con_mag)
-            SiteConstrains(n)%b_con_mag  = b_con_mag
-!
-!           ----------------------------------------------------------
-            call calNewMomentDirection( n, ia, evec )
-!           ----------------------------------------------------------
-            call set_b_basis( n, ia, evec )
-!           ----------------------------------------------------------
-            call setLocalEvecOld( n, evec )
-!           ----------------------------------------------------------
-            if ( n==LocalNumAtoms .and. ia==NumSpecies(n)) then
-               itstep_save = itstep
-            endif
-         endif
-!
-         if ( n_spin_cant /= 2 ) then
-            call resetSpinRotation( n, evec )
-            cycle Loop_ia
-         endif
-!
+      evec = getLocalEvec(n,'old')
+      if ( itstep > 1 .and. iscf == 1 ) then
+!        -------------------------------------------------------------
+!        call calSpinRotation( n, evec )
          b_con = getLocalConstrainField(n)
+!        -------------------------------------------------------------
          b_basis = SiteConstrains(n)%b_basis
          b_con_mag = ZERO
          do i = 1,3
-            b_con_g(i) = b_con(1)*b_basis(i,1) + b_con(2)*b_basis(i,2) +  &
+            b_con_g(i) = b_con(1)*b_basis(i,1) +                      &
+                         b_con(2)*b_basis(i,2) +                      &
                          b_con(3)*b_basis(i,3)
             b_con_mag  = b_con_mag + b_con_g(i)*b_con_g(i)
             SiteConstrains(n)%b_con_g(i) = b_con_g(i)
@@ -261,11 +231,98 @@ contains
          b_con_mag = sqrt(b_con_mag)
          SiteConstrains(n)%b_con_mag  = b_con_mag
 !
-         if ( abs(b_con_mag) < tol ) then
-            call resetSpinRotation( n, evec )
-         else if ( abs(b_con_mag) > ONE ) then
-            call WarningHandler('calConstrainLM','b_con_mag is .gt. one')
+         if ( getMixingParam4Evec(n) > tol ) then
+            mvec_ave = ZERO
+            do ia = 1, NumSpecies(n)
+!              -------------------------------------------------------
+               call calNewMomentVector( n, ia, evec, mvec )
+!              -------------------------------------------------------
+               mvec_ave = mvec_ave + getLocalSpeciesContent(n,ia)*mvec
+            enddo
+            norm = mvec_ave(1)**2 + mvec_ave(2)**2 + mvec_ave(3)**2
+            evec = mvec_ave/sqrt(norm)
          endif
+!
+!        -------------------------------------------------------------
+         call set_b_basis( n, evec )
+!        -------------------------------------------------------------
+         call setLocalEvec( n, evec, 'old' )
+!        -------------------------------------------------------------
+      endif
+!
+      b_con = getLocalConstrainField(n)
+      b_basis = SiteConstrains(n)%b_basis
+      b_con_mag = ZERO
+      do i = 1,3
+         b_con_g(i) = b_con(1)*b_basis(i,1) + b_con(2)*b_basis(i,2) +  &
+                      b_con(3)*b_basis(i,3)
+         b_con_mag  = b_con_mag + b_con_g(i)*b_con_g(i)
+         SiteConstrains(n)%b_con_g(i) = b_con_g(i)
+      enddo
+      b_con_mag = sqrt(b_con_mag)
+      SiteConstrains(n)%b_con_mag  = b_con_mag
+!
+      if ( abs(b_con_mag) < tol ) then
+!        -------------------------------------------------------------
+!        call calSpinRotation( n, evec )
+!        -------------------------------------------------------------
+      else if ( abs(b_con_mag) > ONE .and. getMixingParam4Evec(n) > tol ) then
+!        -------------------------------------------------------------
+         call WarningHandler('calConstrainLM','b_con_mag > 1.0',b_con_mag)
+!        -------------------------------------------------------------
+      endif
+!
+!     ================================================================
+!     calculate the new direction ....................................
+!     ================================================================
+      b_mag = ZERO
+      do i = 1,3
+         evec_r(i) = evec(i) + b_con_g(i)
+         b_mag     = b_mag + evec_r(i)*evec_r(i)
+      end do
+      b_mag = sqrt(b_mag)
+      do i = 1,3
+         evec_r(i) = evec_r(i)/b_mag
+      end do
+!
+      if ( print_level(n) >= 0 ) then
+         write(6,'('' CONSTRAINT: vectors:'')')
+         write(6,'(29x,'' Direction:'',18x,''Magnitude :'')')
+         write(6,'('' B xcor      :'',3f12.5)') (evec(i),i=1,3)
+         write(6,'('' Local C.F.  :'',3f12.5)') (b_con(i),i=1,3)
+         write(6,'('' Local basis X'',3f12.5)') b_basis(1:3,1)
+         write(6,'('' Local basis Y'',3f12.5)') b_basis(1:3,2)
+         write(6,'('' Local basis Z'',3f12.5)') b_basis(1:3,3)
+         if ( abs(b_con_mag) >= tol ) then
+            write(6,'('' B constraint:'',3f12.5,5x,f10.5)')           &
+                               (b_con_g(i)/b_con_mag,i=1,3),b_con_mag
+         else
+            write(6,'('' B constraint:'',3f12.5,5x,f10.5)')           &
+                                        (b_con_g(i),i=1,3),b_con_mag
+         endif
+         write(6,'('' B sum       :'',3f12.5,5x,f10.5)')              &
+                                     (evec_r(i),i=1,3),b_mag
+      endif
+!     ****************************************************************
+!     The following condition-lines are added on 2/8/2020 to allow fixing evec
+!     ****************************************************************
+      if ( getMixingParam4Evec(n) <= tol ) then
+         evec_r = evec
+         c = ONE
+      else
+         c = sqrt( ONE + b_con_mag*b_con_mag )
+      endif
+!     ****************************************************************
+!
+!     ----------------------------------------------------------------
+      call setLocalEvec( n, evec_r, 'new' )
+!     ----------------------------------------------------------------
+!     call calSpinRotation( n, evec_r )
+!     ----------------------------------------------------------------
+!     call printSpinRotation( n )
+!     ----------------------------------------------------------------
+!
+      do ia = 1, NumSpecies(n)
          pot_up   => getSphPotr(n,ia,1)
          pot_down => getSphPotr(n,ia,2)
 !        =============================================================
@@ -276,48 +333,19 @@ contains
          PotSph_r(1:Nrpts(n),1,ia,n) = pot_up(1:Nrpts(n))
          PotSph_r(1:Nrpts(n),2,ia,n) = pot_down(1:Nrpts(n))
 !        =============================================================
-!        set up V and B ..............................................
-!        =============================================================
+!        set up V and B ...........................................
 !        -------------------------------------------------------------
          call v_plus_minus(half,pot_down,pot_up,vvr,br,Nrpts(n))
 !        -------------------------------------------------------------
-!        =============================================================
-!        calculate the new direction .................................
-!        =============================================================
-         b_mag = ZERO
-         do i = 1,3
-            evec_r(i) = evec(i) + b_con_g(i)
-            b_mag     = b_mag + evec_r(i)*evec_r(i)
-         end do
-         b_mag = sqrt(b_mag)
-         do i = 1,3
-            evec_r(i) = evec_r(i)/b_mag
-         end do
 !
-         if ( print_level(n) > 1 ) then
-            write(6,'('' CONSTRAINT: vectors:'')')
-            write(6,'(29x,'' Direction:'',18x,''Magnitude :'')')
-            write(6,'('' B xcor      :'',3f12.5,5x)') (evec(i),i=1,3)
-            if ( abs(b_con_mag) >= tol ) then
-               write(6,'('' B constraint:'',3f12.5,5x,f10.5)')            &
-                                  (b_con_g(i)/b_con_mag,i=1,3),b_con_mag
-            else
-               write(6,'('' B constraint:'',3f12.5,5x,f10.5)')            &
-                                           (b_con_g(i),i=1,3),b_con_mag
-            endif
-            write(6,'('' B sum       :'',3f12.5,5x,f10.5)')               &
-                                        (evec_r(i),i=1,3),b_mag
-         endif
 !        =============================================================
-!        generate new B=sqrt(1+b_con_mag^2)*B_xc......................
+!        generate new B=sqrt(1+b_con_mag^2)*B_xc...................
 !        =============================================================
-         c = sqrt( ONE + b_con_mag*b_con_mag )
          do j = 1,Nrpts(n)
             br(j) = c*br(j)
          enddo
 !        =============================================================
-!        generate new v_up and v_down.................................
-!        =============================================================
+!        generate new v_up and v_down..............................
 !        -------------------------------------------------------------
          call v_plus_minus( ONE, vvr, br, pot_down, pot_up, Nrpts(n) )
 !        -------------------------------------------------------------
@@ -325,14 +353,11 @@ contains
 !        -------------------------------------------------------------
          call setSphPotr(n,ia,2,pot_down)
 !        -------------------------------------------------------------
-         call resetSpinRotation( n, evec_r )
-!        -------------------------------------------------------------
-         if ( print_level(n) > 1 ) then
+         if ( print_level(n) >= 0 ) then
             write(6,'(/,a,3(1x,f12.8))') "CONSTRAINT:: NewB = ",c,    &
                                    pot_down( Nrpts(n)), pot_up( Nrpts(n))
          endif
-!
-      enddo Loop_ia
+      enddo
    enddo NumSitesLoop
 !
    nullify(pot_up, pot_down)
@@ -344,7 +369,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calNewMomentDirection( id, ia, mdir )
+   subroutine calNewMomentVector( id, ia, evec, mvec )
 !  ===================================================================
    use RadialGridModule, only : getRmesh
    use PotentialModule, only : getSphPotr
@@ -357,7 +382,8 @@ contains
 !
    integer (kind=IntKind), intent(in) :: id, ia
 !
-   real (kind=RealKind), intent(inout) :: mdir(3)
+   real (kind=RealKind), intent(in) :: evec(3)
+   real (kind=RealKind), intent(out) :: mvec(3)
 !
    integer (kind=IntKind) ::   i
 !
@@ -435,7 +461,7 @@ contains
 !
    do i = 1,3
       b(i) = beff * SiteConstrains(id)%b_con_g(i)
-      m(i) = mdir(i)
+      m(i) = evec(i)
    enddo
 !
    if ( print_level(id) > 1) then
@@ -456,14 +482,14 @@ contains
    do i = 1,3
       m(i) = m(i) - tstep * mmb(i)
       mnorm = mnorm + m(i)**2
-      dummy = dummy + (m(i)-mdir(i))**2
+      dummy = dummy + (m(i)-evec(i))**2
    enddo
    if (mnorm > emach) then
       mnorm = ONE/sqrt(mnorm)
-      mdir(1:3) = m(1:3) * mnorm
+      mvec(1:3) = m(1:3) * mnorm * moment
    else
       m(1:3) = ZERO
-      mdir(1:2) = ZERO; mdir(3) = ONE
+      mvec(1:2) = ZERO; mvec(3) = moment
    endif
    dummy = sqrt(dummy)
 !
@@ -474,17 +500,17 @@ contains
    nullify( pmom, pot_u, pot_d, rad)
    deallocate( rtmp, dr, dvr, w1 )
 !
-   end subroutine calNewMomentDirection
+   end subroutine calNewMomentVector
 !  ===================================================================
 !
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine set_b_basis( id, ia, evec )
+   subroutine set_b_basis( id, evec )
 !  ===================================================================
    implicit none
 !
-   integer (kind=IntKind), intent(in) :: id, ia
+   integer (kind=IntKind), intent(in) :: id
 !
    real (kind=RealKind), intent(in) :: evec(3)
 !
@@ -577,11 +603,9 @@ contains
 !  ===================================================================
    use Atom2ProcModule, only : getGlobalIndex
 !
-   use AtomModule, only : getLocalConstrainField,                      &
-                          setLocalConstrainField,                      &
-                          getLocalEvecOut, getLocalEvecNew,            &
-                          setLocalEvecOld, getLocalEvecOld,            &
-                          getMixingParam4Evec
+   use AtomModule, only : getLocalConstrainField,                     &
+                          setLocalConstrainField,                     &
+                          getLocalEvec, setLocalEvec, getMixingParam4Evec
 !
    use SystemModule, only : setConstrainField
    use PotentialModule, only : setSphPotr
@@ -615,8 +639,8 @@ contains
    LoopAtoms: do n = 1, LocalNumAtoms
 !
       ng = getGlobalIndex(n)
-      evec    = getLocalEvecOld(n)
-      evec_new = getLocalEvecNew(n)
+      evec    = getLocalEvec(n,'old')
+      evec_new = getLocalEvec(n,'new')
       alphev = getMixingParam4Evec(n)
       if ( abs(alphev) > tol ) then
 !
@@ -627,7 +651,7 @@ contains
 !        update the Evec for the new nstep iteration
 !        also update the Constrain Field stored in System module
 !        -------------------------------------------------------------
-         call setLocalEvecOld(n,evec_new)
+         call setLocalEvec(n,evec_new,'old')
 !        -------------------------------------------------------------
          evec_rms = ZERO
          do i=1,3
@@ -640,7 +664,7 @@ contains
 !
       b_basis = SiteConstrains(n)%b_basis
       b_con   = getLocalConstrainField(n)
-      moment  = getLocalEvecOut(n)
+      moment  = getLocalEvec(n,'out')
 !
       b_con_mag=zero
       do i = 1,3
@@ -683,8 +707,14 @@ contains
 !     ================================================================
       bb1 = zero
       do i = 1,3
-!         b_con_g(i) = (b_con_g(i)+evec(i))-mbproj*moment_dir(i)
-         b_con_g(i) = b_con_g(i)-(moment_dir(i)-mproj*evec(i))
+!        b_con_g(i) = (b_con_g(i)+evec(i))-mbproj*moment_dir(i)
+!        *************************************************************
+!        The following line disagrees with LSMS_1.9r306 and is commented out
+!2/7/2020b_con_g(i) = b_con_g(i)-(moment_dir(i)-mproj*evec(i))
+!        Instead, the following line is copied from new_const.f under
+!        LSMS_1.9r306/ATOM_1.9/src/CONSTRAINT/
+         b_con_g(i) = b_con_g(i)+evec(i)-(mproj+bproj)*moment_dir(i)
+!        *************************************************************
          bb1 = bb1+b_con_g(i)**2
       enddo
       bb1 = sqrt(bb1)
@@ -701,7 +731,12 @@ contains
          enddo
          bcon_rms = bcon_rms + (ctmp-b_con(j))**2
          b_con(j) = ctmp
-         if (j==3) b_con(j) = ZERO
+!        *************************************************************
+!        The following line disagrees with LSMS_1.9r306
+!        It is commented out for now
+!        -------------------------------------------------------------
+!2/7/2020if (j==3) b_con(j) = ZERO
+!        *************************************************************
       enddo
       SiteConstrains(n)%bcon_rms=sqrt(bcon_rms)
       call setLocalConstrainField(n,b_con)
@@ -765,7 +800,7 @@ contains
 !     update the Evec for the new nstep iteration
 !     also update the Constrain Field stored in System module
 !     ----------------------------------------------------------------
-      call setLocalEvecOld(n,evec_new)
+      call setLocalEvec(n,evec_new,'old')
       call setConstrainField(ng,b_con)
 !     ----------------------------------------------------------------
       if ( n_spin_cant==2 ) then
@@ -808,12 +843,8 @@ contains
    real (kind=RealKind), target, intent(out) :: vr(npts)
    real (kind=RealKind), target, intent(out) :: br(npts)
 !
-   integer (kind=IntKind) :: n
-!
-   do n = 1,npts
-      vr(n) = fac*( vr1(n) + vr2(n) )
-      br(n) = fac*( vr1(n) - vr2(n) )
-   enddo
+   vr = fac*( vr1 + vr2 )
+   br = fac*( vr1 - vr2 )
 !
    end subroutine v_plus_minus
 !  ===================================================================

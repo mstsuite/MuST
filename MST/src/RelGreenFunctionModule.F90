@@ -329,7 +329,7 @@ contains
 !                dens_orb   )
 
    use MathParamModule, only : TEN2m10
-   use AtomModule, only : getLocalEvecOld
+   use AtomModule, only : getLocalEvec
    use DiracSolverModule, only : getSizeOfRMesh, getDmat, getDmatP
    use RelScattererModule, only : getRelTmat, getNumRadialPts, &
                                   getGZ, getFZ, getGJ, getFJ,  &
@@ -595,7 +595,7 @@ stop 'Under construction...'
    end if
 
 ! we now have to rotate into the global frame of reference:
-!   evec_r(1:3) = getLocalEvecOld(atom)
+!   evec_r(1:3) = getLocalEvec(atom,'old')
 !   a = sqrt(evec_r(1)**2+evec_r(2)**2)
 !   phi = acos(evec_r(3))
 !   if(a.eq.0.d0) then

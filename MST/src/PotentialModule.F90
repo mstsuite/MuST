@@ -2174,7 +2174,6 @@ contains
    use PotentialTypeModule, only : isMuffinTinPotential, isFullPotential
    use SystemModule, only : setLatticeConstant, getNumAtoms, getAtomName, &
                             getAlloyElementName
-   use AtomModule, only: getLocalEvecOld
    use Atom2ProcModule, only : getGlobalIndex
    use RadialGridModule, only : getNumRmesh
    use ChemElementModule, only : MaxLenOfAtomName
@@ -2447,7 +2446,7 @@ contains
 !
    use SystemModule, only : getAtomName, getAlloyElementName
 !
-   use AtomModule, only : getLocalEvecNew
+   use AtomModule, only : getLocalEvec
    use AtomModule, only : getOutPotFileName, getOutPotFileForm
 !
    use RadialGridModule, only : getNumRmesh
@@ -2487,7 +2486,7 @@ contains
    xmt = ThisP%Grid%xmt
    rmt = ThisP%Grid%rmt
    xstart = ThisP%Grid%xstart
-   evec = getLocalEvecNew(id)
+   evec = getLocalEvec(id,'new')
    nr = getNumRmesh(id)
    r_mesh => ThisP%Grid%r_mesh(1:nr)
 !
@@ -2630,7 +2629,7 @@ contains
 !  ===================================================================
    use SystemModule, only : getLatticeConstant, getNumAtoms, getAtomName, &
                             getAlloyElementName
-   use AtomModule, only: getLocalEvecNew
+   use AtomModule, only: getLocalEvec
    use Atom2ProcModule, only : getGlobalIndex
    use RadialGridModule, only : getGrid, getNumRmesh
    use ChemElementModule, only : MaxLenOfAtomName
@@ -2691,7 +2690,7 @@ contains
    jws = Grid%jend
    xmt = Grid%xmt
    xstart = Grid%xstart
-   evec = getLocalEvecNew(id)
+   evec = getLocalEvec(id,'new')
    nr = getNumRmesh(id)
    r_mesh => Grid%r_mesh(1:nr)
 !

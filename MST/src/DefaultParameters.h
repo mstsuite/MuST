@@ -10,14 +10,22 @@
    n = n + 1; Keys(n) = 'Output to Screen (y/n)';                Values(n) = 'n'
    n = n + 1; Keys(n) = 'Output Level (>= -1)';                  Values(n) = '0'
    n = n + 1; Keys(n) = 'Output Proc. ID (>= -1)';               Values(n) = '0'
-!                     = -1: Each processor writes data to individual output file
-!                     >= 0: the logical index of the processor that writes to unit 6
-   n = n + 1; Keys(n) = 'Output Atom ID (>= 0)';                 Values(n) = '0'
-!                     = 0:  Every atom's info will be written to the output
-!                     >= 1: the global index of the atom whose info will be written to the output
+!                     = -1: All processors write data to individual output file
+!                     >= 0: the logical indexes (separated by space or ",") of the processors that write to unit 6
+   n = n + 1; Keys(n) = 'Output Atom ID (>= 0)';                 Values(n) = '0' ! This format is to allow back-compatable 
+   n = n + 1; Keys(n) = 'Output Atom ID (>= -1)';                Values(n) = '0'
+!                     = -1: The results for each atom in the unit cell are written to the output
+!                     =  0: The results for the atoms mapped on the output procesor are written to the output
+!                     >= 1: the global indexes (separated by space and/or ",") of the atoms whose info are written 
+!                           to the output
+   n = n + 1; keys(n) = 'Generate System Movie';                 Values(n) = '1'
+!                     = 0 - No system movie output(Default)
+!                     = 1 - generate movie
    n = n + 1; Keys(n) = 'Stop-at Routine Name';                  Values(n) = 'main'
    n = n + 1; Keys(n) = 'No. Iter for Each Pot. Write';          Values(n) = '5'
-   n = n + 1; Keys(n) = 'No. Iter for Each Movie';               Values(n) = '5'
+   n = n + 1; Keys(n) = 'No. Iter for Each Movie';               Values(n) = '0'
+!                     = 0 - No system movie output(Default)
+!                    >= 1 - A system movie is written at the end of every this number of SCF iterations
    n = n + 1; Keys(n) = 'Calc. Harris Energy (H.E.)';            Values(n) = '0'
 !                     = 0: Do Not Calc. H.E.; = 1: H.E. at Updated mu; = 2: H.E. at Fixed mu
    n = n + 1; Keys(n) = 'No. Gauss Pts. along r';                Values(n) = '80'
@@ -133,8 +141,8 @@
    n = n + 1; Keys(n) = 'T-matrix inversion (>= 0)';             Values(n) = '2'
    n = n + 1; Keys(n) = 'M-matrix inversion (>= 0)';             Values(n) = '10'
 !                     = 0: LU method; = 2: QMR method
-   n = n + 1; Keys(n) = 'No. Time Steps (>= 0)';                 Values(n) = '1'
-   n = n + 1; Keys(n) = 'Time Step';                             Values(n) = '1.000'
+   n = n + 1; Keys(n) = 'No. Spin-dynamics Time Steps (>= 0)';   Values(n) = '1'
+   n = n + 1; Keys(n) = 'Spin-dynamics Time Step';               Values(n) = '1.000'
    n = n + 1; Keys(n) = 'Mixing quantity type';                  Values(n) = '1'
 !                     = 0: Charge mixing; = 1: Potential mixing
    n = n + 1; Keys(n) = 'Mixing algorithm';                      Values(n) = '2'
@@ -197,6 +205,7 @@
    n = n + 1; Keys(n) = 'Default Integer Factor nmult';          Values(n) = '1'
 !                     = 0: Not specified; > 0: Speciflied. Note: r(j) = exp(j*h), hin = nmult*hout
    n = n + 1; Keys(n) = 'Default Pseudo Charge Radius';          Values(n) = '0.9'
+!             Note: This is the ratio of the pseudo charge radius and the muffin-tin radius
    n = n + 1; Keys(n) = 'Default Screen Pot.';                   Values(n) = '3.0'
    n = n + 1; Keys(n) = 'Default Lmax-Screen';                   Values(n) = '3'
    n = n + 1; Keys(n) = 'Default Rcut-Screen';                   Values(n) = '4.8'
@@ -216,7 +225,9 @@
 !             Note: If Re[E] > 0 and Im[E] < eSwitch, the effective medium iteration is switched to the conservative mode
    n = n + 1; Keys(n) = 'Effective Medium T-matrix Tol (> 0)';   Values(n) = '0.0000001'
    n = n + 1; Keys(n) = 'Default Core Radius';                   Values(n) = '0'
-!                     = 0: Using the muffin-tin radius
+!                     =-1: Using the circumscribed sphere radius for full-potential calculations
+!                     = 0: Using the inscribed sphere radius for full-potential calculations,
+!                          the muffin-tin radius for muffin-tin calculations, or the ASA radius for ASA calculations.
 !                     = 1: Using the implicit core radius defined in ChemElementModule
 !                     = A specific real value (> 0.0, in atomic units)
    n = n + 1; Keys(n) = 'Default Muffin-tin Radius';             Values(n) = '0'

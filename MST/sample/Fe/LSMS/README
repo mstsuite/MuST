@@ -1,0 +1,8 @@
+Three computational examples for Fe are presented here:
+
+pola/: a spin-polarized calculation of BCC Fe with ferromagnetic spin alignment
+
+cant/: a spin-canted calculation of BCC Fe in which the spin on the corner atom is aligned along the z-direction and the spin on the body center atom is aligned in the x-direction.
+
+spin-dynamics/: a spin-dynamics calculation of BCC Fe with 10 time steps. The starting configuration is such that the spin on the corner atom is aligned along the z-direction and 
+the spin on the body center atom is aligned in the x-direction. During the similation, the corning spin is held still and the body center spin is allowed to rotate.

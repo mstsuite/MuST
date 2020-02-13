@@ -1,9 +1,9 @@
 subroutine setupRadGridAndCell(LocalNumAtoms,lmax_max)
    use KindParamModule, only : IntKind, RealKind, CmplxKind
 !
-   use MathParamModule, only : ZERO, TEN2m8
+   use MathParamModule, only : ZERO, TEN2m8, TEN2m6
 !
-   use ErrorHandlerModule, only : WarningHandler
+   use ErrorHandlerModule, only : WarningHandler, ErrorHandler
 !
    use ScfDataModule, only : getSingleSiteSolverType
    use ScfDataModule, only : ngaussr, ngaussq
@@ -16,7 +16,8 @@ subroutine setupRadGridAndCell(LocalNumAtoms,lmax_max)
    use PolyhedraModule, only : getWignerSeitzRadius, getNeighborDistance
 !
    use PotentialTypeModule, only : isASAPotential, isMuffinTinPotential, &
-                                   isMuffinTinASAPotential, isFullPotential
+                                   isMuffinTinASAPotential, isFullPotential, &
+                                   isMuffinTinTestPotential
 !
    use StepFunctionModule, only : initStepFunction
    use StepFunctionModule, only : printStepFunction, testStepFunction
@@ -52,36 +53,62 @@ subroutine setupRadGridAndCell(LocalNumAtoms,lmax_max)
 !        -------------------------------------------------------------
       endif
       rend =  getOutscrSphRadius(i)
-      if (isMuffinTinPotential()) then
-         rmt = getMuffinTinRadius(i)
+      rmt = getMuffinTinRadius(i)
+      if ( rmt < 0.010d0 ) then
+         call ErrorHandler('main','rmt < 0.01',rmt)
+      endif
+      if (isMuffinTinPotential() .or. isMuffinTinTestPotential()) then
          rinsc = getInscrSphRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = rinsc
+         if (rmt - rinsc > TEN2m6) then
+            call WarningHandler('main','rinsc < rmt',rinsc,rmt)
          endif
          rws = getWignerSeitzRadius(i)
+!         volume = PI4*THIRD*(rws**3)
+!         call setAtomVolWS(i,volume)
+!         volume = PI4*THIRD*(rmt**3)
+!         call setAtomVolMT(i,volume)
+!         volume = PI4*THIRD*(rinsc**3)
+!         call setAtomVolINSC(i,volume)
+!         volume = getAtomicVPVolume(i)
+!         call setAtomVolVP(i,volume)
+!         call genRadialGrid( i, rinsc, rinsc, rws, ndivin, ndivout, nmult)
+!
+!
+!        ========================================================
+!???     Temporary fix due to inconsistent definitions of pzz/pzj
+!???     between the relativistic and non-relativistic solvers
+!        ========================================================
          if (getSingleSiteSolverType()==1) then
             rend=rws
          endif
+!        ========================================================
 !        -------------------------------------------------------------
-         call genRadialGrid(i,xstart, rmt, rinsc, rws, rend, ndivin)
+!011820  call genRadialGrid( i, xstart, rmt, rinsc, rws, rend, ndivin)
+         call genRadialGrid( i, rmt, rend, ndivin)
 !        -------------------------------------------------------------
-      else if ( isASAPotential() ) then
-         rend =  getWignerSeitzRadius(i)
-         rmt = getMuffinTinRadius(i)
+      else if (isASAPotential() ) then
+!        rend =  getWignerSeitzRadius(i)
          rinsc = getWignerSeitzRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = rinsc
-         endif
+         rmt = rinsc
+!        if ( rmt < 0.010d0 ) then
+!           rmt = rinsc
+!        endif
+         ndivin = ndivin+11
 !        -------------------------------------------------------------
-         call genRadialGrid(i,xstart, rmt, rinsc, rinsc, rend, ndivin )
+         call genRadialGrid( i, xstart, rmt, rinsc, rinsc, rend, ndivin )
 !        -------------------------------------------------------------
-      else if (isMuffinTinASAPotential()) then
+      else if ( isMuffinTinASAPotential() ) then
          rend =  getWignerSeitzRadius(i)
-         rmt = getMuffinTinRadius(i)
          rinsc = getWignerSeitzRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = rinsc
-         endif
+!         volume = PI4*THIRD*(rend**3)
+!         call setAtomVolWS(i,volume)
+!         volume = PI4*THIRD*(rmt**3)
+!         call setAtomVolMT(i,volume)
+!         volume = PI4*THIRD*(rinsc**3)
+!         call setAtomVolINSC(i,volume)
+!         volume = getAtomicVPVolume(i)
+!         call setAtomVolVP(i,volume)
+!         call genRadialGrid( i, rmt, rinsc, rinsc, ndivin, ndivout, nmult)
 !        -------------------------------------------------------------
          call genRadialGrid( i, xstart, rmt, rinsc, rend, rend, ndivin )
 !        -------------------------------------------------------------
@@ -93,14 +120,15 @@ subroutine setupRadGridAndCell(LocalNumAtoms,lmax_max)
                                 getNeighborDistance(i,1),getOutscrSphRadius(i))
 !           ----------------------------------------------------------
          endif
-         rmt = getMuffinTinRadius(i)
          rinsc = getInscrSphRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = getInscrSphRadius(i)
-         endif
          rws = getWignerSeitzRadius(i)
+         call genRadialGrid( i, rmt, rend, ndivin)
+!        if ( rmt < 0.010d0 ) then
+!           rmt = getInscrSphRadius(i)
+!        endif
+!        rws = getWignerSeitzRadius(i)
 !        -------------------------------------------------------------
-         call genRadialGrid( i, rmt, rinsc, rws, rend, ndivin, ndivout, nmult)
+!        call genRadialGrid( i, rmt, rinsc, rws, rend, ndivin, ndivout, nmult)
 !        -------------------------------------------------------------
       endif
       if (getStandardOutputLevel(i) >= 0) then

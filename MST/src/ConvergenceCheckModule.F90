@@ -13,9 +13,10 @@ private
 !
    integer (kind=IntKind) :: iteration
    integer (kind=IntKind) :: LocalNumAtoms
-   integer (kind=IntKind) :: n_spin_pola
+   integer (kind=IntKind) :: n_spin_pola, n_spin_cant
    integer (kind=IntKind) :: nr_max, jmax, lmax
    integer (kind=IntKind), allocatable :: Print_Level(:)
+   integer (kind=IntKind) :: node_print_level
 !
    real (kind=RealKind) :: Old_FermiEnergy
    real (kind=RealKind) :: Old_TotalEnergy
@@ -25,7 +26,7 @@ contains
    include '../lib/arrayTools.F90'
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine initConvergenceCheck(nlocal,pola,iprint)
+   subroutine initConvergenceCheck(nlocal,pola,cant,iprint)
 !  ===================================================================
    use Atom2ProcModule, only : getGlobalIndex
    use SystemModule, only : getLmaxRho, getLmaxPot
@@ -35,15 +36,17 @@ contains
 !
    implicit none
 !
-   integer (kind=IntKind), intent(in) :: nlocal, pola
+   integer (kind=IntKind), intent(in) :: nlocal, pola, cant
    integer (kind=IntKind), intent(in) :: iprint(nlocal)
 !
    integer (kind=IntKind) :: id, gid
 !
    LocalNumAtoms = nlocal
    n_spin_pola = pola
+   n_spin_cant = cant
    allocate(Print_Level(nlocal))
    Print_Level(1:nlocal) = iprint(1:nlocal)
+   node_print_level = maxval(Print_Level)
 !
    Old_FermiEnergy = ZERO
    Old_TotalEnergy = ZERO
@@ -85,9 +88,12 @@ contains
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine checkConvergence( rho_rms, pot_rms, ef_diff, et_diff,   &
-                                evec_rms, bcon_rms, efermi, etot )
+   subroutine checkConvergence( rho_rms, pot_rms,                     &
+                                evec_rms, bcon_rms, efermi, etot,     &
+                                itstep, iscf, max_rms, converged)
 !  ===================================================================
+   use MPPModule, only : GlobalMax
+!
    use ErrorHandlerModule, only : ErrorHandler
 !
    use Atom2ProcModule, only : getGlobalIndex
@@ -120,8 +126,17 @@ contains
 !
    use PolyhedraModule, only : getVolume
 !
+   use SystemModule, only : setRMSInfo
+!
+   use ScfDataModule, only : eftol, etol, ptol, rmstol
+!
+   use ConstrainLocalMomentModule, only : getFieldRms
+!
    implicit none
 !
+   logical, intent(out) :: converged
+!
+   integer (kind=IntKind), intent(in) :: itstep, iscf
    integer (kind=IntKind) :: is, ir, jmt, id, jl, jend, ia, n
    integer (kind=IntKind) :: lmax_l, jmax_l, kmax_l
    integer (kind=IntKind) :: lmax_prod, jmax_prod, kmax_prod
@@ -132,14 +147,16 @@ contains
    real (kind=RealKind), intent(out) :: pot_rms(:,:)
    real (kind=RealKind), intent(out) :: evec_rms(LocalNumAtoms)
    real (kind=RealKind), intent(out) :: bcon_rms(LocalNumAtoms)
-   real (kind=RealKind), intent(out) :: ef_diff, et_diff
+   real (kind=RealKind), intent(out) :: max_rms(8)
 !
    real (kind=RealKind), pointer :: vec1(:)
    real (kind=RealKind), pointer :: vec2(:)
    real (kind=RealKind), pointer :: r_mesh(:)
    real (kind=RealKind), allocatable :: wk(:)
+   real (kind=RealKind) :: ef_diff, et_diff
    real (kind=RealKind) :: mt_volume, vol_int, VP_volume, tol, vint_mt
    real (kind=RealKind) :: cfac, rho_rms_av(n_spin_pola), pot_rms_av(n_spin_pola)
+   real (kind=RealKind) :: rms_sys(4), rms
 !
    complex (kind=CmplxKind), pointer :: p_den1(:,:)
    complex (kind=CmplxKind), pointer :: p_den2(:,:)
@@ -160,6 +177,13 @@ contains
 !
    if (.not.Initialized) then
       call ErrorHandler('checkConvergence','Module is not initialized')
+   endif
+!
+   if (node_print_level >= 0) then
+      write(6,'(/,80(''-''))')
+      write(6,'(/,24x,a)')'********************************'
+      write(6,'( 24x,a )')'* Output from checkConvergence *'
+      write(6,'(24x,a,/)')'********************************'
    endif
 !
    if (iteration == 0) then
@@ -240,7 +264,7 @@ contains
          enddo
 !
          if (Print_Level(id) >= 0) then
-            write(6,'(/,80(''=''))')
+            write(6,'(80(''=''))')
             write(6,'(1x,a)')                                         &
                     'AtomId    Iter    RMS of Rho   RMS of Pot      Diff Ef    Diff Etot'
             write(6,'(80(''-''))')
@@ -374,11 +398,11 @@ contains
          enddo
 !
          if (Print_Level(id) >= 0) then
-            write(6,'(/,80(''=''))')
+            write(6,'(80(''=''))')
             write(6,'(1x,a)')                                            &
-                    'AtomId    Iter    RMS of Rho   RMS of Pot      Diff Ef    Diff Etot'
+                    'AtomId    Iter    RMS of Rho   RMS of Pot      Diff Ef      Diff Etot'
             write(6,'(80(''-''))')
-            write(6,'(i7,1x,i7,4(1x,d12.5))')getGlobalIndex(id),   &
+            write(6,'(i7,1x,i7,4(2x,d12.5))')getGlobalIndex(id),   &
                    iteration, maxval(rho_rms_av(1:n_spin_pola)),         &
                    maxval(pot_rms_av(1:n_spin_pola)), ef_diff, et_diff
             write(6,'(80(''=''),/)')
@@ -386,6 +410,74 @@ contains
       enddo
       nullify( p_wk, p_den1, p_den2, prod )
       deallocate( wk_c, wk_prod )
+   endif
+!
+   max_rms = ZERO
+   rms_sys = ZERO
+   n = 0
+   do id = 1, LocalNumAtoms
+      rho_rms_av = 0
+      pot_rms_av = 0
+      do ia = 1, getLocalNumSpecies(id)
+         n = n + 1
+         cfac = getLocalSpeciesContent(id,ia)
+         rho_rms_av(1:n_spin_pola) = rho_rms_av(1:n_spin_pola) + &
+                                     cfac*rho_rms(1:n_spin_pola,n)
+         pot_rms_av(1:n_spin_pola) = pot_rms_av(1:n_spin_pola) + &
+                                     cfac*pot_rms(1:n_spin_pola,n)
+      enddo
+      rms_sys(1) = maxval(rho_rms_av(1:n_spin_pola))
+      rms_sys(2) = maxval(pot_rms_av(1:n_spin_pola))
+      if ( n_spin_cant==2 ) then
+         rms_sys(3:4) = getFieldRms(id)
+      endif
+      max_rms(1) = max(max_rms(1),rho_rms_av(1))
+      max_rms(3) = max(max_rms(3),pot_rms_av(1))
+      if (n_spin_pola==2) then
+         max_rms(2) = max(max_rms(2),rho_rms_av(2))
+         max_rms(4) = max(max_rms(4),pot_rms_av(2))
+      endif
+      max_rms(5) = max(max_rms(5),ef_diff)
+      max_rms(6) = max(max_rms(6),et_diff)
+      call setRMSInfo(getGlobalIndex(id),rms_sys)
+   enddo
+   if ( n_spin_cant==2 ) then
+      max_rms(7:8) = getFieldRms()
+   endif
+!  -------------------------------------------------------------------
+   call GlobalMax(max_rms,8)
+!  -------------------------------------------------------------------
+   rms = maxval(max_rms)
+   if ( (max(max_rms(1),max_rms(n_spin_pola)) <= ptol .and.           &
+         max(max_rms(3),max_rms(2+n_spin_pola)) <= ptol .and.         &
+         max_rms(5) <= eftol .and. max_rms(6) <= etol) .or.           &
+        (max_rms(7) <= rmstol .and. itstep>1 .and. n_spin_cant==2)) then
+      if (node_print_level >= 0) then
+         write(6,'(80(''=''))')
+         write(6,'(a,78x,a)')'#','#'
+         write(6,'(a,24x,a,24x,a)')'#','SCF Convergence is reached !!!','#'
+         write(6,'(a,78x,a)')'#','#'
+         write(6,'(80(''=''))')
+         if (n_spin_cant == 1) then
+            write(6,'(/,80(''=''))')
+            write(6,'(a)')                                           &
+'     Iteration   RMS of Rho      RMS of Pot        Diff Ef        Diff Etot'
+            write(6,'(80(''-''))')
+            write(6,'(5x,i5,1x,6(4x,f12.8))')iscf,max(max_rms(1),max_rms(2)), &
+                max(max_rms(3),max_rms(4))
+            write(6,'(80(''=''),/)')
+         else
+            write(6,'(//,a)')                                         &
+'     Iteration   RMS of Rho      RMS of Pot        Diff Ef        Diff Etot      Diff Evec'
+            write(6,'(92(''-''))')
+            write(6,'(5x,i5,1x,6(4x,f12.8))')iscf,max(max_rms(1),max_rms(2)), &
+                max(max_rms(3),max_rms(4)),max_rms(5:7)
+            write(6,'(92(''=''),/)')
+         endif
+      endif
+      converged = .true.
+   else
+      converged = .false.
    endif
 !
    end subroutine checkConvergence

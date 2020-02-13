@@ -15,9 +15,9 @@ No. Atoms in System (> 0)  ::  1
                        Position and Potential Data Files
 ===========================+====================================================
 Atomic Position File Name  :: position.dat
-Default Potential Input File Name  ::  Cu_mt_v
-# Default Potential Input File Name  ::  Cu_fp_v
-Default Potential Input File Form  ::  0
+# Default Potential Input File Name  ::  Cu_mt_v
+Default Potential Input File Name  ::  Cu_fp_v
+Default Potential Input File Form  ::  1
    = 0: ASCII Format       ----------
    = 1: XDR Format         ----------
    = 2: HDF Format         ----------
@@ -111,7 +111,13 @@ Spin Index Param (>= 1)    ::  1
 Default Lmax-T matrix      ::  4
 Default Muffin-tin Radius  ::  2.26
    = 0: Using the inscribed sphere radius
-   = 1: Using the internal muffin-tin radius defined in ChemElementModule
+   = 1: Using the implicit muffin-tin radius defined in ChemElementModule
+   = A specific real value (> 0.0, in atomic units)
+Default Core Radius        ::  0
+   =-1: Using the circumscribed sphere radius for full-potential calculations
+   = 0: Using the inscribed sphere radius for full-potential calculations, the 
+        muffin-tin radius for muffin-tin calculations, or the ASA radius for ASA calculations.
+   = 1: Using the implicit core radius defined in ChemElementModule
    = A specific real value (> 0.0, in atomic units)
 Default No. Rad Points ndivin  :: 1001
    = 0: Not specified ---------------
@@ -125,7 +131,7 @@ Scheme to Generate K (>=0) ::  0
      0. Special K-points ---------
      1. Tetrahedron      ---------
      2. Direction        ---------
-Kx, Ky, Kz Division (> 0)  ::  12  12  12
+Kx, Ky, Kz Division (> 0)  ::  14  14  14
 Symmetrize BZ Integration  ::   1
      0. No                 ---------
      1. Yes                ---------                             
