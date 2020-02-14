@@ -304,10 +304,12 @@ contains
       Core(id)%vol_core = PI4*THIRD*(Core(id)%rcore_mt**3)
       Core(id)%vol_coreint = getVolume(id)-Core(id)%vol_core
       DataSize(id)  = last*n_spin_pola*Core(id)%NumSpecies
-      TotalInterstitialCoreVol = TotalInterstitialCoreVol + &
-                                 Core(id)%vol_coreint
+      if (Core(id)%vol_coreint > ZERO) then
+         TotalInterstitialCoreVol = TotalInterstitialCoreVol +        &
+                                    Core(id)%vol_coreint
+      endif
 !
-      allocate( Core(id)%numc_below(Core(id)%NumSpecies),            &
+      allocate( Core(id)%numc_below(Core(id)%NumSpecies),             &
                 Core(id)%numc(Core(id)%NumSpecies),                  &
                 Core(id)%ztotss(Core(id)%NumSpecies),                &
                 Core(id)%zsemss(Core(id)%NumSpecies),                &
@@ -1913,15 +1915,14 @@ contains
 !
        rhoint_semi = ZERO
        rhoint_deep = ZERO
-   else
-       if (TotalInterstitialCoreVol < TEN2m6) then
-           call ErrorHandler('calCoreStates','no interstitial volume', &
-                             TotalInterstitialCoreVol)
-       endif
-       rhoint_semi =                                                   &
-          real(GlobalNumAtoms,kind=Realkind)*qint_semi/TotalInterstitialCoreVol
-       rhoint_deep =                                                   &
-          real(GlobalNumAtoms,kind=Realkind)*qint_deep/TotalInterstitialCoreVol
+   else if (TotalInterstitialCoreVol > TEN2m6) then
+      rhoint_semi =                                                   &
+         real(GlobalNumAtoms,kind=Realkind)*qint_semi/TotalInterstitialCoreVol
+      rhoint_deep =                                                   &
+         real(GlobalNumAtoms,kind=Realkind)*qint_deep/TotalInterstitialCoreVol
+   else ! In this case the core volume is chosen to be greater than the atomic cell volume
+      rhoint_semi = ZERO
+      rhoint_deep = ZERO
    endif
 !
 !   if ( isASAPotential() .or. isMuffinTinPotential() .or.              &
