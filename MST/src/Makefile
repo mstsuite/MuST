@@ -120,7 +120,8 @@ polyfermi.o \
 calNicholsonPoles.o \
 fetchVisualDomainParameters.o \
 printDensityOnGrid.o \
-printPotentialOnGrid.o
+printPotentialOnGrid.o \
+printScfResults.o
 
 .SUFFIXES:	.o .f .c .f90 .F90
 

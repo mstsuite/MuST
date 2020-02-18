@@ -54,6 +54,7 @@ module MixingModule
                                czero, cone, PI4, THIRD
    use GroupCommModule, only : GlobalSumInGroup
    use PublicTypeDefinitionsModule, only : MixListStruct
+   use PublicParamDefinitionsModule, only : SimpleMixing, AndersonMixing, BroydenMixing
 !
 public :: initMixing,         &
           mixValues,          &
@@ -77,9 +78,9 @@ private
    integer(kind=IntKind), allocatable :: NumQuantities(:)
    integer(kind=IntKind) :: MaxVlen
    integer(kind=IntKind) :: MixingMethod = -1 ! -1 - No method have been set yet
-                                              !  0 - Simple
-                                              !  1 - Broyden 
-                                              !  2 - D.G. Anderson
+                                              !  SimpleMixing - Simple
+                                              !  BroydenMixing - Broyden 
+                                              !  AndersonMixing - D.G. Anderson
 !
 !  Simple Mixing Parameters
 !
@@ -226,12 +227,14 @@ contains
       deallocate( NumQuantities )
       call delWorkingSpace()
       call delMixing()
-      if ( MixingMethod == 0 ) then
+      if ( MixingMethod == SimpleMixing ) then
          deallocate( SimpleMix )
-      else if ( MixingMethod == 1 ) then
+      else if ( MixingMethod == BroydenMixing ) then
          deallocate( BroydenMix )
-      else
+      else if (MixingMethod == AndersonMixing) then
          deallocate( DGAMix )
+      else
+         call ErrorHandler('endMixing','Unknown mixing method',MixingMethod)
       endif
       Initialized = .false.
    endif
@@ -253,12 +256,14 @@ contains
 !
    iter_count =iter_count+1
 !
-   if ( MixingMethod == 0 ) then
+   if ( MixingMethod == SimpleMixing ) then
       call calSimpleMixing(list_q)
-   else if ( MixingMethod == 1 ) then
+   else if ( MixingMethod == BroydenMixing ) then
       call calBroydenMixing(list_q)
-   else
+   else if (MixingMethod == AndersonMixing) then
       call calDGAMixing(list_q)
+   else
+        call ErrorHandler('mixValues','Unknown mixing method',MixingMethod)
    endif
 !
    end subroutine mixValues
@@ -301,9 +306,7 @@ contains
       SimpleMix(id)%alpha = amix
    endif
 !
-   if ( MixingMethod /=0 ) then
-      MixingMethod = 0
-   endif
+   MixingMethod =  SimpleMixing
 !
    end subroutine setSimpleMixing
 !  ===================================================================
@@ -413,9 +416,7 @@ contains
       DGAMix(id)%alpha = amix
    endif
 !
-   if ( MixingMethod /=2 ) then
-      MixingMethod = 2
-   endif
+   MixingMethod =  AndersonMixing
 !
    end subroutine setDGAMixing
 !  ===================================================================
@@ -610,9 +611,7 @@ contains
       BroydenInvMethod = 0
    endif 
 !
-   if ( MixingMethod /= 1 ) then
-      MixingMethod = 1
-   endif
+   MixingMethod = BroydenMixing
 !
    end subroutine setBroydenMixing
 !  ===================================================================
@@ -1282,11 +1281,11 @@ contains
    integer(kind=IntKind) :: id
 !
    id = getMixID(idt,idq)
-   if ( MixingMethod == 0) then
+   if ( MixingMethod == SimpleMixing) then
       SimpleMix(id)%alpha = amix
-   else if ( MixingMethod == 1 ) then
+   else if ( MixingMethod == BroydenMixing ) then
       BroydenMix(id)%alpha = amix
-   else if ( MixingMethod == 2 ) then
+   else if ( MixingMethod == AndersonMixing ) then
       DGAMix(id)%alpha = amix
    endif
 !
@@ -1368,7 +1367,7 @@ contains
 !
    integer(kind=IntKind), intent(in) :: MixId 
 !
-   if (MixId == 1) then
+   if (MixId == BroydenMixing) then
       allocate( a_r( NumBroydenIter,NumBroydenIter ) )
       allocate( b_r( NumBroydenIter,NumBroydenIter ) )
       allocate( d_r( NumBroydenIter,NumBroydenIter ) )
@@ -1378,7 +1377,7 @@ contains
       if ( BroydenInvMethod == 1 ) then
          allocate( ipiv(NumBroydenIter) )
       endif
-   else if (MixId == 2) then
+   else if (MixId == AndersonMixing) then
       allocate( a_r(NumDGAIter+1,NumDGAIter+1), b_r(NumDGAIter+1,NumDGAIter+1) )
       a_r = ZERO; b_r = ZERO
    endif
@@ -1396,13 +1395,13 @@ contains
 !
    implicit  none
 !
-   if ( MixingMethod == 1 ) then
+   if ( MixingMethod == BroydenMixing ) then
       if ( allocated(a_r) ) deallocate( a_r, b_r, d_r, cm_r )
 !
       if ( BroydenInvMethod == 1 ) then
          if ( allocated(ipiv) ) deallocate( ipiv )
       endif
-   else if (MixingMethod == 2) then
+   else if (MixingMethod == AndersonMixing) then
       if ( allocated(a_r) ) deallocate( a_r, b_r )
    endif
 !
@@ -1421,11 +1420,11 @@ contains
 !
    call delWorkingSpace()
 !
-   if ( MixingMethod == 0 ) then
+   if ( MixingMethod == SimpleMixing ) then
       return
-   else if ( MixingMethod == 1 ) then
+   else if ( MixingMethod == BroydenMixing ) then
       call delBroydenMixing()
-   else
+   else if ( MixingMethod == AndersonMixing ) then
       call delDGAMixing()
    endif
 !

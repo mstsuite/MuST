@@ -446,7 +446,7 @@ contains
    enddo
    fnet = fnet/real(GlobalNumAtoms,kind=RealKind)
    write(6,'(80(''-''))')
-   write(6,'(a,3f15.8,2x,f15.8)')"Average Force:",fnet(1:3),sqrt(fnet(1)**2+fnet(2)**2+fnet(3)**2)
+   write(6,'(a,4(f15.8,2x))')"Average Force:",fnet(1:3),sqrt(fnet(1)**2+fnet(2)**2+fnet(3)**2)
    write(6,'(/,a)')'Applying condition that total force on unit cell = 0, the corrected Forces are'
    write(6,'(80(''=''))')
    write(6,'(a)')'   Global ID          Fx               Fy               Fz               |F|'

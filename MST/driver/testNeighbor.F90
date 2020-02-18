@@ -83,7 +83,7 @@ program testNeighbor
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
    use AtomModule, only : getGridData
    use AtomModule, only : getLocalAtomName, getLocalAtomicNumber
-   use AtomModule, only : getLocalAtomPosition, getLocalEvecOld
+   use AtomModule, only : getLocalAtomPosition
    use AtomModule, only : getMixingParam4Evec
 !
    use GauntFactorsModule, only : initGauntFactors, endGauntFactors
@@ -122,7 +122,6 @@ program testNeighbor
    real (kind=RealKind), allocatable :: LocalNumValenceElectrons(:)
    real (kind=RealKind), allocatable :: AtomPosition(:,:)
    real (kind=RealKind), allocatable :: LocalAtomPosi(:,:)
-   real (kind=RealKind), allocatable :: LocalEvec(:,:)
 !
    real (kind=RealKind), allocatable :: rho_rms(:,:),pot_rms(:,:)
    real (kind=RealKind) :: ef_diff, tote_diff, max_rms(4)

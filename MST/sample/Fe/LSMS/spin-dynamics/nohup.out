@@ -1,0 +1,79 @@
+  
+             ********************************************************
+             *                                                      *
+             *              Fortran 90 Interface Module             *
+             *                                                      *
+             *                         For                          *
+             *                                                      *
+             *              MPI Message Passing Library             *
+             *                                                      *
+             *                   Version No. 2.0k                   *
+             *                                                      *
+             ********************************************************
+  
+ CHARACTER_BYTES =            1
+ INTEGER_BYTES   =            4
+ REAL_BYTES      =            8
+ COMPLEX_BYTES   =           16
+ ADDRESS_BYTES   =            8
+  
+ Number of Procs =            2
+  
+Execution starts at 22:10:29, 02-11-2020 on     2 nodes
+#-------------------------------------------------------------------------------
+#
+#
+#           ********************************************************
+#           *                                                      *
+#           *    Full-Potential Multiple Scattering Theory Based   *
+#           *                                                      *
+#           *  Ab Initio Electronic Structure Calculation Package  *
+#           *                                                      *
+#           ********************************************************
+#
+#
+#   username                 : ywg
+#   system name              : bolt.psc.edu
+#   code compiled            : Tuesday, February 11 2020 21:44:58
+#   MuST source code version : Develop
+#-------------------------------------------------------------------------------
+
+ The Position Data File: ./position.dat
+
+ The Position Data is read successfully!
+
+
+ The Evec Data File: ./Evec_input.dat
+
+ The Evec Data is read successfully!
+
+
+================================================================================
+
+ The lattice system is: Cubic       
+
+================================================================================
+
+            *********************************************
+            *     Output from createParallelization     *
+            *            in ProcMappingModule           *
+            *********************************************
+
+The number of processors in each box :    2
+The number of repeats along k-dimen. :    1
+The number of repeats along e-dimen. :    1
+Dimension of the box :    2 x    1 x    1
+MyPE =     0, NumEs, NumEsPerBox =    31   31
+Energy point index =     1    2    3    4    5    6    7    8    9   10   11   12   13   14   15   16   17   18   19   20, ...
+Process in E-group =     0    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0    0, ...
+MyPE =     0, NumKs, NumKsPerBox =     1    1
+MyPE =     0, K index =     1
+IBZ K point index  =     1
+Process in K-group =     1
+
+================================================================================
+
+The number of processes that write output data:      1
+MyPE =     1, NumEs, NumEsPerBox =    31   31
+MyPE =     1, NumKs, NumKsPerBox =     1    1
+MyPE =     1, K index =     1

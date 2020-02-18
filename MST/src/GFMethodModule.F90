@@ -191,12 +191,10 @@ contains
 !
    use SystemModule, only : getNumAtoms, getNumVacancies, getLmaxMax
 !
-   use AtomModule, only : getLocalEvecOld, getLocalNumSpecies, &
+   use AtomModule, only : getLocalEvec, getLocalNumSpecies, &
                           getLocalAtomicNumber
 !
    use KreinModule, only : setLloydStatus, setLloydQ
-!
-   use SpinRotationModule, only :  initSpinRotation
 !
    use DataServiceCenterModule, only : createDataStorage,     &
                                        getDataStorage,        &
@@ -397,12 +395,6 @@ contains
    Initialized = .true.
    chempot = getFermiEnergy()
 !
-   do id = 1,LocalNumAtoms
-      evec(1:3,id) = getLocalEvecOld(id)
-   enddo
-!
-   call initSpinRotation(LocalNumAtoms,evec)
-!
 !  ===================================================================
 !  setup the data structure
 !  ===================================================================
@@ -486,8 +478,6 @@ contains
 !  ===================================================================
    use IntegerFactorsModule, only : endIntegerFactors
 !
-   use SpinRotationModule, only :  endSpinRotation
-!
    use AdaptIntegrationModule, only : endAdaptIntegration
 !
    implicit none
@@ -510,7 +500,6 @@ contains
    endif
 !  -------------------------------------------------------------------
    call endAdaptIntegration()
-   call endSpinRotation()
    call endIntegerFactors()
 !  -------------------------------------------------------------------
 !
@@ -704,7 +693,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine printValenceStates()
 !  ===================================================================
-   use AtomModule, only : getLocalEvecNew
+   use AtomModule, only : getLocalEvec
 !
    use ScfDataModule, only : isExchangeParamNeeded
 !
@@ -729,7 +718,7 @@ contains
    if (n_spin_cant == 2) then
       do id =1, LocalNumAtoms
          do ia = 1, IntegrValue(id)%NumSpecies
-            evec_new(1:3) = getLocalEvecNew(id)
+            evec_new(1:3) = getLocalEvec(id,'new')
             write(6,'(10x,a,t40,''='',2x,3f10.5)') &
                     'LOCAL Moment orientation',evec_new(1:3)
             write(6,'(10x,a,t40,''='',2x,3f10.5)') &
@@ -775,7 +764,7 @@ contains
 !
    use ChemElementModule, only : getZval
 !
-   use AtomModule, only : getLocalEvecOld, getLocalNumSpecies, &
+   use AtomModule, only : getLocalEvec, getLocalNumSpecies, &
                           getLocalSpeciesContent, getLocalAtomicNumber
 !
    use SystemModule, only : getAdditionalElectrons
@@ -794,7 +783,7 @@ contains
 !
    use LdaCorrectionModule, only : checkLdaCorrection, computeLdaPlusU
 !
-   use SpinRotationModule, only :  resetSpinRotation
+   use SpinRotationModule, only :  calSpinRotation, printSpinRotation
 !
    use KreinModule,only : calJost_E0, isLloydOn, setLloydStatus, setLloydQ
 !
@@ -851,11 +840,16 @@ contains
    endif
 ! 
    do id = 1,LocalNumAtoms
-      evec(1:3,id) = getLocalEvecOld(id)
-      if (RelativisticFlag .ne. 2) then
-!        ----------------------------------------------------------------
-         call resetSpinRotation(id,evec(1:3,id))
-!        ----------------------------------------------------------------
+      evec(1:3,id) = getLocalEvec(id,'new')
+      if (n_spin_cant == 2) then
+!        -------------------------------------------------------------
+         call calSpinRotation(id,evec(1:3,id))
+!        -------------------------------------------------------------
+         if (node_print_level >= 0) then
+!           ----------------------------------------------------------
+            call printSpinRotation(id)
+!           ----------------------------------------------------------
+         endif
       endif
    enddo
 !
@@ -1086,7 +1080,7 @@ contains
 !  ===================================================================
    use GroupCommModule, only : GlobalSumInGroup
 !
-   use AtomModule, only : getLocalEvecOld, getLocalNumSpecies,        &
+   use AtomModule, only : getLocalEvec, getLocalNumSpecies,        &
                           getLocalAtomicNumber
 !
    use SSSolverModule, only : initSSSolver, endSSSolver, computeDOS
@@ -1102,7 +1096,7 @@ contains
    use RelMSSolverModule, only : initRelMSSolver, endRelMSSolver
    use RelMSSolverModule, only : computeRelMST
 !
-   use SpinRotationModule, only :  resetSpinRotation
+   use SpinRotationModule, only :  calSpinRotation, printSpinRotation
 !
    use ScfDataModule, only : ErBottom, ErTop, EiBottom, NumSS_IntEs, isLSMS
 !
@@ -1138,11 +1132,13 @@ contains
    endif
 !
    do id = 1,LocalNumAtoms
-      evec(1:3,id) = getLocalEvecOld(id)
-      if (RelativisticFlag .ne. 2) then
-!        ----------------------------------------------------------------
-         call resetSpinRotation(id,evec(1:3,id))
-!        ----------------------------------------------------------------
+      evec(1:3,id) = getLocalEvec(id,'old')
+      if (n_spin_cant == 2) then
+!        -------------------------------------------------------------
+         call calSpinRotation(id,evec(1:3,id))
+!        -------------------------------------------------------------
+         call printSpinRotation(id)
+!        -------------------------------------------------------------
       endif
    enddo
 !
@@ -1941,7 +1937,18 @@ contains
       call mufind(efermi,efermi_old,int_dos,last_dos,BadFermiEnergy,Lloyd_factor)
 !     ----------------------------------------------------------------
       do id = 1, LocalNumAtoms
-!        -------------------------------------------------------------
+!        =============================================================
+!        The following lines for correcting evalsum for the last energy
+!        are added on 02/03/2020 so to match the results by LSMS 1.9.
+!        This will affect the total energy values in early iterations,
+!        but will not make any difference once the SCF convergence is reached.
+!        *************************************************************
+         do ia = 1, LastValue(id)%NumSpecies
+            do is = 1, n_spin_cant*n_spin_pola
+               LastValue(id)%evalsum(is,ia)=adjustEnergy(is,HALF*(efermi+efermi_old))*LastValue(id)%dos(is,ia)
+            enddo
+         enddo
+!        =============================================================
          call addElectroStruct(efermi-efermi_old,LastValue(id),IntegrValue(id))
 !        -------------------------------------------------------------
       enddo
@@ -2021,11 +2028,11 @@ contains
 !
    use PotentialTypeModule, only : isASAPotential
 !
-   use AtomModule, only : getLocalEvecNew, getLocalEvecOld, getLocalAtomName
+   use AtomModule, only : getLocalEvec, getLocalAtomName
    use AtomModule, only : getLocalNumSpecies, getLocalAtomicNumber
 !
+   use SpinRotationModule, only : calSpinRotation, printSpinRotation
    use SpinRotationModule, only : transformDensityMatrix
-   use SpinRotationModule, only : resetSpinRotation
 !
    implicit none
 !
@@ -2067,10 +2074,14 @@ contains
    endif
 !
    do id = 1,LocalNumAtoms
-      evec(1:3) = getLocalEvecOld(id)
-!     ----------------------------------------------------------------
-      call resetSpinRotation(id,evec(1:3))
-!     ----------------------------------------------------------------
+      evec(1:3) = getLocalEvec(id,'old')
+      if (n_spin_cant == 2) then
+!        -------------------------------------------------------------
+         call calSpinRotation(id,evec)
+!        -------------------------------------------------------------
+         call printSpinRotation(id)
+!        -------------------------------------------------------------
+      endif
    enddo
 !
    NumCalls_SS = 0
@@ -4014,7 +4025,7 @@ contains
 !
    use RadialGridModule, only : getGrid
 !
-   use AtomModule, only : getLocalEvecNew, getLocalNumSpecies
+   use AtomModule, only : getLocalEvec, getLocalNumSpecies
 !
    use StepFunctionModule, only : getVolumeIntegration
 !
@@ -4136,7 +4147,7 @@ contains
          dosmt_pola = CZERO; dosws_pola = CZERO
          if(n_spin_cant == 2) then
 !           ---------------------------------------------------------
-            evec_new(1:3) = getLocalEvecNew(id)
+            evec_new(1:3) = getLocalEvec(id,'new')
             dosmt_pola(1) = SQRTm1*HALF*(gm_mt(1)+gm_mt(2)*evec_new(1)+gm_mt(3)*evec_new(2)+gm_mt(4)*evec_new(3))/PI
             dosmt_pola(2) = SQRTm1*HALF*(gm_mt(1)-gm_mt(2)*evec_new(1)-gm_mt(3)*evec_new(2)-gm_mt(4)*evec_new(3))/PI
             dosws_pola(1) = SQRTm1*HALF*(gm(1)+gm(2)*evec_new(1)+gm(3)*evec_new(2)+gm(4)*evec_new(3))/PI
@@ -4978,7 +4989,7 @@ contains
       if (node_print_level >= 0) then
          write(6,'(/,a,d17.8,/)')'WARNING :: tnen = ',tnen
       endif
-   else if (abs(xtws/tnen) > 0.01d0) then
+   else if (abs(xtws/tnen) > 0.50d0) then
 !     ----------------------------------------------------------------
 !     call random_number(r) ! Use random number as a scaling factor to 
 !                           ! set the estimate of the next Fermi energy.
@@ -5187,8 +5198,6 @@ contains
 !
    use ScfDataModule, only : isExchangeParamNeeded
    use ScfDataModule, only : isLloyd, getLloydMode
-!
-   use AtomModule, only : getLocalEvecNew
 !
    implicit   none
 !
@@ -5602,7 +5611,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine calSS_dosdata(is,ie,e_real,CurrentValue,redundant)
 !  ===================================================================
-   use AtomModule, only : getLocalEvecNew
+   use AtomModule, only : getLocalEvec
 !
    implicit none
 !
@@ -5626,7 +5635,7 @@ contains
                do ks = 1, ns_sqr
                   SS_dosdata(id)%rarray3(ks+1,ie,ia) = real(CurrentValue(id)%dos(ks,ia),kind=RealKind)
                enddo
-               evec_new(1:3) = getLocalEvecNew(id)
+               evec_new(1:3) = getLocalEvec(id,'new')
 !              =======================================================
 !              dos(1) = electron density of states
 !              dos(2:4) = moment density of states
@@ -5661,7 +5670,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine calDOSDATA(is,ie,e_real,CurrentValue,redundant)
 !  ===================================================================
-   use AtomModule, only : getLocalEvecNew
+   use AtomModule, only : getLocalEvec
 !
    implicit none
 !
@@ -5685,7 +5694,7 @@ contains
                do ks = 1, ns_sqr
                   dosdata(id)%rarray3(ks+1,ie,ia) = real(CurrentValue(id)%dos(ks,ia),kind=RealKind)
                enddo
-               evec_new(1:3) = getLocalEvecNew(id)
+               evec_new(1:3) = getLocalEvec(id,'new')
 !              =======================================================
 !              dos(1) = electron density of states
 !              dos(2:4) = moment density of states
@@ -5720,7 +5729,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine correctDOSDATA(js,id,ne,dimdos,e_imag)
 !  ===================================================================
-   use AtomModule, only : getLocalEvecNew, getLocalNumSpecies
+   use AtomModule, only : getLocalEvec, getLocalNumSpecies
    implicit none
 !
    integer (kind=IntKind), intent(in) :: js, id, ne
@@ -5736,7 +5745,7 @@ contains
       enddo
 !
       if (n_spin_cant == 2 .and. js == 4) then
-         evec_new(1:3) = getLocalEvecNew(id)
+         evec_new(1:3) = getLocalEvec(id,'new')
          dosdata(id)%rarray3(6,ie,ia) = HALF*( dosdata(id)%rarray3(2,ie,ia) &
                                              + dosdata(id)%rarray3(3,ie,ia)*evec_new(1) &
                                              + dosdata(id)%rarray3(4,ie,ia)*evec_new(2) &
@@ -6715,7 +6724,7 @@ contains
 !
    use RadialGridModule, only : getGrid
 !
-   use AtomModule, only : getLocalEvecNew
+   use AtomModule, only : getLocalEvec
 !
    use StepFunctionModule, only : getVolumeIntegration
 !
@@ -6824,7 +6833,7 @@ contains
    dosmt_pola = CZERO; dosws_pola = CZERO
    if(n_spin_cant == 2) then
 !     ---------------------------------------------------------------
-      evec_new(1:3) = getLocalEvecNew(id)
+      evec_new(1:3) = getLocalEvec(id,'new')
       dosmt_pola(1) = SQRTm1*HALF*(gm_mt(1)+gm_mt(2)*evec_new(1)+gm_mt(3)*evec_new(2)+gm_mt(4)*evec_new(3))/PI
       dosmt_pola(2) = SQRTm1*HALF*(gm_mt(1)-gm_mt(2)*evec_new(1)-gm_mt(3)*evec_new(2)-gm_mt(4)*evec_new(3))/PI
       dosws_pola(1) = SQRTm1*HALF*(gm(1)+gm(2)*evec_new(1)+gm(3)*evec_new(2)+gm(4)*evec_new(3))/PI

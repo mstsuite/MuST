@@ -2,19 +2,18 @@ module AccelerateCPAModule
    use KindParamModule, only : IntKind, RealKind, CmplxKind
    use MathParamModule, only : ZERO, ONE, CZERO, CONE, SQRTm1, TEN2m8
    use ErrorHandlerModule, only : ErrorHandler, WarningHandler
+   use PublicParamDefinitionsModule, only : SimpleMixing, AndersonMixing, BroydenMixing
 !
 public :: initAccelerateCPA,      &
           setAccelerationParam,   &
           initializeAcceleration, &
+          getAccelerationType,    &
           accelerateCPA,          &
           endAccelerateCPA
 !
 private
-   integer (kind=IntKind), parameter :: Simple = 0
-   integer (kind=IntKind), parameter :: Anderson = 1
-   integer (kind=IntKind), parameter :: Broyden = 2
-!
    integer (kind=IntKind) :: MaxIteration = 30
+   integer (kind=IntKind) :: Kmax_KKR_Save
 !
    real (kind=RealKind) :: alpha = 0.15d0
    real (kind=RealKind) :: CPA_tol = TEN2m8
@@ -64,8 +63,9 @@ contains
    real (kind=RealKind), optional, intent(in) :: acc_mix, ctol
 !
    AccelerationType = acc_type
+   Kmax_KKR_Save = kmax_kkr
 !
-   if (present(ctol)) then
+   if (present(acc_mix)) then
       alpha = acc_mix
    endif
 !
@@ -77,7 +77,7 @@ contains
       MaxIteration = max_iter
    endif
 !
-   if (AccelerationType == Broyden) then
+   if (AccelerationType == BroydenMixing) then
       n = 2*kmax_kkr**2
       if (iscf_cpa.eq.1) then
          allocate (cpaiter_nm(n),cpaiter_fm(n),cpaiter_nml(n),cpaiter_fml(n))
@@ -88,7 +88,7 @@ contains
       endif
       allocate (RWORK(n))
       cpaiter_x => RWORK
-   else if (AccelerationType == Anderson) then
+   else if (AccelerationType == AndersonMixing) then
       n = kmax_kkr**2*ipits
       allocate (CWORK1(n))
       allocate (CWORK2(n))
@@ -110,7 +110,7 @@ contains
 !  ===================================================================
    implicit none
 !
-   if (AccelerationType == Broyden) then
+   if (AccelerationType == BroydenMixing) then
       if (iscf_cpa == 1) then
          deallocate(cpaiter_nm)
          deallocate(cpaiter_nml)
@@ -125,7 +125,7 @@ contains
       endif
       deallocate(RWORK)
       nullify(cpaiter_x)
-   else if (AccelerationType == Anderson) then
+   else if (AccelerationType == AndersonMixing) then
       nullify(tcin, tcout)
       deallocate (CWORK1)
       deallocate (CWORK2)
@@ -140,42 +140,44 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine setAccelerationParam(cpa_mix,acc_type,max_iter)
+   subroutine setAccelerationParam(acc_mix,acc_type,max_iter)
 !  ===================================================================
    implicit none
 !
-   real (kind=RealKind), intent(in) :: cpa_mix
+   real (kind=RealKind), intent(in) :: acc_mix
    integer (kind=IntKind), intent(in), optional :: acc_type
    integer (kind=IntKind), intent(in), optional :: max_iter
-   integer (kind=IntKind) :: n
+   integer (kind=IntKind) :: n, kmax_kkr
 !
    if (present(acc_type)) then
-      AccelerationType = acc_type
+      if (AccelerationType /= acc_type) then
+         call endAccelerateCPA()
+         kmax_kkr = Kmax_KKR_Save
+         call initAccelerateCPA(acc_type=acc_type,acc_mix=acc_mix,kmax_kkr=kmax_kkr)
+      endif
    endif
 !
    if (present(max_iter)) then
       MaxIteration = max_iter
    endif
 !
-   alpha = cpa_mix
-!
-!  n = size(RWORK)/2
-!  if (AccelerationType == Anderson) then
-!     if (.not.allocated(CWORK1) .or. .not.allocated(CWORK2)) then
-!        allocate (CWORK1(n*ipits))
-!        allocate (CWORK2(n*ipits))
-!     endif
-!     tcin => aliasArray2_c(CWORK1,n,ipits)
-!     tcout => aliasArray2_c(CWORK2,n,ipits)
-!  else
-!!    n = kmax_kkr**2
-!     if (.not.allocated(CWORK1)) then
-!        allocate (CWORK1(n))
-!     endif
-!     tc_save => CWORK1
-!  endif
+   alpha = acc_mix
 !
    end subroutine setAccelerationParam
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getAccelerationType() result(a)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind) :: a
+!
+   a = AccelerationType
+!  
+   end function getAccelerationType
 !  ===================================================================
 !
 !  *******************************************************************
@@ -190,7 +192,7 @@ contains
 !
    complex (kind=CmplxKind), intent(in) :: tcpa(ndim)
 !
-   if (AccelerationType == Broyden .and. itcpa == 1) then
+   if (AccelerationType == BroydenMixing .and. itcpa == 1) then
       n=2*ndim ! calculate length of the vector.......................
       cpaiter_x(1:ndim)  = real(tcpa(1:ndim))
       cpaiter_x(1+ndim:n)= aimag(tcpa(1:ndim))
@@ -215,10 +217,10 @@ contains
       cpaiter_ppq=alpha
       cpaiter_tp=ZERO
       cpaiter_u=ZERO
-   else if (AccelerationType == Anderson) then
+   else if (AccelerationType == AndersonMixing) then
       i=mod(itcpa-1,ipits)+1
       call zcopy(ndim,tcpa,1,tcin(1,i),1)
-   else if (AccelerationType == Simple) then
+   else if (AccelerationType == SimpleMixing) then
       call zcopy(ndim,tcpa,1,tc_save,1)
    endif
 !
@@ -238,11 +240,11 @@ contains
    complex (kind=CmplxKind), intent(inout) :: tcpa(ndim)
    complex (kind=CmplxKind) :: cfac
 !
-   if (AccelerationType == Broyden) then
+   if (AccelerationType == BroydenMixing) then
 !     ----------------------------------------------------------------
       call cpaiter(tcpa,ndim)
 !     ----------------------------------------------------------------
-   else if (AccelerationType == Anderson) then
+   else if (AccelerationType == AndersonMixing) then
       i=mod(itcpa-1,ipits)+1
 !     ----------------------------------------------------------------
       call zcopy(ndim,tcpa,1,tcout(1,i),1)

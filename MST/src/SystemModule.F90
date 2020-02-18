@@ -33,8 +33,8 @@ public :: initSystem,             &
           getScalingFactor,       &
           getMomentDirection,     &
           setMomentDirection,     &
-          getMomentDirectionOld,  &
-          setMomentDirectionOld,  &
+          getExchangeFieldDirection, &
+          setExchangeFieldDirection, &
           getConstrainField,      &
           setConstrainField,      &
           getForce,               &
@@ -107,15 +107,14 @@ public :: initSystem,             &
       module procedure getMomentDirection_one, getMomentDirection_all
    end interface getMomentDirection
 !
-   interface getMomentDirectionOld
-      module procedure getMomentDirectionOld_one, getMomentDirectionOld_all
-   end interface getMomentDirectionOld
+   interface getExchangeFieldDirection
+      module procedure getExchangeFieldDirection_1, getExchangeFieldDirection_a
+   end interface getExchangeFieldDirection
 !
    interface getConstrainField
       module procedure getConstrainField_one, getConstrainField_all
    end interface getConstrainField
 !
-   integer (kind=IntKind), public :: printSysMovie
 private
    integer (kind=IntKind), parameter :: MaxSpinIndex = 2
 !
@@ -219,7 +218,7 @@ contains
    integer (kind=IntKind), allocatable :: lmax_phi(:), ind_lmax_phi(:)
    integer (kind=IntKind), allocatable :: lmax_rho(:), ind_lmax_rho(:)
    integer (kind=IntKind), allocatable :: lmax_pot(:), ind_lmax_pot(:)
-   integer (kind=IntKind), allocatable :: ind_radplane(:)
+   integer (kind=IntKind), allocatable :: ind_radplane(:), ind_emix(:)
 !
    integer (kind=IntKind) :: NumAlloySubLatts, MaxComponents, rstatus
    integer (kind=IntKind), pointer :: p_AlloySublattIndex(:)
@@ -265,10 +264,6 @@ contains
    rstatus = getKeyValue(tbl_id,'No. Atoms in System (> 0)',NumAtoms)
    rstatus = getKeyValue(tbl_id,'Spin Index Param (>= 1)',nspin)
    rstatus = getKeyValue(tbl_id,'Additional Electrons',AdditionalElectrons)
-   rstatus = getKeyValue(tbl_id,'Generate System Movie',printSysMovie)
-   if ( rstatus == 1 ) then
-      printSysMovie = 0
-   endif
    rstatus = getKeyValue(tbl_id,'Uniform Grid Parameters',svalue)
    read(svalue,*) uniform_grid(1:3)
 !  -------------------------------------------------------------------
@@ -597,13 +592,13 @@ contains
       enddo
    endif
 !
-   if (isDataStorageExisting('Old Moment Direction')) then
-      Evec_Old => getDataStorage('Old Moment Direction',3,NumAtoms,RealMark)
+   if (isDataStorageExisting('Exchange Field Direction')) then
+      Evec_Old => getDataStorage('Exchange Field Direction',3,NumAtoms,RealMark)
    else if (nspin > 2) then
 !     ----------------------------------------------------------------
-      call createDataStorage('Old Moment Direction',3*NumAtoms,RealType)
+      call createDataStorage('Exchange Field Direction',3*NumAtoms,RealType)
 !     ----------------------------------------------------------------
-      Evec_Old => getDataStorage('Old Moment Direction',3,NumAtoms,RealMark)
+      Evec_Old => getDataStorage('Exchange Field Direction',3,NumAtoms,RealMark)
       do i=1,NumAtoms
          Evec_Old(1:3,i) = Evec(1:3,i)
       enddo
@@ -645,24 +640,13 @@ contains
       call createDataStorage('Evec Mixing Parameters',NumAtoms,RealType)
 !     ----------------------------------------------------------------
       emix => getDataStorage('Evec Mixing Parameters',NumAtoms,RealMark)
-      if ( isKeyExisting(info_id,'Evec Mix Param.') ) then
-!        -------------------------------------------------------------
-         rstatus = getKeyValue(info_id,'Evec Mix Param.',value,NumAtoms)
-!        -------------------------------------------------------------
-         do i=1,NumAtoms
-            read(value(i),*)emix(i)
-         enddo
-      else
-         emix(1:NumAtoms) = -ONE
-      endif
+      emix = -ONE
    endif
 !
    if (nspin > 2) then
-!     if ( isKeyExisting(info_id,'Default Evec Mix Param.') ) then
+      allocate(ind_emix(NumAtoms)); ind_emix = 0
+      rstatus = getKeyIndexValue(info_id,'Evec Mix Param.',ind_emix,emix,NumAtoms)
       if ( getKeyValue(info_id,'Default Evec Mix Param.',alpev) == 0 ) then
-!        -------------------------------------------------------------
-!        rstatus = getKeyValue(info_id,'Default Evec Mix Param.',alpev)
-!        -------------------------------------------------------------
          do i=1,NumAtoms
             if (emix(i) < ZERO) then
                emix(i) = alpev
@@ -674,6 +658,7 @@ contains
                            'Not able to identify Evec Mixing Parameters')
 !        -------------------------------------------------------------
       endif
+      deallocate(ind_emix)
    endif
 !
    if (isDataStorageExisting('Force Data')) then
@@ -1338,14 +1323,14 @@ contains
    else
       Evec(1:3,i) = evec_l(1:3)
    endif
-
+!
    end subroutine setMomentDirection
 !  ===================================================================
 !
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getMomentDirectionOld_one(i) result (evec_l)
+   function getExchangeFieldDirection_1(i) result (evec_l)
 !  ===================================================================
    use MathParamModule, only : ONE
    implicit none
@@ -1353,7 +1338,7 @@ contains
    real (kind=RealKind) :: evec_l(3)
 !
    if (i<1 .or. i>NumAtoms) then
-      call ErrorHandler('getMomentDirectionOld','Invalid atom index',i)
+      call ErrorHandler('getExchangeFieldDirection','Invalid atom index',i)
    else if (nspin < 3) then
       evec_l(1) = ZERO
       evec_l(2) = ZERO
@@ -1362,13 +1347,13 @@ contains
       evec_l(1:3) = Evec_Old(1:3,i)
    endif
 
-   end function getMomentDirectionOld_one
+   end function getExchangeFieldDirection_1
 !  ===================================================================
 !
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getMomentDirectionOld_all() result (evec_l)
+   function getExchangeFieldDirection_a() result (evec_l)
 !  ===================================================================
    implicit none
 !
@@ -1376,13 +1361,13 @@ contains
 !
    evec_l => Evec_Old
 
-   end function getMomentDirectionOld_all
+   end function getExchangeFieldDirection_a
 !  ===================================================================
 !
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine setMomentDirectionOld(i,evec_in)
+   subroutine setExchangeFieldDirection(i,evec_in)
 !  ===================================================================
    use MathParamModule, only : TEN2m8, ONE
 !
@@ -1392,21 +1377,21 @@ contains
    real (kind=RealKind) :: em
 !
    if (i<1 .or. i>NumAtoms) then
-      call ErrorHandler('setMomentDirectionOld','Invalid atom index',i)
+      call ErrorHandler('setExchangeFieldDirection','Invalid atom index',i)
    else if (nspin < 3) then
       return
    endif
 !
    em = sqrt(evec_in(1)*evec_in(1)+evec_in(2)*evec_in(2)+evec_in(3)*evec_in(3))
    if (em < TEN2m8) then
-      call ErrorHandler('setMomentDirectioOldn','evec is zero')
+      call ErrorHandler('setExchangeFieldDirection','evec is zero')
    else if (abs(em - ONE) > TEN2m8) then
       Evec_Old(1:3,i) = evec_in(1:3)/em
    else
       Evec_Old(1:3,i) = evec_in(1:3)
    endif
-
-   end subroutine setMomentDirectionOld
+!
+   end subroutine setExchangeFieldDirection
 !  ===================================================================
 !
 !  *******************************************************************
@@ -1876,7 +1861,7 @@ contains
    else if (trim(vname) == 'Moment Direction') then
       NumEvecUpdates = NumEvecUpdates + 1
       n = 3
-   else if (trim(vname) == 'Old Moment Direction') then
+   else if (trim(vname) == 'Exchange Field Direction') then
       NumEvecOldUpdates = NumEvecOldUpdates + 1
       n = 3
    else if (trim(vname) == 'Constrain Field') then

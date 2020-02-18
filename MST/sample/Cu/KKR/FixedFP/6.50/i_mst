@@ -111,7 +111,13 @@ Spin Index Param (>= 1)    ::  1
 Default Lmax-T matrix      ::  4
 Default Muffin-tin Radius  ::  2.26
    = 0: Using the inscribed sphere radius
-   = 1: Using the internal muffin-tin radius defined in ChemElementModule
+   = 1: Using the implicit muffin-tin radius defined in ChemElementModule
+   = A specific real value (> 0.0, in atomic units)
+Default Core Radius        ::  0
+   =-1: Using the circumscribed sphere radius for full-potential calculations
+   = 0: Using the inscribed sphere radius for full-potential calculations, the 
+        muffin-tin radius for muffin-tin calculations, or the ASA radius for ASA calculations.
+   = 1: Using the implicit core radius defined in ChemElementModule
    = A specific real value (> 0.0, in atomic units)
 Default No. Rad Points ndivin  :: 1001
    = 0: Not specified ---------------
@@ -142,7 +148,7 @@ Mixing algorithm           ::  2
 Mixing quantity type       ::  1
      0. Charge mixing      ---------
      1. Potential mixing   ---------
-Default Mixing Parameter   ::  0.1000
+Default Mixing Parameter   ::  0.0100
 Energy (Ryd) Tol (> 0)     ::  0.000005
 Potential Tol (> 0)        ::  0.0000001
 ================================================================================

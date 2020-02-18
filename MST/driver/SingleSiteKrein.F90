@@ -58,7 +58,7 @@ program SingleSiteKrein
 !
    use AtomModule, only : getStepFuncLmax, setTruncPotLmax, setPotLmax
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
-   use AtomModule, only : getGridData, getLocalEvecOld, getMuffinTinRadius
+   use AtomModule, only : getGridData, getMuffinTinRadius
    use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies
 !
    use SphericalHarmonicsModule, only : initSphericalHarmonics

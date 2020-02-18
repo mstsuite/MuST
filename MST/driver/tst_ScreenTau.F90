@@ -39,7 +39,7 @@ program test_ScreenTau
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
    use AtomModule, only : getGridData
    use AtomModule, only : getLocalAtomName, getLocalAtomicNumber
-   use AtomModule, only : getLocalAtomPosition, getLocalEvecOld
+   use AtomModule, only : getLocalAtomPosition
    use AtomModule, only : getInPotFileName, getInPotFileForm
    use AtomModule, only : getScreenPotential, getScreenRcut
 !

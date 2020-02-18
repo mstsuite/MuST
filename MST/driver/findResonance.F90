@@ -70,7 +70,7 @@ program findResonance
 !
    use AtomModule, only : getStepFuncLmax, setTruncPotLmax, setPotLmax
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
-   use AtomModule, only : getGridData, getLocalEvecOld
+   use AtomModule, only : getGridData, getLocalEvec
    use AtomModule, only : getLocalNumSpecies, getLocalAtomicNumber
 !
    use SphericalHarmonicsModule, only : initSphericalHarmonics
@@ -80,7 +80,7 @@ program findResonance
 !
    use MadelungModule, only : initMadelung, endMadelung
 !
-   use SpinRotationModule, only : initSpinRotation, endSpinRotation
+   use SpinRotationModule, only : initSpinRotation, calSpinRotation, endSpinRotation
 !
    use ContourModule, only : getNumEs, getEPoint, setupContour
 !
@@ -454,12 +454,16 @@ contains
       Efermi=getPotEf()
    endif
 !
+!  -------------------------------------------------------------------
+   call initSpinRotation(LocalNumAtoms)
+!  -------------------------------------------------------------------
    allocate(evec(3,LocalNumAtoms))
    do i = 1,LocalNumAtoms
-      evec(1:3,i) = getLocalEvecOld(i)
+      evec(1:3,i) = getLocalEvec(i,'old')
+!     ----------------------------------------------------------------
+      call calSpinRotation(i,evec(1:3,i))
+!     ----------------------------------------------------------------
    enddo
-!  -------------------------------------------------------------------
-   call initSpinRotation(LocalNumAtoms,evec)
 !  -------------------------------------------------------------------
    call setupContour( ErBottom, Efermi, EiBottom, EiTop )
 !  -------------------------------------------------------------------

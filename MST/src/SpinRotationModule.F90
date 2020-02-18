@@ -13,7 +13,7 @@ module SpinRotationModule
 public :: initSpinRotation,  &
           endSpinRotation,   &
           printSpinRotation, &
-          resetSpinRotation, &
+          calSpinRotation,   &
           rotateLtoG,        &
           rotateGtoL,        &
           transformDensityMatrix
@@ -39,14 +39,12 @@ private
 contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine initSpinRotation(na,e)
+   subroutine initSpinRotation(na)
 !  ===================================================================
    implicit none
 !
    integer (kind=IntKind), intent(in) :: na
    integer (kind=IntKind) :: i
-!
-   real (kind=RealKind) :: e(3,na)
 !
    if (na < 1) then
       call ErrorHandler('initSpinRotation',                            & 
@@ -57,27 +55,8 @@ contains
 !
    allocate( u(4,na), ud(4,na), evec(3,na))
    allocate( wx(4,na), wy(4,na), wz(4,na))
-!
-   do i=1,na
-      evec(1:3,i) = e(1:3,i)
-      u(1,i) = sqrt(HALF*(ONE+evec(3,i)))
-      if( abs(u(1,i)) < tol ) then
-         u(1,i) = CZERO
-         u(2,i) = CONE
-         u(3,i) = CONE
-      else
-         u(2,i) =-HALF*(evec(1,i)+SQRTm1*evec(2,i))/u(1,i)
-         u(3,i) = HALF*(evec(1,i)-SQRTm1*evec(2,i))/u(1,i)
-      endif
-      u(4,i)=u(1,i)
-      ud(1,i)=conjg(u(1,i))
-      ud(2,i)=conjg(u(3,i))
-      ud(3,i)=conjg(u(2,i))
-      ud(4,i)=conjg(u(4,i))
-!     ----------------------------------------------------------------
-      call u_sigma_u(u(1:4,i),ud(1:4,i),wx(1:4,i),wy(1:4,i),wz(1:4,i))
-!     ----------------------------------------------------------------
-   enddo
+   u = ZERO; ud = ZERO; evec = ZERO
+   wx = ZERO; wy = ZERO; wz = ZERO
 !
    Initialized = .true.
 !
@@ -101,7 +80,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine resetSpinRotation(id,e)
+   subroutine calSpinRotation(id,e)
 !  ===================================================================
    implicit none
 !
@@ -110,12 +89,12 @@ contains
    real (kind=RealKind) :: e(3)
 !
    if (id < 1 .or. id > NumLocalSpinDirs ) then
-      call ErrorHandler( 'resetSpinRotation',                          & 
+      call ErrorHandler( 'calSpinRotation',                           & 
                        'Wrong Local Spin Directions',NumLocalSpinDirs)
    endif
 !
    if ( .not.Initialized ) then
-      call ErrorHandler("resetSpinRotation",                           &
+      call ErrorHandler("calSpinRotation",                            &
                    'initSpinRotation have to be initialized first')
    endif
 !
@@ -138,7 +117,7 @@ contains
    call u_sigma_u(u(1:4,id),ud(1:4,id),wx(1:4,id),wy(1:4,id),wz(1:4,id))
 !  -------------------------------------------------------------------
 !
-   end subroutine resetSpinRotation
+   end subroutine calSpinRotation
 !  ===================================================================
 !
 !  *******************************************************************

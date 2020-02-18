@@ -681,23 +681,33 @@ contains
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine printChargeDistribution(iter,fu)
+   subroutine printChargeDistribution(iter,fu,cant)
 !  ===================================================================
    use Atom2ProcModule, only : getAtom2ProcInGroup
    use SystemModule, only : getAtomicNumber, getAtomName, getNumAlloyElements
+   use SystemModule, only : getMomentDirection
    implicit none
 !
    logical :: FileExist
 !
    integer (kind=IntKind), intent(in) :: iter
    integer (kind=IntKind), intent(in) :: fu
-   integer (kind=IntKind) :: ig, ia, lig
+   integer (kind=IntKind), intent(in), optional :: cant
+   integer (kind=IntKind) :: ig, ia, lig, n_spin_cant
+!
+   real (kind=RealKind), pointer :: evec(:,:)
 !
    if (.not.Initialized) then
       call ErrorHandler('printChargeDistributionTable',               &
                         'Module is not initialized')
    else if (.not.Updated) then
       call ErrorHandler('printChargeDistributionTable','Updated Table is empty')
+   endif
+!
+   if (present(cant)) then
+      n_spin_cant = cant
+   else
+      n_spin_cant = 1
    endif
 !
    if (fu /= 6) then
@@ -722,10 +732,10 @@ contains
    endif
 !
    write(fu,'(/,a,i5)')'# ITERATION :',iter
-   write(fu,'(80(''=''))')
    if (n_spin_pola == 1) then
-      write(fu,'(a)')' Atom   Index       Q         Qmt        Qvp          dQ'
       write(fu,'(80(''=''))')
+      write(fu,'(a)')' Atom   Index       Q         Qmt        Qvp          dQ'
+      write(fu,'(80(''-''))')
       do ig = 1, GlobalNumAtoms
          do ia = 1, getNumAlloyElements(ig)
             lig = global_table_line(ig) + ia
@@ -735,10 +745,12 @@ contains
                   OnSiteElectronTable(lig)-getAtomicNumber(ig,ia)
          enddo
       enddo
-   else
+      write(fu,'(80(''=''))')
+   else if (n_spin_cant < 2) then
+      write(fu,'(80(''=''))')
       write(fu,'(a)')      &
 ' Atom   Index       Q         Qmt        Qvp          dQ        Mmt        Mvp'
-      write(fu,'(80(''=''))')
+      write(fu,'(80(''-''))')
       do ig = 1, GlobalNumAtoms
          do ia = 1, getNumAlloyElements(ig)
             lig = global_table_line(ig) + ia
@@ -750,8 +762,26 @@ contains
 !                 NetMomentTable(lig)
          enddo
       enddo
+      write(fu,'(80(''=''))')
+   else
+      evec => getMomentDirection()
+      write(fu,'(113(''=''))')
+      write(fu,'(a)')      &
+' Atom   Index       Q         Qmt        Qvp          dQ        Mmt        Mvp      Evec_x     Evec_y     Evec_z'
+      write(fu,'(113(''-''))')
+      do ig = 1, GlobalNumAtoms
+         do ia = 1, getNumAlloyElements(ig)
+            lig = global_table_line(ig) + ia
+            write(fu,'(2x,a3,2x,i7,9(2x,f9.5))')getAtomName(ig,ia),ig, &
+                  OnSiteElectronTable(lig),MTSphereElectronTable(lig), &
+                  VPCellElectronTable(lig),                            &
+                  OnSiteElectronTable(lig)-getAtomicNumber(ig,ia),     &
+                  MTSphereMomentTable(lig),VPCellMomentTable(lig),evec(1:3,ig)
+!                 NetMomentTable(lig)
+         enddo
+      enddo
+      write(fu,'(113(''=''))')
    endif
-   write(fu,'(80(''=''))')
 !
    if (fu /= 6) then
       close(unit=fu)

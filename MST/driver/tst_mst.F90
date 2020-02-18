@@ -54,7 +54,7 @@ program main
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
    use AtomModule, only : getGridData
    use AtomModule, only : getLocalAtomName, getLocalAtomicNumber
-   use AtomModule, only : getLocalAtomPosition, getLocalEvecOld
+   use AtomModule, only : getLocalAtomPosition, getLocalEvec
    use AtomModule, only : getInPotFileName, getInPotFileForm
    use AtomModule, only : getOutPotFileName, getOutPotFileForm
    use AtomModule, only : getInValDenFileName, getInValDenFileForm
@@ -328,7 +328,7 @@ program main
    allocate(GlobalIndex(LocalNumAtoms), LocalEvec(3,LocalNumAtoms))
    do id=1,LocalNumAtoms
       LocalAtomPosi(1:3,id)=getLocalAtomPosition(id)
-      LocalEvec(1:3,id)=getLocalEvecOld(id)
+      LocalEvec(1:3,id)=getLocalEvec(id,'old')
       GlobalIndex(id)=getGlobalIndex(id,MyPE)
       LocalAtomicNumber(id)=getLocalAtomicNumber(id)
    enddo

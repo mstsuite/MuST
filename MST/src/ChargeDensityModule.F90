@@ -830,7 +830,8 @@ contains
       do id = 1,LocalNumAtoms
          p_CDL => ChargeDensityList(id)
          nr = p_CDL%NumRPts
-         r_ps = getRcutPseudo(id)
+         r_ps = getRcutPseudo(id) ! Returns the radio of the pseudo charge 
+                                  ! radius and the muffin-tin radius
          Grid => getGrid(id)
          jmt  = Grid%jmt
          r_mesh => getRmesh(id)
@@ -838,9 +839,9 @@ contains
             r_ps = p_CDL%r_mesh(jmt)
             ir = jmt
          else 
-            if ( r_ps <= ONE ) then ! If r_ps < 1.0, it is regarded as r_ps/Rmt
-               r_ps = r_ps*p_CDL%r_mesh(jmt)
-            endif
+!2/7/2020   if ( r_ps <= ONE ) then ! If r_ps < 1.0, it is regarded as r_ps/Rmt
+            r_ps = r_ps*p_CDL%r_mesh(jmt)
+!2/7/2020   endif
             ir = 1
 !           ----------------------------------------------------------
             call hunt(nr,p_CDL%r_mesh,r_ps,ir)
@@ -2037,7 +2038,7 @@ contains
 !
    use Atom2ProcModule, only : getGlobalIndex
 !
-   use AtomModule, only : getLocalEvecNew, getLocalAtomicNumber
+   use AtomModule, only : getLocalEvec, getLocalAtomicNumber
    use AtomModule, only : getLocalSpeciesContent
 !
    use SystemSymmetryModule, only : getSymmetryFlags
@@ -2127,7 +2128,7 @@ contains
       p_CDL%ChargeCompFlag(1) = 1
       do ia = 1, p_CDL%NumSpecies
          rho2p_r => getValenceSphericalElectronDensity(id,ia)
-         evec(1:3) = getLocalEvecNew(id)
+         evec(1:3) = getLocalEvec(id,'new')
          rho0 => p_CDL%rhoSph_Total(1:nr+1,ia)
          rho0(1:nr+1) = ZERO
          rho0(1:nr) = rho0(1:nr) + rho2p_r(1:nr)

@@ -76,7 +76,8 @@ public
    integer (kind=IntKind) :: harris = -1
    integer (kind=IntKind) :: potwrite = 0
    integer (kind=IntKind) :: movie    = 0
-   integer (kind=IntKind) :: ntstep   = 0
+   integer (kind=IntKind) :: printSysMovie = 0
+   integer (kind=IntKind) :: ntstep   = 1
    integer (kind=IntKind) :: ContourType = -1
    integer (kind=IntKind) :: NumEs = 0
    integer (kind=IntKind) :: NumExtraEs = 0
@@ -115,7 +116,7 @@ public
    real (kind=RealKind) :: slutol
    real (kind=RealKind) :: sluchecktol
    real (kind=RealKind) :: rmstol
-   real (kind=RealKind) :: tstep
+   real (kind=RealKind) :: tstep = 1.0d0
    real (kind=RealKind) :: pole_step
 !
    integer (kind=IntKind), parameter :: LeadPE = 0
@@ -201,6 +202,7 @@ contains
    rstatus = getKeyValue(tbl_id,'Stop-at Routine Name',istop)
    rstatus = getKeyValue(tbl_id,'No. Iter for Each Pot. Write',potwrite)
    rstatus = getKeyValue(tbl_id,'No. Iter for Each Movie',movie)
+   rstatus = getKeyValue(tbl_id,'Generate System Movie',printSysMovie)
    rstatus = getKeyValue(tbl_id,'Calc. Harris Energy (H.E.)',harris)
    rstatus = getKeyValue(tbl_id,'No. Gauss Pts. along r',ngaussr)
    rstatus = getKeyValue(tbl_id,'No. Gauss Pts. along theta',ngaussq)
@@ -233,6 +235,10 @@ contains
             ss_solver_type = 3
          endif
       endif
+   endif
+!
+   if (movie == 0) then
+      printSysMovie = 0
    endif
 !
    rstatus = getKeyValue(tbl_id,'SS Solutions Method (>=0)',ss_solution_method)
@@ -282,9 +288,12 @@ contains
    rstatus = getKeyValue(tbl_id,'Calculate J_ij (y/n)',j_ij)
    rstatus = getKeyValue(tbl_id,'T-matrix inversion (>= 0)',Tinv_alg)
    rstatus = getKeyValue(tbl_id,'M-matrix inversion (>= 0)',Minv_alg)
-   rstatus = getKeyValue(tbl_id,'No. Time Steps (>= 0)',ntstep)
-   rstatus = getKeyValue(tbl_id,'Time Step',tstep)
-   rstatus = getKeyValue(tbl_id,'Time Step',tstep)
+   if ( getKeyValue(tbl_id,'No. SD Time Steps (>= 1)',ntstep) /= 0 ) then
+      rstatus = getKeyValue(tbl_id,'No. Spin-dynamics Time Steps (>= 1)',ntstep)
+   endif
+   if ( getKeyValue(tbl_id,'SD Time Step',tstep) ) then
+      rstatus = getKeyValue(tbl_id,'Spin-dynamics Time Step',tstep)
+   endif
 !  -------------------------------------------------------------------
    rstatus = getKeyValue(tbl_id,'Read E-mesh from emeshs.inp',read_emesh)
    rstatus = getKeyValue(tbl_id,'Contour Type (>= 0)',ContourType)

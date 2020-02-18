@@ -308,7 +308,11 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine computeCPAMedium(e)
 !  ===================================================================
+   use PublicParamDefinitionsModule, only : SimpleMixing, AndersonMixing, BroydenMixing
+!
    use MatrixInverseModule, only : MtxInv_LU
+!
+   use GroupCommModule, only : GlobalMaxInGroup
 !
    use SSSolverModule, only : getScatteringMatrix
 !
@@ -316,7 +320,7 @@ contains
 !  use CrystalMatrixModule, only : getCPAMediumTau => getTau
 !
    use AccelerateCPAModule, only : initializeAcceleration, accelerateCPA
-   use AccelerateCPAModule, only : setAccelerationParam
+   use AccelerateCPAModule, only : setAccelerationParam, getAccelerationType
 !
    use EmbeddedClusterModule, only : setupHostMedium, getTau
 !
@@ -329,7 +333,7 @@ contains
    character (len=12) :: description
 !
    integer (kind=IntKind) :: ia, id, nsize, n, dsize
-   integer (kind=IntKind) :: ns, is, js
+   integer (kind=IntKind) :: ns, is, js, switch
    integer (kind=IntKind) :: site_config(LocalNumSites)
 !
 !  ===================================================================
@@ -393,7 +397,8 @@ contains
       endif
    enddo
 !
-   iteration = 0
+   switch = 0
+   iteration = 0 
    LOOP_iter: do while (iteration < MaxIterations)
       iteration = iteration + 1
 !     write(6,'(a,i5)')'At iteration: ',iteration
@@ -446,9 +451,43 @@ contains
 !        -------------------------------------------------------------
          max_err = max(max_err,err)
       enddo
+!     ----------------------------------------------------------------
+      call GlobalMaxInGroup(GroupID,max_err)
+!     ----------------------------------------------------------------
 !
       if (max_err < CPA_tolerance) then
          exit LOOP_iter
+      else if (iteration > MaxIterations/2) then
+         if (switch <= 1) then
+            if (getAccelerationType() == AndersonMixing .or.          &
+                getAccelerationType() == SimpleMixing) then
+!              -------------------------------------------------------
+               call setAccelerationParam(acc_mix=CPA_slow_alpha,acc_type=BroydenMixing)
+!              -------------------------------------------------------
+               if (print_instruction >= 0) then
+                  write(6,'(a)')'Switch to Broyden Mixing Scheme.'
+               endif
+            else if (getAccelerationType() == BroydenMixing .or.      &
+                     getAccelerationType() == SimpleMixing) then
+!              -------------------------------------------------------
+               call setAccelerationParam(CPA_slow_alpha,acc_type=AndersonMixing)
+!              -------------------------------------------------------
+               if (print_instruction >= 0) then
+                  write(6,'(a)')'Switch to Anderson Mixing Scheme.'
+               endif
+            endif
+            iteration = 0
+            switch = switch + 1
+         else if (switch == 2) then
+!           ----------------------------------------------------------
+            call setAccelerationParam(acc_mix=CPA_alpha,acc_type=SimpleMixing)
+!           ----------------------------------------------------------
+            if (print_instruction >= 0) then
+               write(6,'(a)')'Switch to Simple Mixing Scheme.'
+            endif
+            iteration = 0
+            switch = switch + 1
+         endif
       endif
    enddo LOOP_iter
 !

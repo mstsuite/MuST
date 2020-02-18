@@ -83,6 +83,13 @@ public :: checkParameter,  &
                                                   'Coulomb Potential Test                   ', &
                                                   'Full-Potential inside Muffin-Tin         '/)
 !
+!  ===================================================================
+!  Mixing type parameters:                
+!  ===================================================================
+   integer (kind=IntKind), parameter :: SimpleMixing = 0
+   integer (kind=IntKind), parameter :: AndersonMixing = 1
+   integer (kind=IntKind), parameter :: BroydenMixing = 2
+!
 contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function checkParameter(pname,pvalue) result(t)
