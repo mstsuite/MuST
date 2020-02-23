@@ -346,12 +346,13 @@ contains
    subroutine printMediumHost(pe)
 !  ===================================================================
    use MPPModule, only : MyPE, startRoundTurn, finishMyTurn
-   use MPPModule, only : syncAllPEs
+   use MPPModule, only : syncAllPEs, setCommunicator, resetCommunicator
+   use GroupCommModule, only : getGroupCommunicator
    use ChemElementModule, only :  getName
    implicit none
 !
    integer (kind=intKind), intent(in), optional :: pe
-   integer (kind=intKind) :: print_pe
+   integer (kind=intKind) :: print_pe, comm
 !
    if (present(pe)) then
       print_pe = pe
@@ -360,15 +361,22 @@ contains
    endif
 !
    if (print_pe < 0) then
+!     ----------------------------------------------------------------
+      comm = getGroupCommunicator(GroupID)
+      call setCommunicator(comm,MyPEinGroup,NumPEsInGroup,sync=.true.)
+!     ----------------------------------------------------------------
       call startRoundTurn()
       call printData()
       call finishMyTurn()
+!     ----------------------------------------------------------------
+      call resetCommunicator(sync=.true.)
+!     ----------------------------------------------------------------
    else 
       if (print_pe == MyPE) then
          call printData()
       endif
-      call syncAllPEs()
    endif
+   call syncAllPEs()
 !
    end subroutine printMediumHost
 !  ===================================================================

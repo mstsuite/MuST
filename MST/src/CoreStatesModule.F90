@@ -2209,11 +2209,13 @@ contains
       call IntegrateSphHankelSq(Core(id)%lc(i,ia),r(last2),Core(id)%ec(i,is,ia),norm_frac)
 !     ----------------------------------------------------------------
       if (print_level >= 0) then
-         write(6,'(a,3i4,2(a,d15.8),a,2d15.8)')'nc, lc, kc = ',       &
+!        write(6,'(a,3i4,2(a,d15.8),a,2d15.8)')'nc, lc, kc = ',       &
+         write(6,'(a,3i4,a,d15.8)')'nc, lc, kc = ',                   &
                Core(id)%nc(i,ia),Core(id)%lc(i,ia),Core(id)%kc(i,ia), &
-               ', Int[rho] beyond Rc = ', PI4*norm_frac*h2nrm,        &
-               ', Int[Rho] within Rc = ',TWO*PI4*qmp(last2),          &
-               ', norm_frac, h2nrm = ',norm_frac,h2nrm
+               ', Int[Rho] to Infinity/Int[Rho] to Rc = ',HALF*norm_frac*h2nrm/qmp(last2)
+!              ', Int[rho] beyond Rc = ', PI4*norm_frac*h2nrm,        &
+!              ', Int[Rho] within Rc = ',TWO*PI4*qmp(last2),          &
+!              ', norm_frac, h2nrm = ',norm_frac,h2nrm
       endif
       gnrm=ONE/(TWO*PI4*qmp(last2)+PI4*norm_frac*h2nrm) ! Normalized to R = infinity
 #else
