@@ -424,7 +424,8 @@ contains
       if (isCPAMedium(id)) then ! This is a random alloy sublattice site
          site_config(id) = 0 ! Set the site to be the CPA medium site
       else
-         site_config(id) = id
+!        site_config(id) = id   ! Modified on 2/23/2020
+         site_config(id) = 1
       endif
    enddo
 !
@@ -949,7 +950,7 @@ contains
    character (len=*), intent(in) :: sm_type
    integer (kind=IntKind), intent(in), optional :: spin, site, atom  ! Local atom index
    integer (kind=IntKind), intent(out), optional :: nsize
-   integer (kind=IntKind) :: msize, ic
+   integer (kind=IntKind) :: msize
 !
    complex (kind=CmplxKind), pointer :: tmat(:,:)  ! t-matrix
 !
@@ -989,19 +990,15 @@ contains
       if (present(nsize)) then
          nsize = CPAMedium(site)%dsize*nSpinCant
       endif
-   else 
-      if (atom == 0) then
+   else if (atom == 0) then
 !     ----------------------------------------------------------------
-      call ErrorHandler('getSingleSiteMatrix','atom = 0 on nopn-CPA sublattice')
+      call ErrorHandler('getSingleSiteMatrix','atom = 0 on non-CPA sublattice')
 !     ----------------------------------------------------------------
-         ic = 1   ! For a non-CPA site, index atom is irrelevant
-      else
-         ic = atom  ! For a CPA site, set ic to a real species index
-      endif
+   else
       if (present(spin)) then
-         tmat => getScatteringMatrix(sm_type,spin=spin,site=site,atom=ic,dsize=msize)
+         tmat => getScatteringMatrix(sm_type,spin=spin,site=site,atom=atom,dsize=msize)
       else
-         tmat => getScatteringMatrix(sm_type,spin=1,site=site,atom=ic,dsize=msize)
+         tmat => getScatteringMatrix(sm_type,spin=1,site=site,atom=atom,dsize=msize)
       endif
       if (present(nsize)) then
          nsize = msize
@@ -1025,7 +1022,7 @@ contains
    character (len=*), intent(in) :: sm_type
    integer (kind=IntKind), intent(in), optional :: spin, site, atom  ! Local atom index
    integer (kind=IntKind), intent(out), optional :: nsize
-   integer (kind=IntKind) :: msize, ic
+   integer (kind=IntKind) :: msize
 !
    complex (kind=CmplxKind), pointer :: ss_mat(:,:)
 !
@@ -1055,19 +1052,15 @@ contains
       if (present(nsize)) then
          nsize = CPAMedium(site)%dsize*nSpinCant
       endif
-   else 
-      if (atom == 0) then
+   else if (atom == 0) then
 !     ----------------------------------------------------------------
       call ErrorHandler('getSingleSiteMatrix','atom = 0 on nopn-CPA sublattice')
 !     ----------------------------------------------------------------
-         ic = 1   ! For a non-CPA site, index atom is irrelevant
-      else
-         ic = atom  ! For a CPA site, set ic to a real species index
-      endif
+   else
       if (present(spin)) then
-         ss_mat => getScatteringMatrix(sm_type,spin=spin,site=site,atom=ic,dsize=msize)
+         ss_mat => getScatteringMatrix(sm_type,spin=spin,site=site,atom=atom,dsize=msize)
       else
-         ss_mat => getScatteringMatrix(sm_type,spin=1,site=site,atom=ic,dsize=msize)
+         ss_mat => getScatteringMatrix(sm_type,spin=1,site=site,atom=atom,dsize=msize)
       endif
       if (present(nsize)) then
          nsize = msize
