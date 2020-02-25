@@ -270,7 +270,9 @@ contains
          write(6,*)"  l   m flag          Re[stepf]                  Im[stepf]        "
          do jl = 1, jmax
             ir = izamax(nr,stepf(1:nr,jl),1)
-            write(6,'(3i4,2(1x,d23.14))') lofj(jl), mofj(jl), pSymmFlags(jl), stepf(ir,jl)
+            if (pSymmFlags(jl) > 0) then
+               write(6,'(3i4,2(1x,d23.14))') lofj(jl), mofj(jl), pSymmFlags(jl), stepf(ir,jl)
+            endif
          enddo
          write(6,'(60(''-''),/)')
       endif
@@ -394,7 +396,9 @@ contains
          do ll = 0,lmax
             do ml = 0,ll
                jl = jl+1
-               write(6,'(3i4,2(1x,d23.14))') ll, ml, pSymmFlags(jl), ql_ni(jl)
+               if (pSymmFlags(jl) > 0) then
+                  write(6,'(3i4,2(1x,d23.14))') ll, ml, pSymmFlags(jl), ql_ni(jl)
+               endif
             enddo
          enddo
          write(6,'(60(''-''),/)')

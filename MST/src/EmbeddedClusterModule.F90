@@ -430,6 +430,18 @@ contains
 !  subroutine setupHostMedium(t_host,t_inverse,getMediumTau)
    subroutine setupHostMedium(e,getSingleSiteTmat,configuration)
 !  ===================================================================
+!  Purpose: setup the host crystal in the following steps:
+!           1. Obtaining the t-matrices (by calling getSingleSiteTmat) 
+!              for the host atoms (whose information are contained in 
+!              configuration array) and placing them on appropriate 
+!              sub-lattices (which correspond to the atomic sites in 
+!              the embedding cluster.
+!           2. Calculating the tau matrix for all of the host atoms by
+!              calling calCrystalMatrix with given configuration of the
+!              host crystal.
+!           3. Associate the storage of the calculated tau-matrix with 
+!              pointer tau_l in the local data structure
+!  *******************************************************************
    use MatrixInverseModule, only : MtxInv_LU
    use CrystalMatrixModule, only : calCrystalMatrix, getMediumTau=>getTau
 !

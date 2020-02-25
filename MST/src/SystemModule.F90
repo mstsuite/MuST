@@ -118,6 +118,8 @@ public :: initSystem,             &
 private
    integer (kind=IntKind), parameter :: MaxSpinIndex = 2
 !
+   logical :: isAlloy
+!
    character (len=50) :: SystemID
    character (len=70) :: SystemTitle
    character (len=45) :: fposi_in
@@ -134,7 +136,6 @@ private
    character (len=MaxLenOfAtomName), allocatable :: AlloyElementName(:)
    integer (kind=IntKind), allocatable :: AlloyElementAN(:)
    integer (kind=IntKind), allocatable :: NumAlloyElements(:)
-   integer (kind=IntKind) :: MaxAlloyElements
    real (kind=RealKind), allocatable :: AlloyElementContent(:)
 !
    integer (kind=IntKind) :: NumAtoms
@@ -474,8 +475,8 @@ contains
    do ig=1,NumAtoms
       NumAlloyElements(ig) = 1
    enddo
-   MaxAlloyElements = 1
    if (isDataStorageExisting('Alloy Sublattice Index')) then
+      isAlloy = .true.
       NumAlloySubLatts = getDataStorageSize('Alloy Sublattice Index')
       p_AlloySublattIndex => getDataStorage('Alloy Sublattice Index',NumAlloySubLatts,IntegerMark)
       p_NumComponents => getDataStorage('Number of Components on Sublattice',NumAlloySubLatts,IntegerMark)
@@ -485,9 +486,10 @@ contains
       do i = 1, NumAlloySubLatts
          ig = p_AlloySublattIndex(i)
          NumAlloyElements(ig) = p_NumComponents(i)
-         MaxAlloyElements = max(MaxAlloyElements,NumAlloyElements(ig))
+!        MaxAlloyElements = max(MaxAlloyElements,NumAlloyElements(ig))
       enddo
    else
+      isAlloy = .false.
       NumAlloySubLatts = 0
    endif
 !
@@ -501,7 +503,7 @@ contains
    allocate(AlloyElementName(table_size))
    allocate(AlloyElementAN(table_size))
    allocate(AlloyElementContent(table_size))
-   if (MaxAlloyElements > 1) then
+   if (isAlloy) then
       do i = 1, NumAlloySubLatts
          ig = p_AlloySublattIndex(i)
          do j = 1, NumAlloyElements(ig)
@@ -735,7 +737,7 @@ contains
 !
    deallocate(table_line)
    deallocate(AlloyElementName, AlloyElementAN, AlloyElementContent)
-   MaxAlloyElements = 0
+   isAlloy = .false.
 !
    deallocate(LmaxKKR, LmaxRho, LmaxPot)
    deallocate(RadicalPlaneRatio)

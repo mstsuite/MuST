@@ -776,7 +776,7 @@
          integer (kind=IntKind) :: MyPE_comm = 0
          integer (kind=IntKind) :: NumPEs_comm = 1
 !
-         integer (kind=IntKind) :: robin_message_type = 20170131
+         integer (kind=IntKind) :: robin_message_type = 170131
          integer (kind=IntKind) :: first_robin, robin_wait
 !
       contains
@@ -6770,19 +6770,24 @@
       integer (kind=IntKind), intent(in), optional :: pe
       integer (kind=IntKind) :: msg, source, wait_id
 !
+      if (NumPEs_comm == 1) then
+         return
+      endif
+!
       if (present(pe)) then
-         if (pe < 0 .or. pe > NumPEs-1) then
-            call ErrorHandler('startRoundTurn','starting PE is out of range',pe)
+         if (pe < 0 .or. pe > NumPEs_comm-1) then
+            call ErrorHandler('startRoundTurn',                       &
+     &                        'starting PE is out of range',pe)
          endif
          first_robin = pe
       else
          first_robin = 0
       endif
 !
-      if (MyPE /= first_robin) then
-         source = MyPE - 1
+      if (MyPE_comm /= first_robin) then
+         source = MyPE_comm - 1
          if (source < 0) then
-            source = NumPEs - 1
+            source = NumPEs_comm - 1
          endif
 #ifdef MPI
 !        -------------------------------------------------------------
@@ -6804,13 +6809,17 @@
       implicit none
       integer (kind=IntKind) :: msg, next, wait_id
 !
-      next = MyPE + 1
-      if (next >= NumPEs) then
+      if (NumPEs_comm == 1) then
+         return
+      endif
+!
+      next = MyPE_comm + 1
+      if (next >= NumPEs_comm) then
          next = 0
       endif
 #ifdef MPI
       if (next /= first_robin) then
-         msg = MyPE
+         msg = MyPE_comm
 !        -------------------------------------------------------------
          call MPI_isend(msg,1,MPI_INTEGER,next,                       &
      &                  robin_message_type,communicator,wait_id,info)

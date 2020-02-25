@@ -2313,14 +2313,15 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine printBZone(Rot3D)
+   subroutine printBZone(Rot3D,Klimit)
 !  ===================================================================
    implicit none
 !
    logical, intent(in), optional :: Rot3D
    logical :: print_Rot3D
 !
-   integer (kind=IntKind) :: i, k
+   integer (kind=IntKind), optional :: Klimit
+   integer (kind=IntKind) :: i, k, print_max
 !
    if (.not.Initialized) then
       call WarningHandler('printBZone','BZoneModule is not initialized')
@@ -2338,16 +2339,26 @@ contains
    write(6,'(a,/)')'*******************************'
    write(6,'(''Number of K Meshes = '',i5)')NumMeshs
    do i=1,NumMeshs
+      if (present(Klimit)) then
+         print_max = min(NumKs(i),Klimit)
+      else
+         print_max = NumKs(i)
+      endif
       write(6,'(/,''================================================='')')
       write(6,'(''Mesh index         = '',i5)')i
       write(6,'(''Number of K points = '',i5)')NumKs(i)
-      write(6,'(''================================================='')')
-      write(6,'(''     kx           ky           kz           wght '')')
-      write(6,'(''-------------------------------------------------'')')
-      do k=1,NumKs(i)
-         write(6,'(4(f10.5,3x))')KxPoint(k,i),KyPoint(k,i),KzPoint(k,i), &
-                                 Kweight(k,i)
-      enddo
+      if (print_max > 0) then
+         if (NumKs(i) > print_max) then
+            write(6,'(a,i5,a)')'Only ',print_max,' K points are printed below.'
+         endif
+         write(6,'(''================================================='')')
+         write(6,'(''     kx           ky           kz           wght '')')
+         write(6,'(''-------------------------------------------------'')')
+         do k=1,print_max
+            write(6,'(4(f10.5,3x))')KxPoint(k,i),KyPoint(k,i),KzPoint(k,i), &
+                                    Kweight(k,i)
+         enddo
+      endif
    enddo
    write(6,'(''================================================='')')
 !
