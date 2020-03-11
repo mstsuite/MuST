@@ -291,7 +291,7 @@ contains
    if ( getKeyValue(tbl_id,'No. SD Time Steps (>= 1)',ntstep) /= 0 ) then
       rstatus = getKeyValue(tbl_id,'No. Spin-dynamics Time Steps (>= 1)',ntstep)
    endif
-   if ( getKeyValue(tbl_id,'SD Time Step',tstep) ) then
+   if ( getKeyValue(tbl_id,'SD Time Step',tstep) /= 0) then
       rstatus = getKeyValue(tbl_id,'Spin-dynamics Time Step',tstep)
    endif
 !  -------------------------------------------------------------------
