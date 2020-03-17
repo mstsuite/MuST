@@ -322,6 +322,7 @@ contains
    use PublicParamDefinitionsModule, only : SimpleMixing, AndersonMixing, BroydenMixing
 !
    use MatrixInverseModule, only : MtxInv_LU
+   use MediumHostModule, only : getNumSpecies
 !
    use GroupCommModule, only : GlobalMaxInGroup
 !
