@@ -25,6 +25,7 @@ lattice.o
 AppModules = \
 InputModule.o \
 ScfDataModule.o \
+SROModule.o \
 PotentialTypeModule.o \
 SystemModule.o \
 BZoneModule.o \
