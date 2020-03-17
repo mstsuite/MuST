@@ -193,15 +193,16 @@ contains
    use GauntFactorsModule, only : initGauntFactors, endGauntFactors
    use GauntFactorsModule, only : getK3, getNumK3, getGauntFactor
 !
-   use ScfDataModule, only : isKKR, isScreenKKR, isLSMS, isKKRCPA, isEmbeddedCluster
+   use ScfDataModule, only : isKKR, isScreenKKR, isLSMS, isKKRCPA, isKKRCPASRO, isEmbeddedCluster
    use ScfDataModule, only : isChargeSymm
-   use ScfDataModule, only : retrieveEffectiveMediumParams
+   use ScfDataModule, only : retrieveEffectiveMediumParams, retrieveSROParams
 !
    use ClusterMatrixModule, only : initClusterMatrix
 !
    use CrystalMatrixModule, only : initCrystalMatrix
 !
    use CPAMediumModule, only : initCPAMedium
+   use SROModule, only : initSROMatrix
 !
    implicit none
 !
@@ -223,11 +224,13 @@ contains
 !
    real (kind=RealKind), intent(in) :: local_posi(3,num_latoms)
    real (kind=RealKind) :: em_mix_0, em_mix_1, em_eswitch, em_tol
+   real (kind=RealKind), allocatable :: sro_params(:)
 !
    integer (kind=IntKind) :: lmax, i
    integer (kind=IntKind) :: klp1, klp2, i3, klg
    integer (kind=IntKind) :: em_mix_type, em_max_iter
    integer (kind=IntKind), pointer :: nj3(:,:), kj3(:,:,:)
+   integer (kind=IntKind) :: sro_param_num
 !
    real (kind=RealKind), pointer :: cgnt(:,:,:)
 !
@@ -277,6 +280,24 @@ contains
                          cpa_mix_0=em_mix_0, cpa_mix_1=em_mix_1,      &
                          cpa_eswitch=em_eswitch, cpa_tol=em_tol,      &
                          istop=istop, iprint=iprint)
+!     ----------------------------------------------------------------
+   else if ( isKKRCPASRO() ) then
+      call retrieveEffectiveMediumParams(mix_type = em_mix_type,      &
+                                         max_iter = em_max_iter,      &
+                                         alpha_0  = em_mix_0,         &
+                                         alpha_1  = em_mix_1,         &
+                                         eSwitch  = em_eswitch, tol = em_tol)
+!     ----------------------------------------------------------------
+      call initCPAMedium(cant=cant, lmax_kkr=lmaxkkr, rel=rel,        &
+                         cpa_mix_type=em_mix_type,                    &
+                         cpa_max_iter=em_max_iter,                    &
+                         cpa_mix_0=em_mix_0, cpa_mix_1=em_mix_1,      &
+                         cpa_eswitch=em_eswitch, cpa_tol=em_tol,      &
+                         istop=istop, iprint=iprint)
+!     ----------------------------------------------------------------
+!     call retrieveSROParams(sro_params, sro_param_num)
+!     Print *,sro_params
+      call initSROMatrix(cant)
 !     ----------------------------------------------------------------
    else if (isEmbeddedCluster()) then
 !     ----------------------------------------------------------------
@@ -480,7 +501,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine endMSSolver()
 !  ===================================================================
-   use ScfDataModule, only : isKKR, isScreenKKR, isLSMS, isKKRCPA,    &
+   use ScfDataModule, only : isKKR, isScreenKKR, isLSMS, isKKRCPA, isKKRCPASRO,   &
                              isEmbeddedCluster
 !
    use ClusterMatrixModule, only : endClusterMatrix
@@ -531,6 +552,10 @@ contains
       call endCrystalMatrix()
 !     ----------------------------------------------------------------
    else if (isKKRCPA()) then
+!     ----------------------------------------------------------------
+      call endCPAMedium()
+!     ----------------------------------------------------------------
+   else if (isKKRCPASRO()) then
 !     ----------------------------------------------------------------
       call endCPAMedium()
 !     ----------------------------------------------------------------
@@ -684,7 +709,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine computeMSTMatrix(is,e)
 !  ===================================================================
-   use ScfDataModule, only : isLSMS, isScreenKKR, isKKRCPA, isKKR, isEmbeddedCluster
+   use ScfDataModule, only : isLSMS, isScreenKKR, isKKRCPA, isKKRCPASRO, isKKR, isEmbeddedCluster
 !
    use SSSolverModule, only : getScatteringMatrix
 !
@@ -693,6 +718,7 @@ contains
    use CrystalMatrixModule, only : calCrystalMatrix
 !
    use CPAMediumModule, only : computeCPAMedium
+   use SROModule, only : generateBigTCPAMatrix
 !
    implicit none
 !
@@ -723,6 +749,11 @@ contains
 !     ----------------------------------------------------------------
       call computeCPAMedium(e)
 !     ----------------------------------------------------------------
+   else if (isKKRCPASRO()) then ! Needs some more thought here
+!     ----------------------------------------------------------------
+      call computeCPAMedium(e)
+      call generateBigTCPAMatrix(1)
+!     ----------------------------------------------------------------
    else if (isEmbeddedCluster()) then  ! Needs further work.....
 !     ----------------------------------------------------------------
       call calClusterMatrix(e,getScatteringMatrix)
@@ -745,7 +776,7 @@ contains
 !
    use GroupCommModule, only : GlobalSumInGroup
 !
-   use ScfDataModule, only : isKKR, isScreenKKR, isLSMS, isKKRCPA, isEmbeddedCluster
+   use ScfDataModule, only : isKKR, isScreenKKR, isLSMS, isKKRCPA, isKKRCPASRO, isEmbeddedCluster
 !
    use SystemSymmetryModule, only : getSymmetryFlags
 !
@@ -906,7 +937,7 @@ contains
 !kau00=>getCrystalTau(local_id=id)
 !call writeMatrix('Tau',kau00(:,:,1),kmaxk,kmaxk,TEN2m6)
             kau00 => getCrystalKau(local_id=id) ! Kau00 = energy * S^{-1} * [Tau00 - t_matrix] * S^{-T*}
-         else if (isKKRCPA() .or. isEmbeddedCluster()) then
+         else if (isKKRCPA() .or. isKKRCPASRO() .or.  isEmbeddedCluster()) then
 !p_kau00 => getCPAMatrix('Tcpa',site=id)
 !call writeMatrix('Tcpa',p_kau00,kmaxk,kmaxk,TEN2m6)
 !kau00=>getImpurityMatrix('Tau_a',site=id,atom=0)
@@ -1204,7 +1235,7 @@ contains
    use MPPModule, only : MyPE, syncAllPEs
    use GroupCommModule, only : GlobalSumInGroup
 !
-   use ScfDataModule, only : isKKR, isScreenKKR, isLSMS, isKKRCPA, isEmbeddedCluster
+   use ScfDataModule, only : isKKR, isScreenKKR, isLSMS, isKKRCPA, isKKRCPASRO, isEmbeddedCluster
 !
    use SystemSymmetryModule, only : getSymmetryFlags
 !
@@ -1343,7 +1374,7 @@ contains
             kau00 => getClusterKau(local_id=id) ! Kau00 = energy * S^{-1} * [Tau00 - t_matrix] * S^{-1*}
          else if (isKKR()) then
             kau00 => getCrystalKau(local_id=id) ! Kau00 = energy * S^{-1} * [Tau00 - t_matrix] * S^{-1*}
-         else if ( isKKRCPA() .or. isEmbeddedCluster()) then
+         else if ( isKKRCPA() .or. isKKRCPASRO() .or. isEmbeddedCluster()) then
             kau00 => getImpurityMatrix('Kau_a',site=id,atom=ia)
          endif
          js = 0
