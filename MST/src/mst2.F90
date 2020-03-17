@@ -81,7 +81,7 @@ program mst2
    use ScfDataModule, only : isReadEmesh, getEmeshFileName
    use ScfDataModule, only : isReadKmesh, getKmeshFileName
    use ScfDataModule, only : NumKMeshs, kGenScheme, Kdiv, Symmetrize
-   use ScfDataModule, only : isScreenKKR, isKKRCPA, isLSMS, isScreenKKR_LSMS, &
+   use ScfDataModule, only : isScreenKKR, isKKRCPA, isKKRCPASRO, isLSMS, isScreenKKR_LSMS, &
                              isKKR, isEmbeddedCluster, isSingleSite, setScfMethod
    use ScfDataModule, only : isExchangeParamNeeded
    use ScfDataModule, only : getPotentialTypeParam
@@ -591,7 +591,7 @@ program mst2
 !  ===================================================================
 !  Initialize the Brillouin zone mesh for k-space integration
 !  ===================================================================
-   if (isKKR() .or. isScreenKKR_LSMS() .or. isKKRCPA()) then
+   if (isKKR() .or. isScreenKKR_LSMS() .or. isKKRCPA() .or. isKKRCPASRO()) then
       if (isReadKmesh()) then
 !        -------------------------------------------------------------
          call initBZone(getKmeshFileName(),istop,-1)
@@ -745,6 +745,8 @@ program mst2
         write(6,'(/,14x,a,/)')'::::  Screend-KKR Electronic Structure Calculation ::::'
      else if ( isKKRCPA() ) then
         write(6,'(/,14x,a,/)')'::::  KKR-CPA Electronic Structure Calculation ::::'
+     else if ( isKKRCPASRO() ) then
+        write(6,'(/,14x,a,/)')'::::  KKR-CPA-SRO Electronic Structure Calculation ::::'
      else if ( isScreenKKR_LSMS() ) then
         write(6,'(/,14x,a,/)')'::::  Screened-KKR-LSMS Electronic Structure Calculation ::::'
      else if ( isEmbeddedCluster() ) then
@@ -808,7 +810,7 @@ program mst2
 !  ===================================================================
 !  initialize medium system if needed
 !  ===================================================================
-   if (isKKRCPA() .or. isEmbeddedCluster()) then
+   if (isKKRCPA() .or. isKKRCPASRO() .or. isEmbeddedCluster()) then
 !     ----------------------------------------------------------------
       call initMediumHost(def_id)
 !     ----------------------------------------------------------------
@@ -827,7 +829,7 @@ program mst2
       call setupLizNeighbor(atom_print_level)
 !   endif
 !  -------------------------------------------------------------------
-   if ( (isKKR() .or. isKKRCPA()) .and. node_print_level >= 0) then
+   if ( (isKKR() .or. isKKRCPA() .or. isKKRCPASRO()) .and. node_print_level >= 0) then
 !     ----------------------------------------------------------------
       call printBZone(Klimit=100)
 !     ----------------------------------------------------------------
@@ -1203,7 +1205,7 @@ program mst2
 !  *******************************************************************
 !
 !  ===================================================================
-   if (isKKR() .or. isScreenKKR_LSMS() .or. isKKRCPA()) then
+   if (isKKR() .or. isScreenKKR_LSMS() .or. isKKRCPA() .or. isKKRCPASRO()) then
 !     ================================================================
 !     initialize IBZ rotation matrix module
 !     ----------------------------------------------------------------
@@ -1816,7 +1818,7 @@ program mst2
    endif
 !
    if ( isExchangeParamNeeded() .and. (isKKR() .or. isScreenKKR_LSMS() &
-                                       .or. isKKRCPA()) ) then
+                                       .or. isKKRCPA() .or. isKKRCPASRO()) ) then
       if ( isScreenKKR_LSMS() ) then
          call setScfMethod("ScreenKKR")
       endif
@@ -1886,7 +1888,7 @@ stop 'Under construction...'
       write(6,'(80(''-''))')
    endif
 !
-   if (isKKR() .or. isScreenKKR_LSMS() .or. isKKRCPA()) then
+   if (isKKR() .or. isScreenKKR_LSMS() .or. isKKRCPA() .or. isKKRCPASRO()) then
 !     ----------------------------------------------------------------
       call endBZone()
       call endIBZRotation()
@@ -1944,7 +1946,7 @@ stop 'Under construction...'
    call endAtom2Proc()
    call endParallelIO()
    call endProcMapping()
-   if (isKKRCPA() .or. isEmbeddedCluster()) then
+   if (isKKRCPA() .or. isEmbeddedCluster() .or. isKKRCPASRO()) then
 !     ----------------------------------------------------------------
       call endMediumHost()
 !     ----------------------------------------------------------------
