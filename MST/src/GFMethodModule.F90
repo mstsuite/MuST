@@ -1502,7 +1502,7 @@ contains
 !
    use ScfDataModule, only : ErBottom, ErTop, EiBottom, EiTop, Temperature
    use ScfDataModule, only : NumEs, ContourType, eGridType, isReadEmesh, getEmeshFileName
-   use ScfDataModule, only : isKKR, isKKRCPA, isSSIrregularSolOn
+   use ScfDataModule, only : isKKR, isKKRCPA, isKKRCPASRO, isSSIrregularSolOn
    use ScfDataModule, only : NumSS_IntEs
 !
    use AtomModule, only : getLocalSpeciesContent
@@ -1803,7 +1803,7 @@ contains
 !     Solve the multiple scattering problem for e = eLast, which is
 !     set to be (efermi,0.001) in KKR case.
 !     ===============================================================
-      if (isKKR() .or. isKKRCPA() .or. efermi < ZERO) then
+      if (isKKR() .or. isKKRCPA() .or. isKKRCPASRO() .or. efermi < ZERO) then
          eLast = cmplx(efermi,0.001d0,kind=CmplxKind)
       else
          eLast = cmplx(efermi,0.000d0,kind=CmplxKind)
@@ -2024,7 +2024,7 @@ contains
 !
    use RadialGridModule, only : getGrid
 !
-   use ScfDataModule, only : isKKR, isKKRCPA
+   use ScfDataModule, only : isKKR, isKKRCPA, isKKRCPASRO
 !
    use PotentialTypeModule, only : isASAPotential
 !
@@ -2217,7 +2217,7 @@ contains
 !  -------------------------------------------------------------------
    ns_sqr = n_spin_cant*n_spin_cant
    do is = 1, n_spin_pola/n_spin_cant
-      if (isKKR() .or. isKKRCPA()) then
+      if (isKKR() .or. isKKRCPA() .or. isKKRCPASRO()) then
          ec = adjustEnergy(is,cmplx(er,0.001d0,kind=CmplxKind))
       else
          ec = adjustEnergy(is,cmplx(er,0.000d0,kind=CmplxKind))
