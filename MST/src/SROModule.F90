@@ -10,7 +10,7 @@ public :: initSROMatrix,            &
 
 private
    integer (kind=IntKind) :: GlobalNumSites, LocalNumSites
-   integer (kind=IntKind) :: nSpinCant
+   integer (kind=IntKind) :: nSpinCant, nSpinPola
    integer (kind=IntKind) :: NumPEsInGroup, MyPEinGroup, GroupID
    integer (kind=IntKind) :: kmax_kkr_max
    integer (kind=IntKind) :: ndim_Tmat
@@ -18,12 +18,12 @@ private
 !
    type SROTMatrixStruct
       real (kind=RealKind), pointer :: sro_param_a(:)
-      complex (kind=CmplxKind), pointer :: tmat_a(:,:)
-      complex (kind=CmplxKind), pointer :: tmat_a_inv(:,:)
-      complex (kind=CmplxKind), pointer :: tmat_tilde_a(:,:) ! In global spin framework
-      complex (kind=CmplxKind), pointer :: tmat_tilde_a_inv(:, :) ! In global spin framework
-      complex (kind=CmplxKind), pointer :: T_a(:,:) ! In global spin framework
-      complex (kind=CmplxKind), pointer :: T_a_inv(:,:)
+      complex (kind=CmplxKind), pointer :: tmat_a(:,:,:)
+      complex (kind=CmplxKind), pointer :: tmat_a_inv(:,:,:)
+      complex (kind=CmplxKind), pointer :: tmat_tilde_a(:,:,:) ! In global spin framework
+      complex (kind=CmplxKind), pointer :: tmat_tilde_a_inv(:,:,:) ! In global spin framework
+      complex (kind=CmplxKind), pointer :: T_a(:,:,:) ! In global spin framework
+      complex (kind=CmplxKind), pointer :: T_a_inv(:,:,:)
    end type SROTMatrixStruct
 !
    type SROMediumStruct
@@ -49,18 +49,18 @@ contains
    include '../lib/arrayTools.F90'
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine initSROMatrix (cant)
+   subroutine initSROMatrix (cant, pola)
 !  ===================================================================
    
    use MediumHostModule, only  : getNumSites, getLocalNumSites, getGlobalSiteIndex, getNumSpecies
    use ScfDataModule, only : retrieveSROParams
    use NeighborModule, only : getNumNeighbors
    use SSSolverModule, only : getScatteringMatrix
-   use MatrixInverseModule, only : MtxInv_LU
 
-   integer(kind=IntKind), intent(in) :: cant
-   integer(kind=IntKind) :: sro_param_nums, num, il, ic, ig, i, j, temp
+   integer(kind=IntKind), intent(in) :: cant, pola
+   integer(kind=IntKind) :: sro_param_nums, num, il, ic, ig, i, j, iter1, iter2, temp
    real(kind=RealKind), allocatable :: sro_params(:)
+   complex(kind=CmplxKind), pointer :: tm0(:,:), tm1(:,:)
 !  --------------------------------------------------------
    call retrieveSROParams(sro_params, sro_param_nums)
 !  --------------------------------------------------------
@@ -69,7 +69,9 @@ contains
    if (.not. allocated(SROMedium)) then
       allocate(SROMedium(LocalNumSites))
    endif
-   Print *, LocalNumSites
+   nSpinCant = cant
+   nSpinPola = pola
+   Print *,nSpinPola
  
    do il = 1, LocalNumSites
       SROMedium(il)%neighbors = getNumNeighbors(il)
@@ -99,19 +101,30 @@ contains
                   SROMedium(il)%SROTMatrix(i)%sro_param_a(j) = sro_params(temp)
                endif
             enddo
-            SROMedium(il)%SROTMatrix(i)%tmat_a => getScatteringMatrix('T-Matrix',spin=1,site=SROMedium(il)%local_index,atom=i)
-            SROMedium(il)%SROTMatrix(i)%tmat_a_inv => getScatteringMatrix('T-Matrix',spin=1,site=SROMedium(il)%local_index,atom=i)
-         !  -------------------------------------------------------------------
-            call MtxInv_LU(SROMedium(il)%SROTMatrix(i)%tmat_a_inv,size(SROMedium(il)%SROTMatrix(i)%tmat_a_inv, 1))
-         !  -------------------------------------------------------------------
+
+            tm0 => getScatteringMatrix('T-Matrix',spin=1,site=SROMedium(il)%local_index,atom=i)
+            SROMedium(il)%blk_size = size(tm0, 1)
+            allocate(SROMedium(il)%SROTMatrix(i)%tmat_a(SROMedium(il)%blk_size,SROMedium(il)%blk_size, nSpinPola))
+            allocate(SROMedium(il)%SROTMatrix(i)%tmat_a_inv(SROMedium(il)%blk_size,SROMedium(il)%blk_size, nSpinPola))
+            if (nSpinCant == 2) then
+               call ErrorHandler('initSROMatrix','SRO is not equipped to deal with spin canting yet')
+            endif
+            do ic = 1,nSpinPola
+               tm0 => getScatteringMatrix('T-Matrix',spin=ic,site=SROMedium(il)%local_index,atom=i)
+               tm1 => getScatteringMatrix('TInv-Matrix',spin=ic,site=SROMedium(il)%local_index,atom=i)
+               do iter2 = 1,SROMedium(il)%blk_size
+                  do iter1 = 1,SROMedium(il)%blk_size
+                     SROMedium(il)%SROTMatrix(i)%tmat_a(iter1,iter2,ic) = tm0(iter1, iter2)
+                     SROMedium(il)%SROTMatrix(i)%tmat_a_inv(iter1,iter2,ic) = tm1(iter1, iter2)
+                  enddo
+               enddo
+            enddo
          enddo
        endif
-      SROMedium(il)%blk_size = size(SROMedium(il)%SROTMatrix(num)%tmat_a, 1)       
    enddo
   
    Print *,"Successful init" 
    
-   nSpinCant = cant
 !  do i = 1, LocalNumSites
 !     do j = 1, SROMedium(i)%num_species
 !        Print *, SROMedium(i)%SROTMatrix(j)%sro_param_a
@@ -133,21 +146,32 @@ contains
 !  NEED TO CHECK IF SITE N IS CPA OR NOT
    
    complex (kind=CmplxKind), pointer :: tm0(:,:)
-   integer (kind=IntKind) :: ic, nsize
+   integer (kind=IntKind) :: ic, is, nsize
    real (kind=RealKind) :: wab
    
    nsize = SROMedium(n)%blk_size
 !  Print *,nsize
-   allocate(SROMedium(n)%SROTMatrix(ia)%tmat_tilde_a(nsize, nsize))
-   allocate(SROMedium(n)%SROTMatrix(ia)%tmat_tilde_a_inv(nsize, nsize))
+   allocate(SROMedium(n)%SROTMatrix(ia)%tmat_tilde_a(nsize, nsize, nSpinPola))
+   allocate(SROMedium(n)%SROTMatrix(ia)%tmat_tilde_a_inv(nsize, nsize, nSpinPola))
 
    do ic = 1, SROMedium(n)%num_species
      wab = SROMedium(n)%SROTMatrix(ia)%sro_param_a(ic)
-!    -------------------------------------------------------------------------------------
-     call zaxpy(nsize*nsize,wab,SROMedium(n)%SROTMatrix(ic)%tmat_a,1,SROMedium(n)%SROTMatrix(ia)%tmat_tilde_a,1)
-     call zaxpy(nsize*nsize,wab,SROMedium(n)%SROTMatrix(ic)%tmat_a_inv,1,SROMedium(n)%SROTMatrix(ia)%tmat_tilde_a_inv, 1)
-!    -------------------------------------------------------------------------------------
+     do is = 1, nSpinPola
+!       -------------------------------------------------------------------------------------
+        call zaxpy(nsize*nsize,wab,SROMedium(n)%SROTMatrix(ic)%tmat_a(:,:,is),1,&
+                  SROMedium(n)%SROTMatrix(ia)%tmat_tilde_a(:,:,is),1)
+        call zaxpy(nsize*nsize,wab,SROMedium(n)%SROTMatrix(ic)%tmat_a_inv(:,:,is),1,&
+                  SROMedium(n)%SROTMatrix(ia)%tmat_tilde_a_inv(:,:,is), 1)
+!       -------------------------------------------------------------------------------------
+     enddo
    enddo
+   
+!  do ic = 1,SROMedium(n)%num_species
+!    Print *,"Species is",ic
+!    Print *,SROMedium(n)%SROTMatrix(ic)%tmat_a
+!  enddo
+!  Print *,"The average is"
+!  Print *,SROMedium(n)%SROTMatrix(ia)%tmat_tilde_a
       
    end subroutine averageSROMatrix
 !  ===================================================================
@@ -156,27 +180,34 @@ contains
    subroutine generateBigTAMatrix (n, ia)
 !  ===================================================================
    
-   integer (kind=IntKind) :: nsize, delta, total_size, i, tmp
+   integer (kind=IntKind) :: nsize, delta, total_size, i, is,iter1,iter2, tmp
    complex (kind=CmplxKind), pointer :: tm0(:,:), tm1(:,:)
 
    delta = SROMedium(n)%neighbors + 1
    nsize = SROMedium(n)%blk_size
    total_size = nsize*delta
 !  Print *, delta, nsize, total_size
-   allocate(SROMedium(n)%SROTMatrix(ia)%T_a(total_size, total_size))
-   allocate(SROMedium(n)%SROTMatrix(ia)%T_a_inv(total_size, total_size))
+   allocate(SROMedium(n)%SROTMatrix(ia)%T_a(total_size, total_size, nSpinPola))
+   allocate(SROMedium(n)%SROTMatrix(ia)%T_a_inv(total_size, total_size, nSpinPola))
    
-   do i = 1, delta
-      tmp = (i - 1)*blk_size
-      if (i == 1) then
-         tm1 => SROMedium(n)%SROTMatrix(ia)%tmat_a
-         tm0 => SROMedium(n)%SROTMatrix(ia)%tmat_a_inv
-      else
-         tm1 => SROMedium(n)%SROTMatrix(ia)%tmat_tilde_a
-         tm0 => SROMedium(n)%SROTMatrix(ia)%tmat_tilde_a_inv
-      endif
-      SROMedium(n)%SROTMatrix(ia)%T_a(1+tmp:nsize+tmp,1+tmp:nsize+tmp) = tm1
-      SROMedium(n)%SROTMatrix(ia)%T_a_inv(1+tmp:nsize+tmp,1+tmp:nsize+tmp) = tm0
+   do is = 1, nSpinPola
+      tm1 => SROMedium(n)%SROTMatrix(ia)%tmat_tilde_a(:,:,is)
+      tm0 => SROMedium(n)%SROTMatrix(ia)%tmat_tilde_a_inv(:,:,is)
+      SROMedium(n)%SROTMatrix(ia)%T_a(:,:,is) = CZERO
+      SROMedium(n)%SROTMatrix(ia)%T_a_inv(:,:,is) = CZERO
+      do i = 1, delta
+         tmp = (i - 1)*blk_size
+         if (i == 1) then
+            tm1 => SROMedium(n)%SROTMatrix(ia)%tmat_a(:,:,is)
+            tm0 => SROMedium(n)%SROTMatrix(ia)%tmat_a_inv(:,:,is)
+         endif
+         do iter2 = 1+tmp,nsize+tmp
+            do iter1 = 1+tmp,nsize+tmp
+              SROMedium(n)%SROTMatrix(ia)%T_a(iter1,iter2,is) = tm1(iter1, iter2)
+              SROMedium(n)%SROTMatrix(ia)%T_a_inv(iter1,iter2,is) = tm0(iter1, iter2)
+            enddo
+         enddo
+      enddo
    enddo
    
 
@@ -190,25 +221,29 @@ contains
    use CPAMediumModule, only : getCPAMatrix
    use MatrixInverseModule, only : MtxInv_LU
    
-   integer (kind=IntKind) :: i, tmp, nsize, delta, total_size
+   integer (kind=IntKind) :: i, iter1, iter2, tmp, nsize, delta, total_size
    
    SROMedium(n)%Tcpa => getCPAMatrix('Tcpa', n)
    SROMedium(n)%Tcpa_inv => getCPAMatrix('Tcpa', n)
    nsize = SROMedium(n)%blk_size
    delta = SROMedium(n)%neighbors + 1
    total_size = nsize*delta
-   Print *, "Okay till here!" 
 !  -------------------------------------------------------------------
    call MtxInv_LU(SROMedium(n)%Tcpa_inv,nsize)
 !  -------------------------------------------------------------------
-   Print *, "If you're reading this, everything's fine!"
    allocate(SROMedium(n)%T_CPA(total_size, total_size))
    allocate(SROMedium(n)%T_CPA_inv(total_size, total_size))
-   
+   SROMedium(n)%T_CPA = CZERO
+   SROMedium(n)%T_CPA_inv = CZERO
+    
    do i = 1, delta
        tmp = (i - 1)*nsize
-       SROMedium(n)%T_CPA(1+tmp:nsize+tmp,1+tmp:nsize+tmp) = SROMedium(n)%Tcpa
-       SROMedium(n)%T_CPA_inv(1+tmp:nsize+tmp,1+tmp:nsize+tmp) = SROMedium(n)%Tcpa_inv
+       do iter2 = 1+tmp,nsize+tmp
+          do iter1 = 1+tmp,nsize+tmp
+             SROMedium(n)%T_CPA(iter1,iter2) = SROMedium(n)%Tcpa(iter1,iter2)
+             SROMedium(n)%T_CPA_inv(iter1,iter2) = SROMedium(n)%Tcpa_inv(iter1,iter2)
+          enddo
+       enddo
    enddo
    
    end subroutine generateBigTCPAMatrix
