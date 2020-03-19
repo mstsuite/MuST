@@ -99,6 +99,10 @@ BroydenLib.o \
 AndersonLib.o \
 newtc.o
 
+ifdef ESSL_WORKAROUND
+  LOBS += essl_workaround.o
+endif
+
 .SUFFIXES:	.o .f .F .f90 .F90 
 #.SUFFIXES:	.o .F .F90 
 
