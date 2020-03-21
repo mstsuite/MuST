@@ -2,6 +2,7 @@ module SROModule
    use KindParamModule, only : IntKind, RealKind, CmplxKind
    use MathParamModule, only : ZERO, ONE, CZERO, CONE, SQRTm1, TEN2m6, TEN2m8
    use ErrorHandlerModule, only : ErrorHandler, WarningHandler
+  use PublicTypeDefinitionsModule, only : NeighborStruct
 
 !
 public :: initSROMatrix,            &
@@ -29,10 +30,11 @@ private
    type SROMediumStruct
       integer (kind=IntKind) :: local_index
       integer (kind=IntKind) :: global_index
-      integer (kind=IntKind) :: neighbors
       integer (kind=IntKind) :: num_species
       integer (kind=IntKind) :: blk_size
+      integer (kind=IntKind) :: CPosition(3)
       logical :: isCPA
+      type(NeighborStruct), pointer :: Neighbor
       type(SROTMatrixStruct), allocatable :: SROTMatrix(:)
       complex (kind=CmplxKind), pointer :: Tcpa(:,:)
       complex (kind=CmplxKind), pointer :: Tcpa_inv(:,:)
@@ -54,8 +56,9 @@ contains
    
    use MediumHostModule, only  : getNumSites, getLocalNumSites, getGlobalSiteIndex, getNumSpecies
    use ScfDataModule, only : retrieveSROParams
-   use NeighborModule, only : getNumNeighbors
+   use NeighborModule, only : getNeighbor
    use SSSolverModule, only : getScatteringMatrix
+   use SystemModule, only : getAtomPosition
 
    integer(kind=IntKind), intent(in) :: cant, pola
    integer(kind=IntKind) :: sro_param_nums, num, il, ic, ig, i, j, iter1, iter2, temp
@@ -74,9 +77,10 @@ contains
    Print *,nSpinPola
  
    do il = 1, LocalNumSites
-      SROMedium(il)%neighbors = getNumNeighbors(il)
+      SROMedium(il)%Neighbor => getNeighbor(il)
       SROMedium(il)%local_index = il
       ig = getGlobalSiteIndex(il)
+      SROMedium(il)%CPosition = getAtomPosition(ig)
       SROMedium(il)%global_index = ig
       num = getNumSpecies(ig)
       SROMedium(il)%num_species = num
@@ -144,7 +148,8 @@ contains
 !  ===================================================================
 
 !  NEED TO CHECK IF SITE N IS CPA OR NOT
-   
+!  BE CAREFUL WHETHER TO USE LOCAL OR GLOBAL INDEX ANYWHERE
+
    complex (kind=CmplxKind), pointer :: tm0(:,:)
    integer (kind=IntKind) :: ic, is, nsize
    real (kind=RealKind) :: wab
@@ -183,7 +188,7 @@ contains
    integer (kind=IntKind) :: nsize, delta, total_size, i, is,iter1,iter2, tmp
    complex (kind=CmplxKind), pointer :: tm0(:,:), tm1(:,:)
 
-   delta = SROMedium(n)%neighbors + 1
+   delta = SROMedium(n)%Neighbor%NumAtoms + 1
    nsize = SROMedium(n)%blk_size
    total_size = nsize*delta
 !  Print *, delta, nsize, total_size
@@ -226,7 +231,7 @@ contains
    SROMedium(n)%Tcpa => getCPAMatrix('Tcpa', n)
    SROMedium(n)%Tcpa_inv => getCPAMatrix('Tcpa', n)
    nsize = SROMedium(n)%blk_size
-   delta = SROMedium(n)%neighbors + 1
+   delta = SROMedium(n)%Neighbor%NumAtoms + 1
    total_size = nsize*delta
 !  -------------------------------------------------------------------
    call MtxInv_LU(SROMedium(n)%Tcpa_inv,nsize)
