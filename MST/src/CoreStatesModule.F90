@@ -1793,13 +1793,13 @@ contains
          if(abs(Core(id)%qsemws(ia)-Core(id)%zsemss(ia)) > tolch     &
             .and. print_level >= 0) then
             write(6,'(/,10x,''Lost semi-core charge'')')
-            write(6,'(10x,''z='',d17.8,'' q='',f17.8)') &
+            write(6,'(10x,''z='',f17.8,'' q='',f17.8)') &
                              Core(id)%zsemss(ia), Core(id)%qsemws(ia)
          endif
          if(abs(Core(id)%qcorws(ia)-Core(id)%zcorss(ia)) > tolch     &
             .and. print_level >= 0) then
             write(6,'(/,10x,''Lost      core charge'')')
-            write(6,'(10x,''z='',d17.8,'' q='',f17.8)') &
+            write(6,'(10x,''z='',f17.8,'' q='',f17.8)') &
                              Core(id)%zcorss(ia), Core(id)%qcorws(ia)
          endif
          msgbuf(1) = msgbuf(1) + (Core(id)%zsemss(ia)-Core(id)%qsemmt(ia))*&
@@ -2205,14 +2205,18 @@ contains
 !     ----------------------------------------------------------------
       call calIntegration(last2+1,sqrt_r(0:last2),ftmp(0:last2),qmp(0:last2),3)
 !     ----------------------------------------------------------------
-#ifndef CoreNorm2Rc
+#ifdef CoreNorm2Inf
+!     ================================================================
+!     Normalizing to infinity seems problematic for heavy elements, so we
+!     make it as a non-default setting.
+!     ----------------------------------------------------------------
       call IntegrateSphHankelSq(Core(id)%lc(i,ia),r(last2),Core(id)%ec(i,is,ia),norm_frac)
 !     ----------------------------------------------------------------
       if (print_level >= 0) then
 !        write(6,'(a,3i4,2(a,d15.8),a,2d15.8)')'nc, lc, kc = ',       &
          write(6,'(a,3i4,a,d15.8)')'nc, lc, kc = ',                   &
                Core(id)%nc(i,ia),Core(id)%lc(i,ia),Core(id)%kc(i,ia), &
-               ', Int[Rho] to Infinity/Int[Rho] to Rc = ',HALF*norm_frac*h2nrm/qmp(last2)
+               ', [Int[Rho] from Rc to Inf.]/[Int[Rho] from 0 to Rc] = ',HALF*norm_frac*h2nrm/qmp(last2)
 !              ', Int[rho] beyond Rc = ', PI4*norm_frac*h2nrm,        &
 !              ', Int[Rho] within Rc = ',TWO*PI4*qmp(last2),          &
 !              ', norm_frac, h2nrm = ',norm_frac,h2nrm
