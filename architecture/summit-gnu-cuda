@@ -1,0 +1,72 @@
+#=====================================================================
+# Acceleration = 1: enable GPU acceleration
+# Acceleration = 0: otherwise
+#=====================================================================
+Acceleration = 1
+
+#=====================================================================
+# Library paths and elements, e.g.,
+#    LIBXC_PATH  = /opt/packages/LibXC/libxc-4.3.4/INTEL
+#    ACCEL_PATH  = /usr/local/cuda
+#    FFTW_PATH   = /usr/local/FFTW/fftw-3.3.8/INTEL
+#    P3DFFT_PATH = /opt/packages/P3DFFT/p3dfft-2.7.9/INTEL
+#    LUA_PATH    = /opt/packages/Lua/lua-5.3.5
+#  
+# If LUA_PATH, LIBXC_PATH, FFTW_PATH, and/or P3DFFT_PATH are empty, the
+# corresponding packages will be installed under $(EXTERN_LIB_PATH)
+#=====================================================================
+HDF5_PATH   = 
+ACCEL       = CUDA
+ACCEL_PATH  = $(OLCF_CUDA_ROOT)
+LIBXC_PATH  = 
+FFTW_PATH   = 
+P3DFFT_PATH =
+LUA_PATH    =
+LIBS       += -L${OLCF_ESSL_ROOT}/lib64 -lessl -lscalapack -L$(OLCF_CUDA_ROOT)/lib64 -lcudart -lcuda -lcublas
+ADD_LIBS   += -lgfortran -lm -lstdc++
+
+#=====================================================================
+# Compiler tools, gnu version 7.0 seems requiried by lsms.
+#=====================================================================
+CC          = mpicc
+CXX         = mpicxx
+F77         = mpif90
+FC          = mpif90
+MPICC       = mpicc
+ACCEL_CXX   = nvcc -arch=sm_60
+ARCHV       = ar -r
+
+#=====================================================================
+# Preprocessor/Compiler/Linker flags, e.g.,
+#    FFLAGS = -I. -O3 -CB -CU -traceback -ftrapuv -fpe0 -ftz -fp-stack-check
+# Note: "FPPFLAGS = -DMPI" enables MPI parallel processing.
+#=====================================================================
+FPPDEFS     = -cpp
+CPPDEFS     = -cpp
+FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK
+CPPFLAGS    = 
+
+CFLAGS      = -O3
+CXXFLAGS    = -O3 -std=c++14
+FFLAGS      = -O3
+F77FLAGS    = -O3
+OPT_OPENMP  = -fopenmp
+
+LD_FLAGS    =
+LD          = $(FC) $(LD_FLAGS)
+
+#=====================================================================
+# On IBM Systems with ESSL we need a workaround for missing LAPACK functions
+#=====================================================================
+
+export ESSL_WORKAROUND=1
+
+#=====================================================================
+# LIBXC_CONFIG_FLAGS, P3DFFT_CONFIG_FLAGS and FFTW_CONFIG_FLAGS are 
+# ./configure flags for libxc, p3dfft, and fftw package, respectively.
+# Note: for hdf5, "--enable-parallel" might be needed in the future.
+#=====================================================================
+HDF5_CONFIG_FLAGS   = --enable-fortran --enable-static-exec CC=$(CC) CXX=$(CXX) FC=$(FC)
+LIBXC_CONFIG_FLAGS  = CC=$(CC) CFLAGS="$(CFLAGS)" FC=$(FC) FFLAGS="$(FFLAGS)"
+P3DFFT_CONFIG_FLAGS = FC=$(FC) CC=$(CC) LIBS="$(LIBS)" CCLD=$(FC)
+FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS)" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)"

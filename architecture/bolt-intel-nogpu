@@ -3,7 +3,7 @@ include ../MST/arch/bolt_intel
 else ifdef EXTERNAL
 include ../MST/arch/bolt_intel
 else
-include ../lsms/architecture/bolt-intel-nogpu
+include ../lsms/arch/bolt-intel-nogpu
 endif
 
 export LIBXC_PATH=/opt/packages/LibXC/libxc-4.3.4/INTEL
