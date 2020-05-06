@@ -17,10 +17,11 @@ private
 !
    integer (kind=IntKind) :: GlobalNumSites, LocalNumSites
    integer (kind=IntKind) :: nSpinCant
-   integer (kind=IntKind) :: NumPEsInGroup, MyPEinGroup, GroupID
+   integer (kind=IntKind) :: NumPEsInGroup, MyPEinGroup, mGID, akGID
    integer (kind=IntKind) :: kmax_kkr_max
    integer (kind=IntKind) :: ndim_Tmat
    integer (kind=IntKind) :: print_instruction
+   integer (kind=IntKind) :: MixingType
 !
    type CPAMatrixStruct
       real (kind=RealKind) :: content
@@ -107,18 +108,16 @@ contains
 !  This needs to be further thought through for whether it needs to 
 !  create a Medium Cell communicator.
 !  ===================================================================
+   akGID = getGroupID('A-K Plane')
+   NumPEsInGroup = getNumPEsInGroup(akGID)
+   MyPEinGroup = getMyPEinGroup(akGID)
+!
    if (isGroupExisting('Medium Cell')) then
-      GroupID = getGroupID('Medium Cell')
-      NumPEsInGroup = getNumPEsInGroup(GroupID)
-      MyPEinGroup = getMyPEinGroup(GroupID)
-   else if (isGroupExisting('Unit Cell')) then
-      GroupID = getGroupID('Unit Cell')
-      NumPEsInGroup = getNumPEsInGroup(GroupID)
-      MyPEinGroup = getMyPEinGroup(GroupID)
+      mGID = getGroupID('Medium Cell')
    else
-      GroupID = -1
-      NumPEsInGroup = 1
-      MyPEinGroup = 0
+      mGID = -1
+!     NumPEsInGroup = 1
+!     MyPEinGroup = 0
    endif
 !
    if (rel>1) then
@@ -231,6 +230,7 @@ contains
 !
    iteration = 0
    print_instruction = maxval(iprint)
+   MixingType = cpa_mix_type
 !
 !  -------------------------------------------------------------------
    call initCrystalMatrix(LocalNumSites, cant, lmax_kkr, rel, istop, iprint)
@@ -323,6 +323,8 @@ contains
 !
    use MatrixInverseModule, only : MtxInv_LU
 !
+   use MPPModule, only : GlobalMax, syncAllPEs, MyPE
+!
    use GroupCommModule, only : GlobalMaxInGroup
 !
    use SSSolverModule, only : getScatteringMatrix
@@ -345,8 +347,8 @@ contains
 !
    character (len=12) :: description
 !
-   integer (kind=IntKind) :: ia, id, nsize, n, dsize
-   integer (kind=IntKind) :: ns, is, js, switch
+   integer (kind=IntKind) :: ia, id, nsize, n, dsize, mixing_type
+   integer (kind=IntKind) :: ns, is, js, switch, nt
    integer (kind=IntKind) :: site_config(LocalNumSites)
 !
 !  ===================================================================
@@ -357,7 +359,7 @@ contains
    real (kind=RealKind), parameter ::  ctol=1.0d-08, cmix=0.15d0, cw0=5.0d-03
 !  ===================================================================
 !
-   real (kind=RealKind) :: err, max_err
+   real (kind=RealKind) :: err, max_err, err_prev
 !
    complex (kind=CmplxKind), intent(in) :: e
    complex (kind=CmplxKind) :: kappa
@@ -425,13 +427,17 @@ contains
          site_config(id) = 0 ! Set the site to be the CPA medium site
       else
 !        site_config(id) = id   ! Modified on 2/23/2020
-         site_config(id) = 1
-      endif
+         site_config(id) = 1    ! This is the species index of the atom on the site
+      endif                     ! For crystal, this value = 1.
    enddo
 !
+   nt = 0
    switch = 0
    iteration = 0 
+   mixing_type = MixingType
+   err_prev = 1.0d+10
    LOOP_iter: do while (iteration < MaxIterations)
+      nt = nt + 1
       iteration = iteration + 1
 !     write(6,'(a,i5)')'At iteration: ',iteration
       max_err = ZERO
@@ -486,12 +492,19 @@ contains
          endif
       enddo
 !     ----------------------------------------------------------------
-      call GlobalMaxInGroup(GroupID,max_err)
+      call GlobalMaxInGroup(akGID,max_err)
 !     ----------------------------------------------------------------
+!     write(6,'(a,3i5,2x,3d15.8)')'MyPE, ig, nt, e, max_err = ',      &
+!           MyPE, CPAMedium(1)%global_index, nt, e, max_err
 !
-      if (max_err < CPA_tolerance) then
+      if (max_err < CPA_tolerance .or. nt > 2*MaxIterations) then
          exit LOOP_iter
-      else if (iteration > MaxIterations/2) then
+!     ================================================================
+!     Set 30 to be the maximum number of iterations for the fast mixing method.
+!     If the method does not converge, switch to a different method
+!     ================================================================
+      else if (mixing_type /= SimpleMixing .and. iteration > min(25,MaxIterations/2) &
+               .and. max_err > 0.6*err_prev) then
          if (switch <= 1) then
             if (getAccelerationType() == AndersonMixing .or.          &
                 getAccelerationType() == SimpleMixing) then
@@ -501,6 +514,7 @@ contains
                if (print_instruction >= 0) then
                   write(6,'(a)')'Switch to Broyden Mixing Scheme.'
                endif
+               mixing_type = BroydenMixing
             else if (getAccelerationType() == BroydenMixing .or.      &
                      getAccelerationType() == SimpleMixing) then
 !              -------------------------------------------------------
@@ -509,6 +523,7 @@ contains
                if (print_instruction >= 0) then
                   write(6,'(a)')'Switch to Anderson Mixing Scheme.'
                endif
+               mixing_type = AndersonMixing
             endif
             iteration = 0
             switch = switch + 1
@@ -519,10 +534,12 @@ contains
             if (print_instruction >= 0) then
                write(6,'(a)')'Switch to Simple Mixing Scheme.'
             endif
+            mixing_type = SimpleMixing
             iteration = 0
             switch = switch + 1
          endif
       endif
+      err_prev = max_err
    enddo LOOP_iter
 !
    if (print_instruction >= 1) then
