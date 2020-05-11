@@ -52,6 +52,7 @@ public :: initSystem,             &
           getLmaxPot,             &
           getLmaxMax,             &
           getUniformGridParam,    &
+          getSystemCenter,        &
           printSystem,            &
           updateSystem,           &
           getMomentDirectionMixingParam, &
@@ -212,8 +213,10 @@ contains
    character (len=80) :: svalue
    character (len=80), allocatable :: value(:)
 !
+   logical :: theSame
+!
    integer (kind=IntKind), intent(in) :: tbl_id
-   integer (kind=IntKind) :: i, info_id, ig, j, reset_lmax, pot_type
+   integer (kind=IntKind) :: i, info_id, ig, j, k, kg, kn, reset_lmax, pot_type
    integer (kind=IntKind) :: lig
    integer (kind=IntKind), allocatable :: lmax_kkr(:), ind_lmax_kkr(:)
    integer (kind=IntKind), allocatable :: lmax_phi(:), ind_lmax_phi(:)
@@ -229,7 +232,7 @@ contains
    real (kind=RealKind), allocatable :: radplane(:)
 !
    real (kind=RealKind) :: volume
-   real (kind=RealKind) :: evt(3), em, alpev, cn
+   real (kind=RealKind) :: evt(3), em, alpev, an
 !
    interface
       function nocaseCompare(s1,s2) result(t)
@@ -518,6 +521,60 @@ contains
          AlloyElementName(ig) = AtomName(ig)
          AlloyElementAN(ig) = AtomicNum(ig)
          AlloyElementContent(ig) = ONE
+      enddo
+   endif
+!
+!  ===================================================================
+!  Give each CPA site, a unique "atomic number" so to distinguish CPA
+!  mediums on different sub-lattices
+!  ===================================================================
+   if (isAlloy) then
+      do i = 1, NumAlloySubLatts
+         ig = p_AlloySublattIndex(i)
+         if (AtomicNum(ig) == -1) then
+            if (NumAlloyElements(ig) == 1) then
+               AtomicNum(ig) = p_AlloyElement(1,i)
+            else
+               an = ZERO
+               do j = 1, NumAlloyElements(ig)
+                  an = an + p_AlloyElement(j,i)*p_AlloyContent(j,i)
+               enddo
+               AtomicNum(ig) = 1000 + int(an,kind=IntKind) ! set the CPA site to a new atomic number
+!              =======================================================
+!              Check the uniqness of the new atomic number assignment.
+!              =======================================================
+               do k = 1, i-1
+                  kg = p_AlloySublattIndex(k)
+                  if (AtomicNum(ig) == AtomicNum(kg)) then
+                     if (NumAlloyElements(ig) == NumAlloyElements(kg)) then
+                        LOOP_kn: do kn = 1, NumAlloyElements(kg)
+                           theSame = .false.
+                           LOOP_j: do j = 1, NumAlloyElements(ig)
+                              if (p_AlloyContent(j,i) == p_AlloyContent(kn,i) .and. &
+                                  p_AlloyElement(j,i) == p_AlloyElement(kn,i)) then
+                                  theSame = .true.
+                                  exit LOOP_j
+                              endif
+                           enddo LOOP_j
+                           if (.not.theSame) then
+                              exit LOOP_kn
+                           endif
+                        enddo LOOP_kn
+                     else
+                        theSame = .false.
+                     endif
+                     if (.not.theSame) then
+                        AtomicNum(ig) = AtomicNum(ig) + 1000
+                     endif
+                  endif
+               enddo
+            endif
+         else if (NumAlloyElements(ig) > 1) then
+!           ----------------------------------------------------------
+            call ErrorHandler('initSystem','Z = -1 is expected for CPA', &
+                              AtomicNum(ig))
+!           ----------------------------------------------------------
+         endif
       enddo
    endif
 !
@@ -2108,5 +2165,27 @@ contains
    endif
 !
    end subroutine resetSystemMovie
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ===================================================================
+   function getSystemCenter() result(vc)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind) :: i, ic
+!
+   real (kind=RealKind) :: vc(3)
+!
+   vc = ZERO
+   do i = 1,NumAtoms
+      do ic = 1, 3
+         vc(ic) = vc(ic) + AtomPosition(ic,i)
+      enddo
+   enddo
+   vc = vc/real(NumAtoms,kind=RealKind)
+!
+   end function getSystemCenter
 !  ===================================================================
 end module SystemModule
