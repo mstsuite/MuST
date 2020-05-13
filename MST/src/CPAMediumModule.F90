@@ -9,6 +9,9 @@ public :: initCPAMedium,            &
           isSubLatticeCPAMedium,    &
           getNumSpeciesInCPAMedium, &
           getCPAMatrix,             &
+          populateBigTCPA,          &
+          getSingleSiteMatrix,      &
+          getSingleSiteTmat,        &
           getImpurityMatrix
 !
 private
@@ -70,7 +73,7 @@ contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine initCPAMedium(cant, lmax_kkr, rel, cpa_mix_type, cpa_max_iter,  &
-                            cpa_mix_0, cpa_mix_1, cpa_eswitch, cpa_tol, istop, iprint)
+                            cpa_mix_0, cpa_mix_1, cpa_eswitch, cpa_tol, istop, iprint, is_sro)
 !  ===================================================================
    use GroupCommModule, only : getGroupID, getNumPEsInGroup, getMyPEinGroup
    use GroupCommModule, only : getNumGroups, getGroupLabel, isGroupExisting
@@ -90,6 +93,7 @@ contains
    integer (kind=IntKind), intent(in) :: cant, rel, cpa_mix_type, cpa_max_iter
    integer (kind=IntKind), intent(in) :: iprint(:)
    integer (kind=IntKind), intent(in) :: lmax_kkr(:)
+   logical, intent(in), optional ::  is_sro
    integer (kind=IntKind) :: i, ig, kmaxi, ic, n, NumImpurities
    integer (kind=IntKind) :: aid, num, dsize, lmaxi, nsize
 !
@@ -233,7 +237,13 @@ contains
    print_instruction = maxval(iprint)
 !
 !  -------------------------------------------------------------------
-   call initCrystalMatrix(LocalNumSites, cant, lmax_kkr, rel, istop, iprint)
+   if(present(is_sro)) then
+      call initCrystalMatrix(nla=LocalNumSites, cant=cant, lmax_kkr=lmax_kkr,   &
+                        rel=rel, istop=istop, iprint=iprint, is_sro=is_sro)
+   else
+      call initCrystalMatrix(nla=LocalNumSites, cant=cant, lmax_kkr=lmax_kkr,   &
+                        rel=rel, istop=istop, iprint=iprint)
+   endif
 !  -------------------------------------------------------------------
    call initEmbeddedCluster(cant, istop, print_instruction)
 !  -------------------------------------------------------------------
@@ -317,7 +327,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine computeCPAMedium(e)
+   subroutine computeCPAMedium(e, do_sro)
 !  ===================================================================
    use PublicParamDefinitionsModule, only : SimpleMixing, AndersonMixing, BroydenMixing
 !
@@ -349,6 +359,7 @@ contains
    integer (kind=IntKind) :: ia, id, nsize, n, dsize
    integer (kind=IntKind) :: ns, is, js, switch
    integer (kind=IntKind) :: site_config(LocalNumSites)
+   logical :: use_sro
 !
 !  ===================================================================
 !  CPA iteration acceleration parameters...
@@ -361,6 +372,9 @@ contains
    real (kind=RealKind) :: err, max_err
 !
    complex (kind=CmplxKind), intent(in) :: e
+   logical, intent(in), optional :: do_sro
+
+!
    complex (kind=CmplxKind) :: kappa
    complex (kind=CmplxKind), pointer :: tau_a(:,:,:)
    complex (kind=CmplxKind), pointer :: mat_a(:,:)
@@ -368,7 +382,13 @@ contains
    complex (kind=CmplxKind), pointer :: Jost(:,:), OH(:,:), Tinv(:,:), Jinv(:,:)
    complex (kind=CmplxKind), pointer :: SinvL(:,:), SinvR(:,:)
    complex (kind=CmplxKind), pointer :: tm1(:,:), tm2(:,:), tm0(:,:)
-!  
+!
+   if(present(do_sro)) then
+      use_sro = do_sro
+   else
+      use_sro = .false.
+   endif
+  
    if (nSpinCant == 1) then
       do n = 1, LocalNumSites
          id = CPAMedium(n)%local_index
@@ -431,13 +451,13 @@ contains
    enddo
 !
    switch = 0
-   iteration = 0 
+   iteration = 0
    LOOP_iter: do while (iteration < MaxIterations)
       iteration = iteration + 1
 !     write(6,'(a,i5)')'At iteration: ',iteration
       max_err = ZERO
 !     ----------------------------------------------------------------
-      call setupHostMedium(e,getSingleSiteTmat,configuration=site_config)   
+      call setupHostMedium(e,getSingleSiteTmat,configuration=site_config) 
 !     ----------------------------------------------------------------
       do n = 1, LocalNumSites
          if (isCPAMedium(n)) then
@@ -539,11 +559,11 @@ contains
          call writeMatrix('Final t-cpa-inv',CPAMedium(n)%TcpaInv,nsize,nsize,TEN2m8)
       enddo
    endif
-!  
+   if (.not. use_sro) then
 !  ===================================================================
 !  Calculate Tau_a and Kau_a for each species in local spin framework
 !  ===================================================================
-   do n = 1, LocalNumSites
+    do n = 1, LocalNumSites
       id = CPAMedium(n)%local_index
       dsize = CPAMedium(n)%dsize
       nsize = dsize*nSpinCant
@@ -583,7 +603,6 @@ contains
                call zgemm( 'n', 'n', dsize, dsize, dsize, CONE,       &
                            Jost, dsize, OH, dsize, CZERO, SinvR, dsize)
 !              -------------------------------------------------------
-!
                ns = ns + 1
                if (print_instruction >= 1) then
                   call writeMatrix('Tau_a',CPAMedium(n)%CPAMatrix(ia)%tau_a(:,:,ns), &
@@ -603,7 +622,8 @@ contains
             enddo
          enddo
       enddo
-   enddo
+    enddo
+   endif
 !
    end subroutine computeCPAMedium
 !  ===================================================================
@@ -667,7 +687,7 @@ contains
    integer (kind=IntKind) :: num, n
 !
    if (site < 1 .or. site > LocalNumSites) then
-      call ErrorHandler('getNumSpeciesInCPAMedium',                   &
+      call ErrorHandler('getNumSpeciesInCPAMedium',           &
                         'The local atom index is out of range',site)
    endif
 !
@@ -1109,4 +1129,29 @@ contains
 !
    end subroutine checkCPAMedium
 !  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine populateBigTCPA()
+!  ===================================================================
+
+   use SROModule, only : generateBigTCPAMatrix
+!
+   integer(kind=IntKind) :: n, dsize
+!  complex(kind=CmplxKind), allocatable :: t1(:,:), t2(:,:)
+!
+   do n = 1, LocalNumSites
+      dsize = size(CPAMedium(n)%Tcpa, 1)
+!     allocate(t1(dsize, dsize))
+!     allocate(t2(dsize, dsize))
+!     t1 = CPAMedium(n)%Tcpa
+!     t2 = CPAMedium(n)%TcpaInv
+!     ---------------------------------------   
+      call generateBigTCPAMatrix(n, CPAMedium(n)%TcpaInv)
+!     ---------------------------------------
+!     deallocate(t1)
+!     deallocate(t2)
+   enddo
+
+   end subroutine populateBigTCPA
+!  ==================================================================
 end module CPAMediumModule
