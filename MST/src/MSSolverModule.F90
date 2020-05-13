@@ -293,11 +293,11 @@ contains
                          cpa_max_iter=em_max_iter,                    &
                          cpa_mix_0=em_mix_0, cpa_mix_1=em_mix_1,      &
                          cpa_eswitch=em_eswitch, cpa_tol=em_tol,      &
-                         istop=istop, iprint=iprint)
+                         istop=istop, iprint=iprint, is_sro=.true.)
 !     ----------------------------------------------------------------
 !     call retrieveSROParams(sro_params, sro_param_num)
 !     Print *,sro_params
-      call initSROMatrix(cant)
+      call initSROMatrix(cant=cant, pola=pola)
 !     ----------------------------------------------------------------
    else if (isEmbeddedCluster()) then
 !     ----------------------------------------------------------------
@@ -510,6 +510,8 @@ contains
 !
    use CPAMediumModule, only : endCPAMedium
 !
+   use SROModule, only : endSROMatrix
+!
    implicit none
 !
    integer (kind=IntKind) :: i
@@ -558,6 +560,7 @@ contains
    else if (isKKRCPASRO()) then
 !     ----------------------------------------------------------------
       call endCPAMedium()
+      call endSROMatrix()
 !     ----------------------------------------------------------------
    else if (isEmbeddedCluster()) then
 !     ----------------------------------------------------------------
@@ -715,16 +718,17 @@ contains
 !
    use ClusterMatrixModule, only : calClusterMatrix
 !
-   use CrystalMatrixModule, only : calCrystalMatrix
+   use CrystalMatrixModule, only : calCrystalMatrix, retrieveTauSRO
 !
-   use CPAMediumModule, only : computeCPAMedium
-   use SROModule, only : generateBigTCPAMatrix
+   use CPAMediumModule, only : computeCPAMedium, populateBigTCPA, getSingleSiteMatrix, getSingleSiteTmat
+   use SROModule, only : generateBigTCPAMatrix, calSpeciesTauMatrix
 !
    implicit none
 !
    integer (kind=IntKind), intent(in) :: is
 !
    complex (kind=CmplxKind), intent(in) :: e
+   complex (kind=CmplxKind), pointer :: tcpa(:,:)
 !
 !  ===================================================================
 !  call calClusterMatrix or calCrystalMatrix to calculate the TAU(0,0) matrix
@@ -751,8 +755,17 @@ contains
 !     ----------------------------------------------------------------
    else if (isKKRCPASRO()) then ! Needs some more thought here
 !     ----------------------------------------------------------------
-      call computeCPAMedium(e)
-      call generateBigTCPAMatrix(1)
+      call computeCPAMedium(e, do_sro=.true.)
+      call populateBigTCPA()
+!     ----------------------------------------------------------------
+      call calCrystalMatrix(e, getSingleSiteMatrix ,use_tmat=.true.,tau_needed=.true., use_sro=.true.)
+!     ----------------------------------------------------------------
+      call retrieveTauSRO()
+!     ----------------------------------------------------------------
+      call calSpeciesTauMatrix()
+!     ----------------------------------------------------------------
+ 
+!     Print *, "Executed ok"
 !     ----------------------------------------------------------------
    else if (isEmbeddedCluster()) then  ! Needs further work.....
 !     ----------------------------------------------------------------
@@ -797,6 +810,8 @@ contains
    use CPAMediumModule, only : getImpurityMatrix, getCPAMatrix
 !
    use WriteMatrixModule,  only : writeMatrix
+!
+   use SROModule, only : getKauFromTau
 !
    implicit none
 !
@@ -937,15 +952,20 @@ contains
 !kau00=>getCrystalTau(local_id=id)
 !call writeMatrix('Tau',kau00(:,:,1),kmaxk,kmaxk,TEN2m6)
             kau00 => getCrystalKau(local_id=id) ! Kau00 = energy * S^{-1} * [Tau00 - t_matrix] * S^{-T*}
-         else if (isKKRCPA() .or. isKKRCPASRO() .or.  isEmbeddedCluster()) then
+         else if (isKKRCPA() .or.  isEmbeddedCluster()) then
 !p_kau00 => getCPAMatrix('Tcpa',site=id)
 !call writeMatrix('Tcpa',p_kau00,kmaxk,kmaxk,TEN2m6)
 !kau00=>getImpurityMatrix('Tau_a',site=id,atom=0)
 !call writeMatrix('Tau_a',kau00(:,:,1),kmaxk,kmaxk,TEN2m6)
             kau00 => getImpurityMatrix('Kau_a',site=id,atom=ia) ! Kau00 = energy * S^{-1} * [Tau_a - t_matrix] * S^{-T*}
+         else if (isKKRCPASRO()) then
+             kau00 => getKauFromTau(e=e, n=id, ic=ia) ! Calculates Kau Matrix From Tau
+!            kau00 => getImpurityMatrix('Kau_a',site=id,atom=ia)
          endif
 !        -------------------------------------------------------------
 !        call writeMatrix('Kau_a',kau00(:,:,1),kmaxk,kmaxk,TEN2m6)
+!        -------------------------------------------------------------
+!        call ErrorHandler('computeMSGreenFunction', 'Debug Stop')
 !        -------------------------------------------------------------
          ns = 0
          do js2 = 1, n_spin_cant
