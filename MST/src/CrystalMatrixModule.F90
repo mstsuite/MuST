@@ -107,6 +107,8 @@ public :: initCrystalMatrix, &
           calCrystalMatrix,  &
           getTau,            &
           getKau,            &
+          getTauSRO,         &
+          retrieveTauSRO,    &
           printCrystalMatrix
 !
    interface calCrystalMatrix
@@ -121,12 +123,17 @@ private
 !
    complex (kind=CmplxKind), allocatable, target :: Kau_MatrixDiag(:)
    complex (kind=CmplxKind), allocatable, target :: Tau_MatrixDiag(:)
+   complex (kind=CmplxKind), allocatable, target :: Tau_MatrixSRO(:, :, :) ! First index is LocalNumAtoms, second is for the matrix
+   complex (kind=CmplxKind), allocatable, target :: Kau_MatrixSRO(:, :, :) ! Third index is for neighbors (n, m)
    complex (kind=CmplxKind), allocatable, target :: TMP_MatrixBand(:)
+   complex (kind=CmplxKind), allocatable, target :: TMP_MatrixBandSRO(:,:,:) ! First index is sublattice
    complex (kind=CmplxKind), allocatable, target :: KKR_MatrixBand(:)
+   complex (kind=CmplxKind), allocatable, target :: KKR_MatrixBandSRO(:,:,:) ! Second is for matrix, third is for neighbor
    complex (kind=CmplxKind), allocatable, target :: SCM_MatrixBand(:)
    complex (kind=CmplxKind), allocatable, target :: strconrel(:,:)
 !
    logical :: isRelativistic = .false.
+   logical :: isSRO = .false.
    real (kind=RealKind), parameter :: Me = 0.5d0 !xianglin
 !
    character (len=50) :: stop_routine
@@ -136,10 +143,12 @@ private
    integer (kind=IntKind) :: GlobalNumAtoms, LocalNumAtoms
    integer (kind=IntKind) :: nSpinCant
    integer (kind=IntKind) :: lmax_kkr_max, kmax_kkr_max, tsize
-   integer (kind=IntKind) :: KKRMatrixSize
+   integer (kind=IntKind) :: KKRMatrixSize, OKKRMatrixSize
    integer (kind=IntKind) :: BandSize
-   integer (kind=IntKind) :: KKRMatrixSizeCant
+   integer (kind=IntKind) :: KKRMatrixSizeCant, OKKRMatrixSizeCant
    integer (kind=IntKind) :: BandSizeCant
+   integer (kind=IntKind) :: NeighDimSize
+   integer (kind=IntKind) :: NumCPASubLattice
 !
    integer (kind=IntKind), allocatable :: print_level(:)
    integer (kind=IntKind), allocatable :: ip_array(:) ! Relates a matrix block row index to the mapped processor index (0, 1, ...)
@@ -149,10 +158,12 @@ private
    integer (kind=IntKind), allocatable :: gid_array(:)! Relates a global index to the corresponding matrix block row index
    integer (kind=IntKind), allocatable :: lmaxi_array(:)
    integer (kind=IntKind), allocatable :: lmaxj_array(:)
+   integer (kind=IntKind), allocatable :: num_neighbors(:)
+   integer (kind=IntKind), allocatable :: isCPA(:)
 !
-   integer (kind=IntKind) :: LWORK, LIWORK
-   integer (kind=IntKind), allocatable :: IWORK(:)
-   complex (kind=CmplxKInd), allocatable, target :: WORK(:)
+   integer (kind=IntKind) :: LWORK, LIWORK, LWORK_sro, LIWORK_sro, dbg
+   integer (kind=IntKind), allocatable :: IWORK(:), IWORK_sro(:)
+   complex (kind=CmplxKInd), allocatable, target :: WORK(:), WORK_sro(:)
 !
    integer (kind=IntKind) :: NumPEsInGroup, MyPEinGroup, GroupID
 !
@@ -185,7 +196,7 @@ contains
    include '../lib/arrayTools.F90'
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine initCrystalMatrix( nla, cant, lmax_kkr, rel, istop, iprint)
+   subroutine initCrystalMatrix( nla, cant, lmax_kkr, rel, istop, iprint, is_sro)
 !  ===================================================================
    use MPPModule, only : MyPE
    use GroupCommModule, only : getGroupID, getNumPEsInGroup, getMyPEinGroup
@@ -193,8 +204,10 @@ contains
    use GroupCommModule, only : syncAllPEsInGroup
    use SystemModule, only  : getNumAtoms, getLmaxKKR, getAtomPosition, &
                              getLmaxPhi, getBravaisLattice
-   use Atom2ProcModule, only : getGlobalIndex, getLocalNumAtoms
+   use Atom2ProcModule, only : getLocalIndex, getGlobalIndex, getLocalNumAtoms
    use StrConstModule, only : initStrConst
+   use NeighborModule, only : getNumNeighbors
+   use MediumHostModule, only : getNumSpecies
 !
    implicit none
 !
@@ -203,17 +216,20 @@ contains
    integer (kind=IntKind), intent(in) :: nla, cant, rel
    integer (kind=IntKind), intent(in) :: lmax_kkr(nla)
    integer (kind=IntKind), intent(in) :: iprint(nla)
+   logical, optional, intent(in) :: is_sro
+
 !
    character (len=20) :: sname = "initCrystalMatrix"
 !
-   integer (kind=IntKind) :: i, j, ig, na, n, k, nk
+   integer (kind=IntKind) :: i, j, ig, il, na, n, k, nk
    integer (kind=IntKind) :: lmaxi, kmaxi, kmaxj, t0size, nsize
-   integer (kind=IntKind) :: status
+   integer (kind=IntKind) :: status, num, in, jn, index
 !
    real (kind=RealKind) :: bravais(3,3)
    real (kind=RealKind), allocatable :: global_posi(:,:)
 !
-   complex (kind=CmplxKind), pointer :: p1(:)
+   complex (kind=CmplxKind), pointer :: p1(:), p1_sro(:)
+!
 !
    stop_routine = istop
 !
@@ -269,26 +285,68 @@ contains
       jd_array(j) = MatrixBand(j)%global_index
       lmaxj_array(j) = lmax_kkr(j)
    enddo
-!
+ 
+!  -------- SRO Additions
+!  Print *, is_sro
+   if (present(is_sro)) then
+     isSRO = is_sro
+!    Print *,"Showing up as present"
+   else
+     isSRO = .false.
+   endif
+   if (isSRO) then
+      allocate(num_neighbors(GlobalNumAtoms))
+      allocate(isCPA(GlobalNumAtoms))
+      do i = 1, GlobalNumAtoms
+         il = getNumSpecies(i)
+         if (il > 1) then
+            isCPA(i) = 1
+         else
+            isCPA(i) = 0
+         endif
+      enddo
+      NumCPASubLattice = SUM(isCPA)
+   endif
+
+!  --------
    lmax_kkr_max = 0
+   OKKRMatrixSize = 0
    KKRMatrixSize = 0
+   NeighDimSize = 0
    do i = 1, GlobalNumAtoms
-      lmaxi = getLmaxKKR(i)
-      kmaxi = (lmaxi+1)**2
-      lmax_kkr_max = max( lmax_kkr_max,lmaxi )
-      KKRMatrixSize = KKRMatrixSize + kmaxi
+     lmaxi = getLmaxKKR(i)
+     kmaxi = (lmaxi+1)**2
+     lmax_kkr_max = max( lmax_kkr_max, lmaxi )
+     KKRMatrixSize = KKRMatrixSize + kmaxi
+!  -------- SRO Additions
+     if (isSRO) then
+        if (isCPA(i) == 1) then
+            num_neighbors(i) = getNumNeighbors(i) + 1
+            NeighDimSize = max( NeighDimSize, num_neighbors(i)**2 )
+            OKKRMatrixSize = max( OKKRMatrixSize, kmaxi ) !KKRMatrixSize + kmaxi
+        endif
+     endif
+!  --------
    enddo
    kmax_kkr_max = (lmax_kkr_max+1)**2
-!
    KKRMatrixSizeCant = KKRMatrixSize*nSpinCant
+   OKKRMatrixSizeCant = OKKRMatrixSize*nSpinCant
    BandSizeCant = BandSize*nSpinCant
    tsize = kmax_kkr_max*kmax_kkr_max*nSpinCant*nSpinCant
 !
+!  ----- SRO Additions
    allocate ( Kau_MatrixDiag(tsize*LocalNumAtoms) )
    allocate ( Tau_MatrixDiag(tsize*LocalNumAtoms) )
    allocate ( TMP_MatrixBand(KKRMatrixSizeCant*BandSizeCant) )
    allocate ( KKR_MatrixBand(KKRMatrixSizeCant*BandSizeCant) )
    allocate ( SCM_MatrixBand(KKRMatrixSize*BandSize) )
+   if (isSRO) then
+     allocate ( Kau_MatrixSRO(tsize, NeighDimSize, LocalNumAtoms) )
+     allocate ( Tau_MatrixSRO(tsize, NeighDimSize, LocalNumAtoms) )
+     allocate ( TMP_MatrixBandSRO(OKKRMatrixSizeCant*BandSizeCant, NeighDimSize, NumCPASubLattice) )
+     allocate ( KKR_MatrixBandSRO(OKKRMatrixSizeCant*BandSizeCant, NeighDimSize, NumCPASubLattice) )
+   endif
+!  -----
    if (isRelativistic) then
       allocate( strconrel(kmax_kkr_max*nSpinCant,kmax_kkr_max*nSpinCant) )
    endif
@@ -297,7 +355,15 @@ contains
    LIWORK = 2*KKRMatrixSizeCant
    allocate( WORK(1:max(LWORK,2*BandSizeCant*BandSizeCant)), IWORK(1:LIWORK) )
    WORK = CZERO; IWORK = 0
-!
+
+   if(isSRO) then
+     LWORK_sro = OKKRMatrixSizeCant*BandSizeCant
+     LIWORK = 2*OKKRMatrixSizeCant
+     allocate( WORK_sro(1:max(LWORK_sro,2*BandSizeCant*BandSizeCant)),    & 
+                           IWORK_sro(1:LIWORK_sro) )
+     WORK_sro = CZERO; IWORK_sro = 0
+   endif
+
 !  ===================================================================
 !  Set up the matrix block row/column index in such way that each
 !  a band of columns of the matrix is stored on a processor 
@@ -321,26 +387,56 @@ contains
             MatrixBand(j)%MatrixBlock(n)%global_index = ig
             MatrixBand(j)%MatrixBlock(n)%row_index = nk + 1
             if (ig == getGlobalIndex(j)) then   ! For now, we only store the diagonal blocks of the big Kau matrix.
-               if (isRelativistic) then !by xianglin
+              if (isRelativistic) then !by xianglin
 !                 MatrixBand(j)%MatrixBlock(n)%kau_l => aliasArray3_c(Kau_MatrixDiag(nsize+1:nsize+t0size), &
-!                                                                     kmaxi*nSpinCant,kmaxi*nSpinCant,1)
+!                                                                      kmaxi*nSpinCant,kmaxi*nSpinCant,1)
                   p1 => Kau_MatrixDiag(nsize+1:nsize+t0size)
                   MatrixBand(j)%MatrixBlock(n)%kau_l => aliasArray3_c(p1,kmaxi*nSpinCant,kmaxi*nSpinCant,1)
 !                 MatrixBand(j)%MatrixBlock(n)%tau_l => aliasArray3_c(Tau_MatrixDiag(nsize+1:nsize+t0size), &
-!                                                                     kmaxi*nSpinCant,kmaxi*nSpinCant,1)
+!                                                                       kmaxi*nSpinCant,kmaxi*nSpinCant,1)
                   p1 => Tau_MatrixDiag(nsize+1:nsize+t0size)
                   MatrixBand(j)%MatrixBlock(n)%tau_l => aliasArray3_c(p1,kmaxi*nSpinCant,kmaxi*nSpinCant,1)
-               else
+              else
 !                 MatrixBand(j)%MatrixBlock(n)%kau_l => aliasArray3_c(Kau_MatrixDiag(nsize+1:nsize+t0size), &
-!                                                                     kmaxi,kmaxi,nSpinCant*nSpinCant)
+!                                                                      kmaxi,kmaxi,nSpinCant*nSpinCant)
                   p1 => Kau_MatrixDiag(nsize+1:nsize+t0size)
                   MatrixBand(j)%MatrixBlock(n)%kau_l => aliasArray3_c(p1,kmaxi,kmaxi,nSpinCant*nSpinCant)
 !                 MatrixBand(j)%MatrixBlock(n)%tau_l => aliasArray3_c(Tau_MatrixDiag(nsize+1:nsize+t0size), &
-!                                                                     kmaxi,kmaxi,nSpinCant*nSpinCant)
+!                                                                       kmaxi,kmaxi,nSpinCant*nSpinCant)
                   p1 => Tau_MatrixDiag(nsize+1:nsize+t0size)
                   MatrixBand(j)%MatrixBlock(n)%tau_l => aliasArray3_c(p1,kmaxi,kmaxi,nSpinCant*nSpinCant)
-               endif
-               nsize = nsize + kmaxi*kmaxi*nSpinCant*nSpinCant
+              endif
+              nsize = nsize + kmaxi*kmaxi*nSpinCant*nSpinCant
+              
+              if (isSRO) then
+                 num = num_neighbors(ig)
+                 allocate (MatrixBand(j)%MatrixBlock(n)%NeighMat_l(num*num))
+                 do in = 1, num
+                    do jn = 1, num
+                       index = jn + (in - 1)*num
+                       if (isRelativistic) then !by xianglin
+                        
+                          p1_sro => Kau_MatrixSRO(:,index,j) ! Change order of index
+                          MatrixBand(j)%MatrixBlock(n)%NeighMat_l(index)%kau_l_sro => &
+                                                         aliasArray3_c(p1_sro,kmaxi*nSpinCant,kmaxi*nSpinCant,1)
+                          
+                          p1_sro => Tau_MatrixSRO(:,index, j)
+                          MatrixBand(j)%MatrixBlock(n)%NeighMat_l(index)%tau_l_sro => &
+                                                         aliasArray3_c(p1_sro,kmaxi*nSpinCant,kmaxi*nSpinCant,1)
+                       
+                       else
+                          p1_sro => Kau_MatrixSRO(:,index,j)
+                          MatrixBand(j)%MatrixBlock(n)%NeighMat_l(index)%kau_l_sro => &
+                                                         aliasArray3_c(p1_sro,kmaxi,kmaxi,nSpinCant*nSpinCant)
+                          
+                          p1_sro => Tau_MatrixSRO(:,index,j)
+                          MatrixBand(j)%MatrixBlock(n)%NeighMat_l(index)%tau_l_sro => &
+                                           aliasArray3_c(Tau_MatrixSRO(:,index, j),kmaxi,kmaxi,nSpinCant*nSpinCant)
+                       endif
+                    enddo
+                 enddo
+                 nsize = nsize + kmaxi*kmaxi*nSpinCant*nSpinCant
+              endif
             endif
          enddo
          nk = nk + kmaxi*nSpinCant
@@ -422,6 +518,7 @@ contains
    if (NumPEsInGroup == 1) then  ! ScaLapack will not be used for 1 process case
       return
    endif
+   Print *,"it doesn't reach here"
 !
 #ifdef USE_SCALAPACK
 !  ===================================================================
@@ -452,6 +549,8 @@ contains
 !  -------------------------------------------------------------------
 #endif
 !
+   Print *, "Successful initCrystalMatrix"
+
    end subroutine initCrystalMatrix
 !  ===================================================================
 !
@@ -477,6 +576,14 @@ contains
    nullify(cosine_g)
    deallocate( MatrixBand, sc_blocks )
    deallocate( Kau_MatrixDiag, Tau_MatrixDiag )
+   if (isSRO) then
+     deallocate( TMP_MatrixBandSRO )
+     deallocate( KKR_MatrixBandSRO )
+     deallocate( Tau_MatrixSRO, Kau_MatrixSRO )
+     deallocate( num_neighbors )
+     deallocate( isCPA )
+     deallocate( WORK_sro , IWORK_sro)
+   endif
    deallocate( TMP_MatrixBand )
    deallocate( KKR_MatrixBand )
    deallocate( SCM_MatrixBand )
@@ -797,7 +904,7 @@ contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine calCrystalMatrix_sumk(e,getSingleScatteringMatrix,      &
-                                    tau_needed,use_tmat,configuration)
+                                    tau_needed,use_tmat,use_sro,configuration)
 !  ===================================================================
    use MPPModule, only : MyPE
    use MatrixModule, only : computeAStarT
@@ -808,27 +915,34 @@ contains
                                  getKPointIndex, getNumRedundantKsOnMyProc
    use GroupCommModule, only : getGroupID, GlobalSumInGroup, getMyPEinGroup
    use StrConstModule, only : getStrConstMatrix
-   use WriteMatrixModule,  only : writeMatrix
+ ! use WriteMatrixModule,  only : writeMatrix
+   use SROModule, only : obtainPosition
 !
    implicit none
 !
    logical, intent(in), optional :: tau_needed
    logical, intent(in), optional :: use_tmat
+   logical, intent(in), optional :: use_sro
    logical :: calculate_tau = .false.
+   logical :: do_sro = .false.
 !
    character (len=20) :: sname = "calCrystalMatrix"
 !
    integer (kind=IntKind), intent(in), optional :: configuration(:)
-   integer (kind=IntKind) :: k_loc, k, i, row, col, MyPEinKGroup, method
+   integer (kind=IntKind) :: k_loc, k, row, col, MyPEinKGroup, method
    integer (kind=IntKind) :: NumKs, kGID, aGID, NumKsOnMyProc, NumRedunKs
-   integer (kind=IntKind) :: site_config(LocalNumAtoms)
+   integer (kind=IntKind) :: site_config(LocalNumAtoms), itertmp
+   integer (kind=IntKind) :: ig, i, j, jn, in, index, num, temp
 !
    real (kind=RealKind), pointer :: kpts(:,:), weight(:)
    real (kind=RealKind) :: kfac, kaij
-   real (kind=RealKind) :: weightSum, kvec(1:3), aij(3)
+   real (kind=RealKind) :: weightSum, kvec(1:3)
+   real (kind=RealKind) :: aij(3), bij(3)
+   complex (kind=CmplxKind) :: fourier_factor
+!  real (kind=RealKind) :: fourier_factor
 !
    complex (kind=CmplxKind), intent(in) :: e
-   complex (kind=CmplxKind) :: wfac, efac
+   complex (kind=CmplxKind) :: wfac, efac 
    complex (kind=CmplxKind), pointer :: rotmat(:,:), scm(:,:)
 !
    interface
@@ -880,10 +994,25 @@ contains
       endif
    endif
 !
+   if (present(use_sro)) then
+      if (use_sro .and. .not. isSRO) then
+         call ErrorHandler('calCrystalMatrix_sumk', 'SRO required but SRO init not done.   &
+                 Check is_sro=true in initCrystalMatrix')
+      else
+         do_sro = use_sro
+      endif
+   else
+      do_sro = .false.
+   endif
+!
    if (present(configuration)) then
       site_config(1:LocalNumAtoms) = configuration(1:LocalNumAtoms)
    else
-      site_config = 1
+      if (do_sro) then
+        site_config = 0
+      else
+        site_config = 1
+      endif
    endif
 !
 !  ===================================================================
@@ -911,91 +1040,228 @@ contains
    weight => getAllWeights()
    weightSum = getWeightSum()
 !
-!  ===================================================================
-!  Loop over k-points on mesh
-!  ===================================================================
-   KKR_MatrixBand = CZERO
-   do k_loc = 1,NumKsOnMyProc
-!     ================================================================
-!     Normorlize BZ integration weights
-!     ================================================================
-      k = getKPointIndex(k_loc)
-      kvec(1:3) = kpts(1:3,k)*kfac
-!     ================================================================
-!     get structure constant matrix for the k-point and energy
-      do col = 1, LocalNumAtoms
-         do row = 1, GlobalNumAtoms
-!           ----------------------------------------------------------
-            scm => getStrConstMatrix(kvec,kappa,id_array(row),jd_array(col), &
-                                     lmaxi_array(row),lmaxj_array(col),aij)
-!           ----------------------------------------------------------
-!           kaij = kvec(1)*aij(1)+kvec(2)*aij(2)+kvec(3)*aij(3)
-!           efac = exp(sqrtm1*kaij)
-!           sc_blocks(row,col)%strcon_matrix = scm*efac
-            sc_blocks(row,col)%strcon_matrix = scm
-         enddo
+!  -------------------------------------------------------------------
+!  Outline of SRO implementation
+!  - Make KKR_MatrixBand a 3D block matrix (:,:,:))
+!  - First first index is for tau, the next two will represent the
+!    neighbor atom indices
+!  - There will be two loops over here, looping over the number of 
+!    neighbors
+!  - Multiply integrand (TMP_MatrixBand?) with exp(ik(rn - rm))
+!  - Proceed with regular integration
+!  ------------------------------------------------------------------
+   if (do_sro) then
+!     Print *, "Checked for SRO. Is SRO true"
+      do j = 1, LocalNumAtoms
+        ig = MatrixBand(j)%global_index          ! Get local index of atom given global index
+        i = gid_array(ig)                        ! Diagonal block of big Kau Matrix
+        
+        if (isCPA(ig) == 0) cycle                 ! if sublattice is not CPA skip to next iteration
+        KKR_MatrixBandSRO = CZERO
+        TMP_MatrixBandSRO = CZERO 
+        num  = num_neighbors(ig)
+        do in = 1, num
+           aij = 0
+           call obtainPosition(i, aij, in)       ! Going through row of neighbors
+           do jn = 1, num                        ! Going through column of neighbors
+            !  ===================================================================
+            !  Loop over k-points on mesh
+            !  ===================================================================
+            !  Mapping 2D matrix indices to a 1D matrix index
+               index = jn + (in - 1)*num
+            !  Print *,"obtained neighbor index"
+               bij = 0
+               call obtainPosition(j, bij, jn)
+               do k_loc = 1,NumKsOnMyProc
+            !     ================================================================
+            !     Normorlize BZ integration weights
+            !     ================================================================
+                  k = getKPointIndex(k_loc)
+                  kvec(1:3) = kpts(1:3,k)*kfac
+            !     ================================================================
+            !     Get positions for neighbor block (in, jn) i.e Rin and Rjn
+            !     Modify to return pointer/change to function instead of subroutine
+            !     ================================================================
+            !     Calculate Fourier Factor e^(ik(Rin - Rjn))
+                  kaij = 0
+            !     do temp = 1, 3
+            !        kaij = kaij + kvec(temp)*(aij(temp) - bij(temp))
+            !     enddo
+                  kaij = kvec(1)*(aij(1) - bij(1)) + kvec(2)*(aij(2) - bij(2)) &
+                          + kvec(3)*(aij(3) - bij(3))
+                  fourier_factor = exp(sqrtm1*kaij)
+            !     ================================================================
+            !     get structure constant matrix for the k-point and energy
+                  do col = 1, LocalNumAtoms
+                     do row = 1, GlobalNumAtoms
+            !           ----------------------------------------------------------
+                        scm => getStrConstMatrix(kvec,kappa,id_array(row),jd_array(col), &
+                                                 lmaxi_array(row),lmaxj_array(col))
+            !           ----------------------------------------------------------
+            !           kaij = kvec(1)*aij(1)+kvec(2)*aij(2)+kvec(3)*aij(3)
+            !           efac = ex(sqrtm1*kaij)
+            !           sc_blocks(row,col)%strcon_matrix = scm*efac
+                        sc_blocks(row,col)%strcon_matrix = scm
+                     enddo
+                  enddo
+            !     ----------------------------------------------------------------
+            !     Multiply by exp(ik(rn - rm))
+                  wfac = ( weight(k)/weightSum )
+            !     write(6,'(a,i4,a,3f12.5,a,2d12.5,a,2d12.5)')'k-ind = ',k,       &
+            !             ', kvec = ',kvec,', wfac = ',wfac,', weightsum = ',weightSum
+            !
+            !     ================================================================
+            !     Compute the modified KKR matrix, which is stored in TMP_MatrixBand
+            !     For SRO, the GlobalIndex is also being provided so that the KKR Matrix
+            !     is only calculated for that particular sublattice
+            !     ----------------------------------------------------------------
+                  call computeMatrixBand(p_MatrixBand=TMP_MatrixBandSRO(:,index,i), &
+                                      method=method,fixed_g=i,fixed_l=j,use_sro=do_sro) 
+            !     ----------------------------------------------------------------
+            !     call checkMatrixBandRotation(kvec,TMP_MatrixBand)
+                  do itertmp = 1, OKKRMatrixSizeCant*BandSizeCant
+                      TMP_MatrixBandSRO(itertmp, index, i) =  &
+                        fourier_factor*TMP_MatrixBandSRO(itertmp, index, i)
+                  enddo
+            !     ================================================================
+            !     Sum over the matrix over the processors that take care different
+            !     k-points. The loop will continue for the redundant k-points, if 
+            !     there are any. The redundant k-points are needed for the load 
+            !     balance purpose.
+            !     ================================================================
+                  if (k_loc <= NumKsOnMyProc - NumRedunKs .or. MyPEinKGroup == 0) then
+            !        -------------------------------------------------------------
+                     call zaxpy(OKKRMatrixSizeCant*BandSizeCant,wfac,TMP_MatrixBandSRO(1,index,i),1, &
+                                KKR_MatrixBandSRO(1,index,i),1) ! change order
+            !        -------------------------------------------------------------
+                  else
+            !        -------------------------------------------------------------
+                     call zaxpy(OKKRMatrixSizeCant*BandSizeCant,CZERO,TMP_MatrixBandSRO(1,index, i),1, &
+                                KKR_MatrixBandSRO(1,index, i),1)
+            !        -------------------------------------------------------------
+                  endif
+            !     call writeMatrix('KKR_MatrixBand',KKR_MatrixBand,OKKRMatrixSizeCant, &
+            !                      BandSizeCant,TEN2m8,.true.)
+               enddo
+            !  -------------------------------------------------------------------
+               call GlobalSumInGroup(kGID,KKR_MatrixBandSRO(:,index,i), &
+                                         OKKRMatrixSizeCant*BandSizeCant)
+            !  -------------------------------------------------------------------
+               if (method == 0 .or. method == 1) then
+            !     ----------------------------------------------------------------
+                  call computeKauMatrix(getSingleScatteringMatrix, &
+                                      method,calculate_tau,site_config)
+            !     ----------------------------------------------------------------
+               else if (method == 2) then
+            !     ----------------------------------------------------------------
+                  call computeTauMatrix(getSingleScatteringMatrix=getSingleScatteringMatrix, &
+                           site_config=site_config,gindex=i,jindex=j,nindex=index,use_sro=do_sro)
+            !     ----------------------------------------------------------------
+               else
+            !     ----------------------------------------------------------------
+                  call ErrorHandler('calCrystalMatrix_sumk','The method is invalid',method)
+            !     ----------------------------------------------------------------
+               endif
+               if (getNumIBZRotations() > 1) then
+                 if (isRelativistic) then
+                    call ErrorHandler('calCrystalMatrix_sumk','Relativistic sumIBZRotation not implemented',INFO)
+                 else
+!                   ----------------------------------------------------------------
+                    call sumIBZRotation(calculate_tau, use_sro=do_sro, jindex=j, nindex=index)
+!                   ----------------------------------------------------------------
+                 endif
+               endif
+           enddo
+        enddo
       enddo
-!
-      wfac = weight(k)/weightSum
-!     write(6,'(a,i4,a,3f12.5,a,2d12.5,a,2d12.5)')'k-ind = ',k,       &
-!             ', kvec = ',kvec,', wfac = ',wfac,', weightsum = ',weightSum
-!
-!     ================================================================
-!     Compute the modified KKR matrix, which is stored in TMP_MatrixBand
-!     ----------------------------------------------------------------
-      call computeMatrixBand(TMP_MatrixBand,method)
-!     ----------------------------------------------------------------
-!     call checkMatrixBandRotation(kvec,TMP_MatrixBand)
-!     ----------------------------------------------------------------
-!
-!     ================================================================
-!     Sum over the matrix over the processors that take care different
-!     k-points. The loop will continue for the redundant k-points, if 
-!     there are any. The redundant k-points are needed for the load 
-!     balance purpose.
-!     ================================================================
-      if (k_loc <= NumKsOnMyProc - NumRedunKs .or. MyPEinKGroup == 0) then
-!        -------------------------------------------------------------
-         call zaxpy(KKRMatrixSizeCant*BandSizeCant,wfac,TMP_MatrixBand,1, &
-                    KKR_MatrixBand,1)
-!        -------------------------------------------------------------
-      else
-!        -------------------------------------------------------------
-         call zaxpy(KKRMatrixSizeCant*BandSizeCant,CZERO,TMP_MatrixBand,1, &
-                    KKR_MatrixBand,1)
-!        -------------------------------------------------------------
-      endif
-!     call writeMatrix('KKR_MatrixBand',KKR_MatrixBand,KKRMatrixSizeCant, &
-!                      BandSizeCant,TEN2m8,.true.)
-   enddo
-!  -------------------------------------------------------------------
-   call GlobalSumInGroup(kGID,KKR_MatrixBand,KKRMatrixSizeCant*BandSizeCant)
-!  -------------------------------------------------------------------
-!
-   if (method == 0 .or. method == 1) then
-!     ----------------------------------------------------------------
-      call computeKauMatrix(getSingleScatteringMatrix,method,calculate_tau,site_config)
-!     ----------------------------------------------------------------
-   else if (method == 2) then
-!     ----------------------------------------------------------------
-      call computeTauMatrix(getSingleScatteringMatrix,site_config)
-!     ----------------------------------------------------------------
    else
-!     ----------------------------------------------------------------
-      call ErrorHandler('calCrystalMatrix_sumk','The method is invalid',method)
-!     ----------------------------------------------------------------
-   endif
-!
-   if (getNumIBZRotations() > 1) then
-      if (isRelativistic) then
-         call ErrorHandler('calCrystalMatrix_sumk','Relativistic sumIBZRotation not implemented',INFO)
+   !  ===================================================================
+   !  Loop over k-points on mesh
+   !  ===================================================================
+      KKR_MatrixBand = CZERO
+      do k_loc = 1,NumKsOnMyProc
+   !     ================================================================
+   !     Normorlize BZ integration weights
+   !     ================================================================
+         k = getKPointIndex(k_loc)
+         kvec(1:3) = kpts(1:3,k)*kfac
+   !     ================================================================
+   !     get structure constant matrix for the k-point and energy
+         do col = 1, LocalNumAtoms
+            do row = 1, GlobalNumAtoms
+   !           ----------------------------------------------------------
+               scm => getStrConstMatrix(kvec,kappa,id_array(row),jd_array(col), &
+                                        lmaxi_array(row),lmaxj_array(col),aij)
+   !           ----------------------------------------------------------
+   !           kaij = kvec(1)*aij(1)+kvec(2)*aij(2)+kvec(3)*aij(3)
+   !           efac = ex(sqrtm1*kaij)
+   !           sc_blocks(row,col)%strcon_matrix = scm*efac
+               sc_blocks(row,col)%strcon_matrix = scm
+            enddo
+         enddo
+   !
+         wfac = weight(k)/weightSum
+   !     write(6,'(a,i4,a,3f12.5,a,2d12.5,a,2d12.5)')'k-ind = ',k,       &
+   !             ', kvec = ',kvec,', wfac = ',wfac,', weightsum = ',weightSum
+   !
+   !     ================================================================
+   !     Compute the modified KKR matrix, which is stored in TMP_MatrixBand
+   !     ----------------------------------------------------------------
+         call computeMatrixBand(TMP_MatrixBand,method)
+   !     ----------------------------------------------------------------
+   !     call checkMatrixBandRotation(kvec,TMP_MatrixBand)
+   !     ----------------------------------------------------------------
+   !
+   !     ================================================================
+   !     Sum over the matrix over the processors that take care different
+   !     k-points. The loop will continue for the redundant k-points, if 
+   !     there are any. The redundant k-points are needed for the load 
+   !     balance purpose.
+   !     ================================================================
+         if (k_loc <= NumKsOnMyProc - NumRedunKs .or. MyPEinKGroup == 0) then
+   !        -------------------------------------------------------------
+            call zaxpy(KKRMatrixSizeCant*BandSizeCant,wfac,TMP_MatrixBand,1, &
+                       KKR_MatrixBand,1)
+   !        -------------------------------------------------------------
+         else
+   !        -------------------------------------------------------------
+            call zaxpy(KKRMatrixSizeCant*BandSizeCant,CZERO,TMP_MatrixBand,1, &
+                       KKR_MatrixBand,1)
+   !        -------------------------------------------------------------
+         endif
+   !     call writeMatrix('KKR_MatrixBand',KKR_MatrixBand,KKRMatrixSizeCant, &
+   !                      BandSizeCant,TEN2m8)
+      enddo
+   !  -------------------------------------------------------------------
+      call GlobalSumInGroup(kGID,KKR_MatrixBand,KKRMatrixSizeCant*BandSizeCant)
+   !  -------------------------------------------------------------------
+   !  call writeMatrix('KKR-MatrixBand', KKR_MatrixBand, KKRMatrixSizeCant, &
+   !                  BandSizeCant, TEN2m8)
+      if (method == 0 .or. method == 1) then
+   !     ----------------------------------------------------------------
+         call computeKauMatrix(getSingleScatteringMatrix,method,calculate_tau,site_config)
+   !     ----------------------------------------------------------------
+      else if (method == 2) then
+   !     ----------------------------------------------------------------
+         call computeTauMatrix(getSingleScatteringMatrix,site_config)
+   !     ----------------------------------------------------------------
       else
-!        ----------------------------------------------------------------
-         call sumIBZRotation(calculate_tau)
-!        ----------------------------------------------------------------
+   !     ----------------------------------------------------------------
+         call ErrorHandler('calCrystalMatrix_sumk','The method is invalid',method)
+   !     ----------------------------------------------------------------
+      endif
+!
+      if (getNumIBZRotations() > 1) then
+         if (isRelativistic) then
+            call ErrorHandler('calCrystalMatrix_sumk','Relativistic sumIBZRotation not implemented',INFO)
+         else
+!           ----------------------------------------------------------------
+            call sumIBZRotation(calculate_tau)
+!           ----------------------------------------------------------------
+         endif
       endif
    endif
-!
+ 
    nullify( weight, kpts )
 !
    if (trim(stop_routine) ==trim(sname)) then
@@ -1338,7 +1604,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine computeTauMatrix(getSingleScatteringMatrix,site_config)
+   subroutine computeTauMatrix(getSingleScatteringMatrix,site_config,gindex,jindex,nindex,use_sro)
 !  ===================================================================
    use WriteMatrixModule,  only : writeMatrix
 !
@@ -1347,11 +1613,16 @@ contains
    implicit none
 !
    integer (kind=IntKind), intent(in) :: site_config(:)
+   integer (kind=IntKind), intent(in), optional :: gindex, jindex, nindex
+   logical, optional, intent(in) :: use_sro
+!
    integer (kind=IntKind) :: i, j, ig, np, ni, nj, kl, klp, is, js, ns
-   integer (kind=IntKind) :: kmaxj, kmaxj_ns, t0size
+   integer (kind=IntKind) :: kmaxj, kmaxj_ns, t0size, temp
 !
    complex (kind=CmplxKind), pointer :: tau_l(:,:), pw(:,:), tm(:,:)
    complex (kind=CmplxKind), pointer :: wau_g(:,:), wau_l(:,:,:), p1(:)
+!
+   logical :: do_sro = .false.
 !
    interface
       function getSingleScatteringMatrix(smt,spin,site,atom,dsize) result(sm)
@@ -1362,69 +1633,154 @@ contains
          complex (kind=CmplxKind), pointer :: sm(:,:)
       end function getSingleScatteringMatrix
    end interface
-!
-   do j = 1, LocalNumAtoms
-      ig = MatrixBand(j)%global_index
-      i = gid_array(ig)  ! Here, we only calculate wau_g for the diagonal components of the Tau matrices
-      kmaxj = MatrixBand(j)%MatrixBlock(i)%kmax_kkr
+
+   if (present(use_sro)) then
+     do_sro = use_sro
+   else
+     do_sro = .false.
+   endif
+!  -----------------------------------------------
+!  Check for SRO
+!  -----------------------------------------------
+   if (do_sro) then
+!     -------------------------------------------
+!     Global and Local Indices are given as input, 
+!     no need to obtain them again
+!     ig = MatrixBand(jindex)%global_index
+!     
+!     -------------------------------------------
+      i = gindex
+      kmaxj = MatrixBand(jindex)%MatrixBlock(i)%kmax_kkr
       kmaxj_ns = kmaxj*nSpinCant
-      wau_g => aliasArray2_c(WORK,kmaxj_ns,kmaxj_ns)
-      nj = MatrixBand(j)%column_index-1
-      ni = MatrixBand(j)%MatrixBlock(i)%row_index-1
+      wau_g => aliasArray2_c(WORK_sro,kmaxj_ns,kmaxj_ns)
+      nj = MatrixBand(jindex)%column_index-1
+      ni = MatrixBand(jindex)%MatrixBlock(i)%row_index-1
+      
+!     --------------------------------------------------------------
+!     Populate wau_g for the particular neighbor pair and sublattice
+!     --------------------------------------------------------------
       do kl = 1, kmaxj_ns
-         np = KKRMatrixSizeCant*(nj+kl-1)+ni
+         np = OKKRMatrixSizeCant*(nj+kl-1) + ni
+!        np = kmaxj_ns*(kl - 1)
          do klp = 1, kmaxj_ns
-            wau_g(klp,kl) = KKR_MatrixBand(np+klp)
+!           np = OKKRMatrixSizeCant*(nj+kl-1) + ni
+            wau_g(klp,kl) = KKR_MatrixBandSRO(np+klp, nindex, gindex) ! Change order
          enddo
       enddo
-!
-!     ================================================================
-!     Determine wau_l which is wau_g in local frame.
-!     ================================================================
+      
       if (isRelativistic) then !xianglin
          wau_l => aliasArray3_c(WORK,kmaxj_ns,kmaxj_ns,1)
       else if ( nSpinCant == 2 ) then
          t0size = kmaxj_ns*kmaxj_ns
-         p1 => WORK(t0size+1:t0size*2)
+         p1 => WORK(t0size+1:t0size*2) ! 
          wau_l => aliasArray3_c(p1,kmaxj,kmaxj,nSpinCant*nSpinCant)
 !        -------------------------------------------------------------
          call rotateGtoL(j, kmaxj, kmaxj, wau_g, wau_l)
 !        -------------------------------------------------------------
       else
-         wau_l => aliasArray3_c(WORK,kmaxj,kmaxj,1) ! wau_l = wau_g
+         wau_l => aliasArray3_c(WORK_sro,kmaxj,kmaxj,1) ! wau_l = wau_g
       endif
 !
       if (isRelativistic) then !xianglin
          tm => getSingleScatteringMatrix('T-Matrix',site=j,atom=site_config(j))
-         tau_l => MatrixBand(j)%MatrixBlock(i)%tau_l(:,:,1)
+!        --------------------------------------------------------------------------
+         tau_l => MatrixBand(jindex)%MatrixBlock(i)%     &
+                            NeighMat_l(nindex)%tau_l_sro(:,:,1)
+!        --------------------------------------------------------------------------
          pw => wau_l(:,:,1)
 !        -------------------------------------------------------------
          call zgemm('n', 'n', kmaxj_ns, kmaxj_ns, kmaxj_ns, CONE,     &
-                    tm, kmaxj_ns, pw, kmaxj_ns, CZERO, tau_l, kmaxj_ns)
+                    tm, kmaxj_ns, pw, kmaxj_ns, CZERO, &
+           MatrixBand(jindex)%MatrixBlock(i)%NeighMat_l(nindex)%tau_l_sro(:,:,1), kmaxj_ns)
 !        -------------------------------------------------------------
       else
          ns = 0
          do js = 1, nSpinCant
             tm => getSingleScatteringMatrix('T-Matrix',spin=js,       &
-                                            site=j,atom=site_config(j))
-!           call writeMatrix('tm',tm,kmaxj,kmaxj,TEN2m8)
+                                            site=jindex,atom=site_config(jindex))
 !           ==========================================================
 !           Note: wau_l is the integration of [ 1 - (B(k,e)+i*kappa) * t(e) ]^{-1}
 !                 over IBZ.
 !           ==========================================================
             do is = 1, nSpinCant
                ns = ns + 1
-               tau_l => MatrixBand(j)%MatrixBlock(i)%tau_l(:,:,ns)
+!              ---------------------------------------------------------------------------
+               tau_l => MatrixBand(jindex)%MatrixBlock(i)%    &
+                                 NeighMat_l(nindex)%tau_l_sro(:,:,ns)
+!              ---------------------------------------------------------------------------
                pw => wau_l(:,:,ns)
 !              -------------------------------------------------------
                call zgemm('n', 'n', kmaxj, kmaxj, kmaxj, CONE,        &
                           tm, kmaxj, pw, kmaxj, CZERO, tau_l, kmaxj)
 !              -------------------------------------------------------
-!              call writeMatrix('tau',tau_l,kmaxj,kmaxj,TEN2m8)
             enddo
          enddo
+         WORK_sro = CZERO
       endif
-   enddo
+
+   else
+      do j = 1, LocalNumAtoms
+         ig = MatrixBand(j)%global_index
+         i = gid_array(ig)  ! Here, we only calculate wau_g for the diagonal components of the Tau matrices
+         kmaxj = MatrixBand(j)%MatrixBlock(i)%kmax_kkr
+         kmaxj_ns = kmaxj*nSpinCant
+         wau_g => aliasArray2_c(WORK,kmaxj_ns,kmaxj_ns)
+         nj = MatrixBand(j)%column_index-1
+         ni = MatrixBand(j)%MatrixBlock(i)%row_index-1
+         do kl = 1, kmaxj_ns
+            np = KKRMatrixSizeCant*(nj+kl-1)+ni
+            do klp = 1, kmaxj_ns
+               wau_g(klp,kl) = KKR_MatrixBand(np+klp)
+            enddo
+         enddo
+!        ================================================================
+!        Determine wau_l which is wau_g in local frame.
+!        ================================================================
+         if (isRelativistic) then !xianglin
+            wau_l => aliasArray3_c(WORK,kmaxj_ns,kmaxj_ns,1)
+         else if ( nSpinCant == 2 ) then
+            t0size = kmaxj_ns*kmaxj_ns
+            p1 => WORK(t0size+1:t0size*2)
+            wau_l => aliasArray3_c(p1,kmaxj,kmaxj,nSpinCant*nSpinCant)
+!           -------------------------------------------------------------
+            call rotateGtoL(j, kmaxj, kmaxj, wau_g, wau_l)
+!           -------------------------------------------------------------
+         else
+            wau_l => aliasArray3_c(WORK,kmaxj,kmaxj,1) ! wau_l = wau_g
+         endif
+!     
+         if (isRelativistic) then !xianglin
+            tm => getSingleScatteringMatrix('T-Matrix',site=j,atom=site_config(j))
+            tau_l => MatrixBand(j)%MatrixBlock(i)%tau_l(:,:,1)
+            pw => wau_l(:,:,1)
+!           -------------------------------------------------------------
+            call zgemm('n', 'n', kmaxj_ns, kmaxj_ns, kmaxj_ns, CONE,     &
+                       tm, kmaxj_ns, pw, kmaxj_ns, CZERO, tau_l, kmaxj_ns)
+!           -------------------------------------------------------------
+         else
+            ns = 0
+            do js = 1, nSpinCant
+               tm => getSingleScatteringMatrix('T-Matrix',spin=js,       &
+                                               site=j,atom=site_config(j))
+!              ==========================================================
+!              Note: wau_l is the integration of [ 1 - (B(k,e)+i*kappa) * t(e) ]^{-1}
+!                    over IBZ.
+!              ==========================================================
+               do is = 1, nSpinCant
+                  ns = ns + 1
+                  tau_l => MatrixBand(j)%MatrixBlock(i)%tau_l(:,:,ns)
+                  pw => wau_l(:,:,ns)
+!                 -------------------------------------------------------
+                  call zgemm('n', 'n', kmaxj, kmaxj, kmaxj, CONE,        &
+                             tm, kmaxj, pw, kmaxj, CZERO, tau_l, kmaxj)
+!                 -------------------------------------------------------
+               enddo
+            enddo
+         endif
+      enddo
+   endif
+!
+   nullify(wau_g, wau_l, tau_l, pw, p1)
 !
    end subroutine computeTauMatrix
 !  ===================================================================
@@ -1432,7 +1788,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine computeMatrixBand(p_MatrixBand,method)
+   subroutine computeMatrixBand(p_MatrixBand,method,fixed_g,fixed_l,use_sro)
 !  ===================================================================
    use MatrixModule, only : setupUnitMatrix
 !
@@ -1443,15 +1799,22 @@ contains
    implicit none
 !
    integer (kind=IntKind), intent(in) :: method
+   integer (kind=IntKind), intent(in), optional :: fixed_g, fixed_l
+   logical, optional, intent(in) :: use_sro
+!
    integer (kind=IntKind) :: kmaxj, kmaxj_ns, kmaxi, kmaxi_ns, t0size
    integer (kind=IntKind) :: j, nj, ni, i, is, ig, nc, kl, klp, n, nr
+   integer (kind=IntKind) :: in, jn, index
 !
-   complex (kind=CmplxKind), pointer :: strcon(:,:)
+   complex (kind=CmplxKind), pointer :: strcon(:,:), tau_j(:,:)
    complex (kind=CmplxKind), pointer :: jinvB(:)
+   complex (kind=CmplxKind), allocatable :: temp(:,:)
    complex (kind=CmplxKind), pointer :: p_jinvi(:)
    complex (kind=CmplxKind), pointer :: p_sinej(:), w2(:,:)
    complex (kind=CmplxKind), intent(out), target :: p_MatrixBand(:)
    complex (kind=CmplxKInd) :: cfac, wfac
+!
+   logical :: do_sro = .false.
 !
    interface
       subroutine convertGijToRel(gij, bgij, kkr1, kkr2, ce)
@@ -1464,6 +1827,11 @@ contains
       end subroutine convertGijToRel
    end interface
 !
+   if (present(use_sro)) then
+     do_sro = use_sro
+   else
+     do_sro = .false.
+   endif
 !  ===================================================================
 !  calculate the following modified KKR Matrix (or the M-matrix).
 !  Method 0:
@@ -1479,134 +1847,208 @@ contains
 !    p_MatrixBand = [ 1 - (B(k,e)+i*kappa) * t(e) ]^{-1}
 !  ===================================================================
    cfac = SQRTm1*kappa
-   do j = 1, LocalNumAtoms
-      kmaxj = MatrixBand(j)%kmax_kkr
-      kmaxj_ns = kmaxj*nSpinCant
-      nj = MatrixBand(j)%column_index-1
-      ig = MatrixBand(j)%global_index ! "ig" is the global index of the corresponding atom
-      nc = gid_array(ig)              ! "nc" is the column index of the block in the big matrix
-      do i = 1, GlobalNumAtoms        ! "i" is the row index of the matrix block
-         kmaxi = MatrixBand(j)%MatrixBlock(i)%kmax_kkr
-         kmaxi_ns = kmaxi*nSpinCant
-         t0size = kmaxi_ns*kmaxi_ns
-!        =============================================================
-!        Method = 0: Obtain p_jinvi = OmegaHat(e) * S(e)^{T*}, 
-!        which is the inverse of the Jost matrix: [iS(e) - C(e)],
-!                      i.e., p_jinvi = [iS(e) - C(e)]^{-1}
-!
-!        Method = 1: Obtain p_jinvi = S(e)^{T*}
-!        =============================================================
-         jinvB => p_MatrixBand(1:kmaxi_ns*kmaxj_ns)  ! Use p_MatrixBand as temporary space...
-         p_jinvi => jinv_g(1:kmaxi_ns*kmaxj_ns,i)
-!
-!        =============================================================
-!        Obtain,
-!           method 0: jinvB = i*kappa*OmegaHat(e) * S(e)^{T*}
-!                                    + OmegaHat(e) * S(e)^{T*} * B(e,k)
-!           method 1: jinvB = S(e)^{T*} * B(e,k)
-!           method 2: jinvB = i*kappa + B(e,k)
-!        =============================================================
-         strcon => sc_blocks(i,j)%strcon_matrix(:,:)
-!        call writeMatrix('strcon',strcon,kmaxi,kmaxj)
-         if (isRelativistic) then
-!           ----------------------------------------------------------
-            call convertGijToRel(strcon, strconrel, kmaxi, kmaxj, energy)
-!           ----------------------------------------------------------
-            strcon => strconrel
-            if (method == 0) then
-               if (i == nc) then
-                  jinvB = cfac*p_jinvi
-!                 ----------------------------------------------------
-                  call zgemm('n', 'n', kmaxi_ns, kmaxj_ns, kmaxi_ns, CONE, &
-                             p_jinvi, kmaxi_ns, strcon, kmaxi_ns, CONE, jinvB, kmaxi_ns)
-!                 ----------------------------------------------------
-               else
-!                 ----------------------------------------------------
-                  call zgemm('n', 'n', kmaxi_ns, kmaxj_ns, kmaxi_ns, CONE, &
+!  ===================================================================
+!  Check whether we want to do a regular calculation or SRO
+!  ===================================================================
+   if (.not. do_sro) then
+      do j = 1, LocalNumAtoms
+         kmaxj = MatrixBand(j)%kmax_kkr
+         kmaxj_ns = kmaxj*nSpinCant
+         nj = MatrixBand(j)%column_index-1
+         ig = MatrixBand(j)%global_index ! "ig" is the global index of the corresponding atom
+         nc = gid_array(ig)              ! "nc" is the column index of the block in the big matrix
+         do i = 1, GlobalNumAtoms        ! "i" is the row index of the matrix block
+            kmaxi = MatrixBand(j)%MatrixBlock(i)%kmax_kkr
+            kmaxi_ns = kmaxi*nSpinCant
+            t0size = kmaxi_ns*kmaxi_ns
+!           =============================================================
+!           Method = 0: Obtain p_jinvi = OmegaHat(e) * S(e)^{T*}, 
+!           which is the inverse of the Jost matrix: [iS(e) - C(e)],
+!                         i.e., p_jinvi = [iS(e) - C(e)]^{-1}
+!     
+!           Method = 1: Obtain p_jinvi = S(e)^{T*}
+!           =============================================================
+            jinvB => p_MatrixBand(1:kmaxi_ns*kmaxj_ns)  ! Use p_MatrixBand as temporary space...
+            p_jinvi => jinv_g(1:kmaxi_ns*kmaxj_ns,i)
+!           =============================================================
+!           Obtain,
+!              method 0: jinvB = i*kappa*OmegaHat(e) * S(e)^{T*}
+!                                       + OmegaHat(e) * S(e)^{T*} * B(e,k)
+!              method 1: jinvB = S(e)^{T*} * B(e,k)
+!              method 2: jinvB = i*kappa + B(e,k)
+!           =============================================================
+            strcon => sc_blocks(i,j)%strcon_matrix(:,:)
+!           call writeMatrix('strcon',strcon,kmaxi,kmaxj)
+            if (isRelativistic) then
+!              ----------------------------------------------------------
+               call convertGijToRel(strcon, strconrel, kmaxi, kmaxj, energy)
+!              ----------------------------------------------------------
+               strcon => strconrel
+               if (method == 0) then
+                  if (i == nc) then
+                     jinvB = cfac*p_jinvi
+!                    ----------------------------------------------------
+                     call zgemm('n', 'n', kmaxi_ns, kmaxj_ns, kmaxi_ns, CONE, &
+                                p_jinvi, kmaxi_ns, strcon, kmaxi_ns, CONE, jinvB, kmaxi_ns)
+!                    ----------------------------------------------------
+                  else
+!                    ----------------------------------------------------
+                     call zgemm('n', 'n', kmaxi_ns, kmaxj_ns, kmaxi_ns, CONE, &
+                                p_jinvi, kmaxi_ns, strcon, kmaxi_ns, CZERO, jinvB, kmaxi_ns)
+!                    ----------------------------------------------------
+                  endif
+               else if (method == 1) then
+!                 -------------------------------------------------------
+                  call zgemm('t', 'n', kmaxi_ns, kmaxj_ns, kmaxi_ns, CONE, &
                              p_jinvi, kmaxi_ns, strcon, kmaxi_ns, CZERO, jinvB, kmaxi_ns)
-!                 ----------------------------------------------------
+!                 -------------------------------------------------------
+               else if (method == 2) then
+                  w2 => aliasArray2_c(jinvB,kmaxi_ns,kmaxi_ns)
+                  if (i == nc) then
+!                    ----------------------------------------------------
+                     call setupUnitMatrix(kmaxi_ns,w2,cfac)
+!                    ----------------------------------------------------
+                     w2 = w2 + strcon
+                  else
+                     w2 = strcon
+                  endif
                endif
-            else if (method == 1) then
-!              -------------------------------------------------------
-               call zgemm('t', 'n', kmaxi_ns, kmaxj_ns, kmaxi_ns, CONE, &
-                          p_jinvi, kmaxi_ns, strcon, kmaxi_ns, CZERO, jinvB, kmaxi_ns)
-!              -------------------------------------------------------
-            else if (method == 2) then
-               w2 => aliasArray2_c(jinvB,kmaxi_ns,kmaxi_ns)
-               if (i == nc) then
-!                 ----------------------------------------------------
-                  call setupUnitMatrix(kmaxi_ns,w2,cfac)
-!                 ----------------------------------------------------
-                  w2 = w2 + strcon
-               else
-                  w2 = strcon
-               endif
-            endif
-         else
-            if (method == 0) then
-               if (i == nc) then
-                  jinvB = cfac*p_jinvi
+            else
+               if (method == 0) then
+                  if (i == nc) then
+                     jinvB = cfac*p_jinvi
+                     do is = 1, nSpinCant
+!                       -------------------------------------------------
+                        call zgemm('n', 'n', kmaxi_ns, kmaxj, kmaxi, CONE,    &
+                                   p_jinvi((is-1)*kmaxi_ns*kmaxi+1), kmaxi_ns,&
+                                   strcon, kmaxi, CONE, jinvB((is-1)*kmaxi_ns*kmaxj+1), kmaxi_ns)
+!                       -------------------------------------------------
+                     enddo
+                  else
+                     do is = 1, nSpinCant
+!                       -------------------------------------------------
+                        call zgemm('n', 'n', kmaxi_ns, kmaxj, kmaxi, CONE,    &
+                                   p_jinvi((is-1)*kmaxi_ns*kmaxi+1), kmaxi_ns,&
+                                   strcon, kmaxi, CZERO, jinvB((is-1)*kmaxi_ns*kmaxj+1), kmaxi_ns)
+!                       -------------------------------------------------
+                     enddo
+                  endif
+               else if (method == 1) then
                   do is = 1, nSpinCant
-!                    -------------------------------------------------
-                     call zgemm('n', 'n', kmaxi_ns, kmaxj, kmaxi, CONE,    &
-                                p_jinvi((is-1)*kmaxi_ns*kmaxi+1), kmaxi_ns,&
-                                strcon, kmaxi, CONE, jinvB((is-1)*kmaxi_ns*kmaxj+1), kmaxi_ns)
-!                    -------------------------------------------------
-                  enddo
-               else
-                  do is = 1, nSpinCant
-!                    -------------------------------------------------
-                     call zgemm('n', 'n', kmaxi_ns, kmaxj, kmaxi, CONE,    &
+!                    ----------------------------------------------------
+                     call zgemm('t', 'n', kmaxi_ns, kmaxj, kmaxi, CONE,    &
                                 p_jinvi((is-1)*kmaxi_ns*kmaxi+1), kmaxi_ns,&
                                 strcon, kmaxi, CZERO, jinvB((is-1)*kmaxi_ns*kmaxj+1), kmaxi_ns)
-!                    -------------------------------------------------
+!                    ----------------------------------------------------
                   enddo
-               endif
-            else if (method == 1) then
-               do is = 1, nSpinCant
-!                 ----------------------------------------------------
-                  call zgemm('t', 'n', kmaxi_ns, kmaxj, kmaxi, CONE,    &
-                             p_jinvi((is-1)*kmaxi_ns*kmaxi+1), kmaxi_ns,&
-                             strcon, kmaxi, CZERO, jinvB((is-1)*kmaxi_ns*kmaxj+1), kmaxi_ns)
-!                 ----------------------------------------------------
-               enddo
-            else if (method == 2) then
-               w2 => aliasArray2_c(jinvB,kmaxi_ns,kmaxi_ns)
-               if (i == nc) then
-!                 ----------------------------------------------------
-                  call setupUnitMatrix(kmaxi_ns,w2,cfac)
-!                 ----------------------------------------------------
-                  w2 = w2 + strcon
-               else
-                  w2 = strcon
+               else if (method == 2) then
+                  w2 => aliasArray2_c(jinvB,kmaxi_ns,kmaxi_ns)
+                  if (i == nc) then
+!                    ----------------------------------------------------
+                     call setupUnitMatrix(kmaxi_ns,w2,cfac)
+!                    ----------------------------------------------------
+                     w2 = w2 + strcon
+                  else
+                     w2 = strcon
+                  endif
                endif
             endif
-         endif
-!
-!        =============================================================
-!        Obtain,
-!          method 0: WORK = OmegaHat(e) * S(e)^{T*}
-!                                  * (B(e,k)+i*kappa) * S(e)/kappa
-!          method 1: WORK = S(e)^{T*} * B(e,k) * S(e)/kappa
-!          method 2: WORK = [B(e,k)+i*kappa] * t(e)
-!        =============================================================
-         t0size = kmaxj_ns*kmaxj_ns
-         if (method == 0 .or. method == 1) then
-            p_sinej => sine_g(:,j)
-            wfac = CONE/kappa
-         else
-            p_sinej => tmat_g(:,j)
-            wfac = CONE
-         endif
-         ni = MatrixBand(j)%MatrixBlock(i)%row_index-1
-!        -------------------------------------------------------------
-         call zgemm('n', 'n', kmaxi_ns, kmaxj_ns, kmaxj_ns, wfac,     &
-                    jinvB, kmaxi_ns, p_sinej, kmaxj_ns, CZERO,        &
-                    WORK(KKRMatrixSizeCant*nj+ni+1), KKRMatrixSizeCant)
-!        -------------------------------------------------------------
+!     
+!           =============================================================
+!           Obtain,
+!             method 0: WORK = OmegaHat(e) * S(e)^{T*}
+!                                     * (B(e,k)+i*kappa) * S(e)/kappa
+!             method 1: WORK = S(e)^{T*} * B(e,k) * S(e)/kappa
+!             method 2: WORK = [B(e,k)+i*kappa] * t(e)
+!           =============================================================
+            t0size = kmaxj_ns*kmaxj_ns
+            if (method == 0 .or. method == 1) then
+               p_sinej => sine_g(:,j)
+               wfac = CONE/kappa
+            else
+               p_sinej => tmat_g(:,j)
+               wfac = CONE
+            endif
+            ni = MatrixBand(j)%MatrixBlock(i)%row_index-1
+!           -------------------------------------------------------------
+            call zgemm('n', 'n', kmaxi_ns, kmaxj_ns, kmaxj_ns, wfac,     &
+                       jinvB, kmaxi_ns, p_sinej, kmaxj_ns, CZERO,        &
+                       WORK(KKRMatrixSizeCant*nj+ni+1), KKRMatrixSizeCant)
+!           -------------------------------------------------------------
+         enddo
       enddo
-   enddo
-!  call writeMatrix('WORK',WORK,KKRMatrixSizeCant,KKRMatrixSizeCant,TEN2m8,.true.)
+   else
+       if((.not. present(fixed_g)) .or. (.not. present(fixed_l))) then
+          call ErrorHandler('calCrystalMatrix', &
+                  'Set SRO but did not provide local and global indices')
+       else
+!      =================================================================
+!      Essentially we are doing the same calculation that is done for 
+!      non-SRO case, but instead of iterating over all the atoms we are 
+!      doing it for a single atom
+!
+!      As of now, only doing method 2
+!      =================================================================
+          if (method /= 2) then
+             call ErrorHandler('calCrystalMatrix', &
+                   'SRO only equipped to deal with method = 2')
+          endif
+          i = fixed_g
+          j = fixed_l
+          kmaxj = MatrixBand(j)%kmax_kkr
+          kmaxj_ns = kmaxj*nSpinCant
+          nj = MatrixBand(j)%column_index-1
+          ig = MatrixBand(j)%global_index ! "ig" is the global index of the corresponding atom
+          nc = gid_array(ig)              ! "nc" is the column index of the block in the big matrix
+!
+          kmaxi = MatrixBand(j)%MatrixBlock(i)%kmax_kkr
+          kmaxi_ns = kmaxi*nSpinCant
+          t0size = kmaxi_ns*kmaxi_ns
+!
+          jinvB => p_MatrixBand(1:kmaxi_ns*kmaxj_ns)  ! Use p_MatrixBand as temporary space...
+          p_jinvi => jinv_g(1:kmaxi_ns*kmaxj_ns,i)
+
+          strcon => sc_blocks(i,j)%strcon_matrix(:,:)
+!         call writeMatrix('strcon',strcon,kmaxi,kmaxj)
+          if (isRelativistic) then
+!            ----------------------------------------------------------
+             call convertGijToRel(strcon, strconrel, kmaxi, kmaxj, energy)
+!            ----------------------------------------------------------
+             strcon => strconrel
+             w2 => aliasArray2_c(jinvB,kmaxi_ns,kmaxi_ns)
+             if (i == nc) then
+!               ----------------------------------------------------
+                call setupUnitMatrix(kmaxi_ns,w2,cfac)
+!               ----------------------------------------------------
+                w2 = w2 + strcon
+             else
+                w2 = strcon
+             endif
+          else
+             w2 => aliasArray2_c(jinvB,kmaxi_ns,kmaxi_ns)
+             if (i == nc) then
+!               ----------------------------------------------------
+                call setupUnitMatrix(kmaxi_ns,w2,cfac)
+!               ----------------------------------------------------
+                w2 = w2 + strcon
+             else
+                w2 = strcon
+             endif
+          endif
+!         =========================================================
+!         method 2: WORK = [B(e,k)+i*kappa] * t_cpa(e)
+!         =========================================================
+          p_sinej => tmat_g(:,j) ! Replace with tcpa
+          tau_j => aliasArray2_c(tmat_g(:,j), kmaxi_ns, kmaxi_ns)
+          wfac = CONE
+!         Check below step, replaced WORK with p_MatrixBand
+!         -------------------------------------------------------------
+          call zgemm('n', 'n', kmaxi_ns, kmaxj_ns, kmaxj_ns, wfac,     &
+                      jinvB, kmaxi_ns, p_sinej, kmaxj_ns, CZERO,        &
+                      WORK_sro, OKKRMatrixSizeCant)
+!         -------------------------------------------------------------
+       endif
+   endif
 !
    nullify(jinvB)
 !
@@ -1623,33 +2065,47 @@ contains
 !
 !     For method = 2:
 !        WORK = (B(k,e)+i*kappa) * t(e)
-!
+!       
 !        p_MatrixBand = [1 - WORK]^{-1} = [ 1 - (B(k,e)+i*kappa) * t(e) ]^{-1}
-!
+!        p_MatrixBand = [1 - gt]^{-1}
+!       What we want = [t^{-1} - g]^{-1}
 !        Will call ZGETRF and ZGETRI to solve WORK * p_MatrixBand = 1
 !     ================================================================
 !     -WORK => p_MatrixBand
 !     p_MatrixBand = -WORK
+!     ================================================================
+!     Check for SRO -> if SRO is requested then use method = 2
+!     p_MatrixBand = [1 - WORK]^{-1}
+!     Here is a problem. There are two approaches, which one to take?
+!     1. p_MatrixBand = CONE - p_MatrixBand ----- This approach chosen
+!     2. Do an element by element loop
+!     ================================================================
       n = size(p_MatrixBand)
-      call zcopy(n,WORK,1,p_MatrixBand,1)
-      p_MatrixBand = -p_MatrixBand
-!     ----------------------------------------------------------------
-      do j = 1, LocalNumAtoms
-         nc = MatrixBand(j)%column_index
-         LOOP_n2: do n = 1, GlobalNumAtoms
-            if ( MatrixBand(j)%global_index ==                        &
-                 MatrixBand(j)%MatrixBlock(n)%global_index ) then
-               nr = MatrixBand(j)%MatrixBlock(n)%row_index
-               do i = 1, MatrixBand(j)%kmax_kkr*nSpinCant
-                  p_MatrixBand(i+(nc-1+i-1)*KKRMatrixSizeCant+nr-1) = &
-                     CONE+p_MatrixBand(i+(nc-1+i-1)*KKRMatrixSizeCant+nr-1)
-               enddo
-               exit LOOP_n2
-            endif
-         enddo LOOP_n2
-      enddo
-!     call writeMatrix('p_MatrixBand',p_MatrixBand,KKRMatrixSizeCant, &
-!                      KKRMatrixSizeCant,TEN2m8)
+      if (do_sro) then
+         call zcopy(n,WORK_sro,1,p_MatrixBand,1)
+         p_MatrixBand = -p_MatrixBand
+         do i = 1, OKKRMatrixSizeCant
+              p_MatrixBand(i+(i-1)*OKKRMatrixSizeCant) = &
+                  CONE+p_MatrixBand(i+(i-1)*OKKRMatrixSizeCant)
+         enddo
+      else
+         call zcopy(n,WORK,1,p_MatrixBand,1)
+         p_MatrixBand = -p_MatrixBand
+         do j = 1, LocalNumAtoms
+            nc = MatrixBand(j)%column_index
+            LOOP_n2: do n = 1, GlobalNumAtoms
+               if ( MatrixBand(j)%global_index ==                        &
+                    MatrixBand(j)%MatrixBlock(n)%global_index ) then
+                  nr = MatrixBand(j)%MatrixBlock(n)%row_index
+                  do i = 1, MatrixBand(j)%kmax_kkr*nSpinCant
+                     p_MatrixBand(i+(nc-1+i-1)*KKRMatrixSizeCant+nr-1) = &
+                        CONE+p_MatrixBand(i+(nc-1+i-1)*KKRMatrixSizeCant+nr-1)
+                  enddo
+                  exit LOOP_n2
+               endif
+            enddo LOOP_n2
+         enddo
+      endif
    else if (method == 1) then
 !     ================================================================
 !     WORK = S(e)^{T*} * B(k,e) * S(e)/kappa
@@ -1681,21 +2137,37 @@ contains
    endif
 !
    if (NumPEsInGroup == 1) then  ! BandSizeCant = KKRMatrixSizeCant
-!     ----------------------------------------------------------------
-      call ZGETRF(KKRMatrixSizeCant, KKRMatrixSizeCant,               &
-                  p_MatrixBand, KKRMatrixSizeCant, IPVT, INFO)
-!     ----------------------------------------------------------------
-      if (INFO /= 0) then
+!    ----------------------------------------------------------------
+     if(do_sro) then
+         call ZGETRF(OKKRMatrixSizeCant, OKKRMatrixSizeCant,               &
+                     p_MatrixBand, OKKRMatrixSizeCant, IPVT, INFO)
+     else
+         call ZGETRF(KKRMatrixSizeCant, KKRMatrixSizeCant,                 &
+                     p_MatrixBand, KKRMatrixSizeCant, IPVT, INFO)
+     endif
+!    ----------------------------------------------------------------
+!    call ZGETRF(kmaxi_ns, kmaxj_ns,               &
+!                p_MatrixBand, kmaxi_ns), IPVT, INFO)
+!    ----------------------------------------------------------------
+     if (INFO /= 0) then
 !        -------------------------------------------------------------
          call ErrorHandler('calCrystalMatrix','Failed in ZGETRF',INFO)
 !        -------------------------------------------------------------
-      endif
+     endif
    else
 #ifdef USE_SCALAPACK
 !     ----------------------------------------------------------------
-      call PZGETRF(KKRMatrixSizeCant, KKRMatrixSizeCant,              &
+      if (do_sro) then
+         call PZGETRF(OKKRMatrixSizeCant, OKKRMatrixSizeCant,         &
+                    p_MatrixBand, 1, 1, DESC_A, IPVT, INFO)
+      else
+         call PZGETRF(KKRMatrixSizeCant, KKRMatrixSizeCant,           &
+                    p_MatrixBand, 1, 1, DESC_A, IPVT, INFO)
+      endif
+!     ----------------------------------------------------------------
+!      call PZGETRF(KKRMatrixSizeCant, KKRMatrixSizeCant,              &
 !???  call PZGETRF(KKRMatrixSizeCant, BandSizeCant,                   &
-                   p_MatrixBand, 1, 1, DESC_A, IPVT, INFO)
+!                  p_MatrixBand, 1, 1, DESC_A, IPVT, INFO)
 !     ----------------------------------------------------------------
       if (INFO /= 0) then
 !        -------------------------------------------------------------
@@ -1706,8 +2178,13 @@ contains
 !     ----------------------------------------------------------------
       call ErrorHandler('calCrystalMatrix','Compiling with -DUSE_SCALAPACK is needed!')
 !     ----------------------------------------------------------------
-      call ZGETRF(KKRMatrixSizeCant, KKRMatrixSizeCant,               &
+      if (do_sro) then
+         call ZGETRF(OKKRMatrixSizeCant, OKKRMatrixSizeCant,         &
+                 p_MatrixBand, OKKRMatrixSizeCant, IPVT, INFO)
+      else
+         call ZGETRF(KKRMatrixSizeCant, KKRMatrixSizeCant,           &
                   p_MatrixBand, KKRMatrixSizeCant, IPVT, INFO)
+      endif
 !     ----------------------------------------------------------------
       if (INFO /= 0) then
 !        -------------------------------------------------------------
@@ -1719,7 +2196,13 @@ contains
 !
    if (NumPEsInGroup == 1) then  ! BandSizeCant = KKRMatrixSizeCant
 !     ----------------------------------------------------------------
-      call ZGETRI( KKRMatrixSizeCant, p_MatrixBand, KKRMatrixSizeCant, IPVT, WORK, LWORK, INFO )
+      if (do_sro) then
+         call ZGETRI( OKKRMatrixSizeCant, p_MatrixBand, OKKRMatrixSizeCant,  &
+                       IPVT, WORK_sro, LWORK_sro, INFO)
+      else
+         call ZGETRI( KKRMatrixSizeCant, p_MatrixBand, KKRMatrixSizeCant,  &
+                       IPVT, WORK, LWORK, INFO )
+      endif
 !     ----------------------------------------------------------------
       if (INFO /= 0) then
 !        -------------------------------------------------------------
@@ -1729,8 +2212,13 @@ contains
    else
 #ifdef USE_SCALAPACK
 !     ----------------------------------------------------------------
-      call PZGETRI(KKRMatrixSizeCant, p_MatrixBand, 1, 1,             &
-                   DESC_A, IPVT, WORK, LWORK, IWORK, LIWORK, INFO )
+      if (do_sro) then
+         call PZGETRI(OKKRMatrixSizeCant, p_MatrixBand, 1, 1,         &
+                   DESC_A, IPVT, WORK_sro, LWORK_sro, IWORK_sro, LIWORK_sro, INFO )
+      else
+         call PZGETRI(KKRMatrixSizeCant, p_MatrixBand, 1, 1,         &
+                   DESC_A, IPVT, WORK_sro, LWORK_sro, IWORK_sro, LIWORK_sro, INFO )
+      endif
 !     ----------------------------------------------------------------
       if (INFO /= 0) then
 !        -------------------------------------------------------------
@@ -1741,7 +2229,13 @@ contains
 !     ----------------------------------------------------------------
       call ErrorHandler('calCrystalMatrix','Compiling with -DUSE_SCALAPACK is needed!')
 !     ----------------------------------------------------------------
-      call ZGETRI( KKRMatrixSizeCant, p_MatrixBand, KKRMatrixSizeCant, IPVT, WORK, LWORK, INFO )
+      if (do_sro) then
+         call ZGETRI(OKKRMatrixSizeCant, p_MatrixBand, OKKRMatrixSizeCant,    & 
+                      IPVT, WORK_sro, LWORK_sro, INFO)
+      else
+         call ZGETRI( KKRMatrixSizeCant, p_MatrixBand, KKRMatrixSizeCant,     &
+                      IPVT, WORK, LWORK, INFO )
+      endif
 !     ----------------------------------------------------------------
       if (INFO /= 0) then
 !        -------------------------------------------------------------
@@ -1750,7 +2244,10 @@ contains
       endif
 #endif
    endif
-!
+!  ==================================================================
+!  Since we are only dealing with method = 2 for SRO, no need to make
+!  any changes here
+!  ==================================================================
    if (method == 0) then
       do j = 1, LocalNumAtoms
          nc = MatrixBand(j)%column_index
@@ -1774,7 +2271,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine sumIBZRotation(calculate_tau)
+   subroutine sumIBZRotation(calculate_tau, use_sro, jindex, nindex)
 !  ===================================================================
    use MatrixModule, only : computeUAUtc
    use GroupCommModule, only : getGroupID, GlobalSumInGroup
@@ -1784,103 +2281,93 @@ contains
    implicit none
 !
    logical, intent(in) :: calculate_tau
+   logical, optional, intent(in) :: use_sro
+   integer, optional, intent(in) :: jindex, nindex
 !
    integer (kind=IntKind) :: id, jd, ig, irot, nrot, ns, is, js, kkrsz
    integer (kind=IntKind) :: ni, nj, np, kl, klp, klpp, aGID, ig_rot
+!  integer (kind=IntKind) :: in, jn, num
    integer (kind=IntKind), pointer :: rotation_table(:,:)
 !
    complex (kind=CmplxKind), target :: wtmp(kmax_kkr_max*kmax_kkr_max)
    complex (kind=CmplxKind), pointer :: w0(:,:), rotmat(:,:)
    complex (kind=CmplxKind), pointer :: kmb(:,:), tmb(:,:)
-   complex (kind=CmplxKind), pointer :: matrix_diag(:,:), pm(:)
+   complex (kind=CmplxKind), pointer :: matrix_diag(:,:), matrix_diag_sro(:,:), pm(:)
    complex (kind=CmplxKind) :: cfac
+!
+   logical :: do_sro = .false.
+!
+   if (present(use_sro)) then
+     do_sro = use_sro
+   else
+     do_sro = .false.
+   endif
 !
    nrot = getNumIBZRotations()
    cfac = CONE/real(nrot,RealKind)
    aGID = getGroupID('Unit Cell')
 !
+!  Print *, "Entered IBZ Rotation"
    rotation_table => getBasisRotationTable()
    if (KKRMatrixSizeCant*BandSizeCant >= tsize*GlobalNumAtoms) then
       matrix_diag => aliasArray2_c(TMP_MatrixBand,tsize,GlobalNumAtoms)
    else
       call ErrorHandler('sumIBZRotation','KKR lmax needs to be the same for all atoms')
    endif
+!  
+   if (do_sro) then
+     matrix_diag_sro => aliasArray2_c(TMP_MatrixBandSRO(:,nindex, jindex), tsize, GlobalNumAtoms)
+!    allocate(matrix_diag_sro(tsize, GlobalNumAtoms))
+   endif
 !
-   matrix_diag = CZERO
-   do jd = 1, LocalNumAtoms
-      ig = MatrixBand(jd)%global_index
-      id = gid_array(ig)  ! Here, we only consider&rotate the diagonal blocks of the band matrix
-      kkrsz = MatrixBand(jd)%MatrixBlock(id)%kmax_kkr
-      ns = 0
-      do js = 1, nSpinCant
-         do is = 1, nSpinCant
-            ns = ns + 1
-!           ----------------------------------------------------------
-            call zcopy(kkrsz*kkrsz,MatrixBand(jd)%MatrixBlock(id)%kau_l(1,1,ns),1, &
-                       matrix_diag((ns-1)*kkrsz*kkrsz+1,ig),1)
-!           ----------------------------------------------------------
-         enddo
+   if (do_sro) then
+      matrix_diag_sro = CZERO
+      do jd = 1, LocalNumAtoms
+        ig = MatrixBand(jd)%global_index 
+        id = gid_array(ig)
+        kkrsz = MatrixBand(jd)%MatrixBlock(id)%kmax_kkr
+        ns = 0
+        do js = 1, nSpinCant
+          do is = 1, nSpinCant
+           ns = ns + 1
+!          ------------------------------------------------------------
+           call zcopy(kkrsz*kkrsz, MatrixBand(jd)%MatrixBlock(id)%NeighMat_l(nindex)%tau_l_sro(1,1,ns), 1, &
+                    matrix_diag_sro((ns-1)*kkrsz*kkrsz+1, ig), 1)
+!          -----------------------------------------------------------
+          enddo
+        enddo
       enddo
-   enddo
-!  -------------------------------------------------------------------
-   call GlobalSumInGroup(aGID,matrix_diag,tsize,GlobalNumAtoms)
-!  -------------------------------------------------------------------
-!
-   do jd = 1, LocalNumAtoms
+!     -----------------------------------------------------
+      call GlobalSumInGroup(aGID,matrix_diag_sro,tsize, GlobalNumAtoms)
+!     -----------------------------------------------------
+      w0 => aliasArray2_c(wtmp, kkrsz, kkrsz)
+      jd = jindex
       ig = MatrixBand(jd)%global_index
-      id = gid_array(ig)  ! Here, we only consider&rotate the diagonal blocks of the band matrix
-                          ! For non-diagonal matrix blocks, there is factor of
-                          ! exp(i*k_vector*(Rnm_vector)) needs to be applied to the
-                          ! transformation
-      kkrsz = MatrixBand(jd)%MatrixBlock(id)%kmax_kkr
-      w0 => aliasArray2_c(wtmp,kkrsz,kkrsz)
-
-!ywg  nj = MatrixBand(jd)%column_index-1
-!ywg  ni = MatrixBand(jd)%MatrixBlock(id)%row_index-1
+      id = gid_array(ig)
       ns = 0
       do js = 1, nSpinCant
          do is = 1, nSpinCant
             ns = ns + 1
-!ywg        do kl = 1, kkrsz
-!ywg           np = KKRMatrixSizeCant*(nj+kl+(js-1)*kkrsz-1)+ni+(is-1)*kkrsz
-!ywg           do klp = 1, kkrsz
-!ywg              kmb(klp,kl) = KKR_MatrixBand(np+klp)
-!ywg           enddo
-!ywg        enddo
-!           kmb => MatrixBand(jd)%MatrixBlock(id)%kau_l(:,:,ns)
-!           call writeMatrix('kmb before sum rot',kmb,kkrsz,kkrsz,TEN2m8)
+!           tmb => MatrixBand(jd)%MatrixBlock(id)%NeighMat_l(nindex)%tau_l_sro(:,:,ns)
             w0 = CZERO
             do irot = 1, nrot
-               ig_rot = rotation_table(ig,irot)
-               pm => matrix_diag((ns-1)*kkrsz*kkrsz+1:ns*kkrsz*kkrsz,ig_rot)
-               kmb => aliasArray2_c(pm,kkrsz,kkrsz)
-               rotmat => getIBZRotationMatrix('c',irot)
-!              -------------------------------------------------------
-!              call checkScatteringMatrixSymmetry(jd,rotmat,kmb,kkrsz, &
-!                                                 getSingleScatteringMatrix, &
-!                                                 site_config)
-!              -------------------------------------------------------
-               call computeUAUtc(rotmat,kkrsz,kkrsz,rotmat,kkrsz,cfac, &
-                                 kmb,kkrsz,CONE,w0,kkrsz,WORK)
-!              -------------------------------------------------------
+              ig_rot = rotation_table(MatrixBand(jd)%global_index, irot)
+              pm => matrix_diag_sro((ns-1)*kkrsz*kkrsz+1:ns*kkrsz*kkrsz, ig_rot)
+              tmb => aliasArray2_c(pm,kkrsz,kkrsz)
+              rotmat => getIBZRotationMatrix('c', irot)
+!             ----------------------------------------------------------------
+              call computeUAUtc(rotmat,kkrsz,kkrsz,rotmat,kkrsz,cfac, &
+                        tmb, kkrsz,CONE,w0,kkrsz,WORK_sro)
+!             ----------------------------------------------------------------
             enddo
-!ywg        do kl = 1, kkrsz
-!ywg           np = KKRMatrixSizeCant*(nj+kl+(js-1)*kkrsz-1)+ni+(is-1)*kkrsz
-!ywg           do klp = 1, kkrsz
-!ywg              KKR_MatrixBand(np+klp) = w0(klp,kl)
-!ywg           enddo
-!ywg        enddo
-            kmb => MatrixBand(jd)%MatrixBlock(id)%kau_l(:,:,ns)
-!           ----------------------------------------------------------
-            call zcopy(kkrsz*kkrsz,w0,1,kmb,1)
-!           ----------------------------------------------------------
-!           call writeMatrix('kmb after sum rot',kmb,kkrsz,kkrsz,TEN2m8)
-!
+            tmb => MatrixBand(jd)%MatrixBlock(id)%NeighMat_l(nindex)%tau_l_sro(:,:,ns)
+!           -------------------------------------------------------
+            call zcopy(kkrsz*kkrsz,w0,1,tmb,1)
+!           -------------------------------------------------------
          enddo
       enddo
-   enddo
-!
-   if (calculate_tau) then
+   else            
+    if (calculate_tau) then
       matrix_diag = CZERO
       do jd = 1, LocalNumAtoms
          ig = MatrixBand(jd)%global_index
@@ -1928,13 +2415,95 @@ contains
 !              -------------------------------------------------------
                call zcopy(kkrsz*kkrsz,w0,1,tmb,1)
 !              -------------------------------------------------------
-!              call writeMatrix('tau',tmb,kkrsz,kkrsz,TEN2m8)
             enddo
          enddo
       enddo
+    
+    else
+      matrix_diag = CZERO
+      do jd = 1, LocalNumAtoms
+        ig = MatrixBand(jd)%global_index
+        id = gid_array(ig)  ! Here, we only consider&rotate the diagonal blocks of the band matrix
+        kkrsz = MatrixBand(jd)%MatrixBlock(id)%kmax_kkr
+        ns = 0
+        do js = 1, nSpinCant
+          do is = 1, nSpinCant
+            ns = ns + 1
+!           ----------------------------------------------------------
+            call zcopy(kkrsz*kkrsz,MatrixBand(jd)%MatrixBlock(id)%kau_l(1,1,ns),1, &
+                       matrix_diag((ns-1)*kkrsz*kkrsz+1,ig),1)
+!           ----------------------------------------------------------
+          enddo
+        enddo
+      enddo
+!     -------------------------------------------------------------------
+      call GlobalSumInGroup(aGID,matrix_diag,tsize,GlobalNumAtoms)
+!     -------------------------------------------------------------------
+!
+! This is replaced with a single jd index
+      do jd = 1, LocalNumAtoms
+         ig = MatrixBand(jd)%global_index
+         id = gid_array(ig)  ! Here, we only consider&rotate the diagonal blocks of the band matrix
+                          ! For non-diagonal matrix blocks, there is factor of
+                          ! exp(i*k_vector*(Rnm_vector)) needs to be applied to the
+                          ! transformation
+         kkrsz = MatrixBand(jd)%MatrixBlock(id)%kmax_kkr
+         w0 => aliasArray2_c(wtmp,kkrsz,kkrsz)
+
+!ywg     nj = MatrixBand(jd)%column_index-1
+!ywg     ni = MatrixBand(jd)%MatrixBlock(id)%row_index-1
+         ns = 0
+         do js = 1, nSpinCant
+           do is = 1, nSpinCant
+             ns = ns + 1
+!ywg         do kl = 1, kkrsz
+!ywg           np = KKRMatrixSizeCant*(nj+kl+(js-1)*kkrsz-1)+ni+(is-1)*kkrsz
+!ywg           do klp = 1, kkrsz
+!ywg              kmb(klp,kl) = KKR_MatrixBand(np+klp)
+!ywg           enddo
+!ywg         enddo
+!            kmb => MatrixBand(jd)%MatrixBlock(id)%kau_l(:,:,ns)
+!            call writeMatrix('kmb before sum rot',kmb,kkrsz,kkrsz,TEN2m8)
+             w0 = CZERO
+             do irot = 1, nrot
+               ig_rot = rotation_table(ig,irot)
+               pm => matrix_diag((ns-1)*kkrsz*kkrsz+1:ns*kkrsz*kkrsz,ig_rot)
+               kmb => aliasArray2_c(pm,kkrsz,kkrsz)
+               rotmat => getIBZRotationMatrix('c',irot)
+!              -------------------------------------------------------
+!              call checkScatteringMatrixSymmetry(jd,rotmat,kmb,kkrsz, &
+!                                                 getSingleScatteringMatrix, &
+!                                                 site_config)
+!              -------------------------------------------------------
+               call computeUAUtc(rotmat,kkrsz,kkrsz,rotmat,kkrsz,cfac, &
+                                 kmb,kkrsz,CONE,w0,kkrsz,WORK)
+!              -------------------------------------------------------
+             enddo
+!ywg         do kl = 1, kkrsz
+!ywg           np = KKRMatrixSizeCant*(nj+kl+(js-1)*kkrsz-1)+ni+(is-1)*kkrsz
+!ywg           do klp = 1, kkrsz
+!ywg              KKR_MatrixBand(np+klp) = w0(klp,kl)
+!ywg           enddo
+!ywg         enddo
+             kmb => MatrixBand(jd)%MatrixBlock(id)%kau_l(:,:,ns)
+!            ----------------------------------------------------------
+             call zcopy(kkrsz*kkrsz,w0,1,kmb,1)
+!            ----------------------------------------------------------
+             call writeMatrix('kmb after sum rot',kmb,kkrsz,kkrsz,TEN2m8)
+!
+           enddo
+         enddo
+      enddo
+
+    endif
    endif
 !
    nullify(w0, rotmat, kmb, tmb, matrix_diag)
+!  
+   if (do_sro) then
+     nullify(matrix_diag_sro)
+   endif
+!  Print *, "complete IBZrotation"
 !
    end subroutine sumIBZRotation
 !  ===================================================================
@@ -2160,6 +2729,40 @@ contains
    endif
 !
    end function getKau
+!  ===================================================================
+!
+!  *******************************************************************
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine retrieveTauSRO()
+!  ===================================================================
+
+   use SROModule, only : populateTau, assembleTauFromBlocks 
+   use WriteMatrixModule, only : writeMatrix
+!
+   integer(kind=IntKind) :: j, ig, i, nindex
+!
+   complex (kind=CmplxKind), allocatable, target :: tau(:,:,:)
+   allocate(tau(kmax_kkr_max, kmax_kkr_max, nSpinCant**2))
+!
+   do j = 1, LocalNumAtoms
+     ig = MatrixBand(j)%global_index
+     i = gid_array(ig)
+     do jn = 1, num_neighbors(i)
+       do in = 1, num_neighbors(i)
+         nindex = in + (jn - 1)*num_neighbors(i)
+!        tau = MatrixBand(j)%MatrixBlock(i)%NeighMat_l(nindex)%tau_l_sro
+!        --------------------------------------
+         call populateTau(MatrixBand(j)%MatrixBlock(i)%NeighMat_l(nindex)%tau_l_sro, j, nindex)
+!        --------------------------------------
+       enddo
+     enddo
+!    ------------------------------------------------------------
+     call assembleTauFromBlocks(j)
+!    ------------------------------------------------------------
+   enddo
+!
+   end subroutine retrieveTauSRO
 !  ===================================================================
 !
 !  *******************************************************************
