@@ -414,19 +414,21 @@ contains
 !   
    integer(kind=IntKind), intent(in) :: n, ic
 !
-   integer(kind=IntKind) :: dsize, nsize, is, it, k
+   integer(kind=IntKind) :: dsize, nsize, is
 
    SROMedium(n)%SROTMatrix(ic)%tau_ab = CZERO 
 
    dsize = SROMedium(n)%blk_size
    nsize = SROMedium(n)%neigh_size
-   y = CZERO
 
+!  do is = 1, nSpinCant**2
+   y = CZERO
    z = SROMedium(n)%SROTMatrix(ic)%tmat_s(1)%T_inv - SROMedium(n)%T_CPA_inv
 
    call computeAprojB('L', dsize*nsize, SROMedium(n)%tau_cpa(:,:, 1), z, y)
 
    SROMedium(n)%SROTMatrix(ic)%tau_ab(:, :, 1) = y
+!  enddo
 
    end subroutine calculateImpurityMatrix
 !  ===================================================================
