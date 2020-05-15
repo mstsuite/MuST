@@ -1083,6 +1083,8 @@ contains
    use AtomModule, only : getLocalEvec, getLocalNumSpecies,        &
                           getLocalAtomicNumber
 !
+   use PotentialTypeModule, only : isFullPotential
+!
    use SSSolverModule, only : initSSSolver, endSSSolver, computeDOS
 !
    use MSSolverModule, only : initMSSolver, endMSSolver,              &
@@ -1242,10 +1244,14 @@ contains
       ie = 0
       do while (ie < ne)
          ie = ie + 1
-         if (abs(e_real(ie)) < 0.001d0) then  ! In case of the energy is too close to the origin
-            e_imag = max(0.01d0,EiBottom) ! we take a larger imaginary part
-         else if (e_real(ie) < 0.1d0) then     ! In case of existing shallow bound states or low lying resonance states
-            e_imag = max(0.005d0,EiBottom) ! we take a larger imaginary part
+         if (isFullPotential()) then
+            if (abs(e_real(ie)) < 0.001d0) then  ! In case of the energy is too close to the origin
+               e_imag = max(0.01d0,EiBottom) ! we take a larger imaginary part
+            else if (e_real(ie) < 0.1d0) then     ! In case of existing shallow bound states or low lying resonance states
+               e_imag = max(0.005d0,EiBottom) ! we take a larger imaginary part
+            else
+               e_imag = max(0.001d0,EiBottom) ! in case EiBottom is zero or too small
+            endif
          else
             e_imag = max(0.001d0,EiBottom) ! in case EiBottom is zero or too small
          endif
@@ -1373,30 +1379,38 @@ contains
                else
                   energy = cmplx(e_real(ie),e_imag)
                   if (e_real(ie) <= ZERO) then
-!                    ----------------------------------------------------
-                     call computeMSGreenFunction(is, adjustEnergy(is,energy), add_Gs=.true., isSphSolver=.true.)
-!                    ----------------------------------------------------
-                  else
-!                    ----------------------------------------------------
+!                    -------------------------------------------------
+                     call computeMSGreenFunction(is, adjustEnergy(is,energy), &
+                                                 add_Gs=.true., isSphSolver=.true.)
+!                    -------------------------------------------------
+                  else if (isFullPotential()) then
+!                    -------------------------------------------------
                      call computeMSGreenFunction(is, adjustEnergy(is,energy))
-!                    ----------------------------------------------------
+!                    -------------------------------------------------
+                  else
+!                    =================================================
+!                    In this case, the calculated Green function is Z*tau*Z - Z*J
+!                    -------------------------------------------------
+                     call computeMSGreenFunction(is, adjustEnergy(is,energy), &
+                                                 add_Gs=.true., isSphSolver=.true.)
+!                    -------------------------------------------------
                   endif
                   do id =  1,LocalNumAtoms
                      info(1) = is; info(2) = id; info(3) = -1; info(4) = 0
-!                    ----------------------------------------------------
+!                    -------------------------------------------------
                      msDOS = returnMultipleSiteDOS(info,energy,wk_dos)
                      call calElectroStruct(info,n_spin_cant,wk_dos,LastValue(id))
-!                    ----------------------------------------------------
+!                    -------------------------------------------------
                      if (e_real(ie) > ZERO) then
                         do js = 1, n_spin_cant
                            info(1) = max(is,js); info(2) = id; info(3) = -1 
                            info(4) = -1 ! do not set internal print to 1, otherwise, it
                                         ! could possiblly hang the MPI process
-!                          ----------------------------------------------
+!                          -------------------------------------------
                            ssDOS = returnSingleSiteDOS(info,e_real(ie),wk_dos)
-!                          ----------------------------------------------
+!                          -------------------------------------------
                            call calElectroStruct(info,1,wk_dos,ssLastValue(id),ss_int=.true.)
-!                          ----------------------------------------------
+!                          -------------------------------------------
                         enddo
                         if (node_print_level >= 0) then
                            do ia = 1, LastValue(id)%NumSpecies
@@ -1408,15 +1422,23 @@ contains
                               enddo
                            enddo
                         endif
-                        if (n_spin_cant == 2) then
-!                          ----------------------------------------------
-                           call addElectroStruct(ONE,ssLastValue(id),LastValue(id))
-!                          ----------------------------------------------
-                        else
-!                          ----------------------------------------------
-                           call addElectroStruct(ONE,ssLastValue(id),LastValue(id),is)
-!                          ----------------------------------------------
+!
+!                       ==============================================
+!                       For full-potential, it needs to add the single 
+!                       site DOS to the multiple scattering DOS
+!                       ==============================================
+                        if (isFullPotential()) then
+                           if (n_spin_cant == 2) then
+!                             ----------------------------------------
+                              call addElectroStruct(ONE,ssLastValue(id),LastValue(id))
+!                             ----------------------------------------
+                           else
+!                             ----------------------------------------
+                              call addElectroStruct(ONE,ssLastValue(id),LastValue(id),is)
+!                             ----------------------------------------
+                           endif
                         endif
+!
                         do ia = 1, LastValue(id)%NumSpecies
                            do js = 1, 1   !n_spin_cant*n_spin_cant
                               ns = max(js,is)
@@ -4989,13 +5011,15 @@ contains
       if (node_print_level >= 0) then
          write(6,'(/,a,d17.8,/)')'WARNING :: tnen = ',tnen
       endif
-   else if (abs(xtws/tnen) > 0.50d0) then
+!  else if (abs(xtws/tnen) > 0.50d0) then
+   else if (abs(xtws/tnen) > 0.050d0) then
 !     ----------------------------------------------------------------
 !     call random_number(r) ! Use random number as a scaling factor to 
 !                           ! set the estimate of the next Fermi energy.
 !                           ! This could help to avoid charge sloshing problem.
 !     ----------------------------------------------------------------
-      r = HALF
+!     r = HALF
+      r = ONE
       if (xtws > ZERO) then
          efdif =-r*min(0.01d0,xtws)
       else

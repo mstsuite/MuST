@@ -49,17 +49,31 @@ public :: ErrorHandler, &
 private
 !
    integer (kind=IntKind) :: FileUnit = 6
-   integer (kind=IntKind) :: PrintLevel = 1
+   integer (kind=IntKind) :: ErrorPrintLevel = 1
+   integer (kind=IntKind) :: WarningPrintLevel = 1
+   integer (kind=IntKind) :: MessagePrintLevel = 1
 !
 contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine setErrorOutput(print_level,funit)
+   subroutine setErrorOutput(e_print_level,w_print_level,m_print_level,funit)
 !  ===================================================================
    implicit none
    integer (kind=IntKind), intent(in), optional :: funit
-   integer (kind=IntKind), intent(in) :: print_level
+   integer (kind=IntKind), intent(in), optional :: e_print_level
+   integer (kind=IntKind), intent(in), optional :: w_print_level
+   integer (kind=IntKind), intent(in), optional :: m_print_level
 !
-   PrintLevel = print_level
+   if (present(e_print_level)) then
+      ErrorPrintLevel = e_print_level
+   endif
+!
+   if (present(w_print_level)) then
+      WarningPrintLevel = w_print_level
+   endif
+!
+   if (present(m_print_level)) then
+      MessagePrintLevel = m_print_level
+   endif
 !
    if (present(funit)) then
       FileUnit = funit
@@ -84,7 +98,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (ErrorPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -114,7 +128,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (ErrorPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -144,7 +158,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (ErrorPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -175,7 +189,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (ErrorPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -205,7 +219,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (ErrorPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -235,7 +249,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (ErrorPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -265,7 +279,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (ErrorPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -295,7 +309,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (ErrorPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -324,7 +338,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (ErrorPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -353,7 +367,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (ErrorPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -382,7 +396,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (ErrorPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -410,7 +424,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (ErrorPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -439,7 +453,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (MessagePrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -469,7 +483,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (MessagePrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -499,7 +513,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (MessagePrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -529,7 +543,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (MessagePrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -559,7 +573,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (MessagePrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -589,7 +603,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (MessagePrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -618,7 +632,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (MessagePrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -647,7 +661,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (MessagePrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -676,7 +690,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (MessagePrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -704,7 +718,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (MessagePrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -733,7 +747,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (WarningPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -766,7 +780,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (WarningPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -799,7 +813,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (WarningPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -832,7 +846,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (WarningPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -865,7 +879,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (WarningPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -898,7 +912,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (WarningPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -930,7 +944,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (WarningPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -962,7 +976,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (WarningPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -994,7 +1008,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (WarningPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -1025,7 +1039,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (WarningPrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -1057,7 +1071,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (MessagePrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -1090,7 +1104,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (MessagePrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -1123,7 +1137,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (MessagePrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -1156,7 +1170,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (MessagePrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -1189,7 +1203,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (MessagePrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -1222,7 +1236,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (MessagePrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -1254,7 +1268,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (MessagePrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -1286,7 +1300,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (MessagePrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -1318,7 +1332,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (MessagePrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
@@ -1349,7 +1363,7 @@ contains
 !
    if (present(force_to_print)) then
       pr = force_to_print
-   else if (PrintLevel > 0) then
+   else if (MessagePrintLevel > 0) then
       pr = .true.
    else
       pr = .false.
