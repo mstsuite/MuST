@@ -74,7 +74,7 @@ contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine initCPAMedium(cant, lmax_kkr, rel, cpa_mix_type, cpa_max_iter,  &
-                            cpa_mix_0, cpa_mix_1, cpa_eswitch, cpa_tol, istop, iprint)
+                            cpa_mix_0, cpa_mix_1, cpa_eswitch, cpa_tol, istop, iprint, is_sro)
 !  ===================================================================
    use GroupCommModule, only : getGroupID, getNumPEsInGroup, getMyPEinGroup
    use GroupCommModule, only : getNumGroups, getGroupLabel, isGroupExisting
@@ -94,6 +94,7 @@ contains
    integer (kind=IntKind), intent(in) :: cant, rel, cpa_mix_type, cpa_max_iter
    integer (kind=IntKind), intent(in) :: iprint(:)
    integer (kind=IntKind), intent(in) :: lmax_kkr(:)
+   logical, intent(in), optional :: is_sro
    integer (kind=IntKind) :: i, ig, kmaxi, ic, n, NumImpurities
    integer (kind=IntKind) :: aid, num, dsize, lmaxi, nsize
 !
@@ -236,8 +237,13 @@ contains
    InitialMixingType = cpa_mix_type
 !
 !  -------------------------------------------------------------------
-   call initCrystalMatrix(nla=LocalNumSites, cant=cant, lmax_kkr=lmax_kkr,   &
+   if(present(is_sro)) then
+      call initCrystalMatrix(nla=LocalNumSites, cant=cant, lmax_kkr=lmax_kkr,   &
+                        rel=rel, istop=istop, iprint=iprint, is_sro=is_sro)
+   else
+      call initCrystalMatrix(nla=LocalNumSites, cant=cant, lmax_kkr=lmax_kkr,   &
                         rel=rel, istop=istop, iprint=iprint)
+   endif
 !  -------------------------------------------------------------------
    call initEmbeddedCluster(cant, istop, print_instruction)
 !  -------------------------------------------------------------------
@@ -321,7 +327,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine computeCPAMedium(e)
+   subroutine computeCPAMedium(e, do_sro)
 !  ===================================================================
    use PublicParamDefinitionsModule, only : SimpleMixing, AndersonMixing, BroydenMixing
 !
@@ -356,6 +362,7 @@ contains
    integer (kind=IntKind) :: ns, is, js, switch, nt
    integer (kind=IntKind) :: site_config(LocalNumSites)
 !
+   logical :: use_sro
 !  ===================================================================
 !  CPA iteration acceleration parameters...
 !  These parameters are taken from the mkkrcpa code
@@ -367,7 +374,7 @@ contains
    real (kind=RealKind) :: err, max_err, err_prev
 !
    complex (kind=CmplxKind), intent(in) :: e
-
+   logical, intent(in), optional :: do_sro
 !
    complex (kind=CmplxKind) :: kappa
    complex (kind=CmplxKind), pointer :: tau_a(:,:,:)
@@ -578,10 +585,11 @@ contains
          call writeMatrix('Final t-cpa-inv',CPAMedium(n)%TcpaInv,nsize,nsize,TEN2m8)
       enddo
    endif
+   if (.not. use_sro) then
 !  ===================================================================
 !  Calculate Tau_a and Kau_a for each species in local spin framework
 !  ===================================================================
-   do n = 1, LocalNumSites
+    do n = 1, LocalNumSites
       id = CPAMedium(n)%local_index
       dsize = CPAMedium(n)%dsize
       nsize = dsize*nSpinCant
@@ -640,7 +648,8 @@ contains
             enddo
          enddo
       enddo
-   enddo
+    enddo
+   endif
 !
    end subroutine computeCPAMedium
 !  ===================================================================
