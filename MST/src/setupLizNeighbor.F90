@@ -329,6 +329,7 @@ subroutine setupLizNeighbor(print_level)
 !        -------------------------------------------------------------
          call HeapSort(ns, rs, indx)
 !        -------------------------------------------------------------
+      endif
          neighb%NumAtoms = na
          neighb%NumShells = ns
          allocate( neighb%Z(na), neighb%Lmax(na) )
@@ -401,7 +402,7 @@ subroutine setupLizNeighbor(print_level)
                      neighb%LocalIndex, neighb%GlobalIndex )
          deallocate( neighb%Position, neighb%IndexMN, neighb%Rmunu )
          deallocate( neighb%ShellIndex, neighb%ShellRad)
-      endif
+!     endif
       deallocate( m1, m2, m3 )
 !
       if (print_level(id) >= 0) then

@@ -208,7 +208,7 @@ contains
       call ErrorHandler('setNeighbor','Need to initialize the module first')
    else if (id < 1 .or. id > LocalNumAtoms) then
       call ErrorHandler('setNeighbor','invalid local atom index',id)
-   else if (n < 1) then
+   else if (n < 0) then
       call ErrorHandler('setNeighbor','invalid number of neighbor atoms',n)
    endif
 !

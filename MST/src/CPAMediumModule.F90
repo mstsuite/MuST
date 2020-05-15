@@ -21,7 +21,7 @@ private
    integer (kind=IntKind) :: kmax_kkr_max
    integer (kind=IntKind) :: ndim_Tmat
    integer (kind=IntKind) :: print_instruction
-   integer (kind=IntKind) :: MixingType
+   integer (kind=IntKind) :: InitialMixingType
 !
    type CPAMatrixStruct
       real (kind=RealKind) :: content
@@ -230,7 +230,7 @@ contains
 !
    iteration = 0
    print_instruction = maxval(iprint)
-   MixingType = cpa_mix_type
+   InitialMixingType = cpa_mix_type
 !
 !  -------------------------------------------------------------------
    call initCrystalMatrix(LocalNumSites, cant, lmax_kkr, rel, istop, iprint)
@@ -414,11 +414,11 @@ contains
 !  ===================================================================
    if (aimag(e) >= CPA_switch_param .or. real(e) < ZERO) then
 !     ----------------------------------------------------------------
-      call setAccelerationParam(CPA_alpha)
+      call setAccelerationParam(acc_mix=CPA_alpha,acc_type=InitialMixingType)
 !     ----------------------------------------------------------------
    else
 !     ----------------------------------------------------------------
-      call setAccelerationParam(CPA_slow_alpha)
+      call setAccelerationParam(acc_mix=CPA_slow_alpha,acc_type=InitialMixingType)
 !     ----------------------------------------------------------------
    endif
 !
@@ -434,8 +434,18 @@ contains
    nt = 0
    switch = 0
    iteration = 0 
-   mixing_type = MixingType
+   mixing_type = InitialMixingType
    err_prev = 1.0d+10
+   if (print_instruction >= 0) then
+      write(6,'(/,a,2f13.8)')' ------ In computeCPAMedium: Start CPA iteration for energy = ',e
+      if (getAccelerationType() == AndersonMixing) then
+         write(6,'(a)')'Acceleration type: Anderson mixing'
+      else if (getAccelerationType() == SimpleMixing) then
+         write(6,'(a)')'Acceleration type: Simple mixing'
+      else if (getAccelerationType() == BroydenMixing) then
+         write(6,'(a)')'Acceleration type: Broyden mixing'
+      endif
+   endif
    LOOP_iter: do while (iteration < MaxIterations)
       nt = nt + 1
       iteration = iteration + 1
@@ -475,7 +485,7 @@ contains
             call checkCPAMedium(n,err)
 !           ----------------------------------------------------------
             if (print_instruction >= 0) then
-               write(6,'(a,2i4,2x,d15.8)')'In computeCPAMedium: iter, medium, err = ', &
+               write(6,'(a,2i4,2x,d15.8)')' Iteration, medium, err = ', &
                      iteration, n, err   
             endif
 !
