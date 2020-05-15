@@ -5011,13 +5011,15 @@ contains
       if (node_print_level >= 0) then
          write(6,'(/,a,d17.8,/)')'WARNING :: tnen = ',tnen
       endif
-   else if (abs(xtws/tnen) > 0.50d0) then
+!  else if (abs(xtws/tnen) > 0.50d0) then
+   else if (abs(xtws/tnen) > 0.050d0) then
 !     ----------------------------------------------------------------
 !     call random_number(r) ! Use random number as a scaling factor to 
 !                           ! set the estimate of the next Fermi energy.
 !                           ! This could help to avoid charge sloshing problem.
 !     ----------------------------------------------------------------
-      r = HALF
+!     r = HALF
+      r = ONE
       if (xtws > ZERO) then
          efdif =-r*min(0.01d0,xtws)
       else
