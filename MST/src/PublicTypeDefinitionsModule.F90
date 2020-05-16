@@ -169,6 +169,11 @@ public
       complex(kind=CmplxKind) :: q_lloyd(2)
    end type LloydStruct
 !
+   type SROStruct
+      complex (kind=CmplxKind), pointer :: tau_l_sro(:,:,:) 
+      complex (kind=CmplxKind), pointer :: kau_l_sro(:,:,:)
+   end type SROStruct
+!
    type MatrixBlockStruct
       integer (kind=IntKind) :: lmax_kkr
       integer (kind=IntKind) :: kmax_kkr
@@ -176,6 +181,7 @@ public
       integer (kind=IntKind) :: global_index
       complex (kind=CmplxKind), pointer :: tau_l(:,:,:)
       complex (kind=CmplxKind), pointer :: kau_l(:,:,:)
+      type (SROStruct), pointer :: NeighMat_l(:) ! Contains all the matrices for the neighbors
    end type MatrixBlockStruct
 !
    type MatrixBandStruct
