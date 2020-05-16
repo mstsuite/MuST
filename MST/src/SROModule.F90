@@ -105,7 +105,6 @@ contains
    endif
    nSpinCant = cant
    nSpinPola = pola
-   Print *,nSpinPola
  
    do il = 1, LocalNumSites
       SROMedium(il)%Neighbor => getNeighbor(il)
