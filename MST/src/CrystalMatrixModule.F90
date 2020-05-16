@@ -287,10 +287,8 @@ contains
    enddo
  
 !  -------- SRO Additions
-!  Print *, is_sro
    if (present(is_sro)) then
      isSRO = is_sro
-!    Print *,"Showing up as present"
    else
      isSRO = .false.
    endif
@@ -518,7 +516,6 @@ contains
    if (NumPEsInGroup == 1) then  ! ScaLapack will not be used for 1 process case
       return
    endif
-   Print *,"it doesn't reach here"
 !
 #ifdef USE_SCALAPACK
 !  ===================================================================
@@ -549,7 +546,6 @@ contains
 !  -------------------------------------------------------------------
 #endif
 !
-   Print *, "Successful initCrystalMatrix"
 
    end subroutine initCrystalMatrix
 !  ===================================================================
@@ -1051,7 +1047,6 @@ contains
 !  - Proceed with regular integration
 !  ------------------------------------------------------------------
    if (do_sro) then
-!     Print *, "Checked for SRO. Is SRO true"
       do j = 1, LocalNumAtoms
         ig = MatrixBand(j)%global_index          ! Get local index of atom given global index
         i = gid_array(ig)                        ! Diagonal block of big Kau Matrix
@@ -1660,10 +1655,8 @@ contains
 !     Populate wau_g for the particular neighbor pair and sublattice
 !     --------------------------------------------------------------
       do kl = 1, kmaxj_ns
-         np = OKKRMatrixSizeCant*(nj+kl-1) + ni
-!        np = kmaxj_ns*(kl - 1)
+         np = OKKRMatrixSizeCant*(kl-1)
          do klp = 1, kmaxj_ns
-!           np = OKKRMatrixSizeCant*(nj+kl-1) + ni
             wau_g(klp,kl) = KKR_MatrixBandSRO(np+klp, nindex, gindex) ! Change order
          enddo
       enddo
