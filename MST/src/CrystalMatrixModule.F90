@@ -2210,7 +2210,7 @@ contains
                    DESC_A, IPVT, WORK_sro, LWORK_sro, IWORK_sro, LIWORK_sro, INFO )
       else
          call PZGETRI(KKRMatrixSizeCant, p_MatrixBand, 1, 1,         &
-                   DESC_A, IPVT, WORK_sro, LWORK_sro, IWORK_sro, LIWORK_sro, INFO )
+                   DESC_A, IPVT, WORK, LWORK, IWORK, LIWORK, INFO)
       endif
 !     ----------------------------------------------------------------
       if (INFO /= 0) then
