@@ -2359,60 +2359,7 @@ contains
 !           -------------------------------------------------------
          enddo
       enddo
-   else            
-    if (calculate_tau) then
-      matrix_diag = CZERO
-      do jd = 1, LocalNumAtoms
-         ig = MatrixBand(jd)%global_index
-         id = gid_array(ig)  ! Here, we only consider&rotate the diagonal blocks of the band matrix
-         kkrsz = MatrixBand(jd)%MatrixBlock(id)%kmax_kkr
-         ns = 0
-         do js = 1, nSpinCant
-            do is = 1, nSpinCant
-               ns = ns + 1
-!              -------------------------------------------------------
-               call zcopy(kkrsz*kkrsz,MatrixBand(jd)%MatrixBlock(id)%tau_l(1,1,ns),1, &
-                          matrix_diag((ns-1)*kkrsz*kkrsz+1,ig),1)
-!              -------------------------------------------------------
-            enddo
-         enddo
-      enddo
-!     ----------------------------------------------------------------
-      call GlobalSumInGroup(aGID,matrix_diag,tsize,GlobalNumAtoms)
-!     ----------------------------------------------------------------
-      do jd = 1, LocalNumAtoms
-         ig = MatrixBand(jd)%global_index
-         id = gid_array(ig)  ! Here, we only consider&rotate the diagonal blocks of the band matrix
-                             ! For non-diagonal matrix blocks, there is factor of
-                             ! exp(i*k_vector*(Rnm_vector)) needs to be applied to the
-                             ! transformation
-         kkrsz = MatrixBand(jd)%MatrixBlock(id)%kmax_kkr
-         w0 => aliasArray2_c(wtmp,kkrsz,kkrsz)
-         ns = 0
-         do js = 1, nSpinCant
-            do is = 1, nSpinCant
-               ns = ns + 1
-!              tmb => MatrixBand(jd)%MatrixBlock(id)%tau_l(:,:,ns)
-               w0 = CZERO
-               do irot = 1, nrot
-                  ig_rot = rotation_table(MatrixBand(jd)%global_index,irot)
-                  pm => matrix_diag((ns-1)*kkrsz*kkrsz+1:ns*kkrsz*kkrsz,ig_rot)
-                  tmb => aliasArray2_c(pm,kkrsz,kkrsz)
-                  rotmat => getIBZRotationMatrix('c',irot)
-!                 ----------------------------------------------------
-                  call computeUAUtc(rotmat,kkrsz,kkrsz,rotmat,kkrsz,cfac, &
-                                    tmb,kkrsz,CONE,w0,kkrsz,WORK)
-!                 ----------------------------------------------------
-               enddo
-               tmb => MatrixBand(jd)%MatrixBlock(id)%tau_l(:,:,ns)
-!              -------------------------------------------------------
-               call zcopy(kkrsz*kkrsz,w0,1,tmb,1)
-!              -------------------------------------------------------
-            enddo
-         enddo
-      enddo
-    
-    else
+   else
       matrix_diag = CZERO
       do jd = 1, LocalNumAtoms
         ig = MatrixBand(jd)%global_index
@@ -2482,13 +2429,64 @@ contains
 !            ----------------------------------------------------------
              call zcopy(kkrsz*kkrsz,w0,1,kmb,1)
 !            ----------------------------------------------------------
-             call writeMatrix('kmb after sum rot',kmb,kkrsz,kkrsz,TEN2m8)
+!            call writeMatrix('kmb after sum rot',kmb,kkrsz,kkrsz,TEN2m8)
 !
            enddo
          enddo
       enddo
-
-    endif
+     
+      if (calculate_tau) then
+        matrix_diag = CZERO
+        do jd = 1, LocalNumAtoms
+          ig = MatrixBand(jd)%global_index
+          id = gid_array(ig)  ! Here, we only consider&rotate the diagonal blocks of the band matrix
+          kkrsz = MatrixBand(jd)%MatrixBlock(id)%kmax_kkr
+          ns = 0
+          do js = 1, nSpinCant
+            do is = 1, nSpinCant
+               ns = ns + 1
+!              -------------------------------------------------------
+               call zcopy(kkrsz*kkrsz,MatrixBand(jd)%MatrixBlock(id)%tau_l(1,1,ns),1, &
+                          matrix_diag((ns-1)*kkrsz*kkrsz+1,ig),1)
+!              -------------------------------------------------------
+            enddo
+          enddo
+        enddo
+!       ----------------------------------------------------------------
+        call GlobalSumInGroup(aGID,matrix_diag,tsize,GlobalNumAtoms)
+!       ----------------------------------------------------------------
+        do jd = 1, LocalNumAtoms
+          ig = MatrixBand(jd)%global_index
+          id = gid_array(ig)  ! Here, we only consider&rotate the diagonal blocks of the band matrix
+                             ! For non-diagonal matrix blocks, there is factor of
+                             ! exp(i*k_vector*(Rnm_vector)) needs to be applied to the
+                             ! transformation
+          kkrsz = MatrixBand(jd)%MatrixBlock(id)%kmax_kkr
+          w0 => aliasArray2_c(wtmp,kkrsz,kkrsz)
+          ns = 0
+          do js = 1, nSpinCant
+            do is = 1, nSpinCant
+               ns = ns + 1
+!              tmb => MatrixBand(jd)%MatrixBlock(id)%tau_l(:,:,ns)
+               w0 = CZERO
+               do irot = 1, nrot 
+                  ig_rot = rotation_table(MatrixBand(jd)%global_index,irot)
+                  pm => matrix_diag((ns-1)*kkrsz*kkrsz+1:ns*kkrsz*kkrsz,ig_rot)
+                  tmb => aliasArray2_c(pm,kkrsz,kkrsz)
+                  rotmat => getIBZRotationMatrix('c',irot)
+!                 ----------------------------------------------------
+                  call computeUAUtc(rotmat,kkrsz,kkrsz,rotmat,kkrsz,cfac, &
+                                    tmb,kkrsz,CONE,w0,kkrsz,WORK)
+!                 ----------------------------------------------------
+               enddo
+               tmb => MatrixBand(jd)%MatrixBlock(id)%tau_l(:,:,ns)
+!              -------------------------------------------------------
+               call zcopy(kkrsz*kkrsz,w0,1,tmb,1)
+!              -------------------------------------------------------
+            enddo
+          enddo
+        enddo
+      endif
    endif
 !
    nullify(w0, rotmat, kmb, tmb, matrix_diag)
