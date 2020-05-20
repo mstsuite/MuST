@@ -136,11 +136,12 @@ contains
                  SROMedium(il)%SROTMatrix(i)%sro_param_a(j) = SROMedium(il)%SROTMatrix(j)%sro_param_a(i)
               else
                  
-                 temp = (i - 1)*n - (i - 1)*(i - 2)/2   !j + (((i - 1)*(2*num - 2 - i))/2)
+                 temp = (i - 1)*num - (i - 1)*(i - 2)/2   !j + (((i - 1)*(2*num - 2 - i))/2)
                  SROMedium(il)%SROTMatrix(i)%sro_param_a(j) = sro_params(temp + j - i + 1)
               endif
             enddo
-
+            
+!           Print *, SROMedium(il)%SROTMatrix(i)%sro_param_a
             tm => getScatteringMatrix('T-Matrix',spin=1,site=SROMedium(il)%local_index,atom=i)
             
             SROMedium(il)%blk_size = size(tm, 1)
