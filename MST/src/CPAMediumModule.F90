@@ -1,6 +1,6 @@
 module CPAMediumModule
    use KindParamModule, only : IntKind, RealKind, CmplxKind
-   use MathParamModule, only : ZERO, ONE, CZERO, CONE, SQRTm1, TEN2m6, TEN2m8
+   use MathParamModule, only : ZERO, HALF, ONE, TWO, CZERO, CONE, SQRTm1, TEN2m6, TEN2m8
    use ErrorHandlerModule, only : ErrorHandler, WarningHandler
 !
 public :: initCPAMedium,            &
@@ -92,7 +92,7 @@ contains
    integer (kind=IntKind), intent(in) :: iprint(:)
    integer (kind=IntKind), intent(in) :: lmax_kkr(:)
    integer (kind=IntKind) :: i, ig, kmaxi, ic, n, NumImpurities
-   integer (kind=IntKind) :: aid, num, dsize, lmaxi, nsize
+   integer (kind=IntKind) :: aid, num, dsize, lmaxi, nsize, mixing_type
 !
    real (kind=RealKind), intent(in) :: cpa_mix_0, cpa_mix_1, cpa_eswitch, cpa_tol
 !
@@ -231,13 +231,14 @@ contains
    iteration = 0
    print_instruction = maxval(iprint)
    InitialMixingType = cpa_mix_type
+   mixing_type = mod(InitialMixingType,4)
 !
 !  -------------------------------------------------------------------
    call initCrystalMatrix(LocalNumSites, cant, lmax_kkr, rel, istop, iprint)
 !  -------------------------------------------------------------------
    call initEmbeddedCluster(cant, istop, print_instruction)
 !  -------------------------------------------------------------------
-   call initAccelerateCPA(cpa_mix_type, cpa_max_iter, cpa_mix_0, cpa_tol,  &
+   call initAccelerateCPA(mixing_type, cpa_max_iter, cpa_mix_0, cpa_tol, &
                           kmax_kkr_max)
 !  -------------------------------------------------------------------
 !
@@ -319,7 +320,8 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine computeCPAMedium(e)
 !  ===================================================================
-   use PublicParamDefinitionsModule, only : SimpleMixing, AndersonMixing, BroydenMixing
+   use PublicParamDefinitionsModule, only : SimpleMixing, AndersonMixing, &
+                                            BroydenMixing, AndersonMixingOld
 !
    use MatrixInverseModule, only : MtxInv_LU
 !
@@ -347,6 +349,8 @@ contains
 !
    character (len=12) :: description
 !
+   logical :: used_Anderson, used_Broyden, used_AndersonOld
+!
    integer (kind=IntKind) :: ia, id, nsize, n, dsize, mixing_type
    integer (kind=IntKind) :: ns, is, js, switch, nt
    integer (kind=IntKind) :: site_config(LocalNumSites)
@@ -359,7 +363,7 @@ contains
    real (kind=RealKind), parameter ::  ctol=1.0d-08, cmix=0.15d0, cw0=5.0d-03
 !  ===================================================================
 !
-   real (kind=RealKind) :: err, max_err, err_prev
+   real (kind=RealKind) :: err, max_err, err_prev, alpha
 !
    complex (kind=CmplxKind), intent(in) :: e
    complex (kind=CmplxKind) :: kappa
@@ -412,13 +416,14 @@ contains
 !       CPAMedium(n)%Tcpa_old(:,:,:) is an alias of Tcpa_old(:)
 !       CPAMedium(n)%TcpaInv_old(:,:,:) is an alias of TcpaInv_old(:)
 !  ===================================================================
+   mixing_type = mod(InitialMixingType,4)
    if (aimag(e) >= CPA_switch_param .or. real(e) < ZERO) then
 !     ----------------------------------------------------------------
-      call setAccelerationParam(acc_mix=CPA_alpha,acc_type=InitialMixingType)
+      call setAccelerationParam(acc_mix=CPA_alpha,acc_type=mixing_type)
 !     ----------------------------------------------------------------
    else
 !     ----------------------------------------------------------------
-      call setAccelerationParam(acc_mix=CPA_slow_alpha,acc_type=InitialMixingType)
+      call setAccelerationParam(acc_mix=CPA_slow_alpha,acc_type=mixing_type)
 !     ----------------------------------------------------------------
    endif
 !
@@ -434,7 +439,6 @@ contains
    nt = 0
    switch = 0
    iteration = 0 
-   mixing_type = InitialMixingType
    err_prev = 1.0d+10
    if (print_instruction >= 0) then
       write(6,'(/,a,2f13.8)')' ------ In computeCPAMedium: Start CPA iteration for energy = ',e
@@ -444,9 +448,24 @@ contains
          write(6,'(a)')'Acceleration type: Simple mixing'
       else if (getAccelerationType() == BroydenMixing) then
          write(6,'(a)')'Acceleration type: Broyden mixing'
+      else if (getAccelerationType() == AndersonMixingOld) then
+         write(6,'(a)')'Acceleration type: Anderson mixing - old scheme'
       endif
    endif
-   LOOP_iter: do while (iteration < MaxIterations)
+!
+   used_Anderson = .false.
+   used_AndersonOld = .false.
+   used_Broyden = .false.
+   if (getAccelerationType() == AndersonMixing) then
+      used_Anderson = .true.
+   else if (getAccelerationType() == BroydenMixing) then
+      used_Broyden = .true.
+   else if (getAccelerationType() == AndersonMixingOld) then
+      used_AndersonOld = .true.
+   endif
+!
+   alpha = CPA_slow_alpha
+   LOOP_iter: do while (nt <= 5*MaxIterations)
       nt = nt + 1
       iteration = iteration + 1
 !     write(6,'(a,i5)')'At iteration: ',iteration
@@ -507,47 +526,58 @@ contains
 !     write(6,'(a,3i5,2x,3d15.8)')'MyPE, ig, nt, e, max_err = ',      &
 !           MyPE, CPAMedium(1)%global_index, nt, e, max_err
 !
-      if (max_err < CPA_tolerance .or. nt > 2*MaxIterations) then
+      if (max_err < CPA_tolerance) then
          exit LOOP_iter
 !     ================================================================
-!     Set 30 to be the maximum number of iterations for the fast mixing method.
+!     Set 25 to be the maximum number of iterations for the fast mixing method.
 !     If the method does not converge, switch to a different method
 !     ================================================================
-      else if (mixing_type /= SimpleMixing .and. iteration > min(25,MaxIterations/2) &
+      else if (mixing_type /= SimpleMixing .and. iteration > min(50,MaxIterations) &
                .and. max_err > 0.6*err_prev) then
-         if (switch <= 1) then
-            if (getAccelerationType() == AndersonMixing .or.          &
-                getAccelerationType() == SimpleMixing) then
-!              -------------------------------------------------------
-               call setAccelerationParam(acc_mix=CPA_slow_alpha,acc_type=BroydenMixing)
-!              -------------------------------------------------------
-               if (print_instruction >= 0) then
-                  write(6,'(a)')'Switch to Broyden Mixing Scheme.'
-               endif
-               mixing_type = BroydenMixing
-            else if (getAccelerationType() == BroydenMixing .or.      &
-                     getAccelerationType() == SimpleMixing) then
-!              -------------------------------------------------------
-               call setAccelerationParam(CPA_slow_alpha,acc_type=AndersonMixing)
-!              -------------------------------------------------------
-               if (print_instruction >= 0) then
-                  write(6,'(a)')'Switch to Anderson Mixing Scheme.'
-               endif
-               mixing_type = AndersonMixing
-            endif
-            iteration = 0
-            switch = switch + 1
-         else if (switch == 2) then
+!        -------------------------------------------------------------
+         call setAccelerationParam(acc_mix=alpha,acc_type=SimpleMixing)
+!        -------------------------------------------------------------
+         if (print_instruction >= 0) then
+            write(6,'(a,f10.5)')'Switch to Simple Mixing Scheme with mixing param = ',alpha
+         endif
+         mixing_type = SimpleMixing
+         iteration = 0
+         switch = switch + 1
+         alpha = alpha*HALF
+      else if (mixing_type == SimpleMixing .and. iteration > MaxIterations .and. switch < 4) then
+         if ((used_Broyden .and. InitialMixingType <= 3) .or.         &
+             (.not.used_Broyden .and. InitialMixingType > 3)) then
 !           ----------------------------------------------------------
-            call setAccelerationParam(acc_mix=CPA_alpha,acc_type=SimpleMixing)
+            call setAccelerationParam(acc_mix=alpha,acc_type=BroydenMixing)
 !           ----------------------------------------------------------
             if (print_instruction >= 0) then
-               write(6,'(a)')'Switch to Simple Mixing Scheme.'
+               write(6,'(a,f10.5)')'Switch to Broyden Mixing Scheme with mixing param = ',alpha
             endif
-            mixing_type = SimpleMixing
-            iteration = 0
-            switch = switch + 1
+            mixing_type = BroydenMixing
+            used_Broyden = .true.
+         else if ((used_Anderson .and. InitialMixingType <= 3) .or.   &
+                  (.not.used_Anderson .and. InitialMixingType > 3)) then
+!           ----------------------------------------------------------
+            call setAccelerationParam(acc_mix=alpha,acc_type=AndersonMixing)
+!           ----------------------------------------------------------
+            if (print_instruction >= 0) then
+               write(6,'(a,f10.5)')'Switch to Anderson Mixing Scheme with mixing param = ',alpha
+            endif
+            mixing_type = AndersonMixing
+            used_Anderson = .true.
+         else if ((used_AndersonOld .and. InitialMixingType <= 3) .or.   &
+                  (.not.used_AndersonOld .and. InitialMixingType > 3)) then
+!           ----------------------------------------------------------
+            call setAccelerationParam(acc_mix=alpha,acc_type=AndersonMixingOld)
+!           ----------------------------------------------------------
+            if (print_instruction >= 0) then
+               write(6,'(a,f10.5)')'Switch to Anderson Mixing Old Scheme with mixing param = ',alpha
+            endif
+            mixing_type = AndersonMixingOld
+            used_AndersonOld = .true.
          endif
+         iteration = 0
+         switch = switch + 1
       endif
       err_prev = max_err
    enddo LOOP_iter

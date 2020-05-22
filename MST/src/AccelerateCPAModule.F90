@@ -2,7 +2,8 @@ module AccelerateCPAModule
    use KindParamModule, only : IntKind, RealKind, CmplxKind
    use MathParamModule, only : ZERO, ONE, CZERO, CONE, SQRTm1, TEN2m8
    use ErrorHandlerModule, only : ErrorHandler, WarningHandler
-   use PublicParamDefinitionsModule, only : SimpleMixing, AndersonMixing, BroydenMixing
+   use PublicParamDefinitionsModule, only : SimpleMixing, AndersonMixing, &
+                                            BroydenMixing, AndersonMixingOld
 !
 public :: initAccelerateCPA,      &
           setAccelerationParam,   &
@@ -88,7 +89,7 @@ contains
       endif
       allocate (RWORK(n))
       cpaiter_x => RWORK
-   else if (AccelerationType == AndersonMixing) then
+   else if (AccelerationType == AndersonMixing .or. AccelerationType == AndersonMixingOld) then
       n = kmax_kkr**2*ipits
       allocate (CWORK1(n))
       allocate (CWORK2(n))
@@ -125,7 +126,7 @@ contains
       endif
       deallocate(RWORK)
       nullify(cpaiter_x)
-   else if (AccelerationType == AndersonMixing) then
+   else if (AccelerationType == AndersonMixing .or. AccelerationType == AndersonMixingOld) then
       nullify(tcin, tcout)
       deallocate (CWORK1)
       deallocate (CWORK2)
@@ -217,7 +218,7 @@ contains
       cpaiter_ppq=alpha
       cpaiter_tp=ZERO
       cpaiter_u=ZERO
-   else if (AccelerationType == AndersonMixing) then
+   else if (AccelerationType == AndersonMixing .or. AccelerationType == AndersonMixingOld) then
       i=mod(itcpa-1,ipits)+1
       call zcopy(ndim,tcpa,1,tcin(1,i),1)
    else if (AccelerationType == SimpleMixing) then
@@ -249,11 +250,35 @@ contains
 !     ----------------------------------------------------------------
       call zcopy(ndim,tcpa,1,tcout(1,i),1)
 !     ----------------------------------------------------------------
-      if ( itcpa > ipits ) then
+!     
+!     ================================================================
+!     The following lines of code are modified on 5/22/2020.
+!     The new code will start calling acctc at itcpa =1, while the old
+!     code calls acctc starting itcpa > ipits
+!     ----------------------------------------------------------------
+      call acctc(tcpa,ndim,itcpa)
+!     ----------------------------------------------------------------
+   else if (AccelerationType == AndersonMixingOld) then
+!     ================================================================
+!     The code before 5/22/2020 is as follows. I now call it AndersonMixingOld
+!     ================================================================
+      i=mod(itcpa-1,ipits)+1
+!     ----------------------------------------------------------------
+      call zcopy(ndim,tcpa,1,tcout(1,i),1)
+!     ----------------------------------------------------------------
+!
+      if ( itcpa >= ipits ) then
 !        =============================================================
 !        speed up the convergence by loading the accelarator.
 !        -------------------------------------------------------------
          call acctc(tcpa,ndim,itcpa)
+!        -------------------------------------------------------------
+      else
+         cfac = alpha
+         tcpa = cfac*tcpa
+         cfac = CONE-cfac
+!        -------------------------------------------------------------
+         call zaxpy(ndim,cfac,tcin(1,i),1,tcpa,1)
 !        -------------------------------------------------------------
       endif
    else
@@ -342,6 +367,8 @@ contains
       end subroutine dgaleq
    end interface
 !
+   acctc_a = ZERO
+   acctc_b = ZERO
    nit=min(ipits,nt)
    n=nit+1
    do j=1,nit
@@ -360,7 +387,7 @@ contains
    call dgaleq(acctc_a,acctc_b,n,ipits,info)
 !  -------------------------------------------------------------------
    if (info == 0) then
-      if (alpha > 0.999 .or. iscf_cpa == 1) then
+      if (alpha > 0.999 .or. iscf_cpa == 2) then
          do k=1,ndim
             sum=CZERO
             do i=1,nit
@@ -381,7 +408,7 @@ contains
       endif
    else ! Use simple mixing to get new tc
 !     ----------------------------------------------------------------
-!     call WarningHandler('acctc','Ill condition appeared in DGA mixing')
+!     call WarningHandler('acctc','Ill condition appeared in DGA mixing',force_to_print=.true.)
 !     ----------------------------------------------------------------
       n = mod(nt-1,ipits)+1
       do k=1,ndim

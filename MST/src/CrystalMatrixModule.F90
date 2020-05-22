@@ -808,6 +808,7 @@ contains
                                  getKPointIndex, getNumRedundantKsOnMyProc
    use GroupCommModule, only : getGroupID, GlobalSumInGroup, getMyPEinGroup
    use StrConstModule, only : getStrConstMatrix
+   use StrConstModule, only : checkFreeElectronPoles, getFreeElectronPoleFactor
    use WriteMatrixModule,  only : writeMatrix
 !
    implicit none
@@ -828,7 +829,7 @@ contains
    real (kind=RealKind) :: weightSum, kvec(1:3), aij(3)
 !
    complex (kind=CmplxKind), intent(in) :: e
-   complex (kind=CmplxKind) :: wfac, efac
+   complex (kind=CmplxKind) :: wfac, efac, fepf
    complex (kind=CmplxKind), pointer :: rotmat(:,:), scm(:,:)
 !
    interface
@@ -923,6 +924,9 @@ contains
       kvec(1:3) = kpts(1:3,k)*kfac
 !     ================================================================
 !     get structure constant matrix for the k-point and energy
+!     ----------------------------------------------------------------
+      call checkFreeElectronPoles(kvec,kappa)
+!     ----------------------------------------------------------------
       do col = 1, LocalNumAtoms
          do row = 1, GlobalNumAtoms
 !           ----------------------------------------------------------
@@ -935,6 +939,9 @@ contains
             sc_blocks(row,col)%strcon_matrix = scm
          enddo
       enddo
+!     ----------------------------------------------------------------
+      fepf = getFreeElectronPoleFactor() ! Returns the free eletron pole factor
+!     ----------------------------------------------------------------
 !
       wfac = weight(k)/weightSum
 !     write(6,'(a,i4,a,3f12.5,a,2d12.5,a,2d12.5)')'k-ind = ',k,       &
@@ -943,7 +950,7 @@ contains
 !     ================================================================
 !     Compute the modified KKR matrix, which is stored in TMP_MatrixBand
 !     ----------------------------------------------------------------
-      call computeMatrixBand(TMP_MatrixBand,method)
+      call computeMatrixBand(TMP_MatrixBand,method,fepf)
 !     ----------------------------------------------------------------
 !     call checkMatrixBandRotation(kvec,TMP_MatrixBand)
 !     ----------------------------------------------------------------
@@ -1012,6 +1019,7 @@ contains
                                  tau_needed,use_tmat,configuration)
 !  ===================================================================
    use StrConstModule, only : getStrConstMatrix
+   use StrConstModule, only : checkFreeElectronPoles, getFreeElectronPoleFactor
 !
    implicit none
 !
@@ -1028,6 +1036,7 @@ contains
    real (kind=RealKind), intent(in) :: kpts(1:3)
 !
    complex (kind=CmplxKind), intent(in) :: e
+   complex (kind=CmplxKind) :: fepf
 !
    complex (kind=CmplxKind), pointer :: scm(:,:)
 !
@@ -1098,7 +1107,9 @@ contains
 !
 !  ===================================================================
 !  get structure constant matrix for the k-point and energy
-!  ===================================================================
+!  -------------------------------------------------------------------
+   call checkFreeElectronPoles(kpts,kappa)
+!  -------------------------------------------------------------------
    do col = 1, LocalNumAtoms
       do row = 1, GlobalNumAtoms
 !        -------------------------------------------------------------
@@ -1108,11 +1119,14 @@ contains
          sc_blocks(row,col)%strcon_matrix = scm
       enddo
    enddo
+!  -------------------------------------------------------------------
+   fepf = getFreeElectronPoleFactor()  ! Returns the free eletron pole factor
+!  -------------------------------------------------------------------
 !
 !  ===================================================================
 !  Compute the modified KKR matrix, which is stored in KKR_MatrixBand
 !  -------------------------------------------------------------------
-   call computeMatrixBand(KKR_MatrixBand,method)
+   call computeMatrixBand(KKR_MatrixBand,method,fepf)
 !  -------------------------------------------------------------------
    if (method == 0. .or. method == 1) then
 !     ----------------------------------------------------------------
@@ -1432,7 +1446,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine computeMatrixBand(p_MatrixBand,method)
+   subroutine computeMatrixBand(p_MatrixBand,method,fepf)
 !  ===================================================================
    use MatrixModule, only : setupUnitMatrix
 !
@@ -1446,6 +1460,7 @@ contains
    integer (kind=IntKind) :: kmaxj, kmaxj_ns, kmaxi, kmaxi_ns, t0size
    integer (kind=IntKind) :: j, nj, ni, i, is, ig, nc, kl, klp, n, nr
 !
+   complex (kind=CmplxKInd), intent(in) :: fepf
    complex (kind=CmplxKind), pointer :: strcon(:,:)
    complex (kind=CmplxKind), pointer :: jinvB(:)
    complex (kind=CmplxKind), pointer :: p_jinvi(:)
@@ -1478,7 +1493,7 @@ contains
 !  Method 2:
 !    p_MatrixBand = [ 1 - (B(k,e)+i*kappa) * t(e) ]^{-1}
 !  ===================================================================
-   cfac = SQRTm1*kappa
+   cfac = SQRTm1*kappa*fepf
    do j = 1, LocalNumAtoms
       kmaxj = MatrixBand(j)%kmax_kkr
       kmaxj_ns = kmaxj*nSpinCant
@@ -1642,7 +1657,8 @@ contains
                nr = MatrixBand(j)%MatrixBlock(n)%row_index
                do i = 1, MatrixBand(j)%kmax_kkr*nSpinCant
                   p_MatrixBand(i+(nc-1+i-1)*KKRMatrixSizeCant+nr-1) = &
-                     CONE+p_MatrixBand(i+(nc-1+i-1)*KKRMatrixSizeCant+nr-1)
+                     fepf+p_MatrixBand(i+(nc-1+i-1)*KKRMatrixSizeCant+nr-1)
+!                    CONE+p_MatrixBand(i+(nc-1+i-1)*KKRMatrixSizeCant+nr-1)
                enddo
                exit LOOP_n2
             endif
@@ -1672,7 +1688,7 @@ contains
             i = KKRMatrixSizeCant*(nj+kl-1)+ni
             n = kmaxj_ns*(kl-1)
             do klp = 1, kmaxj_ns
-               WORK(i+klp) = -WORK(i+klp) - stcm_g(n+klp,j)
+               WORK(i+klp) = -WORK(i+klp) - stcm_g(n+klp,j)*fepf
             enddo
          enddo
       enddo
@@ -1750,6 +1766,8 @@ contains
       endif
 #endif
    endif
+!
+   p_MatrixBand = fepf*p_MatrixBand
 !
    if (method == 0) then
       do j = 1, LocalNumAtoms

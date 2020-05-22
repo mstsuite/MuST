@@ -1,0 +1,12 @@
+Source Code Version           : : Develop                                       
+System Description            : CuZn B2 structure                               
+Number of Atoms in Unit Cell  : 2                                               
+Number of Atomic Species      : 2                                               
+Number of Atoms in Each Type  : 1(Cu), 1(Zn)                                    
+Unit Cell Volume (au^3)       : 0.17374111D+03                                  
+Average Atomic Volume (au^3)  : 86.87056                                        
+Energy Offset                 : -3414                                           
+=======================================================================================
+    Iter     Energy      3PV     Efermi   Rms_rho    Rms_pot   Mix  Alg  Alpha 
+---------------------------------------------------------------------------------------
+**       1  -0.467947  -0.13128  0.61895  0.422E-13  0.360E-08  pot  B   0.1000

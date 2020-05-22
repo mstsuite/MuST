@@ -15,8 +15,9 @@ No. Atoms in System (> 0)  ::  1
                        Position and Potential Data Files
 ===========================+====================================================
 Atomic Position File Name  :: position.dat
-Default Potential Input File Name  ::  Cu_mt_v, Zn_mt_v
-Default Potential Input File Form  ::  0
+# Default Potential Input File Name  ::  Cu_mt_v, Zn_mt_v
+Default Potential Input File Name  ::  CuZn_mt_v
+Default Potential Input File Form  ::  1
    = 0: ASCII Format       ----------
    = 1: XDR Format         ----------
    = 2: HDF Format         ----------
@@ -83,11 +84,22 @@ Note: Uniform grid is used for calculating the non-spherical electrostatic
 ================================================================================
                         Energy (Ryd.) Contour Parameters
 ===========================+====================================================
+DOS Run ID :: -1
+     =  0: DOS along the real energy axis will not be calculated (Default);
+     >  0: An integer representing the global index of an atom, to indicate the DOS to be calculated for the atom;
+     = -1: DOS will be calculated for all the atoms.
 Read E-mesh from emeshs.inp :: 0
      0. No                 ---------
      1. Yes. In this case, the following data have no effect
 No. Energy Grids           ::  30 
-Real Axis Bottom, erbot    ::  -0.40
+# Real Axis Bottom, erbot    ::  0.214
+# Imag Axis Bottom, eibot    ::  0.003
+# Real Axis Top, ertop       ::  0.226
+# SS Real Axis Int. Points   ::  5
+Real Axis Bottom, erbot    :: -0.400
+Imag Axis Bottom, eibot    ::  0.003
+Real Axis Top, ertop       ::  1.00
+SS Real Axis Int. Points   ::  500
 ================================================================================
                   * * *              * * *              * * *
 ================================================================================
@@ -117,7 +129,7 @@ Scheme to Generate K (>=0) ::  0
      0. Special K-points ---------
      1. Tetrahedron      ---------
      2. Direction        ---------
-Kx, Ky, Kz Division (> 0)  ::   12  12  12
+Kx, Ky, Kz Division (> 0)  ::   20  20  20
 Symmetrize BZ Integration  ::   1
      0. No                 ---------
      1. Yes                ---------                             
@@ -143,7 +155,7 @@ Potential Tol (> 0)        ::  0.0000001
             Mixing and Tolerance Parameters for Effective Medium
 ===========================+====================================================
 Maximum Effective Medium Iterations   :: 80
-Effective Medium Mixing Scheme        :: 1
+Effective Medium Mixing Scheme        :: 2
      = 0: Simple mixing; = 1: Anderson mixing; = 2: Broyden mixing; = 3: Anderson Mixing by Messina group
 Effective Medium Mixing Parameters    :: 0.1000  0.1000
      Note: The first mixing value is for the energy points in standard mixing mode; the second mixing value
