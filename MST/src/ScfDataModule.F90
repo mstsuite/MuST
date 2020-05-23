@@ -56,6 +56,7 @@ public :: initScfData,                 &
           setSCFMethod,                &
           getPoleSearchStep,           &
           retreiveEffectiveMediumParams,   &
+          retrieveSROParams, &
           printScfData
 !
 public
@@ -174,7 +175,9 @@ public
    real (kind=RealKind), private ::   EM_tol = 0.0000001d0
    real (kind=RealKind), private ::   EM_switch = 0.003
    integer (kind=IntKind), private :: sro_param_num = 0
+   integer (kind=IntKind), private :: next_nearest
    real (kind=RealKind), private, allocatable :: sro_params(:)
+   real (kind=RealKind), private, allocatable :: sro_params_nn(:)
 !
 contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -401,6 +404,18 @@ contains
          read(svalue,*) sro_params(1:sro_param_num)
       else if (rstatus /= 0  .and. isKKRCPASRO()) then
          call ErrorHandler('initScfData', 'SRO Parameters not found')
+      endif
+      rstatus = getKeyValue(tbl_id, 'Next Nearest', next_nearest)
+      if (rstatus == 0) then
+        if (next_nearest == 1) then
+          allocate(sro_params_nn(sro_param_num))
+          rstatus = getKeyValue(tbl_id, 'Next Nearest SRO Parameters', svalue)
+          if (rstatus == 0) then
+             read(svalue,*) sro_params_nn(1:sro_param_num)
+          else
+             call ErrorHandler('initScfData', 'Next Nearest SRO Parameters not given')
+          endif
+        endif
       endif
    else if (rstatus /= 0 .and. isKKRCPASRO()) then
       call ErrorHandler('initScfData','Number of SRO Parameters not found')
@@ -1394,17 +1409,36 @@ contains
 !  *******************************************************************
 !  
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
-   subroutine retrieveSROParams(sro_param_list, param_num)
+   function isNextNearestSRO() result(nn)
+!  ===================================================================
+   implicit none
+
+   integer(kind=IntKind) :: nn
+!
+   nn = next_nearest
+!
+   end function isNextNearestSRO
+!  ===================================================================
+!
+!  *******************************************************************
+!  
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
+   subroutine retrieveSROParams(sro_param_list, param_num, sro_param_list_nn)
 !  ===================================================================
    implicit none
 
    integer (kind=IntKind), intent(out) :: param_num
 !
    real (kind=RealKind), allocatable, intent(out) :: sro_param_list(:)
+   real (kind=RealKind), allocatable, intent(out), optional :: sro_param_list_nn(:)
 
    param_num = sro_param_num
    allocate(sro_param_list(param_num))
    sro_param_list = sro_params
+   if (present(sro_param_list_nn)) then
+     allocate(sro_param_list_nn(param_num))
+     sro_param_list_nn = sro_params_nn
+   endif
 !
    end subroutine retrieveSROParams
 !  ==================================================================
