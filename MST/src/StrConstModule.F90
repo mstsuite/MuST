@@ -106,6 +106,8 @@ module StrConstModule
 public :: initStrConst,      &
           endStrConst,       &
           getStrConstMatrix, &
+          checkFreeElectronPoles, &
+          getFreeElectronPoleFactor, &
           getFreeElectronPoleSum
 !
    interface initStrConst
@@ -171,6 +173,7 @@ private
    complex (kind=CmplxKind) :: kappa_sav
    complex (kind=CmplxKind) :: energy_new
    complex (kind=CmplxKind) :: kappa_new
+   complex (kind=CmplxKind) :: FEP_factor
 !
    integer (kind=IntKind), allocatable :: lofk(:)
    integer (kind=IntKind), allocatable :: mofk(:)
@@ -371,6 +374,8 @@ contains
 !
    ni_sav = 0
    nj_sav = 0
+!
+   FEP_factor = CONE
 !
    if (print_level >= 0) then
       write(6,'(80(''-''),/)')
@@ -596,6 +601,8 @@ contains
    ni_sav = 0
    nj_sav = 0
 !
+   FEP_factor = CONE
+!
    if (print_level >= 0) then
       write(6,'(80(''-''),/)')
    endif
@@ -644,6 +651,8 @@ contains
    kfac_allocated_full = .false.
    rylm_allocated_full = .false.
    rfac_allocated_full = .false.
+!
+   FEP_factor = CONE
 !
    end subroutine endStrConst
 !  ===================================================================
@@ -922,6 +931,7 @@ contains
             if (print_level >= 0) then
                write(6,'(/,'' Real space method, energy ='',2d15.8,/)')kappa_in*kappa_in
             endif
+            FEP_factor = CONE
          endif
       endif
 !     real_space_scheme=.true.
@@ -1299,6 +1309,7 @@ contains
             if (print_level >= 0) then
                write(6,'(/,'' Real space method, energy ='',2d15.8,/)')kappa_in*kappa_in
             endif
+            FEP_factor = CONE
          endif
       endif
 !     real_space_scheme=.true.
@@ -1595,7 +1606,7 @@ contains
 !                               n=0
 !     ================================================================
       if(imj.eq.0) then
-         dlke(1)=dlke(1)+d3term
+         dlke(1)=dlke(1)+d3term*FEP_factor
       endif
    else
 !     ================================================================
@@ -2142,7 +2153,7 @@ contains
       kst_done(n) = .true.
    endif
 !
-   dterm(1:kmax_dlm)=czero
+   dterm=czero
    do jkn=nknlat,1,-1
       xk(1)=knlat_x(jkn)+kvec(1)
       xk(2)=knlat_y(jkn)+kvec(2)
@@ -2151,16 +2162,20 @@ contains
 !     ================================================================
 !     Warning: fpol is related to the free electron poles.
 !     ================================================================
-      if(abs(fpol).lt.ten2m6) then
+!     if(abs(fpol).lt.ten2m6) then
 !        -------------------------------------------------------------
-         call WarningHandler(sname,'free electron pole is found',energy)
+!        call WarningHandler(sname,'free electron pole is found',energy)
 !        -------------------------------------------------------------
-         fpol=ten2m6
-      endif
+!        fpol=ten2m6
+!     endif
+      fpol = FEP_factor/fpol
 !     ================================================================
-      dterm(1:kmax_dlm)=dterm(1:kmax_dlm)+kfac_sav(1:kmax_dlm,jkn,np_kfac)/fpol
+      do kl = 1, kmax_dlm
+         dterm(kl)=dterm(kl)+kfac_sav(kl,jkn,np_kfac)*fpol
+      enddo
+!     dterm(1:kmax_dlm)=dterm(1:kmax_dlm)+kfac_sav(1:kmax_dlm,jkn,np_kfac)*fpol
 !     ----------------------------------------------------------------
-!     call zaxpy(kmax_dlm,cone/fpol,kfac_sav(1,jkn,np_kfac),1,dterm,1)
+!     call zaxpy(kmax_dlm,fpol,kfac_sav(1,jkn,np_kfac),1,dterm,1)
 !     ----------------------------------------------------------------
    end do
 !
@@ -2421,6 +2436,8 @@ contains
       enddo
    enddo
 !
+   dterm = FEP_factor*dterm
+!
    if (print_level.ge.2) then
       write(6,'(''    l    m                   dterm(k,e)'')')
       do kl=1,kmax_dlm
@@ -2495,6 +2512,81 @@ contains
    endif
 !
    end function knfunc
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine calFEPFactor(kvec,z)
+!  ===================================================================
+   implicit none
+!
+   logical :: found
+!
+   real (kind=RealKind), intent(in) :: kvec(3)
+   real (kind=RealKind) :: xk(3)
+   real (kind=RealKind), parameter :: ftol = 1.0d-2
+!
+   complex (kind=CmplxKind), intent(in) :: z
+   complex (kind=CmplxKind) :: fpol
+!
+   integer (kind=IntKind) :: jkn
+!
+   found = .false.
+   FEP_factor = CONE
+   do jkn = 1, nknlat
+      xk(1)=knlat_x(jkn)+kvec(1)
+      xk(2)=knlat_y(jkn)+kvec(2)
+      xk(3)=knlat_z(jkn)+kvec(3)
+      fpol=xk(1)*xk(1)+xk(2)*xk(2)+xk(3)*xk(3)-z
+      if (abs(fpol) < ftol) then
+         FEP_factor = FEP_factor*fpol
+         found = .true.
+      endif
+   enddo
+!
+   end subroutine calFEPFactor
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine checkFreeElectronPoles(kvec_in,kappa_in)
+!  ===================================================================
+!
+!  Calculate the free-electron pole factor, and returns the factor as 
+!  fepf.
+!
+!  *******************************************************************
+   implicit none
+!
+   real (kind=RealKind), intent(in) :: kvec_in(3)
+   real (kind=RealKind) :: kvec(3)
+!
+   complex (kind=CmplxKind), intent(in) :: kappa_in
+   complex (kind=CmplxKind) :: z
+!
+   kvec = kvec_in*ScalingFactor
+   z = (kappa_in*ScalingFactor)**2
+!  -------------------------------------------------------------------
+   call calFEPFactor(kvec,z)
+!  -------------------------------------------------------------------
+!
+   end subroutine checkFreeElectronPoles
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getFreeElectronPoleFactor() result (fepf)
+!  ===================================================================
+   implicit none
+!
+   complex (kind=CmplxKind) :: fepf
+!
+   fepf = FEP_factor
+!
+   end function getFreeElectronPoleFactor
 !  ===================================================================
 !
 !  *******************************************************************

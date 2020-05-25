@@ -89,6 +89,7 @@ public :: checkParameter,  &
    integer (kind=IntKind), parameter :: SimpleMixing = 0
    integer (kind=IntKind), parameter :: AndersonMixing = 1
    integer (kind=IntKind), parameter :: BroydenMixing = 2
+   integer (kind=IntKind), parameter :: AndersonMixingOld = 3
 !
 contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
