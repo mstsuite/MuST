@@ -3,7 +3,8 @@
 #=====================================================================
 # SystemName is the filename found under ./arch
 #=====================================================================
-SystemName = bolt_intel_accel
+# SystemName = bolt_intel_O3
+SystemName = bolt_intel
 
 #=====================================================================
 # Paths and internal libraries setup - This unlikely needs to be changed
@@ -85,9 +86,9 @@ endif
 ifndef LIBXC_PATH
 ADDITIONAL_TARGETS = libxc
 LIBXC_PATH = $(EXTERN_LIB_PATH)/libxc/LibXC
-endif
 ADD_LIBS  += -L$(LIBXC_PATH)/lib -lxcf90 -lxc
-FPPFLAGS += -DLIBXC -I$(LIBXC_PATH)/include
+FPPFLAGS += -DLIBXC5 -I$(LIBXC_PATH)/include
+endif
 
 ifndef Use_FFTW
 Use_FFTW = 1

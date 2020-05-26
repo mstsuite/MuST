@@ -4,7 +4,9 @@ module ParallelFFTModule
 ! 
    use KindParamModule, only : IntKind, RealKind, CmplxKind
    use ErrorHandlerModule, only : ErrorHandler
-#ifdef P3DFFT
+#ifdef P3DFFT3
+   use p3dfft_plus_plus
+#elif defined P3DFFT
    use p3dfft
 #else
    include 'fftw3.f'
@@ -111,7 +113,7 @@ contains
 !                       'Code PotentialGenerationModule needs to be redesigned')
 !  endif
 !  ===================================================================
-#ifdef P3DFFT
+#if defined P3DFFT || defined P3DFFT3
    MyPE_comm = getMyPE()
    NumPEs_comm = getNumPEs()
 #else
@@ -144,7 +146,7 @@ contains
          (pUG%cell(1,1)*pUG%cell(2,2)-pUG%cell(2,1)*pUG%cell(1,2))*pUG%cell(3,3)
    kstep = PI2/vol*kstep
 !
-#ifdef P3DFFT
+#if defined P3DFFT || defined P3DFFT3
    MeshType = 'pencil'
 !  ===================================================================
 !  nproc = the number of processors in the grid distribution mesh on
@@ -184,8 +186,10 @@ contains
       enddo
 !
       if (.not.found) then
+         write(6,'(a)')'Recommend to use less number of processors'
          call ErrorHandler('initParallelFFT',                         &
-                           'A processor mesh is not established for the given grid')
+                           'A processor mesh is not established for the given number of processors', &
+                           nproc)
       else if (MyPE_comm == 0) then
          write(6,'(/,a)')'*****************************************************'
          write(6,'(a)')  '*   Print out from subroutine createProcessorMesh   *'
@@ -204,12 +208,20 @@ contains
 !
    dims(1) = iproc
    dims(2) = jproc
+#ifdef P3DFFT3
+!  -------------------------------------------------------------------
+   call p3dfft_setup()
+   call p3dfft_init_3Dtype(type_rcc,type_ids1)
+   call p3dfft_init_grid(,comm)
+!  -------------------------------------------------------------------
+#else
 !  -------------------------------------------------------------------
    call p3dfft_setup(dims,na,nb,nc,comm)
    call p3dfft_get_dims(istart,iend,isize,1)
    call p3dfft_get_dims(fstart,fend,fsize,2)
    call p3dfft_get_dims(tstart,tend,memsize,3)
 !  -------------------------------------------------------------------
+#endif
    processor_mesh(1) = 1
    processor_mesh(2) = iproc
    processor_mesh(3) = jproc
@@ -346,7 +358,7 @@ contains
       endif
    endif
    id(1) = rgrid0_id; id(2) = kgrid0_id
-#ifdef P3DFFT
+#if defined P3DFFT || defined P3DFFT3
 !  -------------------------------------------------------------------
    call GlobalSum(id,2)
 !  -------------------------------------------------------------------
@@ -383,7 +395,9 @@ contains
 !  ===================================================================
    implicit none
 !
-#ifdef P3DFFT
+#ifdef P3DFFT3
+   call p3dfft_cleanup()
+#elif defined P3DFFT
    call p3dfft_clean()
 #endif
    Initialized = .false.
@@ -921,7 +935,8 @@ contains
 !
    real (kind=RealKind), pointer :: r3(:,:,:)
 !
-#ifndef P3DFFT
+#if defined P3DFFT || defined P3DFFT3
+#else
    real (kind=RealKind), allocatable ::  r1(:)
 !  type (C_PTR) :: c_func_fftwr
 !  real (kind=RealKind), pointer ::  r1(:)
@@ -942,11 +957,17 @@ contains
 !     ----------------------------------------------------------------
    endif
 !
-#ifdef P3DFFT
+#if defined P3DFFT || defined P3DFFT3
    r3 => aliasArray3_r(r,memsize(1),memsize(2),memsize(3))
+#ifdef P3DFFT3
+!  -------------------------------------------------------------------
+   call p3dfft_exec_3Dtrans_double(r3,r3,'fft')
+!  -------------------------------------------------------------------
+#else
 !  -------------------------------------------------------------------
    call ftran_r2c(r3,r3,'fft')
 !  -------------------------------------------------------------------
+#endif
    r = r/real(num_total_points,kind=RealKind)
 #else
    r3 => aliasArray3_r(r,isize(1),isize(2),isize(3))
