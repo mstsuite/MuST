@@ -32,6 +32,7 @@ public :: initScfData,                 &
           isKKR,                       &
           isKKRCPA,                    &
           isEmbeddedCluster,           &
+          isKKRCPASRO,                 &
           isScreenKKR_LSMS,            &
           isSingleSite,                &
           isFrozenCore,                &
@@ -55,6 +56,7 @@ public :: initScfData,                 &
           setSCFMethod,                &
           getPoleSearchStep,           &
           retreiveEffectiveMediumParams,   &
+          retrieveSROParams, &
           printScfData
 !
 public
@@ -139,6 +141,7 @@ public
    integer (kind=IntKind), parameter, private :: KKR = 2
    integer (kind=IntKind), parameter, private :: KKRCPA = 3
    integer (kind=IntKind), parameter, private :: EmbeddedCluster = 4
+   integer (kind=IntKind), parameter, private :: KKRCPASRO = 5
 !
    integer (kind=IntKind), private :: read_emesh = 0
    integer (kind=IntKind), private :: read_kmesh = 0
@@ -171,6 +174,10 @@ public
    real (kind=RealKind), private ::   EM_mix_1 = 0.01d0
    real (kind=RealKind), private ::   EM_tol = 0.0000001d0
    real (kind=RealKind), private ::   EM_switch = 0.003
+   integer (kind=IntKind), private :: sro_param_num = 0
+   integer (kind=IntKind), private :: next_nearest
+   real (kind=RealKind), private, allocatable :: sro_params(:)
+   real (kind=RealKind), private, allocatable :: sro_params_nn(:)
 !
 contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -184,6 +191,7 @@ contains
    integer (kind=IntKind), intent(in) :: tbl_id
 !
    integer (kind=IntKind) :: rstatus, n
+   character(len=120) :: svalue
 !
    character (len=50) :: s50
 !
@@ -387,6 +395,32 @@ contains
 !
    rstatus = getKeyValue(tbl_id,'Effective Medium Mixing Scheme',EM_mix_type)
    rstatus = getKeyValue(tbl_id,'Maximum Effective Medium Iterations',EM_max_iter)
+   rstatus = getKeyValue(tbl_id,'Number of SRO Parameters', sro_param_num)
+   
+   if (rstatus == 0) then
+      allocate(sro_params(sro_param_num))
+      rstatus = getKeyValue(tbl_id,'SRO Parameters',svalue)
+      if (rstatus == 0) then
+         read(svalue,*) sro_params(1:sro_param_num)
+      else if (rstatus /= 0  .and. isKKRCPASRO()) then
+         call ErrorHandler('initScfData', 'SRO Parameters not found')
+      endif
+      rstatus = getKeyValue(tbl_id, 'Next Nearest', next_nearest)
+      if (rstatus == 0) then
+        if (next_nearest == 1) then
+          allocate(sro_params_nn(sro_param_num))
+          rstatus = getKeyValue(tbl_id, 'Next Nearest SRO Parameters', svalue)
+          if (rstatus == 0) then
+             read(svalue,*) sro_params_nn(1:sro_param_num)
+          else
+             call ErrorHandler('initScfData', 'Next Nearest SRO Parameters not given')
+          endif
+        endif
+      endif
+   else if (rstatus /= 0 .and. isKKRCPASRO()) then
+      call ErrorHandler('initScfData','Number of SRO Parameters not found')
+   endif
+
    if ( getKeyValue(tbl_id,'Effective Medium Mixing Parameters',2,rp) == 0) then
       EM_mix_0 = rp(1); EM_mix_1 = rp(2)
    else
@@ -713,6 +747,22 @@ contains
        md = .false.
    endif
    end function isEmbeddedCluster
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isKKRCPASRO() result(md)
+!  ===================================================================
+   implicit none
+   logical :: md
+!
+   if (scf_method == KKRCPASRO) then
+       md = .true.
+   else
+       md = .false.
+   endif
+   end function isKKRCPASRO
 !  ===================================================================
 !
 !  *******************************************************************
@@ -1355,4 +1405,41 @@ contains
 !
    end subroutine retrieveEffectiveMediumParams
 !  ===================================================================
+!  
+!  *******************************************************************
+!  
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
+   function isNextNearestSRO() result(nn)
+!  ===================================================================
+   implicit none
+
+   integer(kind=IntKind) :: nn
+!
+   nn = next_nearest
+!
+   end function isNextNearestSRO
+!  ===================================================================
+!
+!  *******************************************************************
+!  
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
+   subroutine retrieveSROParams(sro_param_list, param_num, sro_param_list_nn)
+!  ===================================================================
+   implicit none
+
+   integer (kind=IntKind), intent(out) :: param_num
+!
+   real (kind=RealKind), allocatable, intent(out) :: sro_param_list(:)
+   real (kind=RealKind), allocatable, intent(out), optional :: sro_param_list_nn(:)
+
+   param_num = sro_param_num
+   allocate(sro_param_list(param_num))
+   sro_param_list = sro_params
+   if (present(sro_param_list_nn)) then
+     allocate(sro_param_list_nn(param_num))
+     sro_param_list_nn = sro_params_nn
+   endif
+!
+   end subroutine retrieveSROParams
+!  ==================================================================
 end module ScfDataModule

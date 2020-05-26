@@ -203,7 +203,7 @@ contains
    use PublicParamDefinitionsModule, only : ASA, MuffinTin, MuffinTinASA
    use Atom2ProcModule, only : getLocalNumAtoms, getGlobalIndex
    use InputModule, only : getKeyValue, getKeyIndexValue
-   use ScfDataModule, only : inputpath, isKKRCPA,  getPotentialTypeParam
+   use ScfDataModule, only : inputpath, isKKRCPA, isKKRCPASRO, getPotentialTypeParam
    use SystemModule, only : getNumAtoms, getNumAlloyElements, getAlloyElementContent
    use SystemModule, only : getAlloyElementName
    use SystemModule, only : getAtomPosition
@@ -620,7 +620,7 @@ contains
       ig = getGlobalIndex(n)
       AtomProperty(n)%GlobalIndex = ig
       AtomProperty(n)%NumSpecies = getNumAlloyElements(ig)
-      if (AtomProperty(n)%NumSpecies > 1 .and. .not. isKKRCPA()) then
+      if (AtomProperty(n)%NumSpecies > 1 .and. .not. isKKRCPA() .and. .not. isKKRCPASRO()) then
 !        -------------------------------------------------------------
          call ErrorHandler('initAtomModule','Number of Species > 1 for global index',ig)
 !        -------------------------------------------------------------

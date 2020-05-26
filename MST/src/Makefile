@@ -80,9 +80,10 @@ Modules_2 = \
 LatticeModule.o \
 IBZRotationModule.o \
 ClusterMatrixModule.o \
+MediumHostModule.o \
+SROModule.o \
 CrystalMatrixModule.o \
 AccelerateCPAModule.o \
-MediumHostModule.o \
 EmbeddedClusterModule.o \
 CPAMediumModule.o \
 BandStructureModule.o \
