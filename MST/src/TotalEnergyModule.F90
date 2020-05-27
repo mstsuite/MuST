@@ -468,10 +468,10 @@ contains
                write(6,'(51x,a)')'At Rmt            At Rcs'
                write(6,'(a,18x,2f18.8)')'R_mesh                  =',r_mesh(Grid%jmt),r_mesh(Grid%jend)
                write(6,'(a,3f18.8)')    'Deep core E, int[rho*v] =',      &
-                 getDeepCoreEnergy(na,is), fact1, vint_mt
+                 getDeepCoreEnergy(na,is), vint_mt, fact1
                write(6,'(a,3f18.8)')    'Deep core K.E.          =',      &
-                 getDeepCoreKineticEnergy(na,ia,is), getDeepCoreEnergy(na,is)-fact1, &
-                 getDeepCoreEnergy(na,is)-vint_mt
+                 getDeepCoreKineticEnergy(na,ia,is), getDeepCoreEnergy(na,is)-vint_mt, &
+                 getDeepCoreEnergy(na,is)-fact1
             endif
 !
             rho_sph => getSemiCoreDensity(na,ia,is)
@@ -716,8 +716,8 @@ contains
          write(6,'(a,f18.8)') 'Kinetic energy term     = ', kine_term
          write(6,'(a,f18.8)') 'Coulomb energy term     = ', rhov_term_e+onsite_term
          write(6,'(a,f18.8)') 'Exc energy term         = ', exc_term
-         write(6,'(a,f18.8)') 'Exc energy term in MT   = ', exc_term_mt
-         write(6,'(a,f18.8)') 'Exc energy term in VP-MT= ', exc_term-exc_term_mt
+         write(6,'(a,f18.8)') 'Exc energy term in IS   = ', exc_term_mt
+         write(6,'(a,f18.8)') 'Exc energy term in VP-IS= ', exc_term-exc_term_mt
          write(6,'(a)') 'Energy terms break up:'
          do is = 1, n_spin_pola
             write(6,'(a,f18.8)') 'Band energy             = ',getBandEnergy(na,is)
@@ -1898,7 +1898,7 @@ contains
       write(6,'(i5,2x,f12.5)')i,SiteEnPres(1,i)
       sum_en = sum_en + SiteEnPres(1,i)
    enddo
-   write(6,'(/,a,f12.5)')'Sum of Local energy: ',sum_en
+   write(6,'(/,a,f12.5)')'Sum of Local energy on my process: ',sum_en
    write(6,'(80(''=''))')
 #ifdef DEBUG_EPRINT
    if (GlobalNumAtoms == NumVacancies) then

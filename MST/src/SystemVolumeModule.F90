@@ -383,8 +383,9 @@ contains
    TotalInterstitialVolume = ZERO
    do i=1,LocalNumAtoms
       ig=getGlobalIndex(i,MyPEinGroup)
-      TotalInterstitialVolume = AtomicVoronoiPolyhedraVolume(ig) -    &
-                                  AtomicMuffintinVolume(ig)
+      TotalInterstitialVolume = TotalInterstitialVolume +             &
+                                AtomicVoronoiPolyhedraVolume(ig) -    &
+                                AtomicMuffintinVolume(ig)
    enddo
 !  -------------------------------------------------------------------
    call GlobalSumInGroup(id,TotalInterstitialVolume)

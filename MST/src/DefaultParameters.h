@@ -235,6 +235,12 @@
 !                     = 1: Using the implicit muffin-tin radius defined in ChemElementModule
 !                     = A specific real value (> 0.0, in atomic units)
    n = n + 1; Keys(n) = 'Default Radical Plane Ratio';           Values(n) = '0.000'
+   n = n + 1; Keys(n) = 'Uniform Grid Origin';                   Values(n) = '0'
+!                     = 0: Using unit cell corner             
+!                     = 1: Using Unit cell center
+   n = n + 1; Keys(n) = 'Core States Normalization Range';       Values(n) = '0'
+!                     = 0: Up to bounding sphere radius
+!                     = 1: Up to infinity
 !  =============================================================================
 !  Additional input parameters can be added to this table using the 
 !  following format:

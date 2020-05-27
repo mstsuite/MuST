@@ -142,6 +142,7 @@ private
    integer (kind=IntKind) :: MyPEinGroup
    integer (kind=IntKind) :: LargeRsMult
    integer (kind=IntKind) :: lmax_core = 0
+   integer (kind=IntKind) :: norm2inf = 0
 !
    real (kind=RealKind) :: MyLightSpeed
    real (kind=RealKind) :: cinv
@@ -189,6 +190,8 @@ contains
 !
    use PotentialTypeModule, only : isFullPotential
 !
+   use InputModule, only : getKeyValue
+!
    implicit none
 !
    logical, intent(in) :: isNonRel
@@ -234,6 +237,16 @@ contains
 !
    stop_routine = istop
    print_level = iprint
+!
+!  ===================================================================
+!  Normalizing to infinity seems problematic for heavy elements,
+!  so we make it as a non-default setting. That is, by default, the
+!  core states will be normalized to the bounding sphere radius
+!  ===================================================================
+   if (getKeyValue(1,'Core States Normalization Range',norm2inf) /= 0) then
+      norm2inf = 0
+   endif
+!  ===================================================================
 !
    TotalInterstitialCoreVol = ZERO
 !
@@ -1584,6 +1597,9 @@ contains
       nws = getRadialGridPoint(id,rws)
 !012620===============================
       last=Core(id)%rsize      ! Definition of last: the final mesh point.
+      if (print_level >= 1) then
+         write(6,'(a,4i5,2x,f12.8)')'id,jmt,nws,last,rws = ',id,jmt,nws,last,rws
+      endif
 !
 !     ----------------------------------------------------------------
       call dcopy(jend_plus_n,Core(id)%Grid%r_mesh,1,Core(id)%r_mesh,1)
@@ -2205,26 +2221,30 @@ contains
 !     ----------------------------------------------------------------
       call calIntegration(last2+1,sqrt_r(0:last2),ftmp(0:last2),qmp(0:last2),3)
 !     ----------------------------------------------------------------
-#ifdef CoreNorm2Inf
-!     ================================================================
-!     Normalizing to infinity seems problematic for heavy elements, so we
-!     make it as a non-default setting.
-!     ----------------------------------------------------------------
-      call IntegrateSphHankelSq(Core(id)%lc(i,ia),r(last2),Core(id)%ec(i,is,ia),norm_frac)
-!     ----------------------------------------------------------------
-      if (print_level >= 0) then
-!        write(6,'(a,3i4,2(a,d15.8),a,2d15.8)')'nc, lc, kc = ',       &
-         write(6,'(a,3i4,a,d15.8)')'nc, lc, kc = ',                   &
-               Core(id)%nc(i,ia),Core(id)%lc(i,ia),Core(id)%kc(i,ia), &
-               ', [Int[Rho] from Rc to Inf.]/[Int[Rho] from 0 to Rc] = ',HALF*norm_frac*h2nrm/qmp(last2)
-!              ', Int[rho] beyond Rc = ', PI4*norm_frac*h2nrm,        &
-!              ', Int[Rho] within Rc = ',TWO*PI4*qmp(last2),          &
-!              ', norm_frac, h2nrm = ',norm_frac,h2nrm
+      if (norm2inf == 1) then
+!        =============================================================
+!        Normalizing to infinity
+!        -------------------------------------------------------------
+         call IntegrateSphHankelSq(Core(id)%lc(i,ia),r(last2),Core(id)%ec(i,is,ia),norm_frac)
+!        -------------------------------------------------------------
+         if (print_level >= 0) then
+!           write(6,'(a,3i4,2(a,d15.8),a,2d15.8)')'nc, lc, kc = ',       &
+            write(6,'(a,3i4,a,d15.8)')'nc, lc, kc = ',                   &
+                  Core(id)%nc(i,ia),Core(id)%lc(i,ia),Core(id)%kc(i,ia), &
+                  ', [Int[Rho] from Rc to Inf.]/[Int[Rho] from 0 to Rc] = ', &
+                  HALF*norm_frac*h2nrm/qmp(last2)
+!                 ', Int[rho] beyond Rc = ', PI4*norm_frac*h2nrm,        &
+!                 ', Int[Rho] within Rc = ',TWO*PI4*qmp(last2),          &
+!                 ', norm_frac, h2nrm = ',norm_frac,h2nrm
+         endif
+         gnrm=ONE/(TWO*PI4*qmp(last2)+PI4*norm_frac*h2nrm) ! Normalized to R = infinity
+!        =============================================================
+      else
+!        =============================================================
+!        Normalizing to R = r(last2)
+!        =============================================================
+         gnrm=ONE/(TWO*PI4*qmp(last2))
       endif
-      gnrm=ONE/(TWO*PI4*qmp(last2)+PI4*norm_frac*h2nrm) ! Normalized to R = infinity
-#else
-      gnrm=ONE/(TWO*PI4*qmp(last2)) ! Normalized to R = r(last2)
-#endif
       do j=1,last2
          ftmp(j)=ftmp(j)*gnrm/r(j)    ! get rid off another factor r so that
                                       ! at this stage, ftmp is just density

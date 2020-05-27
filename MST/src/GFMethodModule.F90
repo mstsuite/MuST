@@ -5011,27 +5011,28 @@ contains
       if (node_print_level >= 0) then
          write(6,'(/,a,d17.8,/)')'WARNING :: tnen = ',tnen
       endif
+!  ===================================================================
+!  The following code is prior to 05/27/2020
 !  else if (abs(xtws/tnen) > 0.50d0) then
-   else if (abs(xtws/tnen) > 0.050d0) then
-!     ----------------------------------------------------------------
-!     call random_number(r) ! Use random number as a scaling factor to 
-!                           ! set the estimate of the next Fermi energy.
-!                           ! This could help to avoid charge sloshing problem.
-!     ----------------------------------------------------------------
-!     r = HALF
-      r = ONE
-      if (xtws > ZERO) then
-         efdif =-r*min(0.01d0,xtws)
-      else
-         efdif = r*min(0.01d0,-xtws)
-      endif
+!     if (xtws > ZERO) then
+!        efdif =-r*min(0.01d0,xtws)
+!     else
+!        efdif = r*min(0.01d0,-xtws)
+!     endif
 !     ================================================================
 !     An average of efdif is needed since r may be different on different
 !     processors
 !     ----------------------------------------------------------------
-      call GlobalSumInGroup(aGID,efdif)
+!     call GlobalSumInGroup(aGID,efdif)
 !     ----------------------------------------------------------------
-      efermi = efermi_old + efdif/real(NumPEsInAGroup,kind=RealKind)
+!     efermi = efermi_old + efdif/real(NumPEsInAGroup,kind=RealKind)
+!  ===================================================================
+!  The following code added on 05/27/2020 to modify the way the
+!  new Fermi energy is determined
+!  ===================================================================
+   else if (abs(xtws/tnen) > 0.010d0) then
+      r = 0.5d0              ! r is essentially a mixing parameter
+      efermi = efermi_old -r*xtws/tnen
       if ( node_print_level >= 0) then
          write(6,'(/,a,4d17.8,/)')'tnen,xtws,x/t,r = ',tnen,xtws,xtws/tnen,r
       endif

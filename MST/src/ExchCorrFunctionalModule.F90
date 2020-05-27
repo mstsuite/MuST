@@ -112,7 +112,7 @@ contains
    character (len=*), intent(in) :: excorr_name
    integer (kind=IntKind), intent(in) :: pola, iprint
 #ifdef LIBXC5
-   integer (kind=IntKind) :: vmajor, vminor, vmicro, fid1, fid2, i, n
+   integer (kind=IntKind) :: vmajor, vminor, vmicro, fid1, fid2, i, n, j
    character (len=40) :: fname1, fname2, fname
    character (len=120) :: func_name, func_kind, func_family, ref
    TYPE(xc_f90_func_t), pointer :: xc_func_p
@@ -476,10 +476,10 @@ contains
                trim(func_name), trim(func_kind), trim(func_family)
          i = 0
 #if defined LIBXC5
-         ref = xc_f90_func_reference_get_ref(xc_f90_func_info_get_references(xc_info_p, i))
          do while(i >= 0)
-            write(6,'(a,i1,2a)') "[", i, "] ", trim(ref)
+            j = i + 1
             ref = xc_f90_func_reference_get_ref(xc_f90_func_info_get_references(xc_info_p, i))
+            write(6,'(a,i1,2a)') "[", j, "] ", trim(ref)
          end do
 #else
          call xc_f90_info_refs(xc_info_p, i, ref)
