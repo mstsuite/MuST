@@ -81,7 +81,6 @@ program testNeighbor
    use AtomModule, only : initAtom, endAtom
    use AtomModule, only : getMaxLmax, printAtom
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
-   use AtomModule, only : getGridData
    use AtomModule, only : getLocalAtomName, getLocalAtomicNumber
    use AtomModule, only : getLocalAtomPosition
    use AtomModule, only : getMixingParam4Evec

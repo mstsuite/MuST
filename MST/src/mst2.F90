@@ -57,7 +57,7 @@ program mst2
    use PotentialModule, only : readPotential, writePotential
    use PotentialModule, only : getPotEf, setV0, printPot_L
    use PotentialModule, only : setPotential, setPotEf
-   use PotentialModule, only : isSphericalInputFile, setPotentialOutsideMT
+   use PotentialModule, only : isSphericalInputFile
 !
    use TestPotentialModule, only : initTestPotential,  &
                                    endTestPotential,   &
@@ -140,7 +140,7 @@ program mst2
    use AtomModule, only : getMaxLmax, printAtom, getStepFuncLmax
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
    use AtomModule, only : getTruncPotLmax
-   use AtomModule, only : getGridData, getMuffinTinRadius, setMuffinTinRadius
+   use AtomModule, only : getRadialGridData, getMuffinTinRadius, setMuffinTinRadius
    use AtomModule, only : getLocalAtomName, getLocalAtomicNumber
    use AtomModule, only : getLocalNumSpecies, getLocalSpeciesContent
    use AtomModule, only : getLocalAtomNickName, printAtomMomentInfo
@@ -311,7 +311,7 @@ program mst2
    real (kind=RealKind) :: vcell(3,3), vorigin(3)
    real (kind=RealKind) :: bravais(3,3)
    real (kind=RealKind) :: alat
-   real (kind=RealKind) :: rmt, rinsc, rend, rws
+   real (kind=RealKind) :: rmt, rinsc, rend, rws, hin
    real (kind=RealKind) :: Efermi, volume, cfac
    real (kind=RealKind) :: v0, val, evb
    real (kind=RealKind) :: t0, t1, t2, t3
@@ -657,7 +657,8 @@ program mst2
    call initOutput(def_id)
 !  -------------------------------------------------------------------
    node_print_level = getStandardOutputLevel()
-   call setErrorOutput(1)
+   call setErrorOutput(e_print_level=1,w_print_level=node_print_level,&
+                       m_print_level=node_print_level)
 !  -------------------------------------------------------------------
 !
    allocate(atom_print_level(1:LocalNumAtoms))
@@ -873,7 +874,7 @@ program mst2
    do i=1,LocalNumAtoms
       ig=GlobalIndex(i)
 !     ----------------------------------------------------------------
-      call getGridData(i,ndivin,ndivout,nmult)
+      call getRadialGridData(i,ndivin,ndivout,nmult,hin)
 !     ----------------------------------------------------------------
 !     call genPolyhedron(i,ig,NumAtoms,AtomPosition)
 !     ----------------------------------------------------------------
@@ -893,7 +894,8 @@ program mst2
       if (isMuffinTinPotential() .or. isMuffinTinTestPotential()) then
          rinsc = getInscrSphRadius(i)
          if (rmt - rinsc > TEN2m6) then
-            call WarningHandler('main','rinsc < rmt',rinsc,rmt)
+            call WarningHandler('main','rinsc < rmt, rmt is reset to rinsc',rinsc,rmt)
+            rmt = rinsc
          endif
          rws = getWignerSeitzRadius(i)
 !         volume = PI4*THIRD*(rws**3)
@@ -917,7 +919,7 @@ program mst2
 !        ========================================================
 !        -------------------------------------------------------------
 !011820  call genRadialGrid( i, xstart, rmt, rinsc, rws, rend, ndivin)
-         call genRadialGrid( i, rmt, rend, ndivin)
+         call genRadialGrid( i, rmt, rinsc, rend, ndivin)
 !        -------------------------------------------------------------
       else if (isASAPotential() ) then
 !        rend =  getWignerSeitzRadius(i)
@@ -966,7 +968,7 @@ program mst2
 !        -------------------------------------------------------------
 !!!      call genRadialGrid( i, xstart, rmt, rinsc, rws, rend, ndivin )
 !01252020call genRadialGrid( i, rmt, rinsc, rws, rend, ndivin, ndivout, nmult)
-         call genRadialGrid( i, rmt, rend, ndivin)
+         call genRadialGrid( i, rmt, rinsc, rend, ndivin)
 !        -------------------------------------------------------------
       endif
       if (atom_print_level(i) >= 0) then

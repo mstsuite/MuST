@@ -83,7 +83,7 @@ program testSineMatrixPole
    use AtomModule, only : initAtom, endAtom
    use AtomModule, only : printAtom, getStepFuncLmax
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
-   use AtomModule, only : getGridData, getLocalEvec, getMuffinTinRadius
+   use AtomModule, only : getRadialGridData, getLocalEvec, getMuffinTinRadius
    use AtomModule, only : getLocalNumSpecies, getLocalAtomicNumber
 !
    use SphericalHarmonicsModule, only : initSphericalHarmonics
@@ -134,7 +134,7 @@ program testSineMatrixPole
 !
    real (kind=RealKind) :: Efermi
    real (kind=RealKind) :: t0, t1, t2, t3
-   real (kind=RealKind) :: rmt, rend, rws, rinsc
+   real (kind=RealKind) :: rmt, rend, rws, rinsc, hin
 !
    real (kind=RealKind), parameter :: xstart = -.1113096740000D+02
 !  real (kind=RealKind), parameter :: xstart = -.913096740000D+01
@@ -280,7 +280,7 @@ program testSineMatrixPole
       ig=getGlobalIndex(i)
       GlobalIndex(i)=ig
 !     ----------------------------------------------------------------
-      call getGridData(i,ndivin,ndivout,nmult)
+      call getRadialGridData(i,ndivin,ndivout,nmult,hin)
 !     ----------------------------------------------------------------
 !     call genPolyhedron(i,ig,NumAtoms,AtomPosition)
 !     ----------------------------------------------------------------

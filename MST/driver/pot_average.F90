@@ -69,7 +69,7 @@ program pot_average
    use AtomModule, only : initAtom, endAtom
    use AtomModule, only : getMaxLmax, printAtom
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
-   use AtomModule, only : getGridData
+   use AtomModule, only : getRadialGridData
    use AtomModule, only : getLocalAtomPosition
 !
    use SphericalHarmonicsModule, only : initSphericalHarmonics
@@ -120,7 +120,7 @@ program pot_average
    real (kind=RealKind), allocatable :: AtomPosition(:,:)
 !
    real (kind=RealKind) :: bravais(3,3)
-   real (kind=RealKind) :: rmt, rend
+   real (kind=RealKind) :: rmt, rend, hin
    real (kind=RealKind) :: t0, t1, t2, t3
    real (kind=RealKind) :: pot_aver(2)
    real (kind=RealKind), pointer :: r_mesh(:)
@@ -265,7 +265,7 @@ program pot_average
    do i=1,LocalNumAtoms
       ig=getGlobalIndex(i,MyPE)
 !     ----------------------------------------------------------------
-      call getGridData(i,ndivin,ndivout,nmult)
+      call getRadialGridData(i,ndivin,ndivout,nmult,hin)
 !     ----------------------------------------------------------------
 !     call genPolyhedron(i,ig,NumAtoms,AtomPosition)
 !     ----------------------------------------------------------------

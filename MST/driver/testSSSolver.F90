@@ -74,7 +74,7 @@ program testSSSolver
 !
    use AtomModule, only : getStepFuncLmax, setTruncPotLmax, setPotLmax
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
-   use AtomModule, only : getGridData, getLocalEvec, getMuffinTinRadius
+   use AtomModule, only : getRadialGridData, getLocalEvec, getMuffinTinRadius
    use AtomModule, only : getLocalNumSpecies, getLocalAtomicNumber
 !
    use SphericalHarmonicsModule, only : initSphericalHarmonics
@@ -168,7 +168,7 @@ program testSSSolver
 !
    real (kind=RealKind) :: Efermi, v0, re, vol
    real (kind=RealKind) :: t0, t1, t2, t3
-   real (kind=RealKind) :: rmt, rend, rws, rinsc, Rb, si, sr
+   real (kind=RealKind) :: rmt, rend, rws, rinsc, Rb, si, sr, hin
    real (kind=RealKind) :: dos, sfac, dos_mt, dos_tmp, intdos, intdos0, intdos1, corr, corr_rb, phase
    real (kind=RealKind), allocatable :: diags(:), diags_e(:,:,:,:), phase_e(:,:,:)
 !
@@ -301,7 +301,7 @@ program testSSSolver
       ig=getGlobalIndex(i)
       GlobalIndex(i)=ig
 !     ----------------------------------------------------------------
-      call getGridData(i,ndivin,ndivout,nmult)
+      call getRadialGridData(i,ndivin,ndivout,nmult,hin)
 !     ----------------------------------------------------------------
 !     call genPolyhedron(i,ig,NumAtoms,AtomPosition)
 !     ----------------------------------------------------------------

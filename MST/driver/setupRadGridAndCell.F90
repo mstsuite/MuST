@@ -22,7 +22,7 @@ subroutine setupRadGridAndCell(LocalNumAtoms,lmax_max)
    use StepFunctionModule, only : initStepFunction
    use StepFunctionModule, only : printStepFunction, testStepFunction
 !
-   use AtomModule, only : getGridData, getMuffinTinRadius
+   use AtomModule, only : getRadialGridData, getMuffinTinRadius
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax, getStepFuncLmax
 !
    use OutputModule, only : getStandardOutputLevel
@@ -34,7 +34,7 @@ subroutine setupRadGridAndCell(LocalNumAtoms,lmax_max)
    integer (kind=IntKind) :: ndivin, ndivout, nmult
    integer (kind=IntKind), allocatable :: ngr(:), ngt(:), lmax_step(:)
 !
-   real (kind=RealKind) :: rmt, rend, rws, rinsc
+   real (kind=RealKind) :: rmt, rend, rws, rinsc, hin
    real (kind=RealKind), parameter :: xstart = -.1113096740000D+02
 !
 !  ===================================================================
@@ -45,7 +45,7 @@ subroutine setupRadGridAndCell(LocalNumAtoms,lmax_max)
 !
    do i=1,LocalNumAtoms
 !     ----------------------------------------------------------------
-      call getGridData(i,ndivin,ndivout,nmult)
+      call getRadialGridData(i,ndivin,ndivout,nmult,hin)
 !     ----------------------------------------------------------------
       if (getStandardOutputLevel(i) >= 0) then
 !        -------------------------------------------------------------
@@ -84,7 +84,7 @@ subroutine setupRadGridAndCell(LocalNumAtoms,lmax_max)
 !        ========================================================
 !        -------------------------------------------------------------
 !011820  call genRadialGrid( i, xstart, rmt, rinsc, rws, rend, ndivin)
-         call genRadialGrid( i, rmt, rend, ndivin)
+         call genRadialGrid( i, rmt, rinsc, rend, ndivin)
 !        -------------------------------------------------------------
       else if (isASAPotential() ) then
 !        rend =  getWignerSeitzRadius(i)
@@ -122,7 +122,7 @@ subroutine setupRadGridAndCell(LocalNumAtoms,lmax_max)
          endif
          rinsc = getInscrSphRadius(i)
          rws = getWignerSeitzRadius(i)
-         call genRadialGrid( i, rmt, rend, ndivin)
+         call genRadialGrid( i, rmt, rinsc, rend, ndivin)
 !        if ( rmt < 0.010d0 ) then
 !           rmt = getInscrSphRadius(i)
 !        endif
