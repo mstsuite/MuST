@@ -58,7 +58,7 @@ program SingleSiteKrein
 !
    use AtomModule, only : getStepFuncLmax, setTruncPotLmax, setPotLmax
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
-   use AtomModule, only : getGridData, getMuffinTinRadius
+   use AtomModule, only : getRadialGridData, getMuffinTinRadius
    use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies
 !
    use SphericalHarmonicsModule, only : initSphericalHarmonics
@@ -143,7 +143,7 @@ program SingleSiteKrein
    real (kind=RealKind), pointer :: r_mesh(:), p_val(:)
    real (kind=RealKind), pointer :: potr_0(:)
 !
-   real (kind=RealKind) :: re, vol, de
+   real (kind=RealKind) :: re, vol, de, hin
    real (kind=RealKind) :: t0, t1, t2, t3
    real (kind=RealKind) :: rmt, rend, rws, rinsc, Rb, si, sr
    real (kind=RealKind) :: dos, sfac, dos_mt, dos_tmp, intdos, intdos0, intdos1, corr, corr_rb, phase
@@ -262,7 +262,7 @@ program SingleSiteKrein
       ig=getGlobalIndex(i)
       GlobalIndex(i)=ig
 !     ----------------------------------------------------------------
-      call getGridData(i,ndivin,ndivout,nmult)
+      call getRadialGridData(i,ndivin,ndivout,nmult,hin)
 !     ----------------------------------------------------------------
       if (atom_print_level(i) >= 0) then
 !        -------------------------------------------------------------

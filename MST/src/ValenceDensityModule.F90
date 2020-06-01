@@ -542,8 +542,10 @@ contains
                q_VP=getVolumeIntegration( id, nr, Density(id)%Grid%r_mesh(1:nr),&
                                           klmax, jlmax, 0, Density(id)%rho_l(1:nr,1:jlmax,ia), q_MT )
 !              -------------------------------------------------------
-               write(6,'(4x,a,t40,a,2f18.11)')                                  &
-                     'Integrated Electron Density in VP','=',q_VP, q_MT
+               write(6,'(4x,a,t40,a,f18.11)')                                  &
+                     'Integrated Electron Density in VP','=',q_VP
+               write(6,'(4x,a,t40,a,f18.11)')                                  &
+                     'Integrated ED in Inscribed Sphere','=',q_MT
                write(6,'(4x,a,t40,a,3f18.11)')                                 &
                      'Integrated Moment Density in MT','=',Density(id)%MomentMT(:,ia)
                write(6,'(4x,a,t40,a,3f18.11)')                                 &

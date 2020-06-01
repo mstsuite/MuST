@@ -83,7 +83,7 @@ program testParallelIO
    use AtomModule, only : initAtom, endAtom
    use AtomModule, only : printAtom
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
-   use AtomModule, only : getGridData, getLocalNumSpecies
+   use AtomModule, only : getRadialGridData, getLocalNumSpecies
 !
    use SphericalHarmonicsModule, only : initSphericalHarmonics
    use SphericalHarmonicsModule, only : endSphericalHarmonics
@@ -130,7 +130,7 @@ program testParallelIO
    real (kind=RealKind), pointer :: mom0_new(:,:)
 !
    real (kind=RealKind) :: Efermi
-   real (kind=RealKind) :: t0, t1, t2, t3
+   real (kind=RealKind) :: t0, t1, t2, t3, hin
 !
    real (kind=RealKind), parameter :: xstart = -.1113096740000D+02
 !  real (kind=RealKind), parameter :: xstart = -.913096740000D+01
@@ -264,7 +264,7 @@ program testParallelIO
       ig=getGlobalIndex(i)
       GlobalIndex(i)=ig
 !     ----------------------------------------------------------------
-      call getGridData(i,ndivin,ndivout,nmult)
+      call getRadialGridData(i,ndivin,ndivout,nmult,hin)
 !     ----------------------------------------------------------------
       call genPolyhedron(i,ig,NumAtoms,AtomPosition)
 !     ----------------------------------------------------------------

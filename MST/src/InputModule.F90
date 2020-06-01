@@ -30,6 +30,7 @@ public :: initInput,       &
           openInputFile,   &
           readInputData,   &
           closeInputFile,  &
+          getNumInputTables, &
           getTableName,    &
           getTableIndex,   &
           printKeyNames,   &
@@ -466,6 +467,20 @@ endif
    call SyncAllPEs()
 !
    end subroutine closeInputFile
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getNumInputTables() result(n)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind) :: n
+!
+   n = NumInputTables
+!
+   end function getNumInputTables
 !  ===================================================================
 !
 !  *******************************************************************

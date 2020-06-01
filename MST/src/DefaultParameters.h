@@ -204,6 +204,9 @@
 !                     = 0: Not specified; > 0: Speciflied. Note: rmt < r(j)=exp(j*hout) <= rmax, j=1,2,...,ndivout
    n = n + 1; Keys(n) = 'Default Integer Factor nmult';          Values(n) = '1'
 !                     = 0: Not specified; > 0: Speciflied. Note: r(j) = exp(j*h), hin = nmult*hout
+   n = n + 1; Keys(n) = 'Default Radial Grid Exponential Step';  Values(n) = '0.0'
+!                     = 0.0: Not specified; 
+!                     > 0.0: 0.005 - 0.02 is recommended. Note: r(j) = exp(j*h), here h is the exponential step
    n = n + 1; Keys(n) = 'Default Pseudo Charge Radius';          Values(n) = '0.9'
 !             Note: This is the ratio of the pseudo charge radius and the muffin-tin radius
    n = n + 1; Keys(n) = 'Default Screen Pot.';                   Values(n) = '3.0'
@@ -235,6 +238,12 @@
 !                     = 1: Using the implicit muffin-tin radius defined in ChemElementModule
 !                     = A specific real value (> 0.0, in atomic units)
    n = n + 1; Keys(n) = 'Default Radical Plane Ratio';           Values(n) = '0.000'
+   n = n + 1; Keys(n) = 'Uniform Grid Origin';                   Values(n) = '0'
+!                     = 0: Using unit cell corner             
+!                     = 1: Using Unit cell center
+   n = n + 1; Keys(n) = 'Core States Normalization Range';       Values(n) = '0'
+!                     = 0: Up to bounding sphere radius
+!                     = 1: Up to infinity
 !  =============================================================================
 !  Additional input parameters can be added to this table using the 
 !  following format:

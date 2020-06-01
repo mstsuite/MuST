@@ -60,7 +60,7 @@ clean-lsms:
 	rm -f bin/lsms bin/wl-lsms
 
 clean-MST:
-	cd MST; make deepclean
+	cd MST; make distclean
 
 distclean:
 	@cd external; make distclean

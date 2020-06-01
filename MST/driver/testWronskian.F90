@@ -71,7 +71,7 @@ program testWronskian
 !
    use AtomModule, only : getStepFuncLmax, setTruncPotLmax, setPotLmax
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
-   use AtomModule, only : getGridData, getLocalEvec, getMuffinTinRadius
+   use AtomModule, only : getRadialGridData, getLocalEvec, getMuffinTinRadius
    use AtomModule, only : getLocalNumSpecies, getLocalAtomicNumber
 !
    use SphericalHarmonicsModule, only : initSphericalHarmonics
@@ -134,7 +134,7 @@ program testWronskian
 !  ******  variables after the following line.             ***********
 !  *******************************************************************
 !
-   real (kind=RealKind) :: t0, t1, t2, t3
+   real (kind=RealKind) :: t0, t1, t2, t3, hin
 !
    complex (kind=CmplxKind) :: kappa
    complex (kind=CmplxKind), pointer :: p_emesh(:)
@@ -341,7 +341,7 @@ contains
       ig=getGlobalIndex(i)
       GlobalIndex(i)=ig
 !     ----------------------------------------------------------------
-      call getGridData(i,ndivin,ndivout,nmult)
+      call getRadialGridData(i,ndivin,ndivout,nmult,hin)
 !     ----------------------------------------------------------------
 !     call genPolyhedron(i,ig,NumAtoms,AtomPosition)
 !     ----------------------------------------------------------------

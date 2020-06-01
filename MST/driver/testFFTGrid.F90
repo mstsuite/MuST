@@ -72,7 +72,7 @@ program testFFTGrid
 !
    use AtomModule, only : getStepFuncLmax, setTruncPotLmax, setPotLmax
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
-   use AtomModule, only : getGridData, getLocalEvec, getMuffinTinRadius
+   use AtomModule, only : getRadialGridData, getLocalEvec, getMuffinTinRadius
    use AtomModule, only : getLocalAtomPosition
 !
    use SphericalHarmonicsModule, only : initSphericalHarmonics
@@ -141,7 +141,7 @@ program testFFTGrid
 !  ******  variables after the following line.             ***********
 !  *******************************************************************
 !
-   real (kind=RealKind) :: t0, t1, t2, t3
+   real (kind=RealKind) :: t0, t1, t2, t3, hin
 !
    integer (kind=IntKind) :: i, id, ig, is, ie_loc, ie_glb
    integer (kind=IntKind) :: eGID, aGID, NumPEsInGroup, comm
@@ -325,7 +325,7 @@ contains
       ig=getGlobalIndex(i)
       GlobalIndex(i)=ig
 !     ----------------------------------------------------------------
-      call getGridData(i,ndivin,ndivout,nmult)
+      call getRadialGridData(i,ndivin,ndivout,nmult,hin)
 !     ----------------------------------------------------------------
 !     call genPolyhedron(i,ig,NumAtoms,AtomPosition)
 !     ----------------------------------------------------------------

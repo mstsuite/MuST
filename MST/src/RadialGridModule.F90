@@ -11,7 +11,6 @@ public ::           &
    resetRadialGrid, &
    printRadialGrid, &
    getGrid,         &
-   getRindex,       &
    getRmesh,        &
    getNumRmesh,     &
    getMaxNumRmesh,  &
@@ -189,7 +188,7 @@ contains
 !  Grid(id)%rinsc=rinsc 
 !  Grid(id)%rws=rws 
 !  Grid(id)%xinsc=log(rinsc) 
-!  Grid(id)%jinsc=ndivin
+   Grid(id)%jinsc=ndivin
    xinsc=log(rinsc) 
    jinsc=ndivin
    Grid(id)%nmult=1
@@ -389,7 +388,7 @@ contains
 !  Grid(id)%rinsc=rinsc 
 !  Grid(id)%xinsc=log(rinsc) 
 !  Grid(id)%rws=rws
-!  Grid(id)%jinsc=ndivin
+   Grid(id)%jinsc=ndivin
    xinsc=log(rinsc) 
    jinsc=ndivin
    Grid(id)%rmt=rmt
@@ -541,7 +540,7 @@ contains
    endif
 !
    if ( rinsc - rmt < TEN2m6 ) then
-!     Grid(id)%jinsc=Grid(id)%jmt
+      Grid(id)%jinsc=Grid(id)%jmt
       jinsc=Grid(id)%jmt
    else
 !     ----------------------------------------------------------------
@@ -637,7 +636,7 @@ contains
 !     ----------------------------------------------------------------
    endif
 !
-!  Grid(id)%jinsc=jinsc
+   Grid(id)%jinsc=jinsc
 !  Grid(id)%rinsc=rinsc
 !  Grid(id)%xinsc=log(rinsc)
 !  Grid(id)%rws  =rws
@@ -786,7 +785,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine genRadialGrid3(id,rmt,rend,ndivin,rstart)
+   subroutine genRadialGrid3(id,rmt,rinsc,rend,ndivin,rstart)
 !  ===================================================================
    use MathParamModule, only : HALF, ONE, TEN2m6
 !
@@ -798,6 +797,7 @@ contains
    integer (kind=IntKind), intent(in) :: ndivin   ! including rmt
 !
    real (kind=RealKind), intent(in) :: rmt
+   real (kind=RealKind), intent(in) :: rinsc
    real (kind=RealKind), intent(in) :: rend
    real (kind=RealKind), intent(in), optional :: rstart   ! The starting point
                                                           ! of the radial grid
@@ -811,6 +811,7 @@ contains
 !
 !        Assuming the following parameters are known
 !           rmt     = the muffin-tin sphere radius
+!           rinsc   = the inscribed sphere radius
 !           rend    = an end point estimate of the radial grid.
 !                     Note: rend may not be on the radial grid point
 !           ndivin  = the number of grid points from 
@@ -896,6 +897,8 @@ contains
       Grid(id)%x_mesh(j) = xg
       Grid(id)%r_mesh(j) = exp(xg)
    enddo
+!
+   Grid(id)%jinsc = getRadialGridPoint(id,rinsc,less_or_equal=.true.)
 !
    MaxNumRmesh = max(MaxNumRmesh, Grid(id)%jend_plus_n)
 !
@@ -1036,7 +1039,7 @@ contains
    write(6,'(a)')'============================================================'
    write(6,'(  ''Local atom index'',t40,''='',i5)')    id
    write(6,'(  ''jmt        '',t40,''='',i5)')    Grid(id)%jmt
-!  write(6,'(  ''jinsc      '',t40,''='',i5)')    Grid(id)%jinsc
+   write(6,'(  ''jinsc      '',t40,''='',i5)')    Grid(id)%jinsc
 !  write(6,'(  ''jws        '',t40,''='',i5)')    Grid(id)%jws  
    write(6,'(  ''jend       '',t40,''='',i5)')    Grid(id)%jend 
    write(6,'(  ''jend_plus_n'',t40,''='',i5)')    Grid(id)%jend_plus_n
@@ -1077,39 +1080,6 @@ contains
 !
    gp=>Grid(id)
    end function getGrid
-!  ===================================================================
-!
-!  *******************************************************************
-!
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getRindex(id,r) result(i)
-!  ===================================================================
-   implicit none
-   integer (kind=IntKind), intent(in) :: id
-   integer (kind=IntKind) :: i
-!
-   real (kind=RealKind), intent(in) :: r
-!
-   if (.not.Initialized) then
-!     ----------------------------------------------------------------
-      call ErrorHandler('getRindex','need to call initRadialGrid first')
-!     ----------------------------------------------------------------
-   else if (id < 1 .or. id > NumGrids) then
-!     ----------------------------------------------------------------
-      call ErrorHandler('genRindex','id out of range',id)
-!     ----------------------------------------------------------------
-   endif
-   if (r <= Grid(id)%rstart) then
-      i=1
-   else if (r >= Grid(id)%r_mesh(Grid(id)%jend_plus_n)) then
-      i=Grid(id)%jend_plus_n
-   else
-!     ----------------------------------------------------------------
-      call hunt(Grid(id)%jend_plus_n,Grid(id)%r_mesh,r,i)
-!     ----------------------------------------------------------------
-   endif
-!
-   end function getRindex
 !  ===================================================================
 !
 !  *******************************************************************
@@ -1216,13 +1186,15 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getRadialGridPoint(id,r) result(jr)
+   function getRadialGridPoint(id,r,less_or_equal) result(jr)
 !  ===================================================================
    use MathParamModule, only : ZERO
    implicit none
 !
    integer (kind=IntKind), intent(in) :: id
    integer (kind=IntKind) :: j, jr
+!
+   logical, intent(in), optional :: less_or_equal
 !
    real (kind=RealKind), intent(in) :: r
 !
@@ -1240,17 +1212,39 @@ contains
 !     ----------------------------------------------------------------
    endif
 !
-   jr = Grid(id)%jend
-   LOOP_j: do j = Grid(id)%jend, 1, -1
-      if (Grid(id)%r_mesh(j) < r) then
-         jr = j
-         exit LOOP_j
+   if (r <= Grid(id)%rstart) then
+      jr = 1
+   else if (r >= Grid(id)%r_mesh(Grid(id)%jend_plus_n)) then
+      jr = Grid(id)%jend_plus_n
+   else if (present(less_or_equal)) then
+      jr = Grid(id)%jend_plus_n
+      if (less_or_equal) then
+         do j = Grid(id)%jend_plus_n, 1, -1
+            if (Grid(id)%r_mesh(j) <= r) then
+               jr = j
+               exit
+            endif 
+         enddo
+      else
+         do j = Grid(id)%jend_plus_n, 1, -1
+            if (Grid(id)%r_mesh(j) < r) then
+               jr = j+1
+               exit
+            endif 
+         enddo
       endif
-   enddo LOOP_j
-!
-   if (jr < Grid(id)%jend) then
-      if (Grid(id)%r_mesh(jr+1)-r <= r-Grid(id)%r_mesh(jr)) then
-         jr = jr+1
+   else
+      jr = Grid(id)%jend_plus_n
+      LOOP_j: do j = Grid(id)%jend_plus_n, 1, -1
+         if (Grid(id)%r_mesh(j) < r) then
+            jr = j
+            exit LOOP_j
+         endif
+      enddo LOOP_j
+      if (jr < Grid(id)%jend_plus_n) then
+         if (Grid(id)%r_mesh(jr+1)-r <= r-Grid(id)%r_mesh(jr)) then
+            jr = jr+1
+         endif
       endif
    endif
 !

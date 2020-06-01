@@ -83,6 +83,8 @@ $(ODIR)/StepFunctionModule.o  \
 $(ODIR)/SSSolverModule.o \
 $(ODIR)/RelSSSolverModule.o \
 $(ODIR)/StrConstModule.o  \
+$(ODIR)/SROModule.o \
+$(ODIR)/MediumHostModule.o \
 $(ODIR)/CrystalMatrixModule.o \
 $(ODIR)/SurfElementsModule.o \
 $(ODIR)/SystemModule.o  \

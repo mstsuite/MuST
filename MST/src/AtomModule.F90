@@ -40,7 +40,7 @@ public :: initAtom,    &
           getInValDenFileForm,  &
           getOutValDenFileName,  &
           getOutValDenFileForm,  &
-          getGridData, &
+          getRadialGridData, &
           getMixingParam4Rho,    &
           getMixingParam4Pot,    &
           getMixingParam4Mom,    &
@@ -186,6 +186,7 @@ private
       integer (kind=IntKind) :: ndivin
       integer (kind=IntKind) :: ndivout
       integer (kind=IntKind) :: nmult
+      real (kind=RealKind) :: hin
    end type LocalGridStruct
    type (LocalGridStruct), allocatable :: GridData(:)
 !  ===================================================================
@@ -261,6 +262,7 @@ contains
    integer (kind=IntKind), allocatable :: ind_ndivin(:)
    integer (kind=IntKind), allocatable :: ind_ndivout(:)
    integer (kind=IntKind), allocatable :: ind_nmult(:)
+   integer (kind=IntKind), allocatable :: ind_hin(:)
    integer (kind=IntKind), allocatable :: ind_cutoff_r(:)
    integer (kind=IntKind), allocatable :: ind_cutoff_r_s(:)
    integer (kind=IntKind), allocatable :: ind_pseudo_r(:)
@@ -276,6 +278,7 @@ contains
    real (kind=RealKind), allocatable :: pseudo_r(:)
    real (kind=RealKind), allocatable :: potScreen(:)
    real (kind=RealKind), allocatable :: cutoff_r_s(:)
+   real (kind=RealKind), allocatable :: hin(:)
    real (kind=RealKind) :: Za, Rav
 !
    real (kind=RealKind), optional, intent(in) :: rinsc(:)
@@ -362,7 +365,7 @@ contains
             alpha_rho(0:GlobalNumAtoms), alpha_pot(0:GlobalNumAtoms),  &
             alpha_mom(0:GlobalNumAtoms), nmax_liz(0:GlobalNumAtoms),   &
             alpha_chg(0:GlobalNumAtoms), ndivin(0:GlobalNumAtoms),     & 
-            ndivout(0:GlobalNumAtoms), nmult(0:GlobalNumAtoms))
+            ndivout(0:GlobalNumAtoms), nmult(0:GlobalNumAtoms), hin(0:GlobalNumAtoms))
    allocate(ind_lmax_kkr(GlobalNumAtoms), ind_lmax_phi(GlobalNumAtoms),    &
             ind_lmax_pot(GlobalNumAtoms), ind_lmax_rho(GlobalNumAtoms),    &
             ind_num_shells(GlobalNumAtoms), ind_lmax_shell(GlobalNumAtoms),&
@@ -371,7 +374,7 @@ contains
             ind_alpha_rho(GlobalNumAtoms), ind_alpha_pot(GlobalNumAtoms),  &
             ind_alpha_chg(GlobalNumAtoms), ind_alpha_mom(GlobalNumAtoms),  &
             ind_nmax_liz(GlobalNumAtoms), ind_nmult(GlobalNumAtoms),       &
-            ind_ndivin(GlobalNumAtoms), ind_ndivout(GlobalNumAtoms))
+            ind_ndivin(GlobalNumAtoms), ind_ndivout(GlobalNumAtoms), ind_hin(GlobalNumAtoms))
    allocate(ind_lmax_step(GlobalNumAtoms),lmax_step(0:GlobalNumAtoms))
    allocate(ind_lmax_pot_trunc(GlobalNumAtoms), lmax_pot_trunc(0:GlobalNumAtoms))
    allocate(ind_cutoff_r(GlobalNumAtoms), cutoff_r(0:GlobalNumAtoms))
@@ -595,7 +598,14 @@ contains
    endif
    ind_nmult = 0
    rstatus = getKeyIndexValue(info_id,'Integer Factor nmult',         &
-                              ind_nmult,nmult(1:GlobalNumAtoms), GlobalNumAtoms)
+                              ind_nmult, nmult(1:GlobalNumAtoms), GlobalNumAtoms)
+!
+   if (getKeyValue(info_id,'Default Radial Grid Exponential Step',hin(0)) /= 0) then
+      call ErrorHandler('initAtom','Radial Grid Exponential Step hin is missing from input')
+   endif
+   ind_hin = 0
+   rstatus = getKeyIndexValue(info_id,'Radial Grid Exponential Step', &
+                              ind_hin, hin(1:GlobalNumAtoms), GlobalNumAtoms)
 !
    rstatus = getKeyValue(info_id,'Default Screen Potential',potScreen(0))
    ind_potScreen = 0
@@ -839,10 +849,10 @@ contains
       endif
 !     ================================================================
 !
-      if ( pseudo_r(ind_pseudo_r(ig)) >= 0.5d0 ) then
+      if ( pseudo_r(ind_pseudo_r(ig)) > ZERO ) then
          AtomProperty(n)%Rcut_pseudo=pseudo_r(ind_pseudo_r(ig))
       else
-         AtomProperty(n)%Rcut_pseudo=ZERO
+         AtomProperty(n)%Rcut_pseudo=ONE
       endif
       Lmax(n)%lmax_kkr=lmax_kkr(ind_lmax_kkr(ig))
       Lmax(n)%lmax_step=lmax_step(ind_lmax_step(ig))
@@ -882,6 +892,7 @@ contains
       GridData(n)%ndivin=ndivin(ind_ndivin(ig))
       GridData(n)%ndivout=ndivout(ind_ndivout(ig))
       GridData(n)%nmult=nmult(ind_nmult(ig))
+      GridData(n)%hin=hin(ind_hin(ig))
    enddo
 !
    do n = 1, LocalNumAtoms
@@ -927,13 +938,13 @@ contains
    deallocate(lmax_kkr,lmax_phi,lmax_pot,lmax_rho, lmax_step, num_shells, &
               lmax_shell, alpha_rho, alpha_pot, nmax_liz,                 &
               potinname, potinform, potoutname, potoutform,               &
-              alpha_mom, alpha_chg, ndivin, ndivout, nmult)
+              alpha_mom, alpha_chg, ndivin, ndivout, nmult, hin)
    deallocate(ind_lmax_pot_trunc, lmax_pot_trunc)
    deallocate(ind_lmax_kkr, ind_lmax_phi, ind_lmax_pot, ind_lmax_rho,     &
               ind_num_shells, ind_lmax_shell, ind_lmax_step,              &
               ind_alpha_rho, ind_alpha_pot, ind_alpha_mom, ind_nmax_liz,  &
               ind_potinname, ind_potinform, ind_potoutname, ind_potoutform, &
-              ind_ndivin, ind_ndivout,ind_nmult, ind_alpha_chg)
+              ind_ndivin, ind_ndivout, ind_nmult, ind_hin, ind_alpha_chg)
 !
    deallocate(ind_cutoff_r, cutoff_r, ind_potScreen, potScreen )
    deallocate(ind_cutoff_r_s, cutoff_r_s)
@@ -1751,23 +1762,25 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine getGridData(id,nin,nout,nmul)
+   subroutine getRadialGridData(id,nin,nout,nmul,h)
 !  ===================================================================
    implicit none
    integer (kind=IntKind), intent(in) :: id
    integer (kind=IntKind), intent(out) :: nin
    integer (kind=IntKind), intent(out) :: nout
    integer (kind=IntKind), intent(out) :: nmul
+   real (kind=RealKind), intent(out) :: h
 !
    if (id<1 .or. id>LocalNumAtoms) then
-      call ErrorHandler('getGridData','Invalid atom index',id)
+      call ErrorHandler('getRadialGridData','Invalid atom index',id)
    endif
 !
    nin=GridData(id)%ndivin
    nout=GridData(id)%ndivout
    nmul=GridData(id)%nmult
+   h=GridData(id)%hin
 !
-   end subroutine getGridData
+   end subroutine getRadialGridData
 !  ===================================================================
 !
 !  *******************************************************************
@@ -2039,6 +2052,10 @@ contains
             GridData(i)%ndivout
       write(6,'(''Ratio of r-mesh steps, hin and hout    : '',i5)')   &
             GridData(i)%nmult
+      if (GridData(i)%hin > 0.000001d0) then
+         write(6,'(''exponential step of inside r-mesh   : '',f10.6)')&
+            GridData(i)%hin
+      endif
       if (AtomProperty(i)%Rmt > 0.000001d0) then
          write(6,'(''Desired Rmt         : '',f10.5)') AtomProperty(i)%Rmt
       endif

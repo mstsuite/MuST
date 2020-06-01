@@ -59,7 +59,7 @@ program adaptiveSSK
 !
    use AtomModule, only : getStepFuncLmax, setTruncPotLmax, setPotLmax
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
-   use AtomModule, only : getGridData, getMuffinTinRadius
+   use AtomModule, only : getRadialGridData, getMuffinTinRadius
    use AtomModule, only : getLocalNumSpecies, getLocalAtomicNumber
 !
    use SphericalHarmonicsModule, only : initSphericalHarmonics
@@ -137,7 +137,7 @@ program adaptiveSSK
    real (kind=RealKind) :: bravais(3,3)
    real (kind=RealKind), pointer :: AtomPosition(:,:)
 !
-   real (kind=RealKind) :: re, vol, de
+   real (kind=RealKind) :: re, vol, de, hin
    real (kind=RealKind) :: t0, t1, t2, t3
    real (kind=RealKind) :: rmt, rend, rws, rinsc, Rb, ps, IDOS_cell, ssdos_int
 !
@@ -260,7 +260,7 @@ program adaptiveSSK
       ig=getGlobalIndex(i)
       GlobalIndex(i)=ig
 !     ----------------------------------------------------------------
-      call getGridData(i,ndivin,ndivout,nmult)
+      call getRadialGridData(i,ndivin,ndivout,nmult,hin)
 !     ----------------------------------------------------------------
       if (atom_print_level(i) >= 0) then
 !        -------------------------------------------------------------

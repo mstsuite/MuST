@@ -52,7 +52,7 @@ program main
    use AtomModule, only : initAtom, endAtom
    use AtomModule, only : getMaxLmax, printAtom
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
-   use AtomModule, only : getGridData
+   use AtomModule, only : getRadialGridData
    use AtomModule, only : getLocalAtomName, getLocalAtomicNumber
    use AtomModule, only : getLocalAtomPosition, getLocalEvec
    use AtomModule, only : getInPotFileName, getInPotFileForm
@@ -112,7 +112,7 @@ program main
    real (kind=RealKind), allocatable :: AtomPosition(:,:)
    real (kind=RealKind), allocatable :: LocalAtomPosi(:,:)
    real (kind=RealKind), allocatable :: LocalEvec(:,:)
-   real (kind=RealKind) :: rmt, rend
+   real (kind=RealKind) :: rmt, rend, hin
    real (kind=RealKind) :: Efermi
    real (kind=RealKind) :: TotalEnergy
    real (kind=RealKind) :: q_ws, q_mt, m_ws, m_mt, evec(3)
@@ -240,7 +240,7 @@ program main
    do i=1,LocalNumAtoms
       ig=getGlobalIndex(i,MyPE)
 !     ----------------------------------------------------------------
-      call getGridData(i,ndivin,ndivout,nmult)
+      call getRadialGridData(i,ndivin,ndivout,nmult,hin)
 !     ----------------------------------------------------------------
       call genPolyhedron(i,ig,NumAtoms,AtomPosition)
 !     ----------------------------------------------------------------

@@ -94,8 +94,8 @@ public
 !     real (kind=RealKind) :: rws           ! the Wigner-Seitz sphere radius
 !     real (kind=RealKind) :: rinsc         ! the inscribed sphere radius 
 !     real (kind=RealKind) :: xinsc         ! log(rinsc)
-!     integer (kind=IntKind) :: jinsc       ! Num. of r-mesh on and inside
-!                                           ! the inscribed radius.
+      integer (kind=IntKind) :: jinsc       ! Num. of r-mesh inside the inscribed
+                                            ! sphere radius.
       real (kind=RealKind) :: rend          ! the terminal sphere radius
                                             ! = rmt, rws, or rcirc
       real (kind=RealKind) :: rmt           ! the muffin-tin sphere radius

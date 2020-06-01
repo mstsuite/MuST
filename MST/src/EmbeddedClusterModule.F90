@@ -441,6 +441,10 @@ contains
 !              host crystal.
 !           3. Associate the storage of the calculated tau-matrix with 
 !              pointer tau_l in the local data structure
+!
+!           configuration array stores the atomic configuration of the
+!           sublattices consisting the host. Its definition can be found
+!           in calCrystalMatrix of CrystalMatrixModule.
 !  *******************************************************************
    use MatrixInverseModule, only : MtxInv_LU
    use CrystalMatrixModule, only : calCrystalMatrix, getMediumTau=>getTau
