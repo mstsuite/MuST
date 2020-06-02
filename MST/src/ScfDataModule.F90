@@ -33,6 +33,7 @@ public :: initScfData,                 &
           isKKRCPA,                    &
           isEmbeddedCluster,           &
           isKKRCPASRO,                 &
+          isSROSCF,                    &
           isScreenKKR_LSMS,            &
           isSingleSite,                &
           isFrozenCore,                &
@@ -56,7 +57,8 @@ public :: initScfData,                 &
           setSCFMethod,                &
           getPoleSearchStep,           &
           retreiveEffectiveMediumParams,   &
-          retrieveSROParams, &
+          isNextNearestSRO,            &
+          retrieveSROParams,           &
           printScfData
 !
 public
@@ -176,6 +178,7 @@ public
    real (kind=RealKind), private ::   EM_switch = 0.003
    integer (kind=IntKind), private :: sro_param_num = 0
    integer (kind=IntKind), private :: next_nearest
+   integer (kind=IntKind), private :: sro_scf = 0
    real (kind=RealKind), private, allocatable :: sro_params(:)
    real (kind=RealKind), private, allocatable :: sro_params_nn(:)
 !
@@ -421,6 +424,8 @@ contains
       call ErrorHandler('initScfData','Number of SRO Parameters not found')
    endif
 
+   rstatus = getKeyValue(tbl_id, 'SCF Mode', sro_scf)
+   
    if ( getKeyValue(tbl_id,'Effective Medium Mixing Parameters',2,rp) == 0) then
       EM_mix_0 = rp(1); EM_mix_1 = rp(2)
    else
@@ -763,6 +768,19 @@ contains
        md = .false.
    endif
    end function isKKRCPASRO
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isSROSCF() result(md)
+!  ===================================================================
+   implicit none
+   integer (kind=Intkind) :: md
+
+   md = sro_scf
+
+   end function isSROSCF
 !  ===================================================================
 !
 !  *******************************************************************
