@@ -42,7 +42,8 @@ private
       complex (kind=CmplxKind), pointer :: tmat_inv(:,:)
       complex (kind=CmplxKind), pointer :: tmat_tilde_inv(:,:)
       complex (kind=CmplxKind), pointer :: tmat_tilde_inv_nn(:,:)
-      complex  (kind=CmplxKind), pointer :: T_inv(:,:)
+      complex (kind=CmplxKind), pointer :: T_inv(:,:)
+      complex (kind=CmplxKind), pointer :: proj_a(:,:)
    end type TmatBlockStruct
 !
    type SROTMatrixStruct
@@ -86,7 +87,7 @@ contains
 !  ===================================================================
    
    use MediumHostModule, only  : getNumSites, getLocalNumSites, getGlobalSiteIndex, getNumSpecies
-   use ScfDataModule, only : retrieveSROParams, isNextNearestSRO
+   use ScfDataModule, only : retrieveSROParams, isNextNearestSRO, isSROSCF
    use NeighborModule, only : getNeighbor
    use SSSolverModule, only : getScatteringMatrix
    use SystemModule, only : getAtomPosition
@@ -187,6 +188,9 @@ contains
                        SROMedium(il)%blk_size))
                allocate(SROMedium(il)%SROTMatrix(i)%tmat_s(is)%T_inv(SROMedium(il)%blk_size*SROMedium(il)%neigh_size, &
                        SROMedium(il)%blk_size*SROMedium(il)%neigh_size))
+               if (isSROSCF() == 1) then
+                  allocate(SROMedium(il)%SROTMatrix(i)%tmat_s(is)%proj_a(SROMedium(il)%blk_size, SROMedium(il)%blk_size))
+               endif
             enddo
 
          enddo
@@ -546,9 +550,88 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calSpeciesTauMatrix()
+   subroutine calculateSCFSpeciesTerm (n, ic, c_ic)
+!  ===================================================================   
+
+   use MatrixModule, only : computeAprojB
+
+   integer (kind=IntKind), intent(in) :: n, ic
+   real (kind=RealKind), intent(in) :: c_ic
+   integer (kind=IntKind) :: dsize, nsize, is
+
+   complex (kind=CmplxKind), allocatable :: tmp(:,:), proj_c(:,:)
+
+   dsize = SROMedium(n)%blk_size
+   nsize = SROMedium(n)%neigh_size
+   allocate(tmp(dsize*nsize, dsize*nsize))
+   allocate(proj_c(dsize*nsize, dsize*nsize))
+
+   do is = 1, nSpinCant**2
+      y = CZERO
+      z = SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%T_inv - SROMedium(n)%T_CPA_inv
+!     ------------------------------------------------------------------------
+      call computeAprojB('N', dsize*nsize, SROMedium(n)%tau_cpa(:,:,1), z, y)
+!     ------------------------------------------------------------------------
+      call zgemm('N', 'n', dsize*nsize, dsize*nsize, dsize*nsize,    &
+        CONE, SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%T_inv, 1, y, 1,  &
+        CZERO, tmp, 1)
+!     ------------------------------------------------------------------------
+      call zgemm('N', 'n', dsize*nsize, dsize*nsize, dsize*nsize,    &
+        c_ic, SROMedium(n)%tau_cpa(1,1,1), 1, tmp, 1, CZERO, proj_c, 1)
+!     ------------------------------------------------------------------------
+      SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%proj_a = proj_c(1:dsize, 1:dsize)
+   enddo 
+
+   end subroutine calculateSCFSpeciesTerm
 !  ===================================================================
 
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function calculateNewTCPA(n)  result(total_proj)
+!  ===================================================================
+
+   use MatrixInverseModule, only : MtxInv_LU
+
+   integer (kind=IntKind), intent(in) :: n
+   integer (kind=IntKind) :: dsize, ic
+   
+   complex (kind=CmplxKind), allocatable :: tau_inv(:,:), temp(:,:)
+   complex (kind=CmplxKind) :: total_proj(SROMedium(n)%blk_size,SROMedium(n)%blk_size)
+
+   dsize = SROMedium(n)%blk_size
+   allocate(tau_inv(dsize, dsize), temp(dsize, dsize))
+
+   total_proj = CZERO
+   temp = CZERO
+
+   do is = 1, nSpinCant**2
+     do ic = 1, SROMedium(n)%num_species
+!       -------------------------------------------------------------
+        call zaxpy(dsize*dsize, CONE, SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%proj_a, &
+             1, temp, 1)
+!       -------------------------------------------------------------
+     enddo
+   enddo
+
+   tau_inv = SROMedium(n)%tau_cpa(1:dsize, 1:dsize, 1)
+!  -----------------------------------------------------------
+   call MtxInv_LU(tau_inv, dsize)
+!  -----------------------------------------------------------
+   call zgemm('N', 'n', dsize, dsize, dsize, CONE, tau_inv, &
+        1, temp, 1, CZERO, total_proj, 1)
+!  -----------------------------------------------------------   
+
+   end function calculateNewTCPA
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine calSpeciesTauMatrix()
+!  ===================================================================
+!  -------------------------------------------------------------------
+!  If SCF mode is off, it will calculate tau_a for all species
+!  If SCF mode in on, then it will only calculate the average and block matrices
+!  ------------------------------------------------------------------
+
+   use ScfDataModule, only : isSROSCF
    use WriteMatrixModule, only : writeMatrix
    use SSSolverModule, only : getScatteringMatrix
 !
@@ -575,13 +658,15 @@ contains
      enddo
    enddo
 
-   do j = 1, LocalNumSites
-     do ic = 1, SROMedium(j)%num_species
-!      -------------------------------------------
-       call calculateImpurityMatrix(j, ic)
-!      -------------------------------------------
+   if (isSROSCF() == 0) then
+     do j = 1, LocalNumSites
+       do ic = 1, SROMedium(j)%num_species
+!        -------------------------------------------
+         call calculateImpurityMatrix(j, ic)
+!        -------------------------------------------
+       enddo
      enddo
-   enddo
+   endif
    
    end subroutine calSpeciesTauMatrix
 !  ===================================================================
