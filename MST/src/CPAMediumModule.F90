@@ -25,6 +25,7 @@ private
    integer (kind=IntKind) :: ndim_Tmat
    integer (kind=IntKind) :: print_instruction
    integer (kind=IntKind) :: InitialMixingType
+   integer (kind=IntKind) :: sro_scf = 0
 !
    type CPAMatrixStruct
       real (kind=RealKind) :: content
@@ -86,6 +87,7 @@ contains
    use AccelerateCPAModule, only : initAccelerateCPA
 !
    use EmbeddedClusterModule, only : initEmbeddedCluster
+   use ScfDataModule, only : isSROSCF
 !
    implicit none
 !
@@ -241,6 +243,7 @@ contains
    if(present(is_sro)) then
       call initCrystalMatrix(nla=LocalNumSites, cant=cant, lmax_kkr=lmax_kkr,   &
                         rel=rel, istop=istop, iprint=iprint, is_sro=is_sro)
+      sro_scf = isSROSCF()
    else
       call initCrystalMatrix(nla=LocalNumSites, cant=cant, lmax_kkr=lmax_kkr,   &
                         rel=rel, istop=istop, iprint=iprint)
@@ -342,13 +345,14 @@ contains
 !
    use SSSolverModule, only : getScatteringMatrix
 !
-!  use CrystalMatrixModule, only : calCrystalMatrix
+   use CrystalMatrixModule, only : calCrystalMatrix, retrieveTauSRO
 !  use CrystalMatrixModule, only : getCPAMediumTau => getTau
 !
    use AccelerateCPAModule, only : initializeAcceleration, accelerateCPA
    use AccelerateCPAModule, only : setAccelerationParam, getAccelerationType
 !
    use EmbeddedClusterModule, only : setupHostMedium, getTau
+   use SROModule, only : calSpeciesTauMatrix, calculateSCFSpeciesTerm, calculateNewTCPA
 !
    use WriteMatrixModule,  only : writeMatrix
 !
@@ -387,6 +391,7 @@ contains
    complex (kind=CmplxKind), pointer :: Jost(:,:), OH(:,:), Tinv(:,:), Jinv(:,:)
    complex (kind=CmplxKind), pointer :: SinvL(:,:), SinvR(:,:)
    complex (kind=CmplxKind), pointer :: tm1(:,:), tm2(:,:), tm0(:,:)
+   complex (kind=CmplxKind), allocatable :: t_proj(:,:)
 !
    if(present(do_sro)) then
       use_sro = do_sro
@@ -601,7 +606,140 @@ contains
       endif
       err_prev = max_err
    enddo LOOP_iter
-!
+
+!  ===================================================================
+!  Doing additional iterations for SRO, if that option is chosen
+!  ===================================================================
+   if (sro_scf == 1) then
+      used_Anderson = .false.
+      used_AndersonOld = .false.
+      used_Broyden = .false.
+      if (getAccelerationType() == AndersonMixing) then
+          used_Anderson = .true.
+      else if (getAccelerationType() == BroydenMixing) then
+          used_Broyden = .true.
+      else if (getAccelerationType() == AndersonMixingOld) then
+          used_AndersonOld = .true.
+      endif
+      allocate(t_proj(nsize, nsize))
+      nt = 0
+      iteration = 0
+      alpha = CPA_slow_alpha
+      LOOP_iter2 : do while (nt <= 5*MaxIterations)
+         nt = nt + 1
+         iteration = iteration + 1
+!        write(6,'(a,i5)')'At SRO iteration: ',iteration
+         max_err = ZERO
+!        ==========================================================
+!        Calculate Block Tau_CPA, Block TCPA and Ta matrices
+!        ==========================================================
+         call calCrystalMatrix(e,getSingleSiteTmat,use_tmat=.true.,   &
+                  tau_needed=.true.,use_sro=do_sro,configuration=site_config)
+!        ----------------------------------------------------------
+         call retrieveTauSRO()
+!        ----------------------------------------------------------
+         call populateBigTCPA()
+         call calSpeciesTauMatrix()
+!        ----------------------------------------------------------
+         do n = 1, LocalNumSites
+           if (isCPAMedium(n)) then
+               dsize = CPAMedium(n)%dsize
+               nsize = dsize*nSpinCant
+               CPAMedium(n)%Tcpa_old = CPAMedium(n)%Tcpa
+               CPAMedium(n)%TcpaInv_old = CPAMedium(n)%TcpaInv
+!              ----------------------------------------------------------
+               call initializeAcceleration(CPAMedium(n)%Tcpa,nsize*nsize,iteration)
+!              ----------------------------------------------------------
+!              ==========================================================
+!              Calculate for projection matrix for each species 
+!              ==========================================================
+               do ia = 1, CPAMedium(n)%num_species
+!                 ----------------------------------------------------------
+                  call calculateSCFSpeciesTerm(n, ia, CPAMedium(n)%CPAMatrix(ia)%content)
+!                 ----------------------------------------------------------
+               enddo
+               t_proj = calculateNewTCPA(n)
+               CPAMedium(n)%Tcpa = t_proj
+               CPAMedium(n)%TcpaInv = CPAMedium(n)%TcpaInv
+!              ----------------------------------------------------------
+               call MtxInv_LU(CPAMedium(n)%Tcpa,nsize)
+!              ----------------------------------------------------------
+               call checkCPAMedium(n,err)
+!              ----------------------------------------------------------
+               if (print_instruction >= 0) then
+                  write(6,'(a,2i4,2x,d15.8)')' SRO Iteration, medium, err = ', &
+                       iteration, n, err   
+               endif
+!              ----------------------------------------------------------
+               call accelerateCPA(CPAMedium(n)%Tcpa,nsize*nsize,iteration)
+!              ----------------------------------------------------------
+               CPAMedium(n)%TcpaInv = CPAMedium(n)%Tcpa
+!              ----------------------------------------------------------
+               call MtxInv_LU(CPAMedium(n)%TcpaInv,nsize)
+!              ----------------------------------------------------------
+               max_err = max(max_err,err)
+!              ----------------------------------------------------------
+               call GlobalMaxInGroup(akGID,max_err)
+!              ----------------------------------------------------------
+               if (max_err < CPA_tolerance) then
+                 exit LOOP_iter2
+!              ================================================================
+!              Set 25 to be the maximum number of iterations for the fast mixing method.
+!              If the method does not converge, switch to a different method
+!              ================================================================
+               else if (mixing_type /= SimpleMixing .and. iteration > min(50,MaxIterations) &
+                      .and. max_err > 0.6*err_prev) then
+!              -------------------------------------------------------------
+               call setAccelerationParam(acc_mix=alpha,acc_type=SimpleMixing)
+!              -------------------------------------------------------------
+               if (print_instruction >= 0) then
+                  write(6,'(a,f10.5)')'Switch to Simple Mixing Scheme with mixing param = ',alpha
+               endif
+               mixing_type = SimpleMixing
+               iteration = 0
+               switch = switch + 1
+               alpha = alpha*HALF
+               else if (mixing_type == SimpleMixing .and. iteration > MaxIterations .and. switch < 4) then
+                   if ((used_Broyden .and. InitialMixingType <= 3) .or.         &
+                      (.not.used_Broyden .and. InitialMixingType > 3)) then
+!                     ----------------------------------------------------------
+                      call setAccelerationParam(acc_mix=alpha,acc_type=BroydenMixing)
+!                     ----------------------------------------------------------
+                      if (print_instruction >= 0) then
+                        write(6,'(a,f10.5)')'Switch to Broyden Mixing Scheme with mixing param = ',alpha
+                      endif
+                      mixing_type = BroydenMixing
+                      used_Broyden = .true.
+                   else if ((used_Anderson .and. InitialMixingType <= 3) .or.   &
+                      (.not.used_Anderson .and. InitialMixingType > 3)) then
+!                     ----------------------------------------------------------
+                      call setAccelerationParam(acc_mix=alpha,acc_type=AndersonMixing)
+!                     ----------------------------------------------------------
+                      if (print_instruction >= 0) then
+                         write(6,'(a,f10.5)')'Switch to Anderson Mixing Scheme with mixing param = ',alpha
+                      endif
+                      mixing_type = AndersonMixing
+                      used_Anderson = .true.
+                   else if ((used_AndersonOld .and. InitialMixingType <= 3) .or.   &
+                      (.not.used_AndersonOld .and. InitialMixingType > 3)) then
+!                     ----------------------------------------------------------
+                      call setAccelerationParam(acc_mix=alpha,acc_type=AndersonMixingOld)
+!                     ----------------------------------------------------------
+                      if (print_instruction >= 0) then
+                         write(6,'(a,f10.5)')'Switch to Anderson Mixing Old Scheme with mixing param = ',alpha
+                      endif
+                      mixing_type = AndersonMixingOld
+                      used_AndersonOld = .true.
+                   endif
+                   iteration = 0
+                   switch = switch + 1
+               endif
+           endif
+           err_prev = max_err
+         enddo
+      enddo LOOP_iter2
+   endif
+
    if (print_instruction >= 1) then
       do n = 1, LocalNumSites
          dsize = CPAMedium(n)%dsize
@@ -615,7 +753,7 @@ contains
          call writeMatrix('Final t-cpa-inv',CPAMedium(n)%TcpaInv,nsize,nsize,TEN2m8)
       enddo
    endif
-   if (.not. use_sro) then
+   if (.not. use_sro .or. sro_scf == 1) then
 !  ===================================================================
 !  Calculate Tau_a and Kau_a for each species in local spin framework
 !  ===================================================================
@@ -1193,19 +1331,11 @@ contains
    use SROModule, only : generateBigTCPAMatrix
 !
    integer(kind=IntKind) :: n, dsize
-!  complex(kind=CmplxKind), allocatable :: t1(:,:), t2(:,:)
 !
    do n = 1, LocalNumSites
-      dsize = size(CPAMedium(n)%Tcpa, 1)
-!     allocate(t1(dsize, dsize))
-!     allocate(t2(dsize, dsize))
-!     t1 = CPAMedium(n)%Tcpa
-!     t2 = CPAMedium(n)%TcpaInv
 !     ---------------------------------------   
       call generateBigTCPAMatrix(n, CPAMedium(n)%TcpaInv)
 !     ---------------------------------------
-!     deallocate(t1)
-!     deallocate(t2)
    enddo
 
    end subroutine populateBigTCPA
