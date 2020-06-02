@@ -86,7 +86,8 @@ endif
 ifndef LIBXC_PATH
 ADDITIONAL_TARGETS = libxc
 LIBXC_PATH = $(EXTERN_LIB_PATH)/libxc/LibXC
-ADD_LIBS  += -L$(LIBXC_PATH)/lib -lxcf90 -lxc
+# ADD_LIBS  += -L$(LIBXC_PATH)/lib -lxcf90 -lxc
+ADD_LIBS  += $(LIBXC_PATH)/lib/libxcf90.a $(LIBXC_PATH)/lib/libxc.a
 FPPFLAGS += -DLIBXC5 -I$(LIBXC_PATH)/include
 endif
 

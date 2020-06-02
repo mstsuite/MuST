@@ -785,7 +785,8 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine genRadialGrid3(id,rmt,rinsc,rend,ndivin,rstart)
+!  subroutine genRadialGrid3(id,rmt,rinsc,rend,ndivin,rstart) ! Causing conflict with genRadialGrid0 when using gnu compiler
+   subroutine genRadialGrid3(id,rmt,rinsc,rend,ndivin)
 !  ===================================================================
    use MathParamModule, only : HALF, ONE, TEN2m6
 !
@@ -799,8 +800,8 @@ contains
    real (kind=RealKind), intent(in) :: rmt
    real (kind=RealKind), intent(in) :: rinsc
    real (kind=RealKind), intent(in) :: rend
-   real (kind=RealKind), intent(in), optional :: rstart   ! The starting point
-                                                          ! of the radial grid
+!  real (kind=RealKind), intent(in), optional :: rstart   ! The starting point
+!                                                         ! of the radial grid
 !
    integer (kind=IntKind) :: j, ndivout
 !
@@ -851,16 +852,16 @@ contains
       call ErrorHandler(sname,'Bad parameters: ndivin < 2', ndivin)
    endif
 !
-   if (present(rstart)) then
-      if (rstart > 1.0d-5) then
-         call WarningHandler(sname,'rstart > 0.00001',rstart)
-      endif
-      Grid(id)%rstart = rstart
-      Grid(id)%xstart = log(rstart)
-   else
+!  if (present(rstart)) then
+!     if (rstart > 1.0d-5) then
+!        call WarningHandler(sname,'rstart > 0.00001',rstart)
+!     endif
+!     Grid(id)%rstart = rstart
+!     Grid(id)%xstart = log(rstart)
+!  else
       Grid(id)%rstart = rstart_default
       Grid(id)%xstart = log(rstart_default)
-   endif
+!  endif
 !
    Grid(id)%rmt = rmt
    Grid(id)%xmt = log(rmt)

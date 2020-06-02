@@ -644,6 +644,9 @@ contains
    subroutine calSphExchangeCorrelation_s(rho_den,der_rho_den,        &
                                           mag_den,der_mag_den)
 !  ===================================================================
+#ifdef LIBXC5
+   use, intrinsic :: iso_c_binding
+#endif
    implicit none
 !
    integer (kind=IntKind) :: is , n
@@ -657,10 +660,12 @@ contains
    real (kind=RealKind) :: rho(2), exc(1), vxc(2)
    real (kind=RealKind) :: sigma(3), vsig(3)
    TYPE(xc_f90_func_t), pointer :: xc_func_p
+   integer (kind=c_size_t) :: np
 #elif defined LIBXC
    real (kind=RealKind) :: rho(2), exc(1), vxc(2)
    real (kind=RealKind) :: sigma(3), vsig(3)
    TYPE(xc_f90_pointer_t), pointer :: xc_func_p
+   integer (kind=IntKind) :: np
 #endif
 !
    if (.not.Initialized) then
@@ -692,6 +697,7 @@ contains
          rho(2) = HALF*(rho_den-mag_den)
       endif
       Vexc_s = ZERO; Eexc_s = ZERO
+      np = 1
       do n = 1, NumFunctionals
          if (n == 1) then
             xc_func_p => xc_func_1
@@ -700,7 +706,7 @@ contains
          endif 
          if (FunctionalType == LDA) then
 !           ---------------------------------------------------------
-            call xc_f90_lda_exc_vxc(xc_func_p, 1, rho(1), exc(1), vxc(1))
+            call xc_f90_lda_exc_vxc(xc_func_p, np, rho(1), exc(1), vxc(1))
 !           ---------------------------------------------------------
          else if (FunctionalType == GGA) then
             sigma = ZERO
@@ -717,7 +723,7 @@ contains
 !              ------------------------------------------------------
             endif
 !           ---------------------------------------------------------
-            call xc_f90_gga_exc_vxc(xc_func_p, 1, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
+            call xc_f90_gga_exc_vxc(xc_func_p, np, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
 !           ---------------------------------------------------------
          else
             call ErrorHandler('calSphExchangeCorrelation_s',          &
@@ -753,9 +759,6 @@ contains
 !
    integer (kind=IntKind), intent(in) :: n_Rpts
    integer (kind=IntKind) :: is, i, n, js
-#ifdef LIBXC5
-   integer (kind=c_size_t) :: np
-#endif
 !
    real (kind=RealKind), intent(in) :: rho_den(n_Rpts)
    real (kind=RealKind), intent(in), optional :: der_rho_den(n_Rpts)
@@ -766,10 +769,12 @@ contains
    real (kind=RealKind), allocatable :: vxc(:), exc(:), rho(:)
    real (kind=RealKind), allocatable :: sigma(:), vsig(:)
    TYPE(xc_f90_func_t), pointer :: xc_func_p
+   integer (kind=c_size_t) :: np
 #elif defined LIBXC
    real (kind=RealKind), allocatable :: vxc(:), exc(:), rho(:)
    real (kind=RealKind), allocatable :: sigma(:), vsig(:)
    TYPE(xc_f90_pointer_t), pointer :: xc_func_p
+   integer (kind=IntKind) :: np
 #endif
 !
    if (.not.Initialized) then
@@ -835,16 +840,10 @@ contains
             xc_func_p => xc_func_2
          endif 
          if (FunctionalType == LDA) then
-#ifdef LIBXC5
             np = n_Rpts
 !           ---------------------------------------------------------
             call xc_f90_lda_exc_vxc(xc_func_p, np, rho(1), exc(1), vxc(1))
 !           ---------------------------------------------------------
-#else
-!           ---------------------------------------------------------
-            call xc_f90_lda_exc_vxc(xc_func_p, n_Rpts, rho(1), exc(1), vxc(1))
-!           ---------------------------------------------------------
-#endif
          else if (FunctionalType == GGA) then
             if (n_spin_pola == 1 .and. present(der_rho_den)) then
                do i = 1, n_Rpts
@@ -862,16 +861,10 @@ contains
                call ErrorHandler('calSphExchangeCorrelation_v','Density derivative is required')
 !              ------------------------------------------------------
             endif
-#ifdef LIBXC5
             np = n_Rpts
 !           ---------------------------------------------------------
             call xc_f90_gga_exc_vxc(xc_func_p, np, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
 !           ---------------------------------------------------------
-#else
-!           ---------------------------------------------------------
-            call xc_f90_gga_exc_vxc(xc_func_p, n_Rpts, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
-!           ---------------------------------------------------------
-#endif
          else
             call ErrorHandler('calSphExchangeCorrelation_s',         &
                  'Evauation of the functionals other LDA and GGA has not been implemented yet.')
@@ -909,6 +902,9 @@ contains
    subroutine calExchangeCorrelation_s(rho_den,grad_rho_den,          &
                                        mag_den,grad_mag_den)
 !  ===================================================================
+#ifdef LIBXC5
+   use, intrinsic :: iso_c_binding
+#endif
    implicit none
 !
    integer (kind=IntKind) :: is, n 
@@ -922,10 +918,12 @@ contains
    real (kind=RealKind) :: rho(2), exc(1), vxc(2)
    real (kind=RealKind) :: sigma(3), vsig(3)
    TYPE(xc_f90_func_t), pointer :: xc_func_p
+   integer (kind=c_size_t) :: np
 #elif defined LIBXC
    real (kind=RealKind) :: rho(2), exc(1), vxc(2)
    real (kind=RealKind) :: sigma(3), vsig(3)
    TYPE(xc_f90_pointer_t), pointer :: xc_func_p
+   integer (kind=IntKind) :: np
 #endif
 !
    if (.not.Initialized) then
@@ -957,6 +955,7 @@ contains
          rho(2) = HALF*(rho_den-mag_den)
       endif
       Vexc_s = ZERO; Eexc_s = ZERO
+      np = 1
       do n = 1, NumFunctionals
          if (n == 1) then
             xc_func_p => xc_func_1
@@ -965,7 +964,7 @@ contains
          endif 
          if (FunctionalType == LDA) then
 !           ---------------------------------------------------------
-            call xc_f90_lda_exc_vxc(xc_func_p, 1, rho(1), exc(1), vxc(1))
+            call xc_f90_lda_exc_vxc(xc_func_p, np, rho(1), exc(1), vxc(1))
 !           ---------------------------------------------------------
          else if (FunctionalType == GGA) then
             if (n_spin_pola == 1 .and. present(grad_rho_den)) then
@@ -987,7 +986,7 @@ contains
 !              ------------------------------------------------------
             endif
 !           ---------------------------------------------------------
-            call xc_f90_gga_exc_vxc(xc_func_p, 1, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
+            call xc_f90_gga_exc_vxc(xc_func_p, np, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
 !           ---------------------------------------------------------
          else
             call ErrorHandler('calExchangeCorrelation_s',            &
@@ -1024,9 +1023,6 @@ contains
 !
    integer (kind=IntKind), intent(in) :: n_Rpts
    integer (kind=IntKind) :: is, i, n, js
-#ifdef LIBXC5
-   integer (kind=c_size_t) :: np
-#endif
 !
    real (kind=RealKind), intent(in) :: rho_den(n_Rpts)
    real (kind=RealKind), intent(in), optional :: grad_rho_den(3,n_Rpts)
@@ -1037,10 +1033,12 @@ contains
    real (kind=RealKind), allocatable :: vxc(:), exc(:), rho(:)
    real (kind=RealKind), allocatable :: sigma(:), vsig(:)
    TYPE(xc_f90_func_t), pointer :: xc_func_p
+   integer (kind=c_size_t) :: np
 #elif defined LIBXC
    real (kind=RealKind), allocatable :: vxc(:), exc(:), rho(:)
    real (kind=RealKind), allocatable :: sigma(:), vsig(:)
    TYPE(xc_f90_pointer_t), pointer :: xc_func_p
+   integer (kind=IntKind) :: np
 #endif
 !
    if (.not.Initialized) then
@@ -1099,16 +1097,10 @@ contains
             xc_func_p => xc_func_2
          endif 
          if (FunctionalType == LDA) then
-#ifdef LIBXC5
             np = n_Rpts
 !           ---------------------------------------------------------
             call xc_f90_lda_exc_vxc(xc_func_p, np, rho(1), exc(1), vxc(1))
 !           ---------------------------------------------------------
-#else
-!           ---------------------------------------------------------
-            call xc_f90_lda_exc_vxc(xc_func_p, n_Rpts, rho(1), exc(1), vxc(1))
-!           ---------------------------------------------------------
-#endif
          else if (FunctionalType == GGA) then
             if (n_spin_pola == 1 .and. present(grad_rho_den)) then
                allocate(sigma(n_Rpts), vsig(n_Rpts))
@@ -1134,16 +1126,10 @@ contains
                call ErrorHandler('calExchangeCorrelation_v','Density gradient is required')
 !              ------------------------------------------------------
             endif
-#ifdef LIBXC5
             np = n_Rpts
 !           ---------------------------------------------------------
             call xc_f90_gga_exc_vxc(xc_func_p, np, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
 !           ---------------------------------------------------------
-#else
-!           ---------------------------------------------------------
-            call xc_f90_gga_exc_vxc(xc_func_p, n_Rpts, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
-!           ---------------------------------------------------------
-#endif
             deallocate(sigma,vsig)
          else
 !           ---------------------------------------------------------
