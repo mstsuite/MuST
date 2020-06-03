@@ -69,6 +69,11 @@ private
    real (kind=RealKind) :: CPA_slow_alpha = 0.02d0
    real (kind=RealKind) :: CPA_switch_param = 0.003d0
 !
+   integer (kind=IntKind) :: SRO_mixing_type
+   real (kind=RealKind) :: SRO_alpha
+   real (kind=RealKind) :: SRO_slow_alpha
+   real (kind=RealKind) :: SRO_tolerance
+!
 contains
 !
    include '../lib/arrayTools.F90'
@@ -87,7 +92,7 @@ contains
    use AccelerateCPAModule, only : initAccelerateCPA
 !
    use EmbeddedClusterModule, only : initEmbeddedCluster
-   use ScfDataModule, only : isSROSCF
+   use ScfDataModule, only : isSROSCF, retrieveSROSCFParams
 !
    implicit none
 !
@@ -244,6 +249,10 @@ contains
       call initCrystalMatrix(nla=LocalNumSites, cant=cant, lmax_kkr=lmax_kkr,   &
                         rel=rel, istop=istop, iprint=iprint, is_sro=is_sro)
       sro_scf = isSROSCF()
+      if (sro_scf == 1) then
+         call retrieveSROSCFParams(mix_type=SRO_mixing_type, alpha_0=SRO_alpha, &
+                         alpha_1=SRO_slow_alpha,tol=SRO_tolerance)
+      endif
    else
       call initCrystalMatrix(nla=LocalNumSites, cant=cant, lmax_kkr=lmax_kkr,   &
                         rel=rel, istop=istop, iprint=iprint)
@@ -613,7 +622,16 @@ contains
    if (sro_scf == 1) then
       used_Anderson = .false.
       used_AndersonOld = .false.
-      used_Broyden = .false.
+      used_Broyden = .false. 
+      if (aimag(e) >= CPA_switch_param .or. real(e) < ZERO) then 
+!        -------------------------------------------------------------
+         call setAccelerationParam(acc_mix=SRO_alpha,acc_type=SRO_mixing_type)
+!        -------------------------------------------------------------
+      else
+!        -------------------------------------------------------------
+         call setAccelerationParam(acc_mix=SRO_slow_alpha,acc_type=SRO_mixing_type)
+!        -------------------------------------------------------------
+      endif 
       if (getAccelerationType() == AndersonMixing) then
           used_Anderson = .true.
       else if (getAccelerationType() == BroydenMixing) then
@@ -624,7 +642,7 @@ contains
       allocate(t_proj(nsize, nsize))
       nt = 0
       iteration = 0
-      alpha = CPA_slow_alpha
+      alpha = SRO_slow_alpha
       LOOP_iter2 : do while (nt <= 5*MaxIterations)
          nt = nt + 1
          iteration = iteration + 1
@@ -681,7 +699,7 @@ contains
 !              ----------------------------------------------------------
                call GlobalMaxInGroup(akGID,max_err)
 !              ----------------------------------------------------------
-               if (max_err < CPA_tolerance) then
+               if (max_err < SRO_tolerance) then
                  exit LOOP_iter2
 !              ================================================================
 !              Set 25 to be the maximum number of iterations for the fast mixing method.
