@@ -755,7 +755,7 @@ contains
    else if (isKKRCPASRO()) then ! Needs some more thought here
       if (isSROSCF() == 1) then
 !        -------------------------------------------------------------
-         call computeCPAMedium(e)
+         call computeCPAMedium(e, do_sro=.true.)
 !        -------------------------------------------------------------
       else
 !        ----------------------------------------------------------------
