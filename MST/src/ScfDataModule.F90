@@ -176,6 +176,10 @@ public
    real (kind=RealKind), private ::   EM_mix_1 = 0.01d0
    real (kind=RealKind), private ::   EM_tol = 0.0000001d0
    real (kind=RealKind), private ::   EM_switch = 0.003
+   real (kind=RealKind), private ::   SRO_mix_type=1
+   real (kind=RealKind), private ::   SRO_mix_0 = 0.1d0
+   real (kind=RealKind), private ::   SRO_mix_1 = 0.01d0
+   real (kind=RealKind), private ::   SRO_tol = 0.00001d0
    integer (kind=IntKind), private :: sro_param_num = 0
    integer (kind=IntKind), private :: next_nearest
    integer (kind=IntKind), private :: sro_scf = 0
@@ -425,12 +429,19 @@ contains
    endif
 
    rstatus = getKeyValue(tbl_id, 'SCF Mode', sro_scf)
+   rstatus = getKeyValue(tbl_id, 'SRO Medium Mixing Scheme', SRO_mix_type)
+   rstatus = getKeyValue(tbl_id, 'SRO Medium T-Matrix Tol (> 0)', SRO_tol)
    
    if ( getKeyValue(tbl_id,'Effective Medium Mixing Parameters',2,rp) == 0) then
       EM_mix_0 = rp(1); EM_mix_1 = rp(2)
    else
       call ErrorHandler('initScfData','Effective Medium Mixing Parameters are not found')
    endif
+
+   if ( getKeyValue(tbl_id, 'SRO Medium Mixing Parameters',2,rp) == 0) then
+      SRO_mix_0 = rp(1); SRO_mix_1 = rp(2)
+   endif
+
    rstatus = getKeyValue(tbl_id,'Effective Medium T-matrix Tol (> 0)',EM_tol)
    rstatus = getKeyValue(tbl_id,'Effective Medium Mixing eSwitch Value',EM_switch)
 !
@@ -1427,6 +1438,25 @@ contains
 !  *******************************************************************
 !  
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
+   subroutine retrieveSROSCFParams(mix_type, alpha_0, alpha_1, tol)
+!  ===================================================================
+   implicit none
+
+   integer (kind=IntKind), intent(out) :: mix_type
+
+   real (kind=RealKind), intent(out) :: alpha_0, alpha_1, tol
+
+   mix_type = SRO_mix_type
+   alpha_0 = SRO_mix_0
+   alpha_1 = SRO_mix_1
+   tol = SRO_tol
+
+   end subroutine retrieveSROSCFParams
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function isNextNearestSRO() result(nn)
 !  ===================================================================
    implicit none
