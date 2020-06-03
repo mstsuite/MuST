@@ -634,7 +634,7 @@ contains
 !        Calculate Block Tau_CPA, Block TCPA and Ta matrices
 !        ==========================================================
          call calCrystalMatrix(e,getSingleSiteTmat,use_tmat=.true.,   &
-                  tau_needed=.true.,use_sro=do_sro,configuration=site_config)
+                  tau_needed=.true.,use_sro=use_sro)
 !        ----------------------------------------------------------
          call retrieveTauSRO()
 !        ----------------------------------------------------------
@@ -659,8 +659,8 @@ contains
 !                 ----------------------------------------------------------
                enddo
                t_proj = calculateNewTCPA(n)
-               CPAMedium(n)%Tcpa = t_proj
-               CPAMedium(n)%TcpaInv = CPAMedium(n)%TcpaInv
+               CPAMedium(n)%TcpaInv = t_proj
+               CPAMedium(n)%Tcpa = CPAMedium(n)%TcpaInv
 !              ----------------------------------------------------------
                call MtxInv_LU(CPAMedium(n)%Tcpa,nsize)
 !              ----------------------------------------------------------
@@ -689,16 +689,17 @@ contains
 !              ================================================================
                else if (mixing_type /= SimpleMixing .and. iteration > min(50,MaxIterations) &
                       .and. max_err > 0.6*err_prev) then
-!              -------------------------------------------------------------
-               call setAccelerationParam(acc_mix=alpha,acc_type=SimpleMixing)
-!              -------------------------------------------------------------
-               if (print_instruction >= 0) then
-                  write(6,'(a,f10.5)')'Switch to Simple Mixing Scheme with mixing param = ',alpha
-               endif
-               mixing_type = SimpleMixing
-               iteration = 0
-               switch = switch + 1
-               alpha = alpha*HALF
+                   alpha = alpha*HALF
+!                  -------------------------------------------------------------
+                   call setAccelerationParam(acc_mix=alpha,acc_type=AndersonMixing)
+!                  -------------------------------------------------------------
+                   if (print_instruction >= 0) then
+                     write(6,'(a,f10.5)')'Switch to Anderson Mixing Scheme with mixing param = ',alpha
+                   endif
+                   mixing_type = SimpleMixing
+                   iteration = 0
+                   switch = switch + 1
+!                  alpha = alpha*HALF
                else if (mixing_type == SimpleMixing .and. iteration > MaxIterations .and. switch < 4) then
                    if ((used_Broyden .and. InitialMixingType <= 3) .or.         &
                       (.not.used_Broyden .and. InitialMixingType > 3)) then
