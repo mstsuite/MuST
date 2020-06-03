@@ -554,6 +554,7 @@ contains
 !  ===================================================================   
 
    use MatrixModule, only : computeAprojB
+   use WriteMatrixModule, only : writeMatrix
 
    integer (kind=IntKind), intent(in) :: n, ic
    real (kind=RealKind), intent(in) :: c_ic
@@ -572,13 +573,18 @@ contains
 !     ------------------------------------------------------------------------
       call computeAprojB('N', dsize*nsize, SROMedium(n)%tau_cpa(:,:,1), z, y)
 !     ------------------------------------------------------------------------
+!     call writeMatrix('(1 + tau(ta - tcpa))^-1', y, dsize*nsize, dsize*nsize, TEN2m8)
+
       call zgemm('N', 'n', dsize*nsize, dsize*nsize, dsize*nsize,    &
-        CONE, SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%T_inv, 1, y, 1,  &
-        CZERO, tmp, 1)
+        CONE, SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%T_inv, dsize*nsize, y, dsize*nsize,  &
+        CZERO, tmp, dsize*nsize)
+
+!     call writeMatrix('Ta(1 + tau(ta - tcpa))^-1', tmp, dsize*nsize, dsize*nsize, TEN2m8) 
 !     ------------------------------------------------------------------------
       call zgemm('N', 'n', dsize*nsize, dsize*nsize, dsize*nsize,    &
-        c_ic, SROMedium(n)%tau_cpa(1,1,1), 1, tmp, 1, CZERO, proj_c, 1)
+        c_ic, SROMedium(n)%tau_cpa(1,1,1), dsize*nsize, tmp, dsize*nsize, CZERO, proj_c, dsize*nsize)
 !     ------------------------------------------------------------------------
+!     call writeMatrix('tauTa(1 + tau(ta - tcpa))^-1', proj_c(1:dsize, 1:dsize), dsize, dsize, TEN2m8)
       SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%proj_a = proj_c(1:dsize, 1:dsize)
    enddo 
 
@@ -590,6 +596,7 @@ contains
 !  ===================================================================
 
    use MatrixInverseModule, only : MtxInv_LU
+   use WriteMatrixModule, only : writeMatrix
 
    integer (kind=IntKind), intent(in) :: n
    integer (kind=IntKind) :: dsize, ic
@@ -612,13 +619,16 @@ contains
      enddo
    enddo
 
+!  call writeMatrix('pre-tauinv', temp, dsize, dsize, TEN2m8)
+
    tau_inv = SROMedium(n)%tau_cpa(1:dsize, 1:dsize, 1)
 !  -----------------------------------------------------------
    call MtxInv_LU(tau_inv, dsize)
 !  -----------------------------------------------------------
    call zgemm('N', 'n', dsize, dsize, dsize, CONE, tau_inv, &
-        1, temp, 1, CZERO, total_proj, 1)
+        dsize, temp, dsize, CZERO, total_proj, dsize)
 !  -----------------------------------------------------------   
+!  call writeMatrix('new_tcpa_inv', total_proj, dsize, dsize, TEN2m8)'
 
    end function calculateNewTCPA
 !  ===================================================================
