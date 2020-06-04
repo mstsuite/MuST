@@ -430,7 +430,7 @@ contains
 
    rstatus = getKeyValue(tbl_id, 'SCF Mode', sro_scf)
    rstatus = getKeyValue(tbl_id, 'SRO Medium Mixing Scheme', SRO_mix_type)
-   rstatus = getKeyValue(tbl_id, 'SRO Medium T-Matrix Tol (> 0)', SRO_tol)
+   rstatus = getKeyValue(tbl_id, 'SRO Medium T-matrix Tol (> 0)', SRO_tol)
    
    if ( getKeyValue(tbl_id,'Effective Medium Mixing Parameters',2,rp) == 0) then
       EM_mix_0 = rp(1); EM_mix_1 = rp(2)
