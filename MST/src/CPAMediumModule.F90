@@ -707,7 +707,7 @@ contains
 !              ================================================================
                else if (mixing_type /= SimpleMixing .and. iteration > min(50,MaxIterations) &
                       .and. max_err > 0.6*err_prev) then
-                   alpha = alpha*HALF
+                   alpha=alpha*HALF
 !                  -------------------------------------------------------------
                    call setAccelerationParam(acc_mix=alpha,acc_type=AndersonMixing)
 !                  -------------------------------------------------------------
