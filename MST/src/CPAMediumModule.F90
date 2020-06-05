@@ -70,6 +70,7 @@ private
    real (kind=RealKind) :: CPA_switch_param = 0.003d0
 !
    integer (kind=IntKind) :: SRO_mixing_type
+   integer (kind=IntKind) :: SRO_max_iter
    real (kind=RealKind) :: SRO_alpha
    real (kind=RealKind) :: SRO_slow_alpha
    real (kind=RealKind) :: SRO_tolerance
@@ -251,7 +252,7 @@ contains
       sro_scf = isSROSCF()
       if (sro_scf == 1) then
          call retrieveSROSCFParams(mix_type=SRO_mixing_type, alpha_0=SRO_alpha, &
-                         alpha_1=SRO_slow_alpha,tol=SRO_tolerance)
+                         alpha_1=SRO_slow_alpha,tol=SRO_tolerance,max_iter=SRO_max_iter)
       endif
    else
       call initCrystalMatrix(nla=LocalNumSites, cant=cant, lmax_kkr=lmax_kkr,   &
@@ -643,7 +644,7 @@ contains
       nt = 0
       iteration = 0
       alpha = SRO_slow_alpha
-      LOOP_iter2 : do while (nt <= 5*MaxIterations)
+      LOOP_iter2 : do while (nt <= 5*SRO_max_iter)
          nt = nt + 1
          iteration = iteration + 1
 !        write(6,'(a,i5)')'At SRO iteration: ',iteration
@@ -705,7 +706,7 @@ contains
 !              Set 25 to be the maximum number of iterations for the fast mixing method.
 !              If the method does not converge, switch to a different method
 !              ================================================================
-               else if (mixing_type /= SimpleMixing .and. iteration > min(50,MaxIterations) &
+               else if (mixing_type /= SimpleMixing .and. iteration > 3*SRO_iter_max &
                       .and. max_err > 0.6*err_prev) then
                    alpha=alpha*HALF
 !                  -------------------------------------------------------------
