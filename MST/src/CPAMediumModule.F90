@@ -706,7 +706,7 @@ contains
 !              Set 25 to be the maximum number of iterations for the fast mixing method.
 !              If the method does not converge, switch to a different method
 !              ================================================================
-               else if (mixing_type /= SimpleMixing .and. iteration > 3*SRO_iter_max &
+               else if (mixing_type /= SimpleMixing .and. iteration > 3*SRO_max_iter &
                       .and. max_err > 0.6*err_prev) then
                    alpha=alpha*HALF
 !                  -------------------------------------------------------------
