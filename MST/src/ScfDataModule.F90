@@ -180,6 +180,7 @@ public
    real (kind=RealKind), private ::   SRO_mix_0 = 0.1d0
    real (kind=RealKind), private ::   SRO_mix_1 = 0.01d0
    real (kind=RealKind), private ::   SRO_tol = 0.00001d0
+   integer (kind=IntKind), private :: SRO_max_iter = 5
    integer (kind=IntKind), private :: sro_param_num = 0
    integer (kind=IntKind), private :: next_nearest
    integer (kind=IntKind), private :: sro_scf = 0
@@ -403,6 +404,7 @@ contains
    rstatus = getKeyValue(tbl_id,'Effective Medium Mixing Scheme',EM_mix_type)
    rstatus = getKeyValue(tbl_id,'Maximum Effective Medium Iterations',EM_max_iter)
    rstatus = getKeyValue(tbl_id,'Number of SRO Parameters', sro_param_num)
+   rstatus = getKeyValue(tbl_id,'Maximum SRO Medium Iterations',SRO_max_iter)
    
    if (rstatus == 0) then
       allocate(sro_params(sro_param_num))
@@ -1438,11 +1440,11 @@ contains
 !  *******************************************************************
 !  
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
-   subroutine retrieveSROSCFParams(mix_type, alpha_0, alpha_1, tol)
+   subroutine retrieveSROSCFParams(mix_type, alpha_0, alpha_1, tol, max_iter)
 !  ===================================================================
    implicit none
 
-   integer (kind=IntKind), intent(out) :: mix_type
+   integer (kind=IntKind), intent(out) :: mix_type, max_iter
 
    real (kind=RealKind), intent(out) :: alpha_0, alpha_1, tol
 
@@ -1450,6 +1452,7 @@ contains
    alpha_0 = SRO_mix_0
    alpha_1 = SRO_mix_1
    tol = SRO_tol
+   max_iter = SRO_max_iter
 
    end subroutine retrieveSROSCFParams
 !  ===================================================================
