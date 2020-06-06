@@ -260,59 +260,8 @@ program pot_average
 !  ===================================================================
 !  initialize radial grid
 !  -------------------------------------------------------------------
-   call initRadialGrid(LocalNumAtoms, istop, node_print_level)
+   call setupRadGridAndCell(NumAtoms,lmax_max)
 !  -------------------------------------------------------------------
-   do i=1,LocalNumAtoms
-      ig=getGlobalIndex(i,MyPE)
-!     ----------------------------------------------------------------
-      call getRadialGridData(i,ndivin,ndivout,nmult,hin)
-!     ----------------------------------------------------------------
-!     call genPolyhedron(i,ig,NumAtoms,AtomPosition)
-!     ----------------------------------------------------------------
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printPolyhedron(i)
-!        call printPolyhedronBoundary(i)
-!        -------------------------------------------------------------
-      endif
-      if (isMuffinTinPotential() .or. isMuffinTinTestPotential()) then
-!        -------------------------------------------------------------
-!         call genRadialGrid(i,xstart,getInscrSphRadius(i),           &
-!                            getWignerSeitzRadius(i),ndivin)
-         call genRadialGrid(i,xstart,getInscrSphRadius(i),            &
-                            getInscrSphRadius(i),                     &
-                            getOutscrSphRadius(i),ndivin)
-!        -------------------------------------------------------------
-      else if (isASAPotential() .or. isMuffinTinASAPotential()) then
-!        -------------------------------------------------------------
-         call genRadialGrid(i,xstart,getWignerSeitzRadius(i),         &
-                            getWignerSeitzRadius(i),                  &
-                            getOutscrSphRadius(i),ndivin)
-!                           getWignerSeitzRadius(i),ndivin)
-!        -------------------------------------------------------------
-      else
-         if (getNeighborDistance(i,1)-getOutscrSphRadius(i) < TEN2m8) then
-!           ----------------------------------------------------------
-            call WarningHandler('main',                               &
-                     'Ill condition found: Neighbor distance <= Rcs', &
-                     getNeighborDistance(i,1),getOutscrSphRadius(i))
-!           ----------------------------------------------------------
-         endif
-!        -------------------------------------------------------------
-         call genRadialGrid(i,xstart,getInscrSphRadius(i),            &
-                            getInscrSphRadius(i),                     &
-                            getOutscrSphRadius(i),ndivin)
-!        call genRadialGrid(i,getInscrSphRadius(i),getOutscrSphRadius(i), &
-!                           ndivin,ndivout,nmult)
-!        -------------------------------------------------------------
-      endif
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printRadialGrid(i)
-!        -------------------------------------------------------------
-      endif
-   enddo
-!  ===================================================================
 !
 !  *******************************************************************
 !

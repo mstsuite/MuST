@@ -160,7 +160,7 @@ program mst2
 !
    use RadialGridModule, only : initRadialGrid, endRadialGrid
    use RadialGridModule, only : genRadialGrid, printRadialGrid
-   use RadialGridModule, only : getNumRmesh, getRmesh, getGrid
+   use RadialGridModule, only : getRadialGridRadius
 !
    use CoreStatesModule, only : initCoreStates, calCoreStates, endCoreStates
    use CoreStatesModule, only : readCoreStates, readCoreDensity, writeCoreDensity
@@ -251,7 +251,7 @@ program mst2
 !
    logical :: ScfConverged = .false.
    logical :: FileNamed = .false.
-   logical :: isRmtExternal = .false.
+   logical :: isRmtUpdated = .false.
    logical :: IsoParamVINT = .false.
    logical :: FrozenCoreFileExist = .false.
    logical :: StandardInputExist = .false.
@@ -311,7 +311,7 @@ program mst2
    real (kind=RealKind) :: vcell(3,3), vorigin(3)
    real (kind=RealKind) :: bravais(3,3)
    real (kind=RealKind) :: alat
-   real (kind=RealKind) :: rmt, rinsc, rend, rws, hin
+   real (kind=RealKind) :: rmt, rinsc, rend, rws, hin, rmt_grid
    real (kind=RealKind) :: Efermi, volume, cfac
    real (kind=RealKind) :: v0, val, evb
    real (kind=RealKind) :: t0, t1, t2, t3
@@ -762,6 +762,7 @@ program mst2
 !  -------------------------------------------------------------------
    call initAtom(info_id,istop,node_print_level)
 !  -------------------------------------------------------------------
+!
    do i = 1,LocalNumAtoms
       rmt   = getMuffinTinRadius(i)
       rinsc = getInscrSphRadius(i)
@@ -771,22 +772,20 @@ program mst2
 !        -------------------------------------------------------------
          call setMuffinTinRadius(i,rinsc)
 !        -------------------------------------------------------------
-         isRmtExternal = .false.
       else if ( abs(rinsc-rmt) > Ten2m6 .and. rmt > TEN2m6 ) then
 !        =============================================================
 !        The muffin-tin radius is set to be other than the inscribed radius.
 !        -------------------------------------------------------------
          call setSystemVolumeMT(i,rmt)
 !        -------------------------------------------------------------
-         isRmtExternal = .true.
-      else
+         isRmtUpdated = .true.
+      else if (rmt < ZERO) then
 !        -------------------------------------------------------------
          call ErrorHandler('main','Invalid rmt value',rmt)
 !        -------------------------------------------------------------
       endif
    enddo
-!
-   if ( isRmtExternal ) then
+   if ( isRmtUpdated ) then
 !     ----------------------------------------------------------------
       call updateSystemVolume()
 !     ----------------------------------------------------------------
@@ -797,7 +796,6 @@ program mst2
       call printPotentialType()
       call printScfData()
       call printSystem()
-      call printSystemVolume()
       call printAtom()
 !     ----------------------------------------------------------------
    endif
@@ -853,15 +851,6 @@ program mst2
       GlobalIndex(id)=getGlobalIndex(id)
    enddo
 !
-!
-!  *******************************************************************
-!
-!  ===================================================================
-!  initialize atomic polyhedra
-!  -------------------------------------------------------------------
-!   call initPolyhedra(LocalNumAtoms,bravais,istop,node_print_level)
-!  -------------------------------------------------------------------
-!
 !  *******************************************************************
 !
 !  ===================================================================
@@ -871,17 +860,15 @@ program mst2
 !  -------------------------------------------------------------------
    call initRadialGrid(LocalNumAtoms, istop, node_print_level)
 !  -------------------------------------------------------------------
+   isRmtUpdated = .false.
    do i=1,LocalNumAtoms
       ig=GlobalIndex(i)
 !     ----------------------------------------------------------------
       call getRadialGridData(i,ndivin,ndivout,nmult,hin)
 !     ----------------------------------------------------------------
-!     call genPolyhedron(i,ig,NumAtoms,AtomPosition)
-!     ----------------------------------------------------------------
       if (atom_print_level(i) >= 0) then
 !        -------------------------------------------------------------
          call printPolyhedron(i)
-!        call printPolyhedronBoundary(i)
 !        -------------------------------------------------------------
       endif
 !
@@ -919,7 +906,6 @@ program mst2
 !        ========================================================
 !        -------------------------------------------------------------
 !011820  call genRadialGrid( i, xstart, rmt, rinsc, rws, rend, ndivin)
-         call genRadialGrid( i, rmt, rinsc, rend, ndivin)
 !        -------------------------------------------------------------
       else if (isASAPotential() ) then
 !        rend =  getWignerSeitzRadius(i)
@@ -930,7 +916,7 @@ program mst2
 !        endif
          ndivin = ndivin+11
 !        -------------------------------------------------------------
-         call genRadialGrid( i, xstart, rmt, rinsc, rinsc, rend, ndivin )
+!        call genRadialGrid( i, rmt, rinsc, rend, ndivin = ndivin )
 !        -------------------------------------------------------------
       else if ( isMuffinTinASAPotential() ) then
          rend =  getWignerSeitzRadius(i)
@@ -945,7 +931,7 @@ program mst2
 !         call setAtomVolVP(i,volume)
 !         call genRadialGrid( i, rmt, rinsc, rinsc, ndivin, ndivout, nmult)
 !        -------------------------------------------------------------
-         call genRadialGrid( i, xstart, rmt, rinsc, rend, rend, ndivin )
+!        call genRadialGrid( i, rmt, rinsc, rend, ndivin = ndivin )
 !        -------------------------------------------------------------
       else
          if (getNeighborDistance(i,1)-getOutscrSphRadius(i) < TEN2m8) then
@@ -968,16 +954,37 @@ program mst2
 !        -------------------------------------------------------------
 !!!      call genRadialGrid( i, xstart, rmt, rinsc, rws, rend, ndivin )
 !01252020call genRadialGrid( i, rmt, rinsc, rws, rend, ndivin, ndivout, nmult)
-         call genRadialGrid( i, rmt, rinsc, rend, ndivin)
+!        call genRadialGrid( i, rmt, rinsc, rend, ndivin = ndivin)
 !        -------------------------------------------------------------
       endif
+!     ----------------------------------------------------------------
+      call genRadialGrid(id=i, rmt=rmt, rinsc=rinsc, rend=rend,    &
+                         ndivin=ndivin, xstep=hin)
+!     ----------------------------------------------------------------
       if (atom_print_level(i) >= 0) then
 !        -------------------------------------------------------------
          call printRadialGrid(i)
 !        -------------------------------------------------------------
       endif
+      rmt_grid = getRadialGridRadius(i,MT=.true.)
+      if (abs(rmt_grid-rmt) > TEN2m6) then
+!        -------------------------------------------------------------
+         call setMuffinTinRadius(i,rmt_grid)
+!        -------------------------------------------------------------
+         call setSystemVolumeMT(i,rmt_grid)
+!        -------------------------------------------------------------
+         isRmtUpdated = .true.
+      endif
       radius(i) = getOutscrSphRadius(i)
    enddo
+   if ( isRmtUpdated ) then
+!     ----------------------------------------------------------------
+      call updateSystemVolume()
+!     ----------------------------------------------------------------
+   endif
+   if (node_print_level >= 0) then
+      call printSystemVolume()
+   endif
 !
 !  ===================================================================
 !  initialize and setup the Visual grid

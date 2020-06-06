@@ -226,7 +226,7 @@ $(ODIR)/madpot: madpot.o
 	$(LD) -o $(ODIR)/madpot madpot.o $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/pav: pot_average.o
-	$(LD) -o $(ODIR)/pav pot_average.o $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
+	$(LD) -o $(ODIR)/pav pot_average.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 
 $(ODIR)/ft: inc_fftw fourier_transform.o
@@ -254,10 +254,10 @@ $(SRC_OBJS)  $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 	rm -f fftw3f.h
 
 $(ODIR)/testSineMatrixPole: testSineMatrixPole.o calScatteringPoles.o
-	$(LD) -o $(ODIR)/testSineMatrixPole testSineMatrixPole.o $(ODIR)/calScatteringPoles.o $(ODIR)/readInputs.o $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
+	$(LD) -o $(ODIR)/testSineMatrixPole testSineMatrixPole.o $(ODIR)/calScatteringPoles.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/testSineMatrixPole2: testSineMatrixPole2.o calScatteringPoles.o
-	$(LD) -o $(ODIR)/testSineMatrixPole2 testSineMatrixPole2.o $(ODIR)/readInputs.o $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
+	$(LD) -o $(ODIR)/testSineMatrixPole2 testSineMatrixPole2.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/findResonance:  findResonance.o
 	$(LD) -o $(ODIR)/findResonance findResonance.o $(ODIR)/SCPolesModule.o \
@@ -290,7 +290,7 @@ $(ODIR)/testBlockInverse: testBlockInverse.o
 	$(LD) -o $(ODIR)/testBlockInverse $(ODIR)/testBlockInverse.o $(ODIR)/MatrixBlockInversionModule.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/testParallelIO: testParallelIO.o
-	$(LD) -o $(ODIR)/testParallelIO testParallelIO.o $(ODIR)/readInputs.o $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
+	$(LD) -o $(ODIR)/testParallelIO testParallelIO.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/testPZGETRI: testPZGETRI.o 
 	$(LD) -o $(ODIR)/testPZGETRI testPZGETRI.o $(ADDLIBS) $(MPPLIB) $(MSTLIB)

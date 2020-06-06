@@ -203,10 +203,11 @@
    n = n + 1; Keys(n) = 'Default No. Rad Points ndivout';        Values(n) = '0'
 !                     = 0: Not specified; > 0: Speciflied. Note: rmt < r(j)=exp(j*hout) <= rmax, j=1,2,...,ndivout
    n = n + 1; Keys(n) = 'Default Integer Factor nmult';          Values(n) = '1'
-!                     = 0: Not specified; > 0: Speciflied. Note: r(j) = exp(j*h), hin = nmult*hout
+!                     = 0: Not specified; > 0: Speciflied. Note: r(j) = exp(j*hin), hin = nmult*hout
    n = n + 1; Keys(n) = 'Default Radial Grid Exponential Step';  Values(n) = '0.0'
 !                     = 0.0: Not specified; 
-!                     > 0.0: 0.005 - 0.02 is recommended. Note: r(j) = exp(j*h), here h is the exponential step
+!                     > 0.0: 0.005 - 0.02 is recommended. Note: r(j) = exp(j*hin), here hin is the 
+!                            exponential step. In this case, you may want to leave ndivin unspecified
    n = n + 1; Keys(n) = 'Default Pseudo Charge Radius';          Values(n) = '0.9'
 !             Note: This is the ratio of the pseudo charge radius and the muffin-tin radius
    n = n + 1; Keys(n) = 'Default Screen Pot.';                   Values(n) = '3.0'
@@ -236,7 +237,8 @@
    n = n + 1; Keys(n) = 'Default Muffin-tin Radius';             Values(n) = '0'
 !                     = 0: Using the inscribed sphere radius
 !                     = 1: Using the implicit muffin-tin radius defined in ChemElementModule
-!                     = A specific real value (> 0.0, in atomic units)
+!                     = A specific real value (> 0.0, in atomic units). However, if this value < 1.0, it will be treated
+!                       as a multiplier, and the muffin-tin radius is this value times the inscribed sphere radius.
    n = n + 1; Keys(n) = 'Default Radical Plane Ratio';           Values(n) = '0.000'
    n = n + 1; Keys(n) = 'Uniform Grid Origin';                   Values(n) = '0'
 !                     = 0: Using unit cell corner             

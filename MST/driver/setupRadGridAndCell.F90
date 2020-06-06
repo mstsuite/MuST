@@ -84,7 +84,8 @@ subroutine setupRadGridAndCell(LocalNumAtoms,lmax_max)
 !        ========================================================
 !        -------------------------------------------------------------
 !011820  call genRadialGrid( i, xstart, rmt, rinsc, rws, rend, ndivin)
-         call genRadialGrid( i, rmt, rinsc, rend, ndivin)
+!        call genRadialGrid( i, rmt, rinsc, rend, ndivin)
+         call genRadialGrid( i, rmt, rinsc, rend, ndivin = ndivin)
 !        -------------------------------------------------------------
       else if (isASAPotential() ) then
 !        rend =  getWignerSeitzRadius(i)
@@ -95,7 +96,8 @@ subroutine setupRadGridAndCell(LocalNumAtoms,lmax_max)
 !        endif
          ndivin = ndivin+11
 !        -------------------------------------------------------------
-         call genRadialGrid( i, xstart, rmt, rinsc, rinsc, rend, ndivin )
+!        call genRadialGrid( i, xstart, rmt, rinsc, rinsc, rend, ndivin )
+         call genRadialGrid( i, rmt, rinsc, rend, ndivin = ndivin )
 !        -------------------------------------------------------------
       else if ( isMuffinTinASAPotential() ) then
          rend =  getWignerSeitzRadius(i)
@@ -110,7 +112,8 @@ subroutine setupRadGridAndCell(LocalNumAtoms,lmax_max)
 !         call setAtomVolVP(i,volume)
 !         call genRadialGrid( i, rmt, rinsc, rinsc, ndivin, ndivout, nmult)
 !        -------------------------------------------------------------
-         call genRadialGrid( i, xstart, rmt, rinsc, rend, rend, ndivin )
+!        call genRadialGrid( i, xstart, rmt, rinsc, rend, rend, ndivin )
+         call genRadialGrid( i, rmt, rinsc, rend, ndivin = ndivin )
 !        -------------------------------------------------------------
       else
          if (getNeighborDistance(i,1)-getOutscrSphRadius(i) < TEN2m8) then
@@ -122,7 +125,8 @@ subroutine setupRadGridAndCell(LocalNumAtoms,lmax_max)
          endif
          rinsc = getInscrSphRadius(i)
          rws = getWignerSeitzRadius(i)
-         call genRadialGrid( i, rmt, rinsc, rend, ndivin)
+!        call genRadialGrid( i, rmt, rinsc, rend, ndivin)
+         call genRadialGrid( i, rmt, rinsc, rend, ndivin = ndivin)
 !        if ( rmt < 0.010d0 ) then
 !           rmt = getInscrSphRadius(i)
 !        endif

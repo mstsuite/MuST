@@ -107,7 +107,7 @@ program testParallelIO
    integer (kind=IntKind) :: def_id, info_id
    integer (kind=IntKind) :: i, j, k, id, ig, nstep, is, nr, ns, ip
    integer (kind=IntKind) :: lmax_step_max, lmax_kkr_max, lmax_phi_max, lmax_rho_max, lmax_pot_max
-   integer (kind=IntKind) :: ndivin, ndivout, nmult
+   integer (kind=IntKind) :: ndivin, ndivout, nmult, lmax_max
    integer (kind=IntKind) :: LocalNumAtoms, NumAtoms, NumIOProcs(2)
    integer (kind=IntKind) :: node_print_level
    integer (kind=IntKind) :: MaxSpecies
@@ -221,6 +221,7 @@ program testParallelIO
    lmax_rho_max = 0
    lmax_pot_max = 0
    lmax_step_max = 0
+   lmax_max = 0
    do i=1,LocalNumAtoms
       lmax_kkr(i) = getKKRLmax(i)
       lmax_phi(i) = getPhiLmax(i)
@@ -232,6 +233,7 @@ program testParallelIO
       lmax_rho_max = max(lmax_rho_max,lmax_rho(i))
       lmax_pot_max = max(lmax_pot_max,lmax_pot(i))
       lmax_step_max = max(lmax_step_max,lmax_step(i))
+      lmax_max = max(lmax_max,lmax_step(i))
    enddo
 !
 !  -------------------------------------------------------------------
@@ -244,12 +246,6 @@ program testParallelIO
    call initGauntFactors(lmax_step_max,istop,0)
 !  -------------------------------------------------------------------
 !
-!  ===================================================================
-!  initialize radial grid
-!  -------------------------------------------------------------------
-   call initRadialGrid(LocalNumAtoms, istop, node_print_level)
-!  -------------------------------------------------------------------
-!
    if (isDataStorageExisting('Bravais Vector')) then
 !     ----------------------------------------------------------------
       bravais => getDataStorage('Bravais Vector',3,3,RealMark)
@@ -259,82 +255,9 @@ program testParallelIO
       call ErrorHandler('testParallelIO','Bravais vector data does not exist')
 !     ----------------------------------------------------------------
    endif
-!
-   do i=1,LocalNumAtoms
-      ig=getGlobalIndex(i)
-      GlobalIndex(i)=ig
-!     ----------------------------------------------------------------
-      call getRadialGridData(i,ndivin,ndivout,nmult,hin)
-!     ----------------------------------------------------------------
-      call genPolyhedron(i,ig,NumAtoms,AtomPosition)
-!     ----------------------------------------------------------------
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printPolyhedron(i)
-!        call printPolyhedronBoundary(i)
-!        -------------------------------------------------------------
-      endif
-      if (isMuffinTinPotential() .or. isMuffinTinTestPotential()) then
-!        -------------------------------------------------------------
-         call genRadialGrid(i,xstart,getInscrSphRadius(i),            &
-                            getInscrSphRadius(i),                     &
-                            getOutscrSphRadius(i),ndivin)
-!        -------------------------------------------------------------
-      else if (isASAPotential() .or. isMuffinTinASAPotential()) then
-!        -------------------------------------------------------------
-         call genRadialGrid(i,xstart,getWignerSeitzRadius(i),         &
-                            getWignerSeitzRadius(i),                  &
-                            getOutscrSphRadius(i),ndivin)
-!                           getWignerSeitzRadius(i),ndivin)
-!        -------------------------------------------------------------
-      else
-         if (getNeighborDistance(i,1)-getOutscrSphRadius(i) < TEN2m8) then
-!           ----------------------------------------------------------
-            call WarningHandler('main',                               &
-                     'Ill condition found: Neighbor distance <= Rcs', &
-                     getNeighborDistance(i,1),getOutscrSphRadius(i))
-!           ----------------------------------------------------------
-         endif
-!        -------------------------------------------------------------
-         call genRadialGrid(i,xstart,getInscrSphRadius(i),            &
-                            getInscrSphRadius(i),                     &
-                            getOutscrSphRadius(i),ndivin)
-!        call genRadialGrid(i,getInscrSphRadius(i),getOutscrSphRadius(i), &
-!                           ndivin,ndivout,nmult)
-!        -------------------------------------------------------------
-      endif
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printRadialGrid(i)
-!        -------------------------------------------------------------
-      endif
-   enddo
-!  ===================================================================
-!  initialize step function module
-!  ===================================================================
-   allocate( ngr(LocalNumAtoms), ngt(LocalNumAtoms) )
-   do i=1,LocalNumAtoms
-      ngr(i) = ngaussr
-      ngt(i) = ngaussq
-   enddo
-!
 !  -------------------------------------------------------------------
-   call initStepFunction(LocalNumAtoms, lmax_step_max, lmax_step, ngr, ngt, &
-                         istop,node_print_level)
+   call setupRadGridAndCell(NumAtoms,lmax_max)
 !  -------------------------------------------------------------------
-   deallocate( ngr, ngt )
-!
-   do i=1,LocalNumAtoms
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printStepFunction(i)
-!        -------------------------------------------------------------
-      endif
-!     ----------------------------------------------------------------
-      call testStepFunction(i)
-!     ----------------------------------------------------------------
-   enddo
-!  ===================================================================
 !
 !  *******************************************************************
 !
