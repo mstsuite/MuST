@@ -3,7 +3,7 @@ program mst2
 !
    use KindParamModule, only : IntKind, RealKind, CmplxKind
 !
-   use MathParamModule, only : ZERO, TEN2m8, TEN2m6, TEN2m5, TEN2m3, PI4, THIRD
+   use MathParamModule, only : ZERO, TEN2m8, TEN2m6, TEN2m5, TEN2m3, ONE, PI4, THIRD
 !
    use ChemElementModule, only : getZval
 !
@@ -766,23 +766,32 @@ program mst2
    do i = 1,LocalNumAtoms
       rmt   = getMuffinTinRadius(i)
       rinsc = getInscrSphRadius(i)
-      if (abs(rmt) < TEN2m6) then
-!        =============================================================
-!        The muffin-tin radius is set to be the inscribed radius.
+      if (rmt < ONE) then
+         if (abs(rmt) < TEN2m6) then
+!           ==========================================================
+!           The muffin-tin radius is set to be the inscribed radius.
+!           ==========================================================
+            rmt = rinsc
+         else
+!           ==========================================================
+!           In this case, rmt is treated as a scaling factor for rinsc
+!           The muffin-tin radius is set to be the inscribed radius
+!           multiplied by the scaling factor
+!           ==========================================================
+            rmt = rmt*rinsc
+         endif
 !        -------------------------------------------------------------
-         call setMuffinTinRadius(i,rinsc)
+         call setMuffinTinRadius(i,rmt)
 !        -------------------------------------------------------------
-      else if ( abs(rinsc-rmt) > Ten2m6 .and. rmt > TEN2m6 ) then
+      endif 
+!
+      if ( abs(rinsc-rmt) > TEN2m6) then
 !        =============================================================
 !        The muffin-tin radius is set to be other than the inscribed radius.
 !        -------------------------------------------------------------
          call setSystemVolumeMT(i,rmt)
 !        -------------------------------------------------------------
          isRmtUpdated = .true.
-      else if (rmt < ZERO) then
-!        -------------------------------------------------------------
-         call ErrorHandler('main','Invalid rmt value',rmt)
-!        -------------------------------------------------------------
       endif
    enddo
    if ( isRmtUpdated ) then

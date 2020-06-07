@@ -208,6 +208,7 @@ contains
    real (kind=RealKind), intent(in) :: evb
 !
    real (kind=RealKind), pointer :: r_mesh(:)
+   real (kind=RealKind) :: rc
 !
    interface
       subroutine hunt(n,xx,x,jlo)
@@ -279,22 +280,25 @@ contains
 !     otherwise, the value is chosen to be either the inscribed sphere radius 
 !     or the circumscribed sphere radius of the atomic cell.
 !     ================================================================
-      if ( getAtomCoreRad(id) < ZERO .and. isFullPotential()) then
+      rc = getAtomCoreRad(id)
+      if ( rc < ZERO .and. isFullPotential()) then
          jcore = getRadialGridPoint(id, getOutscrSphRadius(id))
-      else if ( getAtomCoreRad(id) < 0.10d0 ) then
+      else if ( rc < TEN2m6 ) then
 !012620===============================
 !012620  jcore = Core(id)%Grid%jmt
 !        jcore = Core(id)%Grid%jinsc
-         if (isFullPotential() .or. getMuffinTinRadius(id) < 0.10d0) then
+         if (isFullPotential() .or. getMuffinTinRadius(id) < ONE) then
             jcore = getRadialGridPoint(id, getInscrSphRadius(id))
          else
             jcore = getRadialGridPoint(id, getMuffinTinRadius(id))
          endif
 !012620===============================
+      else if ( rc < ONE ) then
+         jcore = getRadialGridPoint(id, rc*getInscrSphRadius(id))
       else
 !012620===============================
 !        jcore = Core(id)%Grid%jmt
-!        Core(id)%rcore_mt = getAtomCoreRad(id)
+!        Core(id)%rcore_mt = rc
 !        Find the first point on the radial grid that is smaller
 !        than the input rcore_mt
 !        jend = Core(id)%Grid%jend
@@ -306,7 +310,7 @@ contains
 !           Core(id)%rcore_mt = r_mesh(jcore)
 !           Core(id)%jcore = jcore
 !        endif
-         jcore = getRadialGridPoint(id,getAtomCoreRad(id))
+         jcore = getRadialGridPoint(id,rc)
 !012620===============================
       endif
       Core(id)%rcore_mt = r_mesh(jcore)

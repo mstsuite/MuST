@@ -800,10 +800,10 @@ contains
             call ErrorHandler('initAtom','Invalid muffin-tin radius parameter', &
                               AtomProperty(n)%Rmt)
 !           ----------------------------------------------------------
-         else if (AtomProperty(n)%Rmt == ZERO) then
+         else if (AtomProperty(n)%Rmt == ZERO .and. present(rinsc)) then
             AtomProperty(n)%Rmt=rinsc(n)
-         else if (AtomProperty(n)%Rmt < ONE) then ! The read-in value is used as a
-                                                  ! multiplier to the inscribed sphere radius
+         else if (AtomProperty(n)%Rmt < ONE .and. present(rinsc)) then 
+!           The read-in value is used as a multiplier to the inscribed sphere radius
             AtomProperty(n)%Rmt=AtomProperty(n)%Rmt*rinsc(n)
          endif
       else
