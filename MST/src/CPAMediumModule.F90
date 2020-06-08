@@ -630,7 +630,7 @@ contains
 !        -------------------------------------------------------------
       else
 !        -------------------------------------------------------------
-         call setAccelerationParam(acc_mix=SRO_slow_alpha,acc_type=SRO_mixing_type)
+         call setAccelerationParam(acc_mix=SRO_slow_alpha,acc_type=AndersonMixing)
 !        -------------------------------------------------------------
       endif 
       if (getAccelerationType() == AndersonMixing) then
