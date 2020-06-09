@@ -233,7 +233,8 @@
 !                     = 0: Using the inscribed sphere radius for full-potential calculations,
 !                          the muffin-tin radius for muffin-tin calculations, or the ASA radius for ASA calculations.
 !                     = 1: Using the implicit core radius defined in ChemElementModule
-!                     = A specific real value (> 0.0, in atomic units)
+!                     = A specific real value (> 0.0, in atomic units). However, if this value < 1.0, it will be treated
+!                       as a multiplier, and the core radius is this value times the inscribed sphere radius.
    n = n + 1; Keys(n) = 'Default Muffin-tin Radius';             Values(n) = '0'
 !                     = 0: Using the inscribed sphere radius
 !                     = 1: Using the implicit muffin-tin radius defined in ChemElementModule

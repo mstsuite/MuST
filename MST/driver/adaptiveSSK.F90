@@ -30,7 +30,7 @@ program adaptiveSSK
    use StepFunctionModule, only : getVolumeIntegration
 !
    use PotentialModule, only : initPotential, endPotential
-   use PotentialModule, only : readPotential, setPotentialOutsideMT, getPotential
+   use PotentialModule, only : readPotential, getPotential
    use PotentialModule, only : getPotEf, setV0, setPotential, isPotComponentZero, getSphPotr
 !
    use ScfDataModule, only : ngaussr, ngaussq

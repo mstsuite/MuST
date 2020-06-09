@@ -2023,7 +2023,7 @@ contains
 !
    write(6,'(''Local Atom Index: '',i6)')id
    write(6,'(''jend, jcore     : '',2i6)')Core(id)%Grid%jend,Core(id)%jcore
-   write(6,'(''Core radius     : '',f12.8)')Core(id)%Rcore_mt
+   write(6,'(''Core radius     : '',f12.8)')Core(id)%rcore_mt
    write(6,'(''Upper limit of core level'',t31,''='',f20.11)')etopcor
    do ia = 1, Core(id)%NumSpecies
       write(6,'(80(''=''))')

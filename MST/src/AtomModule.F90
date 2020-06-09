@@ -1936,9 +1936,6 @@ contains
       call ErrorHandler('setMuffinTinRadius','Invalid atom index',i)
    endif
    AtomProperty(i)%Rmt = rmt
-   if (AtomProperty(i)%Rcore < 0.001d0) then
-      AtomProperty(i)%Rcore=AtomProperty(i)%Rmt
-   endif
 !
    end subroutine setMuffinTinRadius
 !  ===================================================================

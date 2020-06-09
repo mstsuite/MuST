@@ -146,7 +146,8 @@ program mst2
    use AtomModule, only : getLocalAtomNickName, printAtomMomentInfo
 !   use AtomModule, only : setAtomVolMT, setAtomVolVP
 !   use AtomModule, only : setAtomVolWS, setAtomVolINSC
-   use AtomModule, only : getLocalAtomPosition, getLocalEvec, getAtomCoreRad
+   use AtomModule, only : getLocalAtomPosition, getLocalEvec
+   use AtomModule, only : getAtomCoreRad, setAtomCoreRad
    use AtomModule, only : getLocalConstrainField, updateLocalExchangeFieldDir
    use AtomModule, only : getMixingParam4Evec ! , resetCompFlags, getCompFlags
 !
@@ -783,6 +784,14 @@ program mst2
 !        -------------------------------------------------------------
          call setMuffinTinRadius(i,rmt)
 !        -------------------------------------------------------------
+         if (.not.isFullPotential()) then
+!           ==========================================================
+!           For Muffin-tin, ASA, or Muffin-tin-ASA calculations, since
+!           potential outside rmt is 0, core radius is set to rmt
+!           ----------------------------------------------------------
+            call setAtomCoreRad(i,rmt)
+!           ----------------------------------------------------------
+         endif
       endif 
 !
       if ( abs(rinsc-rmt) > TEN2m6) then
@@ -979,6 +988,15 @@ program mst2
       if (abs(rmt_grid-rmt) > TEN2m6) then
 !        -------------------------------------------------------------
          call setMuffinTinRadius(i,rmt_grid)
+!        -------------------------------------------------------------
+         if (.not.isFullPotential()) then
+!           ==========================================================
+!           For Muffin-tin, ASA, or Muffin-tin-ASA calculations, since
+!           potential outside rmt is 0, core radius is set to rmt
+!           ----------------------------------------------------------
+            call setAtomCoreRad(i,rmt_grid)
+!           ----------------------------------------------------------
+         endif
 !        -------------------------------------------------------------
          call setSystemVolumeMT(i,rmt_grid)
 !        -------------------------------------------------------------
