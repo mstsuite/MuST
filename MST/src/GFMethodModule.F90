@@ -98,6 +98,7 @@ private
    integer (kind=IntKind), allocatable :: lmax_green(:)
 !
    integer (kind=IntKind) :: RECORD_LENGTH
+   integer (kind=IntKind) :: MaxRs
 !
    integer (kind=IntKind), parameter :: n_inter = 5 ! order of polynomial
                                                     ! interpolation
@@ -402,6 +403,7 @@ contains
 !
    green_size = 0
    nsize = 0
+   MaxRs = 0
    do id = 1,LocalNumAtoms
       Grid => getGrid(id)
       NumRs(id) = Grid%jend
@@ -413,6 +415,7 @@ contains
       else
          nsize = max(nsize,NumRs(id)*jmax*getLocalNumSpecies(id))
       endif
+      MaxRs = max(MaxRs,NumRs(id))
    enddo
 !
    if (getAdaptiveIntegrationMethod() == 1) then
@@ -1970,6 +1973,9 @@ contains
                LastValue(id)%evalsum(is,ia)=adjustEnergy(is,HALF*(efermi+efermi_old))*LastValue(id)%dos(is,ia)
             enddo
          enddo
+!        =============================================================
+!        If efermi-efermi_old < 0, the following code could potentially
+!        cause IntegrValue(id)%dos_r_jl(1,1,:,:) < 0
 !        =============================================================
          call addElectroStruct(efermi-efermi_old,LastValue(id),IntegrValue(id))
 !        -------------------------------------------------------------
@@ -4043,6 +4049,8 @@ contains
    use MSSolverModule, only : getMSGreenFunction, getMSGreenMatrix
    use MSSolverModule, only : getMSGreenFunctionDerivative
 !
+   use SSSolverModule, only : getFreeElectronDOS
+!
    use PotentialTypeModule, only : isASAPotential
 !
    use RadialGridModule, only : getGrid
@@ -4061,7 +4069,7 @@ contains
    complex (kind=CmplxKind), intent(inout), target :: dos_array(:)
 !
    integer (kind=IntKind), intent(in) :: info(:)
-   integer (kind=IntKind) :: is, id, atom, ia
+   integer (kind=IntKind) :: is, id, atom, ia, ir, nr
    integer (kind=IntKind) :: ks, jid, j, l, m, jl, kl, klc, p0, n, i
    integer (kind=IntKind) :: jmax, kmax, iend, ns_sqr, gform
 !
@@ -4081,7 +4089,12 @@ contains
    complex (kind=CmplxKind), pointer :: der_green(:,:,:,:), der_dos_r_jl(:,:)
    complex (kind=CmplxKind), pointer :: pcv_x(:), pcv_y(:), pcv_z(:), p1(:)
 !
+   real (kind=RealKind), pointer :: fedos(:)
+   real (kind=RealKind) :: der_fedos(MaxRs)
+!
    type (GridStruct), pointer :: Grid
+!
+   logical :: isPositive
 !
    is = info(1); id = info(2); atom = info(3)
    energy = adjustEnergy(is,e)
@@ -4266,9 +4279,48 @@ contains
                pca_y = cmul*SQRTm1*pca_x
                p0 = p0 + kmax*kmax
             endif
+! =============================================================================
+! Note: It is possible that due to numerical round off error, the imaginary part
+!       of Green function becomes negative. In this case, DOS is replaced with
+!       the free-electron DOS. An investigation of this issue is necessary in the
+!       future.  06/14/2020....
+! =============================================================================
+            isPositive = .false.
+            LOOP_ir: do ir = Grid%jend, 1, -1
+               if (aimag(green(ir,1,ks,ia)) > ZERO) then
+!                 write(6,'(a,2i5,2d16.8)')'id,ir,r,-Im[green(ir)]/PI = ',     &
+!                       id,ir,Grid%r_mesh(ir),-aimag(green(ir,1,ks,ia))/Grid%r_mesh(ir)**2/PI
+                  nr = ir
+                  isPositive = .true.
+                  exit LOOP_ir
+               endif
+            enddo LOOP_ir
+            if (isPositive) then
+               if (rad_derivative) then
+                  fedos => getFreeElectronDOS(site=id,gfac=cmul,derivative=der_fedos)
+               else
+                  fedos => getFreeElectronDOS(site=id,gfac=cmul)
+               endif
+               if (rad_derivative) then
+                  do ir = 1, nr
+                     if (aimag(green(ir,1,ks,ia)) > ZERO) then
+                        dos_r_jl(ir,1) = sfac*fedos(ir)
+                        der_dos_r_jl(ir,1) = sfac*der_fedos(ir)
+                     endif
+                  enddo
+               else
+                  do ir = 1, nr
+                     if (aimag(green(ir,1,ks,ia)) > ZERO) then
+                        dos_r_jl(ir,1) = sfac*fedos(ir)
+                     endif
+                  enddo
+               endif
+            endif
+! =============================================================================
          enddo
       endif
    enddo
+   nullify(fedos)
 !
 !! The following codes will be uncommented and implemented later....................................
 !! if (n_spin_cant == 2) then
@@ -4895,7 +4947,7 @@ contains
 !
    use GroupCommModule, only : GlobalSumInGroup
 !
-   use ScfDataModule, only : isLloyd, getLloydMode
+   use ScfDataModule, only : isLloyd, getLloydMode, getMixingParamForFermiEnergy
 !
    use KreinModule, only : isLloydOn
 !
@@ -4917,7 +4969,7 @@ contains
    real (kind=RealKind) :: efdif
    real (kind=RealKind) :: dosefpa
    real (kind=RealKind) :: ztdif
-   real (kind=RealKind) :: r
+   real (kind=RealKind) :: ef_mixing, mixing_switch
    real (kind=RealKind) :: N_Green_Contour(2)
    real (kind=RealKind) :: wspace(6)
 !
@@ -5004,6 +5056,13 @@ contains
 !  falls into a band gap, where the DOS is very small, the new Fermi
 !  energy is adjusted by an amount <= 0.01.
 !  +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+!
+!  ===================================================================
+!  The following line is added on 06/14/2020 to enable fermi energy  
+!  mixing if the change is found greater than mixing_switch
+!  ===================================================================
+   ef_mixing = getMixingParamForFermiEnergy(mixing_switch)
+!
    if (iharris > 1) then
       efermi = efermi_old
    else if (tnen < 0.0001d0) then
@@ -5027,14 +5086,13 @@ contains
 !     ----------------------------------------------------------------
 !     efermi = efermi_old + efdif/real(NumPEsInAGroup,kind=RealKind)
 !  ===================================================================
-!  The following code added on 05/27/2020 to modify the way the
-!  new Fermi energy is determined
+!  The following code added on 05/27/2020 and updated on 06/14/2020 to 
+!  change the way the new Fermi energy is determined
 !  ===================================================================
-   else if (abs(xtws/tnen) > 0.010d0) then
-      r = 0.5d0              ! r is essentially a mixing parameter
-      efermi = efermi_old -r*xtws/tnen
+   else if (abs(xtws/tnen) > mixing_switch) then
+      efermi = efermi_old -ef_mixing*xtws/tnen
       if ( node_print_level >= 0) then
-         write(6,'(/,a,4d17.8,/)')'tnen,xtws,x/t,r = ',tnen,xtws,xtws/tnen,r
+         write(6,'(/,a,4d17.8,/)')'tnen,xtws,x/t,ef_mixing = ',tnen,xtws,xtws/tnen,ef_mixing
       endif
    else
       efermi = efermi_old - xtws/tnen
@@ -5381,7 +5439,7 @@ contains
 !
    character (len=17) :: sname='calDensity'
 !
-   integer (kind=IntKind) :: id, ir, ia
+   integer (kind=IntKind) :: id, ir, ia, is
 !
    real (kind=RealKind), intent(in):: efermi
    real (kind=RealKind) :: dos(4)

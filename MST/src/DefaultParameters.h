@@ -240,13 +240,31 @@
 !                     = 1: Using the implicit muffin-tin radius defined in ChemElementModule
 !                     = A specific real value (> 0.0, in atomic units). However, if this value < 1.0, it will be treated
 !                       as a multiplier, and the muffin-tin radius is this value times the inscribed sphere radius.
-   n = n + 1; Keys(n) = 'Default Radical Plane Ratio';           Values(n) = '0.000'
+   n = n + 1; Keys(n) = 'Default Radical Plane Ratio';           Values(n) = '1.000'
+!  Note: "Ratio" here is the radical plane distance from atom ralative to a 
+!        universal value applied to the entire system. This universal value does 
+!        not have to be specified, so long as all the atoms in the system have 
+!        the same denominator when choosing this value. If all atoms have the same
+!        radical plane ratio (RPR), a radical plane is set at half way between two
+!        atoms. If each atom has its own RPR, which is in effect treated as a 
+!        "weight" for the atom when setting up a radical plane. Specifically, a 
+!        radical plane between atom i and atom j, separated by distance D, will be 
+!        set at distance from atom i at D*RPR(i)/(RPR(i)+RPR(j)), and at distance 
+!        from atom j at D*RPR(j)/(RPR(i)+RPR(j))
    n = n + 1; Keys(n) = 'Uniform Grid Origin';                   Values(n) = '0'
 !                     = 0: Using unit cell corner             
 !                     = 1: Using Unit cell center
    n = n + 1; Keys(n) = 'Core States Normalization Range';       Values(n) = '0'
 !                     = 0: Up to bounding sphere radius
 !                     = 1: Up to infinity
+   n = n + 1; Keys(n) = 'Mixing Parameter for Finding Ef';       Values(n) = '0.5'
+!        Note: At each SCF step, the calculated fermi energy will be mixing with the old fermi energy
+!              to determine the new fermi energy for the next SCF iteration
+   n = n + 1; Keys(n) = 'Mixing Switch for Finding Ef';          Values(n) = '0.01'
+!        Note: If the difference between the calculated fermi energy and the old fermi energy is
+!              greater than this switching value, mixing will be engaged. otherwise, no fermi energy
+!              mixing is applied. One may keep the fermi energy fixed by setting this switching value 
+!              to 0.0 and also setting fermi energy mixing parameter to 0.0.
 !  =============================================================================
 !  Additional input parameters can be added to this table using the 
 !  following format:

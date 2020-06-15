@@ -19,7 +19,7 @@
    real (kind=RealKind), allocatable :: denOnGrid(:)
 !
    interface 
-      subroutine constructDataOnGrid(grid_name, value_name, value_type, getData, den, lmax, spin)
+      subroutine constructDataOnGrid(grid_name, value_name, value_type, getData, den, lmax, spin, tol_in)
          use KindParamModule, only : IntKind, RealKind
          use PublicTypeDefinitionsModule, only : UniformGridStruct
          implicit none
@@ -27,15 +27,16 @@
          character (len=*), intent(in) :: value_name
          character (len=*), intent(in) :: value_type
          real (kind=RealKind), intent(out) :: den(:)
+         real (kind=RealKind), intent(in), optional :: tol_in
          integer (kind=IntKind), intent(in), optional :: lmax, spin
 !
          interface
-            function getData( dname, id, ia, r, jmax_in, n, grad ) result(v)
+            function getData( dname, id, ia, r, tol, jmax_in, n, grad ) result(v)
                use KindParamModule, only : IntKind, RealKind
                implicit none
                character (len=*), intent(in) :: dname
                integer (kind=IntKind), intent(in) :: id, ia
-               real (kind=RealKind), intent(in) :: r(3)
+               real (kind=RealKind), intent(in) :: r(3), tol
                real (kind=RealKind), intent(out), optional :: grad(3)
                integer (kind=IntKind), intent(in), optional :: jmax_in, n
                real (kind=RealKind) :: v

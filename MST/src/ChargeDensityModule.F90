@@ -198,12 +198,13 @@ contains
 !  ===================================================================
    use IntegerFactorsModule, only : initIntegerFactors
    use Atom2ProcModule, only : getMaxLocalNumAtoms
-   use RadialGridModule, only : getNumRmesh, getRmesh, getGrid
+   use RadialGridModule, only : getNumRmesh, getRmesh, getGrid, getRadialGridPoint
    use SystemModule, only : getNumAtoms, getLmaxRho, getNumAlloyElements
    use AtomModule, only : getRcutPseudo, getLocalNumSpecies
    use PotentialTypeModule, only : isFullPotential, isMuffinTinFullPotential
    use ScfDataModule, only : isChargeSymm, isFittedChargeDen
    use ValenceDensityModule, only : getValenceElectronDensity, getValenceMomentDensity
+   use PolyhedraModule, only : getInscrSphRadius
 !
    implicit none
 !
@@ -841,11 +842,15 @@ contains
          else 
 !2/7/2020   if ( r_ps <= ONE ) then ! If r_ps < 1.0, it is regarded as r_ps/Rmt
             r_ps = r_ps*p_CDL%r_mesh(jmt)
+            if (r_ps > getInscrSphRadius(id)) then
+               r_ps = getInscrSphRadius(id)
+            endif
 !2/7/2020   endif
-            ir = 1
+!           ir = 1
 !           ----------------------------------------------------------
-            call hunt(nr,p_CDL%r_mesh,r_ps,ir)
+!           call hunt(nr,p_CDL%r_mesh,r_ps,ir)
 !           ----------------------------------------------------------
+            ir = getRadialGridPoint(id,r_ps,less_or_equal=.true.)
          endif
          if ( print_level(id)>=0 ) then
             write(6,'(/,a,2(1x,f12.8))') "ChargeDensity:: Input:  R_pseudo/R_mt, R_pseudo = ", &
@@ -1178,9 +1183,10 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getChargeDensityAtPoint(densityType, id, ia, posi, jmax_in, n_mult, grad) result(rho)
+   function getChargeDensityAtPoint(densityType, id, ia, posi, tol_in, &
+                                    jmax_in, n_mult, grad) result(rho)
 !  ===================================================================
-   use MathParamModule, only : ZERO, TWO
+   use MathParamModule, only : ZERO, TWO, TEN2m8
 !
    use SphericalHarmonicsModule, only : calYlm
 !
@@ -1197,6 +1203,7 @@ contains
    integer (kind=IntKind), intent(in), optional :: n_mult
 !
    real (kind=RealKind), intent(in) :: posi(3)
+   real (kind=RealKind), intent(in) :: tol_in
    real (kind=RealKind), intent(out), optional :: grad(3)
 !
    integer (kind=IntKind) :: VP_point
@@ -1302,10 +1309,26 @@ contains
    endif
 !
    if ( present(n_mult) ) then
-      if ( n_mult<1 ) then 
+      if ( n_mult < 1 ) then 
          call ErrorHandler("getChargeDensityAtPoint",'Invalid n_mult',n_mult)
       endif
-      VP_point = getPointLocationFlag(id, posi(1), posi(2), posi(3))
+      VP_point = getPointLocationFlag(id, posi(1), posi(2), posi(3), tol=tol_in)
+!     ================================================================
+!     Consistency check
+!     ================================================================
+      if (VP_point == 0 .and. n_mult == 1) then
+!        -------------------------------------------------------------
+         call WarningHandler('getChargeDensityAtPoint',                 &
+                             'Inconsistency between VP_point and n_mult',&
+                             VP_point,n_mult)
+!        -------------------------------------------------------------
+      else if (VP_point /= 0 .and. n_mult /= 1) then
+!        -------------------------------------------------------------
+         call WarningHandler('getChargeDensityAtPoint',                 &
+                             'Inconsistency between VP_point and n_mult',&
+                             VP_point,n_mult)
+!        -------------------------------------------------------------
+      endif
       if ( nocaseCompare(densityType,"Pseudo") ) then
          if ( VP_point == 1 .or. VP_point == 0 ) then
             do jl = 1,p_CDL%jmax
@@ -1665,7 +1688,8 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getMomentDensityAtPoint(momentType, id, ia, posi, jmax_in, n_mult, grad) result(mom)
+   function getMomentDensityAtPoint(momentType, id, ia, posi, tol_in, &
+                                    jmax_in, n_mult, grad) result(mom)
 !  ===================================================================
    use MathParamModule, only : ZERO, TWO
 !
@@ -1688,6 +1712,7 @@ contains
    integer (kind=IntKind) :: kmax, nr, is, isig, jmax
 !
    real (kind=RealKind), intent(in) :: posi(3)
+   real (kind=RealKind), intent(in) :: tol_in
    real (kind=RealKind), intent(out), optional :: grad(3)
    real (kind=RealKind) :: mom, err, r, fact, er(3)
 !
@@ -1779,10 +1804,26 @@ contains
 !
    mom_l = CZERO
    if ( present(n_mult) ) then
-      if ( n_mult<1 ) then
+      if ( n_mult < 1 ) then
          call ErrorHandler("getMomentDensityAtPoint",'Invalid n_mult',n_mult)
       endif
-      VP_point = getPointLocationFlag(id, posi(1), posi(2), posi(3))
+      VP_point = getPointLocationFlag(id, posi(1), posi(2), posi(3), tol=tol_in)
+!     ================================================================
+!     Consistency check
+!     ================================================================
+      if (VP_point == 0 .and. n_mult == 1) then
+!        -------------------------------------------------------------
+         call WarningHandler('getMomentDensityAtPoint',                 &
+                             'Inconsistency between VP_point and n_mult',&
+                             VP_point,n_mult)
+!        -------------------------------------------------------------
+      else if (VP_point /= 0 .and. n_mult /= 1) then
+!        -------------------------------------------------------------
+         call WarningHandler('getMomentDensityAtPoint',                 &
+                             'Inconsistency between VP_point and n_mult',&
+                             VP_point,n_mult)
+!        -------------------------------------------------------------
+      endif
       if ( nocaseCompare(momentType,"TotalNew") ) then
          if ( VP_point == 1 .or. VP_point == 0) then
             do jl = 1,jmax
@@ -2128,16 +2169,17 @@ contains
       p_CDL%ChargeCompFlag(1) = 1
       do ia = 1, p_CDL%NumSpecies
          rho2p_r => getValenceSphericalElectronDensity(id,ia)
+!        write(6,'(a,i5,a,d15.8)')'id = ',id,', vale den(1) = ',rho2p_r(1)
          evec(1:3) = getLocalEvec(id,'new')
          rho0 => p_CDL%rhoSph_Total(1:nr+1,ia)
-         rho0(1:nr+1) = ZERO
+         rho0 = ZERO
          rho0(1:nr) = rho0(1:nr) + rho2p_r(1:nr)
 !
          if ( print_level(id) >= 0 ) then
             q_tmp = getVolumeIntegration( id, jend, r_mesh, 0,           &
                                           rho2p_r(1:nr), q_tmp_mt )
             write(6,'(a,i4,a,i4,a)')'+++++ id = ',id,',   ia = ',ia,' +++++'
-            write(6,'(a,f20.14)') "Charge Density :: Spherical Val Charge in MT   = ",  &
+            write(6,'(a,f20.14)') "Charge Density :: Spherical Val Charge in IS   = ",  &
                        q_tmp_mt
             write(6,'(a,f20.14)') "Charge Density :: Spherical Val Charge in VP   = ",  &
                        q_tmp
@@ -2182,7 +2224,7 @@ contains
                                           den_r1(jend)*PI8
             write(6,'(a,f20.14)') "Charge Density :: DeepCore Charge in EX-Sphere = ", &
                                           den_r1(nr)*PI8
-            write(6,'(a,f20.14)') "Charge Density :: DeepCore Charge in MT        = ",  q_tmp_mt
+            write(6,'(a,f20.14)') "Charge Density :: DeepCore Charge in Insc. Sph.= ",  q_tmp_mt
             write(6,'(a,f20.14)') "Charge Density :: DeepCore Charge in VP        = ",  q_tmp
          endif
 !
@@ -2218,7 +2260,7 @@ contains
             write(6,'(a,f20.14)') "Charge Density :: SemiCore Charge in MT-Sphere = ", den_r1(jmt)*PI8
             write(6,'(a,f20.14)') "Charge Density :: SemiCore Charge in WS-Sphere = ", den_r1(jend)*PI8
             write(6,'(a,f20.14)') "Charge Density :: SemiCore Charge in EX-Sphere = ", den_r1(nr)*PI8
-            write(6,'(a,f20.14)') "Charge Density :: SemiCore Charge in MT        = ", q_tmp_mt
+            write(6,'(a,f20.14)') "Charge Density :: SemiCore Charge in Insc. Sph.= ", q_tmp_mt
             write(6,'(a,f20.14)') "Charge Density :: SemiCore Charge in VP        = ", q_tmp
 !
          endif
@@ -2232,9 +2274,10 @@ contains
 !        =============================================================
          do ir = 1, nr
             if (rho0(ir) < ZERO) then
-               if (rho0(ir) > -TEN2m5 .or. getLocalAtomicNumber(id,ia) == 0) then
-                  rho0(ir) = ZERO
+               if (rho0(ir) > -TEN2m5 .or. getLocalAtomicNumber(id,ia) < 2) then
+                  rho0(ir) = TEN2m5
                else
+                  write(6,'(a,i5,a,i5,a,f12.8)')'For id = ',id,', ir = ',ir, ', r(ir) = ',r_mesh(ir)
                   call ErrorHandler('constructChargeDensity','rho0(ir) < 0',rho0(ir),.true.)
                endif
             endif
@@ -2329,7 +2372,6 @@ contains
          endif
 !
          if ( .not.isSphericalCharge ) then
-!
 !           =========================================================
 !           L Density components - should have been already computed in
 !                                  ValenceStatesModule for l>1 and for l=0
@@ -2409,9 +2451,9 @@ contains
                q_tmp = getVolumeIntegration( id, nr, r_mesh(1:nr), kmax, jmax,  &
                                            0, p_CDL%rhoL_Valence(1:nr,1:jmax,ia),   &
                                            q_tmp_mt)
-               write(6,'(a,f20.14)') "Charge Density :: Valence Charge in MT-Sphere  = ", &
+               write(6,'(a,f20.14)') "Charge Density :: Valence Charge in Insc. Sph. = ", &
                                                  q_tmp_mt
-               write(6,'(a,f20.14)') "Charge Density :: Valence Charge in VP         = ", &
+               write(6,'(a,f20.14)') "Charge Density :: Valence Charge in Voro. Poly.= ", &
                                                  q_tmp
             endif
 !
@@ -2471,14 +2513,11 @@ contains
 !
             q_tmp = getVolumeIntegration( id, nr, r_mesh, kmax, jmax,   &
                                             0, p_CDL%rhoL_Total(1:nr,1:jmax,ia), q_tmp_mt )
-            qlost = qlost+(getLocalAtomicNumber(id,ia) - q_tmp)
+            qlost = qlost+(getLocalAtomicNumber(id,ia) - q_tmp)*getLocalSpeciesContent(id,ia)
             if (print_level(id) >= 0) then
-               write(6,'(a,f20.14)')'Checking -- Missing charge in atomic cell      = ',qlost
+               write(6,'(a,f20.14,a,i4)')'Checking -- Missing charge in atomic cell      = ', &
+                    getLocalAtomicNumber(id,ia)-q_tmp,', of species',ia
             endif
-!qlost = qlost+(getLocalAtomicNumber(ia) - q_tmp_mt)
-!if (print_level(id) >= 0) then
-!   write(6,'(a,f18.14)')'Checking --- Interstitial charge  = ',qlost
-!endif
 !
 !           ==========================================================
 !           Use getVolumeIntegration to calculate the volume will help
@@ -2694,7 +2733,7 @@ contains
                                             0, p_CDL%rhoL_Total(1:nr,1:jmax,ia), &
                                             q_tmp_mt )
             if (print_level(id) >= 0) then
-               write(6,'(a,2i5,f20.14)') "id, ia, Total Charge in MT = ", &
+               write(6,'(a,2i5,f20.14)') "id, ia, Total Charge in IS = ", &
                                                  id, ia, q_tmp_mt
                write(6,'(a,2i5,f20.14)') "id, ia, Total Charge in VP = ", &
                                                  id, ia, q_tmp

@@ -1109,6 +1109,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine printRadialGrid(id)
 !  ===================================================================
+   use MathParamModule, only : THIRD, PI, FOUR
    implicit none
    integer (kind=IntKind), intent(in) :: id
 !
@@ -1144,6 +1145,7 @@ contains
 !  write(6,'(  ''rinsc      '',t40,''='',d20.13)')Grid(id)%rinsc
    write(6,'(  ''rend       '',t40,''='',d20.13)')Grid(id)%rend 
 !  write(6,'(  ''rws        '',t40,''='',d20.13)')Grid(id)%rws 
+   write(6,'(  ''4pi/3*rmt^3'',t40,''='',d20.13)')FOUR*PI*Grid(id)%rmt**3*THIRD 
    write(6,'(a)')'============================================================'
 !
    end subroutine printRadialGrid

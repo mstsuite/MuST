@@ -1087,8 +1087,9 @@ contains
    real (kind=RealKind) :: zt
    real (kind=RealKind) :: r2t
    real (kind=RealKind) :: r
-   real (kind=RealKind), allocatable :: radsq(:)
-   real (kind=RealKind) :: d2, radsq_dif, CutRatio, d2t
+!  real (kind=RealKind), allocatable :: radsq(:)
+!  real (kind=RealKind) :: radsq_dif
+   real (kind=RealKind) :: d2, CutRatio, d2t
 !
 !  ==================================================================
 !  determine i,j,k data set.......................................
@@ -1118,10 +1119,10 @@ contains
       enddo
    enddo
 !
-   allocate( radsq(num_seeds) )
-   do n=1,num_seeds
-      radsq(n) = radical(n)*radical(n)
-   enddo
+!  allocate( radsq(num_seeds) )
+!  do n=1,num_seeds
+!     radsq(n) = radical(n)*radical(n)
+!  enddo
 !
    x0=seed_pos(1,i_seed)
    y0=seed_pos(2,i_seed)
@@ -1139,12 +1140,13 @@ contains
          if (d2 < TOLERANCE) then
             cycle LOOP_j_seed
          endif
-         radsq_dif = radsq(i_seed)-radsq(j_seed)
-         if (abs(radsq_dif) < TOLERANCE) then
-            CutRatio = HALF
-         else
-            CutRatio = HALF*(ONE+radsq_dif/d2)
-         endif
+!        radsq_dif = radsq(i_seed)-radsq(j_seed)
+         CutRatio = radical(i_seed)/(radical(i_seed)+radical(j_seed))
+!        if (abs(radsq_dif) < TOLERANCE) then
+!           CutRatio = HALF
+!        else
+!           CutRatio = HALF*(ONE+radsq_dif/d2)
+!        endif
          x = CutRatio*x
          y = CutRatio*y
          z = CutRatio*z
@@ -1193,7 +1195,7 @@ contains
       enddo LOOP_j_seed
    enddo
    nm1=j
-   deallocate( radsq )
+!  deallocate( radsq )
 !
 !  ===================================================================
 !  reduce nm1 to speed up the process of looking for boundary planes
@@ -2527,7 +2529,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function isExternalPoint(poly,x,y,z) result(a)
+   function isExternalPoint(poly,x,y,z,tol_in) result(a)
 !  ===================================================================
    implicit none
 !
@@ -2535,6 +2537,7 @@ contains
    integer (kind=IntKind) :: isigma
 !
    real (kind=RealKind), intent(in) :: x, y, z
+   real (kind=RealKind), intent(in), optional :: tol_in
    real (kind=RealKind) :: tol
 !
    logical :: a
@@ -2543,7 +2546,11 @@ contains
       call ErrorHandler('isExternalPoint','Invalid polyhedron index',poly)
    endif
 !
-   tol = TOLERANCE
+   if (present(tol_in)) then
+      tol = tol_in
+   else
+      tol = TOLERANCE
+   endif
 !  -------------------------------------------------------------------
    call chkpnt(x,y,z,Polyhedron(poly)%vplane,                         &
                      Polyhedron(poly)%vpsq,                           &
@@ -2561,7 +2568,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function isSurfacePoint(poly,x,y,z) result(a)
+   function isSurfacePoint(poly,x,y,z,tol_in) result(a)
 !  ===================================================================
    implicit none
 !
@@ -2569,6 +2576,7 @@ contains
    integer (kind=IntKind) :: isigma
 !
    real (kind=RealKind), intent(in) :: x, y, z
+   real (kind=RealKind), intent(in), optional :: tol_in
    real (kind=RealKind) :: tol
 !
    logical :: a
@@ -2577,7 +2585,11 @@ contains
       call ErrorHandler('isExternalPoint','Invalid polyhedron index',poly)
    endif
 !
-   tol = HALF*TOLERANCE
+   if (present(tol_in)) then
+      tol = tol_in
+   else
+      tol = HALF*TOLERANCE
+   endif
 !  -------------------------------------------------------------------
    call chkpnt(x,y,z,Polyhedron(poly)%vplane,                         &
                      Polyhedron(poly)%vpsq,                           &
@@ -2604,7 +2616,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getPointLocationFlag(poly,x,y,z) result(f)
+   function getPointLocationFlag(poly,x,y,z,tol) result(f)
 !  ===================================================================
    implicit none
 !
@@ -2612,13 +2624,38 @@ contains
    integer (kind=IntKind) :: f
 !
    real (kind=RealKind), intent(in) :: x, y, z
+   real (kind=RealKind), intent(in), optional :: tol
 !
-   if (isExternalPoint(poly,x,y,z)) then
-      f = -1
-   else if (isSurfacePoint(poly,x,y,z)) then
-      f = 0
+   if (present(tol)) then
+!     if (isExternalPoint(poly,x,y,z,tol_in=tol)) then
+!        f = -1
+!     else if (isSurfacePoint(poly,x,y,z,tol_in=tol)) then
+!        f = 0
+!     else
+!        f = 1
+!     endif
+      if (isSurfacePoint(poly,x,y,z,tol_in=tol)) then
+         f = 0
+      else if (isExternalPoint(poly,x,y,z,tol_in=tol)) then
+         f = -1
+      else
+         f = 1
+      endif
    else
-      f = 1
+!     if (isExternalPoint(poly,x,y,z)) then
+!        f = -1
+!     else if (isSurfacePoint(poly,x,y,z)) then
+!        f = 0
+!     else
+!        f = 1
+!     endif
+      if (isSurfacePoint(poly,x,y,z)) then
+         f = 0
+      else if (isExternalPoint(poly,x,y,z)) then
+         f = -1
+      else
+         f = 1
+      endif
    endif
 !
    end function getPointLocationFlag

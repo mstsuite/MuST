@@ -270,7 +270,7 @@ private
 !
    real (kind=RealKind), allocatable, target :: sqrt_r(:), rr0(:)
 !
-   real (kind=RealKind), parameter :: sigma_tol = TEN2m8
+   real (kind=RealKind), parameter :: sigma_tol = TEN2m6  ! changed from TEN2m8 on 3/4/2020
 !
    real (kind=RealKind), allocatable :: rfg(:), res(:)
    complex (kind=CmplxKind), allocatable :: cfg(:), ces(:)
@@ -525,6 +525,7 @@ contains
    do ic = 2,n
       ng(ic-1) = ceiling(ngr*(StepFunction(poly)%CriticalR(ic)-       &
                               StepFunction(poly)%CriticalR(ic-1))/fac)
+!     write(6,'(a,2i5)')'ic, ng = ',ic-1,ng(ic-1)
 !       ng(ic-1)=20
       nmax = max(nmax, ng(ic-1))
    enddo
@@ -1055,7 +1056,7 @@ contains
 !
    logical, intent(in), optional :: truncated
 !
-   logical :: isTruncated
+   logical :: isTruncated, positive_def
 !
    integer (kind=IntKind) :: ig, ng, ir, mr, mt
 !
@@ -1097,8 +1098,8 @@ contains
    call setupIntWkSpace(nr,r)
 !
    rmin = StepFunction(n)%rmin
-   rmax = StepFunction(n)%rmin          ! By default, will truncate
-   isTruncated =.true.
+   rmax = StepFunction(n)%rmin
+   isTruncated =.true.          ! By default, will truncate
 !
    if ( present(truncated) ) then
       if (.not.truncated) then
@@ -1131,6 +1132,11 @@ contains
       enddo LOOP_irt
    endif
 !
+   positive_def = .false.
+   if (minval(f,nr) >= ZERO) then
+      positive_def = .true.
+   endif
+!
    allocate( g(0:mr+1) )
 !
    g(0) = ZERO
@@ -1143,18 +1149,27 @@ contains
 !        -------------------------------------------------------------
          call calIntegration(mr+1,sqrt_r(0:mr),g(0:mr),g0,2*k+3)
 !        -------------------------------------------------------------
+         if (positive_def .and. g0 < ZERO) then
+            g0 = ZERO
+         endif
          v = g0*PI4*TWO
 !
          if ( present(v_mr) ) then
 !           ----------------------------------------------------------
             call calIntegration(mt+1,sqrt_r(0:mt),g(0:mt),g0,2*k+3)
 !           ----------------------------------------------------------
+            if (positive_def .and. g0 < ZERO) then
+               g0 = ZERO
+            endif
             v_mr = g0*PI4*TWO
         endif
       else
 !        -------------------------------------------------------------
          fg = getInterpolation(nr,r(1:nr),f(1:nr),rmax,err)
 !        -------------------------------------------------------------
+         if (positive_def .and. fg < ZERO) then
+            fg = ZERO
+         endif
          rt = sqrt_r(mr+1)
          sqrt_r(mr+1) = sqrt(rmax)
          do ir = 1,mr
@@ -1164,6 +1179,9 @@ contains
 !        -------------------------------------------------------------
          call calIntegration(mr+2,sqrt_r(0:mr+1),g(0:mr+1),g0,2*k+3)
 !        -------------------------------------------------------------
+         if (positive_def .and. g0 < ZERO) then
+            g0 = ZERO
+         endif
          v = g0*PI4*TWO
          sqrt_r(mr+1) = rt
          if ( present(v_mr) ) then
@@ -1173,6 +1191,9 @@ contains
 !              -------------------------------------------------------
                fg = getInterpolation(nr,r(1:nr),f(1:nr),rmin,err)
 !              -------------------------------------------------------
+               if (positive_def .and. fg < ZERO) then
+                  fg = ZERO
+               endif
                rt = sqrt_r(mt+1)
                sqrt_r(mt+1) = sqrt(rmin)
                do ir = 1,mt
@@ -1182,6 +1203,9 @@ contains
 !              -------------------------------------------------------
                call calIntegration(mt+2,sqrt_r(0:mt+1),g(0:mt+1),g0,2*k+3)
 !              -------------------------------------------------------
+               if (positive_def .and. g0 < ZERO) then
+                  g0 = ZERO
+               endif
                v_mr = g0*PI4*TWO
                sqrt_r(mt+1) = rt
             endif
@@ -1214,6 +1238,9 @@ contains
 !     ----------------------------------------------------------------
       fg = getInterpolation(nr-mr,r(mr+1:nr),f(mr+1:nr),rg(ig),err)
 !     ----------------------------------------------------------------
+      if (positive_def .and. fg < ZERO) then
+         fg = ZERO
+      endif
       vng = vng + TWO*sqrt(PI)*wg(ig)*fg*(rg(ig)**(2+k))*             &
                   real(StepFunction(n)%sigma_L(ig,1),kind=RealKind)
    enddo

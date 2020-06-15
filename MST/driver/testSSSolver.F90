@@ -36,7 +36,7 @@ program testSSSolver
    use StepFunctionModule, only : getVolumeIntegration
 !
    use PotentialModule, only : initPotential, endPotential
-   use PotentialModule, only : readPotential, setPotentialOutsideMT, getPotential
+   use PotentialModule, only : readPotential, setPotentialOutsideR, getPotential
    use PotentialModule, only : getPotEf, setV0, setPotential, isPotComponentZero, getSphPotr
 !
    use ScfDataModule, only : ngaussr, ngaussq
@@ -385,7 +385,7 @@ program testSSSolver
             Grid => getGrid(id)
             do is = 1,n_spin_pola
 !              -------------------------------------------------------
-!ywg           call setPotentialOutsideMT(id,1,is,nfit=3)
+!ywg           call setPotentialOutsideR(id,1,is,nfit=3)
 !              -------------------------------------------------------
                jl = 0
                do l = 0, lmax_pot(id)

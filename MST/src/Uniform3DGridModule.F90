@@ -1,6 +1,6 @@
 module Uniform3DGridModule
    use KindParamModule, only : IntKind, RealKind
-   use MathParamModule, only : ZERO, ONE
+   use MathParamModule, only : ZERO, TEN2m8, ONE
    use PublicTypeDefinitionsModule, only : UniformGridStruct
    use PublicTypeDefinitionsModule, only : AtomOnUniformGridStruct
    use ErrorHandlerModule, only : ErrorHandler, StopHandler, WarningHandler
@@ -22,7 +22,8 @@ public ::                      &
    isOnAtomicCellBoundary,     &
    isLocalGrid,                &
    getSourceProc,              &
-   getTargetProc
+   getTargetProc,              &
+   getToleranceParam
 !
    interface distributeUniformGrid
       module procedure distributeUniformGrid_s, distributeUniformGrid_p
@@ -58,6 +59,8 @@ private
          logical :: t
       end function nocaseCompare
    end interface
+!
+   real (kind=RealKind) :: tol_param = TEN2m8
 !
 contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -342,7 +345,7 @@ contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine insertAtomsInGrid(gname, NumAtoms, AtomPosition,        &
-                                getPointLocationFlag, radius)
+                                getPointLocationFlag, radius, tol_in)
 !  ===================================================================
 !  This routine identifies the uniform grid points local to the input atoms,
 !  which are local to this processor. However, the identified grid points 
@@ -367,6 +370,7 @@ contains
    integer (kind=IntKind), intent(in) :: NumAtoms
 !
    real (kind=RealKind), intent(in) :: radius(:)
+   real (kind=RealKind), intent(in), optional :: tol_in
 !
    integer (kind=IntKind) :: gCounter, ic, jc, kc, GroupID
    integer (kind=IntKind) :: ia, lp, mp, np, nshift, ig, max_incell_pts
@@ -395,12 +399,13 @@ contains
    type (PointOnCellStruct), pointer :: p_head, linked_list
 !
    interface
-      function getPointLocationFlag(i,x,y,z) result(k)
+      function getPointLocationFlag(i,x,y,z,tol) result(k)
          use KindParamModule, only : IntKind, RealKind
          implicit none
          integer (kind=IntKind), intent(in) :: i
          integer (kind=IntKind) :: k
          real (kind=RealKind), intent(in) :: x, y, z
+         real (kind=RealKind), intent(in), optional :: tol
       end function getPointLocationFlag
    end interface
 !
@@ -542,6 +547,10 @@ contains
 !
    allocate(pAOG%InCellGridPointABIndex(max_incell_pts,NumAtoms))
 !
+   if (present(tol_in)) then
+      tol_param = tol_in
+   endif
+!
    pAOG%NumGridPointsOnCellBound = 0
    do ia = 1, NumAtoms
       pAOG%NumGridPointsInCell(ia) = 0
@@ -570,7 +579,7 @@ contains
 !           Establish a linked list of all grid points which are on atomic
 !           cell boundaries.
 !           ==========================================================
-            n = getPointLocationFlag(ia, rv(1), rv(2), rv(3))
+            n = getPointLocationFlag(ia, rv(1), rv(2), rv(3), tol=tol_param)
             if (n >= 0) then
                pAOG%NumGridPointsInCell(ia) = pAOG%NumGridPointsInCell(ia) + 1
                if (pAOG%NumGridPointsInCell(ia) > max_incell_pts) then
@@ -1560,5 +1569,19 @@ contains
    endif
 !
    end function getTargetProc
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getToleranceParam() result(tol)
+!  ===================================================================
+   implicit none
+!
+   real (kind=RealKind) :: tol
+!
+   tol = tol_param
+!
+   end function getToleranceParam
 !  ===================================================================
 end module Uniform3DGridModule

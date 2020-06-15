@@ -31,7 +31,7 @@ public :: initPotential,         &
           getPotEf,              &
           setPotEf,              &
           setPotentialAccess,    &
-          setPotentialOutsideMT, &
+          setPotentialOutsideR,  &
           isSphericalInputFile,  &
           pushPotentialToAccel,  &
           pushTruncatedPotToAccel, &
@@ -136,7 +136,7 @@ contains
    use Atom2ProcModule, only : getGlobalIndex, getMaxLocalNumAtoms,  &
                                getLocalNumAtoms
    use AtomModule, only : getTPL => getTruncPotLmax
-   use RadialGridModule, only : getGrid
+   use RadialGridModule, only : getGrid, getNumRmesh
    use DataServiceCenterModule, only : createDataStorage,     &
                                        getDataStorage,        &
                                        isDataStorageExisting, &
@@ -150,8 +150,6 @@ contains
    use PotentialTypeModule, only : isFullPotential
    use ScfDataModule, only : getSingleSiteSolverMethod, isChargeSymm
 !
-   use RadialGridModule, only : getNumRmesh
-!
    implicit none
 !
    character (len=*) :: istop
@@ -164,7 +162,7 @@ contains
    integer (kind=IntKind) :: lmax_max_trunc, lmax_pot_trunc, jmax_pot_trunc
    integer (kind=IntKind) :: jmax_trunc, kmax_trunc
    integer (kind=IntKind) :: lmax_max_step
-   integer (kind=IntKind) :: lmax_pot, jmax_pot, jend, jmt
+   integer (kind=IntKind) :: lmax_pot, jmax_pot, jend
    integer (kind=IntKind) :: lmax_max, jmax_max, l, m, ip, glb_lmax_max
    integer (kind=IntKind) :: numc, ig, msg(5), MaxLocalNumAtoms
 !
@@ -187,7 +185,8 @@ contains
    ClusterIndexOfGroup = getMyClusterIndex(GroupID)
 !
 !  if ( getSingleSiteSolverMethod() > 0 ) then
-   if ( getSingleSiteSolverMethod() > -2 ) then
+!  if ( getSingleSiteSolverMethod() > -2) then
+   if ( isFullPotential() ) then
       isTruncatedPotential = .true.
    else
       isTruncatedPotential = .false.
@@ -266,8 +265,7 @@ contains
       Grid => getGrid(id)
       DataSize(id) = Grid%jend*NumSpecies(id)*n_spin_pola
       if ( isTruncatedPotential ) then
-         iend_diff = Grid%jend-Grid%jmt+1
-         DataSize_trunc(id) = iend_diff*n_spin_pola*NumSpecies(id)
+         DataSize_trunc(id) = Grid%jend*n_spin_pola*NumSpecies(id)
       endif
    enddo
 !
@@ -294,9 +292,9 @@ contains
 !        ------------------------------------------------------------
          do id = 1,LocalNumAtoms
             Grid => getGrid(id)
-            iend_diff = Grid%jend-Grid%jmt+1
+            jend = Grid%jend
 !           ----------------------------------------------------------
-            call setDataStorageLDA(id,'OldLDATruncPotential_r',iend_diff)
+            call setDataStorageLDA(id,'OldLDATruncPotential_r',jend)
 !           ----------------------------------------------------------
          enddo
       endif
@@ -311,7 +309,7 @@ contains
 !        l = lmax_step(id)+lmax(id)
          l = getTPL(id)
          jl = ((l+1)*(l+2))/2
-         iend_diff = Grid%jend - Grid%jmt + 1
+         iend_diff = Grid%jend - Grid%jinsc + 1
          DataSize_trunc(id) = iend_diff*jl*n_spin_pola*NumSpecies(id)
       endif
    enddo
@@ -339,7 +337,7 @@ contains
 !        ------------------------------------------------------------
          do id = 1,LocalNumAtoms
             Grid => getGrid(id)
-            iend_diff = Grid%jend - Grid%jmt + 1
+            iend_diff = Grid%jend - Grid%jinsc + 1
 !           ----------------------------------------------------------
             call setDataStorageLDA(id,'OldLDATruncPotential_l',iend_diff)
 !           ----------------------------------------------------------
@@ -378,7 +376,6 @@ contains
       Grid => getGrid(id)
       jmax_pot=((lmax_pot+1)*(lmax_pot+2))/2
       jend = Grid%jend
-      jmt = Grid%jmt
       allocate(Potential(id)%jtitle(n_spin_pola,NumSpecies(id)))
       allocate(Potential(id)%ztss(NumSpecies(id)))
       allocate(Potential(id)%isTruncDone(NumSpecies(id)))
@@ -393,7 +390,7 @@ contains
       Potential(id)%lmax=lmax_pot
       Potential(id)%jmax=jmax_pot
       if ( isTruncatedPotential ) then
-         iend_diff = jend - jmt + 1
+         iend_diff = jend - Grid%jinsc + 1
 !        lmax_pot_trunc = (lmax(id)+lmax_step(id))
          lmax_pot_trunc = getTPL(id)
          jmax_pot_trunc = ((lmax_pot_trunc+1)*(lmax_pot_trunc+2))/2
@@ -404,7 +401,7 @@ contains
          Potential(id)%pot_l_trunc=>getDataStorage(id,"OldLDATruncPotential_l", &
                             iend_diff,jmax_pot_trunc,n_spin_pola,NumSpecies(id),ComplexMark)
          Potential(id)%potr_sph_trunc=>getDataStorage(id,"OldLDATruncPotential_r", &
-                                        iend_diff,n_spin_pola,NumSpecies(id),RealMark)
+                                                      jend,n_spin_pola,NumSpecies(id),RealMark)
          Potential(id)%isTruncDone(1:NumSpecies(id)) = .false.
          Potential(id)%PotCompFlag_trunc(1:jmax_pot_trunc)=0
       else
@@ -412,8 +409,8 @@ contains
          nullify(Potential(id)%pot_l_trunc)
          nullify(Potential(id)%potr_sph_trunc)
          Potential(id)%isTruncDone = .false.
-         Potential(id)%lmax_trunc=-1
-         Potential(id)%jmax_trunc=-1
+         Potential(id)%lmax_trunc=0
+         Potential(id)%jmax_trunc=1
       endif
 !
       jmtmax = max(jmtmax,Potential(id)%Grid%jmt)
@@ -546,7 +543,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getSphPotr(id,ia,is) result(potr)
+   function getSphPotr(id,ia,is,truncated) result(potr)
 !  ===================================================================
    implicit none
 !
@@ -554,6 +551,9 @@ contains
    integer (kind=IntKind), intent(in) :: ia
    integer (kind=IntKind), intent(in) :: is
    integer (kind=IntKind) :: iend
+!
+   logical, intent(in), optional :: truncated
+   logical :: tr
 !
    real (kind=RealKind), pointer :: potr(:)
 !
@@ -568,8 +568,22 @@ contains
       call ErrorHandler('getSphPotr','invalid spin index',is)
    endif
 !
+   if (present(truncated)) then
+      tr = truncated .and. isTruncatedPotential
+   else
+      tr = .false.
+   endif
+!
    iend = Potential(id)%Grid%jend
-   potr => Potential(id)%potr_sph(1:iend,is,ia)
+   if (.not.tr) then
+      potr => Potential(id)%potr_sph(1:iend,is,ia)
+   else
+      if ( .not.Potential(id)%isTruncDone(ia) ) then
+         call truncatePotential(id,ia)
+         Potential(id)%isTruncDone(ia) = .true.
+      endif
+      potr => Potential(id)%potr_sph_trunc(1:iend,is,ia)
+   endif
 !
    end function getSphPotr
 !  ===================================================================
@@ -608,6 +622,9 @@ contains
    endif
    r_mesh => Potential(id)%Grid%r_mesh(1:iend)
    Potential(id)%potr_sph(1:iend,is,ia)=potr(1:iend)
+   if (isTruncatedPotential) then
+      Potential(id)%potr_sph_trunc(1:iend,is,ia)=potr(1:iend)
+   endif
    do ir=1,Potential(id)%Grid%jend
       Potential(id)%pot_l(ir,1,is,ia)=cmplx( potr(ir)/(Y0*r_mesh(ir)),&
                                           ZERO, kind=CmplxKind )
@@ -1181,7 +1198,7 @@ contains
    integer (kind=IntKind), intent(in) :: is
    integer (kind=IntKind), intent(in) :: jl
    integer (kind=IntKind), intent(in) :: ir
-   integer (kind=IntKind) :: iend, jmt
+   integer (kind=IntKind) :: iend, jinsc
 !
    real (kind=RealKind), pointer :: r_mesh(:)
 !
@@ -1215,20 +1232,21 @@ contains
       call ErrorHandler('getTruncPoten_r','ir < iend',ir)
    endif
 !
-   jmt = Potential(id)%Grid%jmt
-   r_mesh=>Potential(id)%Grid%r_mesh(jmt:iend)
-   if ( ir>jmt ) then
-      if (jl == 1) then
-         pot_r=Potential(id)%potr_sph_trunc(ir-jmt+1,is,ia)/(Y0*r_mesh(ir))
-      else
-         pot_r=Potential(id)%pot_l_trunc(ir-jmt+1,jl,is,ia)
-      endif
+   jinsc = Potential(id)%Grid%jinsc
+   r_mesh=>Potential(id)%Grid%r_mesh(jinsc:iend)
+   if ( ir>jinsc ) then
+!     if (jl == 1) then
+!        pot_r=Potential(id)%potr_sph_trunc(ir-jinsc+1,is,ia)/(Y0*r_mesh(ir))
+!        pot_r=Potential(id)%potr_sph_trunc(ir,is,ia)/(Y0*r_mesh(ir))
+!     else
+         pot_r=Potential(id)%pot_l_trunc(ir-jinsc+1,jl,is,ia)
+!     endif
    else
-      if (jl == 1) then
-         pot_r=Potential(id)%potr_sph(ir,is,ia)/(Y0*r_mesh(ir))
-      else
+!     if (jl == 1) then
+!        pot_r=Potential(id)%potr_sph(ir,is,ia)/(Y0*r_mesh(ir))
+!     else
          pot_r=Potential(id)%pot_l(ir,jl,is,ia)
-      endif
+!     endif
    endif
 !
    end function getTruncPoten_r
@@ -1271,6 +1289,11 @@ contains
       do ir = 1,iend
          Potential(id)%potr_sph(ir,is,ia)=Y0*pot_l(ir)*r_mesh(ir)
       enddo
+      if (isTruncatedPotential) then
+         do ir = 1,iend
+            Potential(id)%potr_sph_trunc(ir,is,ia)=Potential(id)%potr_sph(ir,is,ia)
+         enddo
+      endif
    endif
 !
 !  check the integraty of the potential ...
@@ -1313,7 +1336,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine setPotentialOutsideMT(id,ia,is,v0,nfit)
+   subroutine setPotentialOutsideR(id,ia,is,r,v0,nfit)
 !  ===================================================================
    implicit none
 !
@@ -1322,9 +1345,10 @@ contains
    integer (kind=IntKind), intent(in) :: is
    integer (kind=IntKind), intent(in), optional :: nfit
 !
+   real (kind=RealKind), intent(in) :: r
    real (kind=RealKind), intent(in), optional :: v0
 !
-   integer (kind=IntKind) :: ir, iend, jmt, jl, jl_max, iex
+   integer (kind=IntKind) :: ir, iend, nr, jl, jl_max, iex
 !
    real (kind=RealKind), pointer :: r_mesh(:), x_mesh(:)
 !
@@ -1353,29 +1377,40 @@ contains
       call ErrorHandler('setPotential','invalid is',is)
    else if (ia < 1 .or. ia > NumSpecies(id)) then
       call ErrorHandler('setPotential','invalid species index',ia)
+   else if (r <= ZERO) then
+      call ErrorHandler('setPotential','invalid r',r)
    endif
 !
    jl_max = Potential(id)%jmax
    iend = Potential(id)%Grid%jend
-   jmt = Potential(id)%Grid%jmt
+   if (r >= Potential(id)%Grid%r_mesh(iend)) then
+      call WarningHandler('setPotential','r > rend',r,Potential(id)%Grid%r_mesh(iend))
+      return
+   endif
+   do ir = iend, 1, -1
+      if (r >= Potential(id)%Grid%r_mesh(ir)) then
+         nr = ir
+         exit
+      endif
+   enddo
    if ( present(nfit) ) then
       x_mesh=>Potential(id)%Grid%x_mesh(1:iend)
-      do ir = jmt+1,iend
+      do ir = nr+1,iend
          Potential(id)%potr_sph(ir,is,ia) =                           &
-             ylag(x_mesh(ir),x_mesh,Potential(id)%potr_sph(:,is,ia),0,nfit,jmt,iex)
+             ylag(x_mesh(ir),x_mesh,Potential(id)%potr_sph(:,is,ia),0,nfit,nr,iex)
          Potential(id)%pot_l(ir,1,is,ia) =                            &
-             cylag(x_mesh(ir),x_mesh,Potential(id)%pot_l(:,1,is,ia),0,nfit,jmt,iex)
+             cylag(x_mesh(ir),x_mesh,Potential(id)%pot_l(:,1,is,ia),0,nfit,nr,iex)
       enddo
    else if ( present(v0) ) then
       r_mesh=>Potential(id)%Grid%r_mesh(1:iend)
-      do ir = jmt+1,iend
+      do ir = nr+1,iend
          Potential(id)%potr_sph(ir,is,ia) = v0*r_mesh(ir)
          Potential(id)%pot_l(ir,1,is,ia) = v0/Y0
       enddo
    else
-      do ir = jmt+1,iend
-         Potential(id)%potr_sph(ir,is,ia) = Potential(id)%potr_sph(jmt,is,ia)
-         Potential(id)%pot_l(ir,1,is,ia) = Potential(id)%pot_l(jmt,1,is,ia)
+      do ir = nr+1,iend
+         Potential(id)%potr_sph(ir,is,ia) = Potential(id)%potr_sph(nr,is,ia)
+         Potential(id)%pot_l(ir,1,is,ia) = Potential(id)%pot_l(nr,1,is,ia)
       enddo
    endif
 !  do jl = 2,jl_max
@@ -1385,10 +1420,13 @@ contains
    call setPotCompFlag(id,is,ia)
 !  -------------------------------------------------------------------
    if ( isTruncatedPotential ) then
+      do ir = nr+1,iend
+         Potential(id)%potr_sph_trunc(ir,is,ia) = Potential(id)%potr_sph_trunc(ir,is,ia)
+      enddo
       Potential(id)%isTruncDone = .false.
    endif
 !
-   end subroutine setPotentialOutsideMT
+   end subroutine setPotentialOutsideR
 !  ===================================================================
 !
 !  *******************************************************************
@@ -1477,10 +1515,11 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine setV0(is,vzero)
 !  ===================================================================
+   use PotentialTypeModule, only : isFullPotential
    implicit none
 !
    integer (kind=IntKind), intent(in) :: is
-   integer (kind=IntKind) :: iend, id, jmt, ia
+   integer (kind=IntKind) :: iend, id, nr, ia
 !
    real (kind=RealKind), intent(in) :: vzero
 !
@@ -1494,13 +1533,22 @@ contains
       iend = Potential(id)%Grid%jend
       if (abs(vzero) > TEN2m8) then
          r_mesh=>Potential(id)%Grid%r_mesh(1:iend)
-         jmt = Potential(id)%Grid%jmt
+         if (isFullPotential()) then
+            nr = Potential(id)%Grid%jinsc
+         else
+            nr = Potential(id)%Grid%jmt
+         endif
          do ia = 1, NumSpecies(id)
-            Potential(id)%potr_sph(1:jmt,is,ia) = Potential(id)%potr_sph(1:jmt,is,ia) &
-                                                 -vzero*r_mesh(1:jmt)
-            Potential(id)%pot_l(1:jmt,1,is,ia) = Potential(id)%pot_l(1:jmt,1,is,ia)   &
+            Potential(id)%potr_sph(1:nr,is,ia) = Potential(id)%potr_sph(1:nr,is,ia) &
+                                                 -vzero*r_mesh(1:nr)
+            Potential(id)%pot_l(1:nr,1,is,ia) = Potential(id)%pot_l(1:nr,1,is,ia)   &
                                                  -vzero/Y0
-          enddo
+         enddo
+         if (isTruncatedPotential) then
+            do ia = 1, NumSpecies(id)
+               Potential(id)%potr_sph_trunc(1:nr,is,ia) = Potential(id)%potr_sph(1:nr,is,ia)
+            enddo
+         endif
       endif
    enddo
    v0(is) = ZERO
@@ -1714,7 +1762,6 @@ contains
 !  ===================================================================
 #ifdef POT_DIPOL
 !   do id = 1, LocalNumAtoms
-!      jmt = Potential(id)%Grid%jmt
 !      do is = 1, n_spin_pola
 !         if ( Potential(id)%jmax >= 2 ) then
 !            do ia = 1, NumSpecies(id)
@@ -1750,6 +1797,15 @@ contains
                                                      Potential(id)%Grid%r_mesh(ir)
                enddo
             enddo
+         endif
+         if ( isTruncatedPotential ) then
+            iend = Potential(id)%Grid%jend
+            do is = 1, n_spin_pola
+               do ir = 1,iend
+                  Potential(id)%potr_sph_trunc(ir,is,ia) = Potential(id)%potr_sph(ir,is,ia)
+               enddo
+            enddo
+            Potential(id)%isTruncDone(ia) = .false.
          endif
       enddo
    enddo
@@ -2917,7 +2973,7 @@ contains
 !
    integer (kind=IntKind) :: jmax_pot, lmax_pot, kmax_pot
    integer (kind=IntKind) :: jmax_trunc, lmax_trunc, jmax_min
-   integer (kind=IntKind) :: ir, iend, jmt, iend_diff, is, jl, i, n
+   integer (kind=IntKind) :: ir, iend, iend_diff, is, jl, i, n, jinsc
    integer (kind=IntKind) :: izamax, ModifiedTruncation
    integer (kind=IntKind), pointer :: flags_jl(:), p_flags(:)
 !
@@ -2927,8 +2983,8 @@ contains
    complex (kind=CmplxKind), pointer :: pot(:,:), potl(:,:)
 !
    iend = Potential(id)%Grid%jend
-   jmt  = Potential(id)%Grid%jmt
-   iend_diff = iend-jmt+1
+   jinsc = Potential(id)%Grid%jinsc
+   iend_diff = iend-jinsc+1
    lmax_pot = Potential(id)%lmax
    jmax_pot = Potential(id)%jmax
    kmax_pot = (lmax_pot+1)*(lmax_pot+1)
@@ -2973,9 +3029,14 @@ contains
          enddo
       endif
 !     ---------------------------------------------------------------
-      call truncate( id, jmt, iend, r_mesh, pot, flags_jl, jmax_pot, &
+      call truncate( id, jinsc, iend, r_mesh, pot, flags_jl, jmax_pot, &
                      iend_diff, potl, jmax_trunc )
 !     ---------------------------------------------------------------
+!
+      do ir = 1, iend_diff
+         Potential(id)%potr_sph_trunc(jinsc+ir-1,is,ia) =                &
+                       real(potl(ir,1),kind=RealKind)*Y0*r_mesh(jinsc+ir-1)
+      enddo
 !
       flags_jl => Potential(id)%PotCompFlag_trunc
 !

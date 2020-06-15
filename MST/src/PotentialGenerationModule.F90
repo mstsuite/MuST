@@ -158,7 +158,7 @@ private
    type (ChebyshevStruct), allocatable, target :: chebv_struct(:)
 !
    interface
-      subroutine constructDataOnGrid(grid_name, value_name, value_type, getData, den, lmax, spin)
+      subroutine constructDataOnGrid(grid_name, value_name, value_type, getData, den, lmax, spin, tol_in)
          use KindParamModule, only : IntKind, RealKind
          use PublicTypeDefinitionsModule, only : UniformGridStruct
          implicit none
@@ -166,15 +166,16 @@ private
          character (len=*), intent(in) :: value_name
          character (len=*), intent(in) :: value_type
          real (kind=RealKind), intent(out) :: den(:)
+         real (kind=RealKind), intent(in), optional :: tol_in
          integer (kind=IntKind), intent(in), optional :: lmax, spin
 !
          interface
-            function getData( dname, id, ia, r, jmax_in, n, grad ) result(v)
+            function getData( dname, id, ia, r, tol, jmax_in, n, grad ) result(v)
                use KindParamModule, only : IntKind, RealKind
                implicit none
                character (len=*), intent(in) :: dname
                integer (kind=IntKind), intent(in) :: id, ia
-               real (kind=RealKind), intent(in) :: r(3)
+               real (kind=RealKind), intent(in) :: r(3), tol
                real (kind=RealKind), intent(out), optional :: grad(3)
                integer (kind=IntKind), intent(in), optional :: jmax_in, n
                real (kind=RealKind) :: v
@@ -661,7 +662,7 @@ contains
       call distributeUniformGrid('FFT',grid_start,grid_end)
 !     ----------------------------------------------------------------
       call insertAtomsInGrid('FFT', LocalNumAtoms, LocalAtomPosi,     &
-                             getPointLocationFlag, radius)
+                             getPointLocationFlag, radius, tol_in=TEN2m8)
 !     ----------------------------------------------------------------
       if (node_print_level >= 0) then
          call printUniform3DGrid('FFT')
@@ -981,7 +982,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getPotentialAtPosi(potentialType,site,atom,is,posi) result(pot)
+   function getPotentialAtPosi(potentialType,site,atom,tol,is,posi) result(pot)
 !  ===================================================================
    implicit none
 !
@@ -990,6 +991,7 @@ contains
    integer (kind=IntKind), intent(in) :: site, atom, is
 !
    real (kind=RealKind), intent(in) :: posi(3)
+   real (kind=RealKind), intent(in) :: tol
    real (kind=RealKind) :: pot
 !
    complex (kind=CmplxKind), pointer :: pot_l(:,:)
@@ -1014,7 +1016,7 @@ contains
    endif
 !
    if ( PotentialType=="Total" .or. PotentialType=="Potential" ) then
-      if ( sqrt(posi(1)**2+posi(2)**2+posi(3)**2) < TEN2m8 ) then
+      if ( sqrt(posi(1)**2+posi(2)**2+posi(3)**2) < tol ) then
          pot = -1.0d12
          return
       endif
@@ -1024,7 +1026,7 @@ contains
    else if ( PotentialType=="Tilda" ) then
       pot_l => Potential(site)%potL_Tilda(:,:,atom)
    else if ( PotentialType=="Coulomb" ) then
-      if ( sqrt(posi(1)**2+posi(2)**2+posi(3)**2) < TEN2m8 ) then
+      if ( sqrt(posi(1)**2+posi(2)**2+posi(3)**2) < tol ) then
          pot = -1.0d12
          return
       endif
@@ -3858,9 +3860,9 @@ contains
             posi(1:3) = r_mesh(ir)*posi(1:3)
             t2 = getTime()
             if (gga_functional) then
-               rho = getChargeDensityAtPoint( 'TotalNew', id, ia, posi, grad=grad_rho )
+               rho = getChargeDensityAtPoint( 'TotalNew', id, ia, posi, TEN2m8, grad=grad_rho )
             else
-               rho = getChargeDensityAtPoint( 'TotalNew', id, ia, posi )
+               rho = getChargeDensityAtPoint( 'TotalNew', id, ia, posi, TEN2m8 )
                grad_rho = ZERO
             endif
             tc1 = tc1 + (getTime()-t2)  ! cummulating time on getChargeDensityAtPoint
@@ -3870,12 +3872,12 @@ contains
             t2 = getTime()
             if ( n_spin_pola==2 ) then
                if (gga_functional) then
-                  mom = getMomentDensityAtPoint( 'TotalNew', id, ia, posi, grad=grad_mom )
+                  mom = getMomentDensityAtPoint( 'TotalNew', id, ia, posi, TEN2m8, grad=grad_mom )
 !                 ----------------------------------------------------
                   call calExchangeCorrelation(rho,grad_rho,mom,grad_mom)
 !                 ----------------------------------------------------
                else
-                  mom = getMomentDensityAtPoint( 'TotalNew', id, ia, posi )
+                  mom = getMomentDensityAtPoint( 'TotalNew', id, ia, posi, TEN2m8 )
 !                 ----------------------------------------------------
                   call calExchangeCorrelation(rho,mag_den=mom)
 !                 ----------------------------------------------------
@@ -4433,7 +4435,8 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getPotentialAtPoint( potType, id, ia, posi, jmax_in, spin, grad ) result(pot)
+   function getPotentialAtPoint( potType, id, ia, posi, tol,          &
+                                 jmax_in, spin, grad ) result(pot)
 !  ===================================================================
    use SphericalHarmonicsModule, only : calYlm
 !
@@ -4453,7 +4456,7 @@ contains
    integer (kind=IntKind), intent(in), optional :: jmax_in
    integer (kind=IntKind), intent(in), optional :: spin
 !
-   real (kind=RealKind), intent(in) :: posi(3)
+   real (kind=RealKind), intent(in) :: posi(3), tol
    real (kind=RealKind), intent(out), optional :: grad(3) ! So far it is not used
 !
    integer (kind=IntKind) :: iend, irp, ir, l, kl, jl, ns, jmt, jmax
@@ -4498,7 +4501,7 @@ contains
 !
    pot = ZERO
 !
-   if ( isExternalPoint(id,posi(1),posi(2),posi(3)) ) then
+   if ( isExternalPoint(id,posi(1),posi(2),posi(3),tol_in=tol) ) then
       return
    endif
 !

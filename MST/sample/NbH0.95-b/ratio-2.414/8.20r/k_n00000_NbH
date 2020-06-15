@@ -1,0 +1,12 @@
+Source Code Version           : : v1.2.8                                        
+System Description            : NbH, NaCl structure                             
+Number of Atoms in Unit Cell  : 2                                               
+Number of Atomic Species      : 2                                               
+Number of Atoms in Each Type  : 1(CPA), 1(Nb)                                   
+Unit Cell Volume (au^3)       : 0.13784200D+03                                  
+Average Atomic Volume (au^3)  : 68.92100                                        
+Energy Offset                 : -3820                                           
+=======================================================================================
+    Iter     Energy      3PV     Efermi   Rms_rho    Rms_pot   Mix  Alg  Alpha 
+---------------------------------------------------------------------------------------
+**       1  -0.985589  162.9356  0.76602  0.401E-10  0.451E-09  pot  B   0.1000
