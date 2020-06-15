@@ -76,7 +76,7 @@ private
    type(SROMediumStruct), allocatable :: SROMedium(:)
    integer (kind=IntKind) :: next_near_option
    logical :: test_CPA = .false.
-   logical :: test_pure = .false.
+   logical :: test_pure = .true.
 
 
 contains
@@ -374,7 +374,7 @@ contains
                      SROMedium(n)%Tcpa_inv(iter1, iter2)
                
                  else if (test_pure) then
-                    if (i < 6) then
+                    if (i < 3) then
                        SROMedium(n)%SROTMatrix(ia)%tmat_s(is)%T_inv(iter1+tmp, iter2+tmp) = &
                          SROMedium(n)%SROTMatrix(ia)%tmat_s(is)%tmat_tilde_inv(iter1, iter2)
                     else
@@ -554,69 +554,40 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine calculateSCFSpeciesTerm (n, ic, c_ic)
 !  ===================================================================   
-
+   
    use MatrixModule, only : computeAprojB
    use WriteMatrixModule, only : writeMatrix
 
    integer (kind=IntKind), intent(in) :: n, ic
    real (kind=RealKind), intent(in) :: c_ic
-   integer (kind=IntKind) :: dsize, nsize, is, l
+   integer (kind=IntKind) :: dsize, nsize, is
 
-   complex (kind=CmplxKind), allocatable :: tmp(:,:), tmp2(:,:), proj_c(:,:), proj_d(:,:)
-   complex (kind=CmplxKind), allocatable :: tmp3(:,:), tmp4(:,:)
-   complex (kind=CmplxKind), allocatable :: tau_a_11(:,:), tau_cpa_11(:,:)
-   complex (kind=CmplxKind), allocatable :: T_diff(:,:), tdiff(:,:)
+   complex (kind=CmplxKind), allocatable :: tmp(:,:), proj_c(:,:)
 
    dsize = SROMedium(n)%blk_size
    nsize = SROMedium(n)%neigh_size
-   allocate(tmp(dsize, dsize))
-   allocate(tmp2(dsize, dsize))
-   allocate(tmp3(dsize, dsize), tmp4(dsize, dsize))
+   allocate(tmp(dsize*nsize, dsize*nsize))
    allocate(proj_c(dsize*nsize, dsize*nsize))
-   allocate(proj_d(dsize*nsize, dsize*nsize))
-   allocate(tau_a_11(dsize, dsize))
-   allocate(tau_cpa_11(dsize,dsize))
-   allocate(T_diff(dsize*nsize, dsize*nsize))
-   allocate(tdiff(dsize, dsize))
-
-   tau_a_11   = SROMedium(n)%SROTMatrix(ic)%tau_ab(1:dsize, 1:dsize, 1)
-   tau_cpa_11 = SROMedium(n)%tau_cpa(1:dsize, 1:dsize, 1)
 
    do is = 1, nSpinCant**2
-
-      T_diff = SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%T_inv - SROMedium(n)%T_CPA_inv
-      tdiff = SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%tmat_inv - SROMedium(n)%Tcpa_inv
-
-   !  Calculating First Term
-   !  proj_a = c_a * t_inv_a * tau_a_11
-       
-      call zgemm('N', 'n', dsize, dsize, dsize,    &
-        c_ic, SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%tmat_inv, dsize, tau_a_11, dsize,    &
-        CZERO, tmp, dsize)
-
-   !  Calculating Second Term First Part
-   !  proj_a = c_a * tau_cpa * T_diff * tau_a
+      y = CZERO
+      z = SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%T_inv - SROMedium(n)%T_CPA_inv
+!     ------------------------------------------------------------------------
+      call computeAprojB('N', dsize*nsize, SROMedium(n)%tau_cpa(:,:,1), z, y)
+!     ------------------------------------------------------------------------
+!     call writeMatrix('(1 + tau(ta - tcpa))^-1', y, dsize*nsize, dsize*nsize, TEN2m8)
 
       call zgemm('N', 'n', dsize*nsize, dsize*nsize, dsize*nsize,    &
-        c_ic, T_diff, dsize*nsize, SROMedium(n)%SROTMatrix(ic)%tau_ab(1,1,is), dsize*nsize,  &
-        CZERO, proj_c, dsize*nsize)
+        CONE, SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%T_inv, dsize*nsize, y, dsize*nsize,  &
+        CZERO, tmp, dsize*nsize)
 
+!     call writeMatrix('Ta(1 + tau(ta - tcpa))^-1', tmp, dsize*nsize, dsize*nsize, TEN2m8) 
+!     ------------------------------------------------------------------------
       call zgemm('N', 'n', dsize*nsize, dsize*nsize, dsize*nsize,    &
-        CONE, SROMedium(n)%tau_cpa(1,1,1), dsize*nsize, proj_c, dsize*nsize, CZERO, proj_d, dsize*nsize)
-
-      tmp2 = proj_d(1:dsize, 1:dsize)
-
-      call zgemm ('N', 'n', dsize, dsize, dsize, c_ic, tdiff, dsize, &
-        tau_a_11, dsize, CZERO, tmp3, dsize)
-      
-      call zgemm ('N', 'n', dsize, dsize, dsize, CONE, tau_cpa_11, dsize, &
-        tmp3, dsize, CZERO, tmp4, dsize)
-
-      call zaxpy(dsize*dsize, -CONE, tmp4, 1, tmp2, 1)
-
-      SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%proj_a = tmp
-      SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%proj_b = tmp2
-!     call writeMatrix('tmp2',tmp2, dsize, dsize, TEN2m8)
+        c_ic, SROMedium(n)%tau_cpa(1,1,1), dsize*nsize, tmp, dsize*nsize, CZERO, proj_c, dsize*nsize)
+!     ------------------------------------------------------------------------
+!     call writeMatrix('tauTa(1 + tau(ta - tcpa))^-1', proj_c(1:dsize, 1:dsize), dsize, dsize, TEN2m8)
+      SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%proj_a = proj_c(1:dsize, 1:dsize)
    enddo 
 
    end subroutine calculateSCFSpeciesTerm
@@ -632,17 +603,14 @@ contains
    integer (kind=IntKind), intent(in) :: n
    integer (kind=IntKind) :: dsize, ic
    
-   complex (kind=CmplxKind), allocatable :: tau_inv(:,:), temp(:,:), temp2(:,:)
-   complex (kind=CmplxKind), allocatable :: term21(:,:), term22(:,:)
+   complex (kind=CmplxKind), allocatable :: tau_inv(:,:), temp(:,:)
    complex (kind=CmplxKind) :: total_proj(SROMedium(n)%blk_size,SROMedium(n)%blk_size)
 
    dsize = SROMedium(n)%blk_size
-   allocate(tau_inv(dsize, dsize), temp(dsize, dsize), temp2(dsize, dsize),  &
-              term21(dsize, dsize), term22(dsize, dsize))
+   allocate(tau_inv(dsize, dsize), temp(dsize, dsize))
 
    total_proj = CZERO
    temp = CZERO
-   temp2 = CZERO
 
    do is = 1, nSpinCant**2
      do ic = 1, SROMedium(n)%num_species
@@ -650,30 +618,20 @@ contains
         call zaxpy(dsize*dsize, CONE, SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%proj_a, &
              1, temp, 1)
 !       -------------------------------------------------------------
-        call zaxpy(dsize*dsize, CONE, SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%proj_b, &
-             1, temp2, 1)
-!       -------------------------------------------------------------
      enddo
    enddo
-  
+
 !  call writeMatrix('pre-tauinv', temp, dsize, dsize, TEN2m8)
 
    tau_inv = SROMedium(n)%tau_cpa(1:dsize, 1:dsize, 1)
 !  -----------------------------------------------------------
    call MtxInv_LU(tau_inv, dsize)
 !  -----------------------------------------------------------
-   call zgemm('N', 'n', dsize, dsize, dsize, CONE, temp, &
-        dsize, tau_inv, dsize, CZERO, total_proj, dsize)
-!  -----------------------------------------------------------
-   call zgemm('N', 'n', dsize, dsize, dsize, CONE, temp2, &
-        dsize, tau_inv, dsize, CZERO, term21, dsize)
-!  -----------------------------------------------------------
    call zgemm('N', 'n', dsize, dsize, dsize, CONE, tau_inv, &
-        dsize, term21, dsize, CZERO, term22, dsize)
-!  -----------------------------------------------------------
-   call zaxpy(dsize*dsize, CONE, term22, 1, total_proj, 1)
-!  -----------------------------------------------------------
+        dsize, temp, dsize, CZERO, total_proj, dsize)
+!  -----------------------------------------------------------   
 !  call writeMatrix('new_tcpa_inv', total_proj, dsize, dsize, TEN2m8)'
+
 
    end function calculateNewTCPA
 !  ===================================================================
@@ -713,15 +671,15 @@ contains
      enddo
    enddo
 
-!  if (isSROSCF() == 0) then
-   do j = 1, LocalNumSites
-     do ic = 1, SROMedium(j)%num_species
-!      -------------------------------------------
-       call calculateImpurityMatrix(j, ic)
-!      -------------------------------------------
+   if (isSROSCF() == 0) then
+     do j = 1, LocalNumSites
+       do ic = 1, SROMedium(j)%num_species
+!        -------------------------------------------
+         call calculateImpurityMatrix(j, ic)
+!        -------------------------------------------
+       enddo
      enddo
-   enddo
-!  endif
+   endif
    
    end subroutine calSpeciesTauMatrix
 !  ===================================================================
