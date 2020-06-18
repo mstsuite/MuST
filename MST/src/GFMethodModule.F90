@@ -4281,39 +4281,41 @@ contains
             endif
 ! =============================================================================
 ! Note: It is possible that due to numerical round off error, the imaginary part
-!       of Green function becomes negative. In this case, DOS is replaced with
-!       the free-electron DOS. An investigation of this issue is necessary in the
-!       future.  06/14/2020....
+!       of Green function becomes negative. If this happens, in non-full-potential 
+!       case, DOS is replaced with the free-electron DOS. An investigation of this
+!       issue is necessary in the future.  06/14/2020....
 ! =============================================================================
-            isPositive = .false.
-            LOOP_ir: do ir = Grid%jend, 1, -1
-               if (aimag(green(ir,1,ks,ia)) > ZERO) then
-!                 write(6,'(a,2i5,2d16.8)')'id,ir,r,-Im[green(ir)]/PI = ',     &
-!                       id,ir,Grid%r_mesh(ir),-aimag(green(ir,1,ks,ia))/Grid%r_mesh(ir)**2/PI
-                  nr = ir
-                  isPositive = .true.
-                  exit LOOP_ir
-               endif
-            enddo LOOP_ir
-            if (isPositive) then
-               if (rad_derivative) then
-                  fedos => getFreeElectronDOS(site=id,gfac=cmul,derivative=der_fedos)
-               else
-                  fedos => getFreeElectronDOS(site=id,gfac=cmul)
-               endif
-               if (rad_derivative) then
-                  do ir = 1, nr
-                     if (aimag(green(ir,1,ks,ia)) > ZERO) then
-                        dos_r_jl(ir,1) = sfac*fedos(ir)
-                        der_dos_r_jl(ir,1) = sfac*der_fedos(ir)
-                     endif
-                  enddo
-               else
-                  do ir = 1, nr
-                     if (aimag(green(ir,1,ks,ia)) > ZERO) then
-                        dos_r_jl(ir,1) = sfac*fedos(ir)
-                     endif
-                  enddo
+            if (jmax == 1) then
+               isPositive = .false.
+               LOOP_ir: do ir = Grid%jend, 1, -1
+                  if (aimag(green(ir,1,ks,ia)) > ZERO) then
+!                    write(6,'(a,2i5,2d16.8)')'id,ir,r,-Im[green(ir)]/PI = ',     &
+!                          id,ir,Grid%r_mesh(ir),-aimag(green(ir,1,ks,ia))/Grid%r_mesh(ir)**2/PI
+                     nr = ir
+                     isPositive = .true.
+                     exit LOOP_ir
+                  endif
+               enddo LOOP_ir
+               if (isPositive) then
+                  if (rad_derivative) then
+                     fedos => getFreeElectronDOS(site=id,gfac=cmul,derivative=der_fedos)
+                  else
+                     fedos => getFreeElectronDOS(site=id,gfac=cmul)
+                  endif
+                  if (rad_derivative) then
+                     do ir = 1, nr
+                        if (aimag(green(ir,1,ks,ia)) > ZERO) then
+                           dos_r_jl(ir,1) = sfac*fedos(ir)
+                           der_dos_r_jl(ir,1) = sfac*der_fedos(ir)
+                        endif
+                     enddo
+                  else
+                     do ir = 1, nr
+                        if (aimag(green(ir,1,ks,ia)) > ZERO) then
+                           dos_r_jl(ir,1) = sfac*fedos(ir)
+                        endif
+                     enddo
+                  endif
                endif
             endif
 ! =============================================================================
