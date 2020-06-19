@@ -644,6 +644,7 @@ contains
       nt = 0
       iteration = 0
       alpha = SRO_slow_alpha
+ !    call writeMatrix('t-cpa-init', CPAMedium(1)%Tcpa, nsize, nsize, TEN2m8)
       LOOP_iter2 : do while (nt <= 5*SRO_max_iter)
          nt = nt + 1
          iteration = iteration + 1
@@ -699,6 +700,8 @@ contains
                max_err = max(max_err,err)
 !              ----------------------------------------------------------
                call GlobalMaxInGroup(akGID,max_err)
+!              ----------------------------------------------------------
+!              call writeMatrix('t-cpa', CPAMedium(n)%Tcpa, nsize, nsize, TEN2m8)
 !              ----------------------------------------------------------
                if (max_err < SRO_tolerance) then
                  exit LOOP_iter2
@@ -759,6 +762,10 @@ contains
          enddo
       enddo LOOP_iter2
    endif
+
+!  ----------------------------------------------------------------
+   call setupHostMedium(e,getSingleSiteTmat,configuration=site_config)
+!  ----------------------------------------------------------------
 
    if (print_instruction >= 1) then
       do n = 1, LocalNumSites
