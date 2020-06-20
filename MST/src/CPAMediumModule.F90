@@ -679,7 +679,7 @@ contains
 !                 ----------------------------------------------------------
                enddo
                t_proj = calculateNewTCPA(n)
-               CPAMedium(n)%TcpaInv = t_proj
+               CPAMedium(n)%TcpaInv = CPAMedium(n)%TcpaInv + t_proj
                CPAMedium(n)%Tcpa = CPAMedium(n)%TcpaInv
 !              ----------------------------------------------------------
                call MtxInv_LU(CPAMedium(n)%Tcpa,nsize)
