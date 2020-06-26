@@ -3088,6 +3088,8 @@ contains
 !
    use GroupCommModule, only : GlobalSumInGroup
 !
+   use InputModule, only : getKeyValue
+!
    use ScfDataModule, only : NumSS_IntEs, getAdaptiveIntegrationMethod, &
                              Contourtype, ErBottom, NumExtraEs
 !
@@ -3106,13 +3108,13 @@ contains
    logical :: LC, UC, REL !xianglin
 !
    integer (kind=IntKind) :: id, is, ns, info(4), nm, ie, NumEs, ilc !xianglin
-   integer (kind=IntKind) :: ia
+   integer (kind=IntKind) :: ia, renorm
 !
    real (kind=RealKind), intent(in), optional :: Ebegin, Eend
    logical, intent(in), optional :: relativity !xianglin
 !
    real (kind=RealKind) :: ssdos_int, IDOS_cell, ps, peak_pos, e0, ps0, ssDOS
-   real (kind=RealKind) :: ebot, etop, er, ei
+   real (kind=RealKind) :: ebot, etop, er, ei, scaling_factor, IDOS_space, IDOS_out
    real (kind=RealKind), allocatable :: xg(:), wg(:)
 !
    complex (kind=CmplxKind) :: int_test, ec, es
@@ -3162,6 +3164,10 @@ contains
 !
    if (.not.LC .and. .not.UC .and. etop < ebot) then
       call ErrorHandler('calSingleScatteringIDOS','ebot > etop',ebot,etop)
+   endif
+!
+   if (getKeyValue(1,'Renormalize Green function',renorm) /= 0) then
+      renorm = 0
    endif
 !
 !  ===================================================================
@@ -3526,28 +3532,51 @@ contains
                   write(6,'(a)')   '=========================================================================================='
                   write(6,'(a,i4)')'Number of mesh points for the integration: ',nm
                endif
+!
+!              =======================================================
+!              Get the energy integrated quantities by calling ...
 !              -------------------------------------------------------
                p_aux => getAuxDataAdaptIntegration()
 !              -------------------------------------------------------
 !              write(6,'(a,i5)')'size of p_aux = ',size(p_aux)
+!              =======================================================
+!              Store the quantities in p_aux to ssLastValue
 !              ----------------------------------------------------------
                call calElectroStruct(info,1,p_aux,ssLastValue(id),ss_int=.true.)
                ps = returnSingleSitePS(info,etop) - ps0  ! Relative to the phase shift at energy = e0.
 !              -------------------------------------------------------
+               do while (ps < ZERO)
+                  ps = ps + PI
+               enddo
+               IDOS_space = (2/n_spin_pola)*(ps+getVolume(id)*sqrt(etop**3)/(6.0d0*PI))/PI
+               IDOS_out = ssIDOS_out(id)%rarray2(ns,ia)
+               IDOS_cell = IDOS_space - IDOS_out
+               scaling_factor = IDOS_cell/ssdos_int
+!              =======================================================
                if ( node_print_level >= 0) then
                   write(6,'(a,f12.8,a,d15.8)')'At energy = ',etop,     &
                                               ': Single site IDOS given by Green function  =',ssdos_int
-                  write(6,'(26x,a,d15.8)')      'Integrated DOS outside the atomic cell    =', &
-                                              ssIDOS_out(id)%rarray2(ns,ia)
+                  write(6,'(26x,a,d15.8)')      'Integrated DOS outside the atomic cell    =', IDOS_out
 !                 ====================================================
                   write(6,'(26x,a,d15.8)')      'Single site sum. of partial phase shifts  =',ps
                   write(6,'(26x,a,d15.8)')      'Integrated DOS in space due to single site=',(2/n_spin_pola)*ps/PI
                   write(6,'(26x,a,d15.8)')      'Free electron DOS in the atomic cell      =', &
                                           (2/n_spin_pola)*getVolume(id)*sqrt(etop**3)/(6.0d0*PI**2)
-                  IDOS_cell = (2/n_spin_pola)*(ps+getVolume(id)*sqrt(etop**3)/(6.0d0*PI))/PI - &
-                              ssIDOS_out(id)%rarray2(ns,ia)
                   write(6,'(26x,a,d15.8)')      'Single site {phase shift sum-OutsideIDOS} =',IDOS_cell
+                  write(6,'(26x,a,d15.8)')      'Renormalization factor to Green function  =',scaling_factor
 !                 ====================================================
+               endif
+!              =======================================================
+!              Ideally, scaling_factor = 1.0. We use this factor to
+!              renormalize the single site Green function, which is
+!              stored in ssLastValue
+!              =======================================================
+               if (scaling_factor < TEN2m6) then
+                  call WarningHandler('calSingleScatteringIDOS','scaling_factor < 10^-6',scaling_factor)
+               else if (renorm > 0) then
+!                 ----------------------------------------------------
+                  call scaleSpeciesElectroStruct(ia,scaling_factor,ssLastValue(id),eIntegral_only=.false.)
+!                 ----------------------------------------------------
                endif
             enddo
 !           ----------------------------------------------------------
@@ -4817,7 +4846,53 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine scaleElectroStruct(alp,ESV)
+   subroutine scaleSpeciesElectroStruct(ia,alp,ESV,eIntegral_only)
+!  ===================================================================
+!
+!  Perform ESV = alp*ESV
+!
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: ia
+!
+   real (kind=RealKind), intent(in) :: alp
+!
+   type(ElectroStruct), intent(inout) :: ESV
+!
+   complex (kind=CmplxKind) :: alpc
+!
+   logical, intent(in) :: eIntegral_only
+!
+   alpc = alp
+!
+   if (.not.eIntegral_only) then
+      ESV%dos(:,ia) = alpc*ESV%dos(:,ia)
+      ESV%dos_mt(:,ia) = alpc*ESV%dos_mt(:,ia)
+   endif
+!
+   ESV%dos_r_jl(:,:,:,ia) = alpc*ESV%dos_r_jl(:,:,:,ia)
+   if (rad_derivative) then
+      ESV%der_dos_r_jl(:,:,:,ia) = alpc*ESV%der_dos_r_jl(:,:,:,ia)
+   endif
+   ESV%evalsum(:,ia) = alpc*ESV%evalsum(:,ia)
+   if (isDensityMatrixNeeded) then
+      ESV%density_matrix(:,:,:,ia) = alpc*ESV%density_matrix(:,:,:,ia)
+   endif
+!
+   if (n_spin_cant == 2) then
+!     ----------------------------------------------------------------
+      call scaleSpinCantStruct(alp,ESV%pSC(ia))
+!     ----------------------------------------------------------------
+   endif
+!
+   end subroutine scaleSpeciesElectroStruct
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine scaleElectroStruct(alp,ESV,eIntegral_only)
 !  ===================================================================
 !
 !  Perform ESV = alp*ESV
@@ -4833,14 +4908,19 @@ contains
 !
    integer (kind=IntKind) :: ia
 !
+   logical, intent(in) :: eIntegral_only
+!
    alpc = alp
+!
+   if (.not.eIntegral_only) then
+      ESV%dos = alpc*ESV%dos
+      ESV%dos_mt = alpc*ESV%dos_mt
+   endif
 !
    ESV%dos_r_jl = alpc*ESV%dos_r_jl
    if (rad_derivative) then
       ESV%der_dos_r_jl = alpc*ESV%der_dos_r_jl
    endif
-   ESV%dos = alpc*ESV%dos
-   ESV%dos_mt = alpc*ESV%dos_mt
    ESV%evalsum = alpc*ESV%evalsum
    if (isDensityMatrixNeeded) then
       ESV%density_matrix = alpc*ESV%density_matrix
@@ -5323,7 +5403,8 @@ contains
       do is = 1, n_spin_pola/n_spin_cant
          if (isLloyd().and.(getLloydMode().eq.1) ) then
 !           ----------------------------------------------------------
-            call scaleElectroStruct(Lloyd_factor(is),IntegrValue(id))
+            call scaleElectroStruct(Lloyd_factor(is),IntegrValue(id), &
+                                    eIntegral_only=.false.)
 !           ----------------------------------------------------------
          endif
       enddo

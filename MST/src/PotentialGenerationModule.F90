@@ -4,7 +4,7 @@ Module PotentialGenerationModule
    use MathParamModule, only : CZERO, ZERO, ONE, TWO, THREE, FOUR,    &
                                FIVE, SIX, THIRD, HALF, SQRTM1, PI,    &
                                PI2, PI4, SQRT_PI, TEN2m6, TEN2m7,     &
-                               TEN2m8, TEN2m9, TEN2m10, TEN2m12, TEN2m13, Y0
+                               TEN2m5, TEN2m8, TEN2m9, TEN2m10, TEN2m12, TEN2m13, Y0
    use IntegerFactorsModule, only : lofk, mofk, lofj, mofj, kofj, m1m
    use PublicTypeDefinitionsModule, only : GridStruct, UniformGridStruct
    use TimerModule, only : getTime
@@ -236,6 +236,7 @@ contains
 !
    use SystemModule, only : getLmaxRho, getLmaxMax
    use SystemModule, only : getUniformGridParam, getBravaisLattice
+   use SystemModule, only : getSystemCenter, getAtomPosition
 !
    use Atom2ProcModule, only : getGlobalIndex
 !
@@ -243,6 +244,8 @@ contains
    use AtomModule, only : getLocalAtomPosition
 !
    use ScfDataModule, only : isChargeSymm
+!
+   use InputModule, only : getKeyValue
 !
    use Uniform3DGridModule, only : initUniform3DGrid
    use Uniform3DGridModule, only : isUniform3DGridInitialized, createUniform3DGrid, printUniform3DGrid
@@ -266,13 +269,13 @@ contains
 !
    type (GridStruct), pointer :: Grid
 !
-   integer (kind=IntKind) :: jl, kl, l, m, ig, id, nr, ir
+   integer (kind=IntKind) :: jl, kl, l, m, ig, id, nr, ir, ugo
    integer (kind=IntKind) :: kmax_max, lmax_pot, jmax_pot
    integer (kind=IntKind) :: jmt, jend, num_species
    integer (kind=IntKind) :: grid_start(3), grid_end(3), gir(3,3), ng_uniform(3)
 !
    real (kind=RealKind) :: alpha, r, alpha_min, alpha_max
-   real (kind=RealKind) :: bravais(3,3)
+   real (kind=RealKind) :: bravais(3,3), vc(3)
    real (kind=RealKind), pointer :: madmat(:), r_mesh(:)
    real (kind=RealKind), allocatable :: radius(:)
 !
@@ -647,8 +650,17 @@ contains
       endif
       ng_uniform(1:3) = getUniformGridParam()
       bravais = getBravaisLattice()
+      if (getKeyValue(1,'Uniform Grid Origin',ugo) /= 0) then
+         ugo = 0
+      endif
+      if (ugo == 1) then
+         vc = getSystemCenter() ! set the uniform grid origin to the cell center.
+      else
+         vc = ZERO ! set the uniform grid origin to the cell corner.
+      endif
 !     ----------------------------------------------------------------
-      call createUniform3DGrid('FFT', ng_uniform(1), ng_uniform(2), ng_uniform(3), bravais)
+      call createUniform3DGrid('FFT', ng_uniform(1), ng_uniform(2), ng_uniform(3), &
+                               bravais, cell_origin=vc)
 !     ----------------------------------------------------------------
       call initParallelFFT()
 !     ----------------------------------------------------------------
@@ -660,6 +672,12 @@ contains
       grid_end(1:3) = gir(1:3,2)
 !     ----------------------------------------------------------------
       call distributeUniformGrid('FFT',grid_start,grid_end)
+!     ----------------------------------------------------------------
+!
+!     ================================================================
+!     I set tol_in = 10^{-5} after testing several cases, which include
+!     atom displacement. The test can be performed using testFFTGrid tool
+!     under driver/ directory.
 !     ----------------------------------------------------------------
       call insertAtomsInGrid('FFT', LocalNumAtoms, LocalAtomPosi,     &
                              getPointLocationFlag, radius, tol_in=TEN2m8)
@@ -1339,6 +1357,28 @@ contains
                enddo
 !
                r_mesh => Potential(id)%Grid%r_mesh(1:nRpts)
+               if (node_print_level >= 0) then
+                  write(6,'(a,4d15.8)')'r,v_til,v_mad,v_pse = ',r_mesh(50),       &
+                     real(Potential(id)%potL_Tilda(50,1,ia),kind=RealKind),       &
+                     real(Potential(id)%potL_Madelung(50,1),kind=RealKind),       &
+                     real(Potential(id)%potL_Pseudo(50,1),kind=RealKind)
+                  write(6,'(a,4d15.8)')'r,v_til,v_mad,v_pse = ',r_mesh(100),      &
+                     real(Potential(id)%potL_Tilda(100,1,ia),kind=RealKind),      &
+                     real(Potential(id)%potL_Madelung(100,1),kind=RealKind),      &
+                     real(Potential(id)%potL_Pseudo(100,1),kind=RealKind)
+                  write(6,'(a,4d15.8)')'r,v_til,v_mad,v_pse = ',r_mesh(nRpts/10), &
+                     real(Potential(id)%potL_Tilda(nRpts/10,1,ia),kind=RealKind), &
+                     real(Potential(id)%potL_Madelung(nRpts/10,1),kind=RealKind), &
+                     real(Potential(id)%potL_Pseudo(nRpts/10,1),kind=RealKind)
+                  write(6,'(a,4d15.8)')'r,v_til,v_mad,v_pse = ',r_mesh(nRpts/2),  &
+                     real(Potential(id)%potL_Tilda(nRpts/2,1,ia),kind=RealKind),  &
+                     real(Potential(id)%potL_Madelung(nRpts/2,1),kind=RealKind),  &
+                     real(Potential(id)%potL_Pseudo(nRpts/2,1),kind=RealKind)
+                  write(6,'(a,4d15.8)')'r,v_til,v_mad,v_pse = ',r_mesh(nRpts-10), &
+                     real(Potential(id)%potL_Tilda(nRpts-10,1,ia),kind=RealKind), &
+                     real(Potential(id)%potL_Madelung(nRpts-10,1),kind=RealKind), &
+                     real(Potential(id)%potL_Pseudo(nRpts-10,1),kind=RealKind)
+               endif
                do ir = 1,nRpts
                   pot_r = real(Potential(id)%potL(ir,1,is,ia),kind=RealKind)
                   Potential(id)%potr_sph(ir,is,ia) = Y0*r_mesh(ir)*pot_r
@@ -3151,7 +3191,6 @@ contains
                                    getPseudoNumRPts
    use ChargeDistributionModule, only : getInterstitialElectronDensity
    use PolyhedraModule, only : getVolume, getInscrSphVolume, getInscrSphRadius
-   use StepFunctionModule, only : getVolumeIntegration
    use InterpolationModule, only : FitInterp
 !
    implicit none
@@ -3360,7 +3399,6 @@ contains
    real (kind=RealKind) :: pot_r, pseudo_fft, vc_0, dps
    real (kind=RealKind) :: dfp(3), dfp_total(3), dfp_corr(3), buf(2)
    real (kind=RealKind), pointer :: r_mesh(:)
-!  real (kind=RealKind), pointer :: p_den(:,:,:)
    real (kind=RealKind), pointer :: p_den(:)
 !
    complex (kind=CmplxKind), pointer :: v_jl(:,:)
@@ -3394,7 +3432,11 @@ contains
    do i = 1, ng
       pseudo_fft = pseudo_fft + p_den(i)
    enddo
-!  write(6,'(a,i5,2x,3d16.8)')'MyPE,p_den = ',MyPE,p_den(1),p_den(ng),pseudo_fft
+   if (node_print_level >= 1) then
+      write(6,'(/,a,i8,a)')'ng = ',ng,', p_den(1:ng):'
+      write(6,'(5d16.8)')(p_den(i),i=1,ng)
+      write(6,'(/)')
+   endif
 !
    buf(1) = ng
    buf(2) = pseudo_fft
@@ -3407,12 +3449,13 @@ contains
 !  The following buf(1) should be the total number of FFT grids.
    pseudo_fft = buf(2)/buf(1)
 !
-   if ( maxval(print_level) >= 0 ) then
-      write(6,'(a,d16.8)') "Sum of pseudo charge density on uniform grid =",pseudo_fft
+   if ( node_print_level >= 0 ) then
+      write(6,'(a,d16.8,/)') "Sum of pseudo charge density on uniform grid =",pseudo_fft
    endif
 !
    pseudo_fft = ZERO ! In priciple, pseudo_fft should be zero since the pseudo charge
-!                    ! is neutral. Here I set it to zero -ywg
+!!                   ! is neutral. But, since the uniform grid is finite, this
+                     ! number will not be zero. Here I set it to zero -ywg
    do i = 1, ng
       p_den(i) = p_den(i) - pseudo_fft
    enddo
@@ -3424,13 +3467,13 @@ contains
 !j = getGridIndex(gp,i)
 !write(111,'(i8,2x,3f15.8,2x,3f15.8,2x,d16.8)')j,getGridPosition(gp,j),getGridPointCoord('R',i),p_den(i)
 !enddo
-!do i = 14, 15
-!j = getGridIndex(gp,i)
-!write(6,'(i8,2x,3f15.8,2x,3f15.8,2x,d16.8)')j,getGridPosition(gp,j),getGridPointCoord('R',i),p_den(i)
-!enddo
-! open(unit=111,file='den-2001-new.dat',status='unknown',form='formatted')
-! write(111,'(5d16.8)')(p_den(i),i=1,ng)
-! close(unit=111)
+!!do i = 14, 15
+!!j = getGridIndex(gp,i)
+!!write(6,'(i8,2x,3f15.8,2x,3f15.8,2x,d16.8)')j,getGridPosition(gp,j),getGridPointCoord('R',i),p_den(i)
+!!enddo
+!! open(unit=111,file='den-2001-new.dat',status='unknown',form='formatted')
+!! write(111,'(5d16.8)')(p_den(i),i=1,ng)
+!! close(unit=111)
 !nullify(gp)
 !
 !  -------------------------------------------------------------------
@@ -3441,6 +3484,11 @@ contains
 !write(112,'(i5,2x,3f15.8,2x,2d15.8)')k,getGridPointCoord('K',k),fft_c(k)
 !enddo
 !close(112)
+   if (node_print_level >= 1) then
+      write(6,'(/,a,i8,a)')'numk_local = ',numk_local,', fft_c(1:numk_local):'
+      write(6,'(6d16.8)')(p_den(i),i=1,numk_local)
+      write(6,'(/)')
+   endif
 !
 #ifdef TIMING
    t2 = getTime()
@@ -3453,7 +3501,9 @@ contains
    dfp_total = ZERO
    do id = 1,LocalNumAtoms
       dfp_total(1:3) = dfp_total(1:3) + DF_Pseudo(1:3,id)
-!     write(6,'(a,3d16.8)'),'DF_Pseudo = ',DF_Pseudo(1:3,id)
+      if (node_print_level >= 0) then
+         write(6,'(a,3d16.8)'),'DF_Pseudo = ',DF_Pseudo(1:3,id)
+      endif
    enddo
 !
 !  Correction is made to ensure total force acting on the unit cell is zero.
@@ -3480,6 +3530,14 @@ contains
       jmin = min(jmax,jmax_rho)
       nr     = Potential(id)%jend
       r_mesh => Potential(id)%Grid%r_mesh(1:nr)
+      if (node_print_level >= 0) then
+         write(6,'(a,6d15.8,/)')'v_iterp = ',real(v_interp(  1,id),kind=RealKind), &
+                                             real(v_interp( 50,id),kind=RealKind), &
+                                             real(v_interp(100,id),kind=RealKind), &
+                                             real(v_interp(200,id),kind=RealKind), &
+                                             real(v_interp(300,id),kind=RealKind), &
+                                             real(v_interp(400,id),kind=RealKind)
+      endif
       v_jl => Potential(id)%potL_Pseudo(1:nr,1:jmax)
       v_jl = CZERO
 !     ----------------------------------------------------------------
@@ -3500,11 +3558,11 @@ contains
 !ywg        Potential(id)%VcoulombR0 = Potential(id)%VcoulombR0 +    &
 !ywg                                   real(V_L0,kind=RealKind)*Y0
             if ( print_level(1) >=0 ) then
-               write(6,'(a,d15.8,a,d15.8)')'Extrapolation: r = ',ZERO,     'pot_pseudo_0 = ',vc_0
-               write(6,'(a,d15.8,a,d15.8)')'               r = ',r_mesh(1),'pot_pseudo_0 = ',V1_r(1)
-               write(6,'(a,d15.8,a,d15.8)')'               r = ',r_mesh(2),'pot_pseudo_0 = ',V1_r(2)
-               write(6,'(a,d15.8,a,d15.8)')'               r = ',r_mesh(3),'pot_pseudo_0 = ',V1_r(3)
-               write(6,'(a,d15.8,a,d15.8)')'               r = ',r_mesh(4),'pot_pseudo_0 = ',V1_r(4)
+               write(6,'(a,d15.8,a,d15.8)')'Extrapolation at r = ',ZERO,     ', pot_pseudo_0 = ',vc_0
+               write(6,'(a,d15.8,a,d15.8)')'                 r = ',r_mesh(1),', pot_pseudo_0 = ',V1_r(1)
+               write(6,'(a,d15.8,a,d15.8)')'                 r = ',r_mesh(2),', pot_pseudo_0 = ',V1_r(2)
+               write(6,'(a,d15.8,a,d15.8)')'                 r = ',r_mesh(3),', pot_pseudo_0 = ',V1_r(3)
+               write(6,'(a,d15.8,a,d15.8)')'                 r = ',r_mesh(4),', pot_pseudo_0 = ',V1_r(4)
                write(6,'(a,d15.8,a,d15.8)')'Pseudo Pot at Site = ',vc_0*Y0, &
                                            ', with extrapolation error = ',dps
 !ywg           write(6,'(a,d15.8,a,d15.8)')'Old Pseudo V0 = ',vc_0*Y0,  &
@@ -3542,6 +3600,8 @@ contains
    use ParallelFFTModule, only : getNumLocalGridPoints,               &
                                  getLocalIndexOfGridOrigin,           &
                                  getGridPointCoord, getParaFFTCommunicator
+!
+   use Uniform3DGridModule, only : getGridOrigin
 !
    use SystemModule, only : getAtomPosition
 !
@@ -3581,9 +3641,9 @@ contains
    dfp_p = ZERO
    do ig = 1, na
       if (comm > 0) then ! For serial FFT, comm = -1.
-         posi = getAtomPosition(ig)
+         posi = getAtomPosition(ig) - getGridOrigin('FFT')
       else
-         posi = LocalAtomPosi(:,ig)
+         posi = LocalAtomPosi(:,ig) - getGridOrigin('FFT')
       endif
       do idk =idk0+1, numk_local
          kvec = getGridPointCoord('K',idk)
@@ -3986,6 +4046,10 @@ contains
                cost = cos(theta(it))
                posi(1) = sint*sinp
                posi(2) = cost*sinp
+!ywg 06/24/20
+  posi(1) = cost*sinp
+  posi(2) = sint*sinp
+!
                posi(3) = cosp
                posi(1:3) = r_mesh(ir)*posi(1:3)
                pylm => ylm_ngl(1:kmax,ing)
@@ -4642,6 +4706,8 @@ contains
                                  getLocalIndexOfGridOrigin,  &
                                  getGridPointCoord, getParaFFTCommunicator
 !
+   use Uniform3DGridModule, only : getGridOrigin
+!
    use MPPModule, only : GlobalSum, setCommunicator, resetCommunicator
    use GroupCommModule, only : getGroupID, GlobalSumInGroup
 !
@@ -4820,7 +4886,7 @@ contains
 !        In this case, pv_interp is to be calculated for all the atoms
 !        on the local processor
 !        =============================================================
-         posi = getAtomPosition(ia)
+         posi = getAtomPosition(ia) - getGridOrigin('FFT')
          lmax = iparam_global(1,ia)
          n_interp = iparam_global(2,ia)
          n_interp_in = iparam_global(3,ia)
@@ -4838,7 +4904,7 @@ contains
 !        In this case, pv_interp is to be calculated for the local atoms
 !        on the local processor
 !        =============================================================
-         posi = LocalAtomPosi(:,ia)
+         posi = LocalAtomPosi(:,ia) - getGridOrigin('FFT')
          lmax = iparam_out(1,ia)
          n_interp = iparam_out(2,ia)
          n_interp_in = iparam_out(3,ia)

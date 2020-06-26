@@ -265,6 +265,12 @@
 !              greater than this switching value, mixing will be engaged. otherwise, no fermi energy
 !              mixing is applied. One may keep the fermi energy fixed by setting this switching value 
 !              to 0.0 and also setting fermi energy mixing parameter to 0.0.
+   n = n + 1; Keys(n) = 'Renormalize Green function';            Values(n) = '0'
+!        Note: The Green function may be renormalized using the the integrated DOS value
+!              calculated from multiple scattering Lloyd formula and/or single scattering
+!              Krein formula.
+!                     = 0: Do NOT renormalize the Green function
+!                     = 1: Renormalize the Green function
 !  =============================================================================
 !  Additional input parameters can be added to this table using the 
 !  following format:

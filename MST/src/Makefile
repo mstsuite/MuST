@@ -177,5 +177,6 @@ clean:
 printSystemMovie.o: $(Modules_2)
 
 DefaultParamModule.o: DefaultParameters.h
+InputModule.o: DefaultParamModule.o
 
 keep.o: git_version.h

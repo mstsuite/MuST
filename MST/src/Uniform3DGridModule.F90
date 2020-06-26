@@ -1,6 +1,6 @@
 module Uniform3DGridModule
    use KindParamModule, only : IntKind, RealKind
-   use MathParamModule, only : ZERO, TEN2m8, ONE
+   use MathParamModule, only : ZERO, ONE, TEN2m8
    use PublicTypeDefinitionsModule, only : UniformGridStruct
    use PublicTypeDefinitionsModule, only : AtomOnUniformGridStruct
    use ErrorHandlerModule, only : ErrorHandler, StopHandler, WarningHandler
@@ -19,6 +19,7 @@ public ::                      &
    getGridStepSize,            &
    getGridPosition,            &
    getGridIndex,               &
+   getGridOrigin,              &
    isOnAtomicCellBoundary,     &
    isLocalGrid,                &
    getSourceProc,              &
@@ -225,9 +226,9 @@ contains
    pUG%nproc_b = 1
    pUG%nproc_c = 1
    pUG%vec_origin = v0
-   pUG%cell(1:3,1) = unit_cell(1:3,1)-v0(1:3)
-   pUG%cell(1:3,2) = unit_cell(1:3,2)-v0(1:3)
-   pUG%cell(1:3,3) = unit_cell(1:3,3)-v0(1:3)
+   pUG%cell(1:3,1) = unit_cell(1:3,1)
+   pUG%cell(1:3,2) = unit_cell(1:3,2)
+   pUG%cell(1:3,3) = unit_cell(1:3,3)
 !
    pUG%grid_step_a(1:3) = pUG%cell(1:3,1)/real(na,kind=RealKind)
    pUG%grid_step_b(1:3) = pUG%cell(1:3,2)/real(nb,kind=RealKind)
@@ -357,7 +358,7 @@ contains
 !        associated with any local atoms, since atoms and uniform grids 
 !        have independent parallel distribution.
 !  ===================================================================
-   use MathParamModule, only : TEN2m12, TEN2m6, TWO, PI
+   use MathParamModule, only : TEN2m12, TEN2m6, TEN2m8, TWO, PI, TEN2m10
    use VectorModule, only : getVecLength, getDotProduct, getCrossProduct
    use GroupCommModule, only : getGroupID, getNumPEsInGroup, getMyPEinGroup
    use GroupCommModule, only : GlobalCollectInGroup, GlobalMaxInGroup
@@ -578,8 +579,13 @@ contains
 !
 !           Establish a linked list of all grid points which are on atomic
 !           cell boundaries.
+!           We choose tol = 10^(-8) to be the default. It may not always work if the cell
+!           becomes extremely distorted. For such situation, the symptom would
+!           be: the total energy may have an abrupt jump.
 !           ==========================================================
             n = getPointLocationFlag(ia, rv(1), rv(2), rv(3), tol=tol_param)
+!           write(6,'(a,3i8,2x,3f12.8,2x,3f12.8,2x,i5)')'ia,ig,gCounter,rg,rv,n = ', &
+!                    ia,ig,gCounter,rg,rv,n
             if (n >= 0) then
                pAOG%NumGridPointsInCell(ia) = pAOG%NumGridPointsInCell(ia) + 1
                if (pAOG%NumGridPointsInCell(ia) > max_incell_pts) then
@@ -1119,7 +1125,8 @@ contains
    ic = mod(ig_in_box-1,ni)+pAOG%AtomBox(1,1,ia)
    jc = mod((ig_in_box-ic+pAOG%AtomBox(1,1,ia)-1)/ni,nj)+pAOG%AtomBox(1,2,ia)
    kc = ((ig_in_box-ic+pAOG%AtomBox(1,1,ia)-1)/ni-(jc-pAOG%AtomBox(1,2,ia)))/nj+pAOG%AtomBox(1,3,ia)
-   pos = pUG%grid_step_a*(ic-1) + pUG%grid_step_b*(jc-1) + pUG%grid_step_c*(kc-1)
+   pos = pUG%grid_step_a*(ic-1) + pUG%grid_step_b*(jc-1) + pUG%grid_step_c*(kc-1) &
+         + pUG%vec_origin
 !
    end function getGridPosition_box
 !  ===================================================================
@@ -1148,9 +1155,36 @@ contains
    ic = mod(ig_global-1,pUG%nga)+1
    jc = mod((ig_global-ic)/pUG%nga,pUG%ngb)+1
    kc = ((ig_global-ic)/pUG%nga-(jc-1))/pUG%ngb+1
-   pos = pUG%grid_step_a*(ic-1) + pUG%grid_step_b*(jc-1) + pUG%grid_step_c*(kc-1)
+   pos = pUG%grid_step_a*(ic-1) + pUG%grid_step_b*(jc-1) + pUG%grid_step_c*(kc-1) &
+         + pUG%vec_origin
 !
    end function getGridPosition_global
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getGridOrigin(gname) result(vc)
+!  ===================================================================
+   implicit none
+!
+   character (len=*), intent(in) :: gname
+!
+   type (UniformGridStruct), pointer :: pUG
+!
+   real (kind=RealKind) :: vc(3)
+!
+   if (nocaseCompare(gname,'FFT')) then
+      pUG => FFTGrid
+   else if (nocaseCompare(gname,'Visual')) then
+      pUG => VisualGrid
+   else
+      call ErrorHandler('getGridOrigin','Unknown grid name',gname)
+   endif
+!
+   vc = pUG%vec_origin
+!
+   end function getGridOrigin
 !  ===================================================================
 !
 !  *******************************************************************
@@ -1190,7 +1224,10 @@ contains
 !
    character (len=*), intent(in) :: gname
 !
+   integer (kind=IntKind) :: id
+!
    type (UniformGridStruct), pointer :: pUG
+   type (AtomOnUniformGridStruct), pointer :: pAOG
 !
    if (.not.Initialized) then
 !     ----------------------------------------------------------------
@@ -1224,6 +1261,16 @@ contains
    write(6,'(  ''step_a     '',t40,''='',3d13.6)')  pUG%grid_step_a(1:3)
    write(6,'(  ''step_b     '',t40,''='',3d13.6)')  pUG%grid_step_b(1:3)
    write(6,'(  ''step_c     '',t40,''='',3d13.6)')  pUG%grid_step_c(1:3)
+   write(6,'(  ''uniform grid origin'',t40,''='',3d13.6)')  pUG%vec_origin
+!
+   pAOG => pUG%AtomOnGrid
+   write(6,'(/,a,t40,a,i8,a)')'Number of Grid Points on Cell Bound','=',pAOG%NumGridPointsOnCellBound, &
+                              ' on the current process'
+   do id = 1, pAOG%NumLocalAtoms
+      write(6,'(a,i5,a)')'For local atom index = ',id,'  --------------'
+      write(6,'(a,t40,a,i8)')'Number of Grid Points in Cell','=',pAOG%NumGridPointsInCell(id)
+      write(6,'(a,t40,a,i8)')'Number of Grid Points in Atom Box','=',pAOG%NumGridPointsInAtomBox(id)
+   enddo
    write(6,'(a)')'============================================================'
 !
    end subroutine printUniform3DGrid
