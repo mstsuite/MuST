@@ -3441,7 +3441,8 @@ contains
    buf(1) = ng
    buf(2) = pseudo_fft
    comm = getParaFFTCommunicator(MyProc=p,NumProcs=n)
-   if (comm > 0) then ! For serial FFT, comm = -1.
+!  if (comm > -1) then ! For serial FFT, comm = -1.
+   if (n > 1) then ! For serial FFT, comm = -1.
       call setCommunicator(comm,p,n)
       call GlobalSum(buf,2)
       call resetCommunicator()
@@ -3502,7 +3503,7 @@ contains
    do id = 1,LocalNumAtoms
       dfp_total(1:3) = dfp_total(1:3) + DF_Pseudo(1:3,id)
       if (node_print_level >= 0) then
-         write(6,'(a,3d16.8)'),'DF_Pseudo = ',DF_Pseudo(1:3,id)
+         write(6,'(a,3d16.8)')'DF_Pseudo = ',DF_Pseudo(1:3,id)
       endif
    enddo
 !
@@ -3630,7 +3631,8 @@ contains
    cfact =  SQRTm1    ! 09/26/2018
 !
    comm = getParaFFTCommunicator(MyProc=p,NumProcs=n)
-   if (comm > 0) then ! For serial FFT, comm = -1.
+!  if (comm > -1) then ! For serial FFT, comm = -1.
+   if (n > 1) then ! For serial FFT, comm = -1.
       na = GlobalNumAtoms
       dfp_p => dfp_buf
    else
@@ -3640,7 +3642,8 @@ contains
 !
    dfp_p = ZERO
    do ig = 1, na
-      if (comm > 0) then ! For serial FFT, comm = -1.
+!     if (comm > -1) then ! For serial FFT, comm = -1.
+      if (n > 1) then ! For serial FFT, comm = -1.
          posi = getAtomPosition(ig) - getGridOrigin('FFT')
       else
          posi = LocalAtomPosi(:,ig) - getGridOrigin('FFT')
@@ -3653,7 +3656,8 @@ contains
          dfp_p(:,ig) = dfp_p(:,ig) + real(cfact*expikR*p_fft_c(idk),kind=RealKind)*kvec/kv2
       enddo
    enddo
-   if (comm > 0) then ! For serial FFT, comm = -1.
+!  if (comm > -1) then ! For serial FFT, comm = -1.
+   if (n > 1) then ! For serial FFT, comm = -1.
 !     ----------------------------------------------------------------
       call setCommunicator(comm,p,n)
       call GlobalSum(dfp_buf,3,GlobalNumAtoms)
@@ -4830,7 +4834,8 @@ contains
 !
    comm = getParaFFTCommunicator(MyProc=p,NumProcs=n)
 !
-   if (comm > 0) then
+!  if (comm > -1) then
+   if (n > 1) then
       na = GlobalNumAtoms
       iparam_global = 0
       do id = 1, LocalNumAtoms
@@ -4881,7 +4886,8 @@ contains
    endif
 !
    do ia = 1, na
-      if (comm > 0) then
+!     if (comm > -1) then
+      if (n > 1) then
 !        =============================================================
 !        In this case, pv_interp is to be calculated for all the atoms
 !        on the local processor
@@ -4979,7 +4985,8 @@ contains
 !  In parallel FFT case, a summation over all k-points, which are
 !  distributed across pocessors, needs to be performed.
 !  ===================================================================
-   if (comm > 0) then
+!  if (comm > -1) then
+   if (n > 1) then
 !     ================================================================
 !     In this case, w_interp_global is summed across all processors, 
 !     which, in effect, sums over the reciprocal uniform grid points.
