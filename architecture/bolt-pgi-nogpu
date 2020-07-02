@@ -1,0 +1,19 @@
+ifdef MST
+include ../MST/arch/bolt_pgi
+else ifdef EXTERNAL
+include ../MST/arch/bolt_pgi
+else
+include ../lsms/arch/bolt-pgi-nogpu
+endif
+
+export LIBXC_PATH=/opt/packages/LibXC/libxc-5.0.0/PGI
+export HDF5_PATH=/opt/packages/HDF5/hdf5-1.10.5/PGI
+export LUA_PATH=/opt/packages/Lua/lua-5.3.5/PGI
+export FFTW_PATH = /usr/local/fftw/fftw-3.3.8/PGI
+export P3DFFT_PATH = /usr/local/p3dfft/p3dfft-2.7.9/PGI
+
+# Note: for hdf5, "--enable-parallel" might be needed in the future.
+# HDF5_CONFIG_FLAGS   = --enable-fortran --enable-static-exec CC=$(CC) CXX=$(CXX) FC=$(FC)
+# LIBXC_CONFIG_FLAGS  = CC=$(CC) CFLAGS="$(CFLAGS)" FC=$(FC) FFLAGS="$(FFLAGS)"
+# P3DFFT_CONFIG_FLAGS = --enable-intel FC=$(FC) CC=$(CC)
+# FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS)" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)"

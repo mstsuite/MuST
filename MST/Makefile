@@ -9,8 +9,8 @@ SystemName = bolt_intel
 #=====================================================================
 # Paths and internal libraries setup - This unlikely needs to be changed
 #=====================================================================
-TOP_DIR = $(shell pwd)
-ODIR=$(TOP_DIR)/bin
+export TOP_DIR = $(shell pwd)
+OODIR=$(TOP_DIR)/bin
 
 ifndef EXTERN_LIB_PATH
 EXTERN_LIB_PATH=$(TOP_DIR)/../external
@@ -28,6 +28,12 @@ endif
 #=====================================================================
 # No need to change following settings, unless it is necessary
 #=====================================================================
+
+ifdef SUFFIX
+ODIR = $(OODIR)/$(SUFFIX)
+else
+ODIR = $(OODIR)
+endif
 
 ifndef EXEC_NAME
 EXEC_NAME = mst2
@@ -85,7 +91,7 @@ endif
 
 ifndef LIBXC_PATH
 ADDITIONAL_TARGETS = libxc
-LIBXC_PATH = $(EXTERN_LIB_PATH)/libxc/LibXC
+LIBXC_PATH = $(EXTERN_LIB_PATH)/libxc/LibXC/$(SUFFIX)
 # ADD_LIBS  += -L$(LIBXC_PATH)/lib -lxcf90 -lxc
 ADD_LIBS  += $(LIBXC_PATH)/lib/libxcf90.a $(LIBXC_PATH)/lib/libxc.a
 FPPFLAGS += -DLIBXC5 -I$(LIBXC_PATH)/include
@@ -97,14 +103,14 @@ endif
 
 ifndef FFTW_PATH
 ADDITIONAL_TARGETS += fftw
-FFTW_PATH = $(EXTERN_LIB_PATH)/fftw/FFTW
+FFTW_PATH = $(EXTERN_LIB_PATH)/fftw/FFTW/$(SUFFIX)
 endif
 FFTW_INC = $(FFTW_PATH)/include
 
 ifndef NotUse_P3DFFT
 ifndef P3DFFT_PATH
 ADDITIONAL_TARGETS += p3dfft
-P3DFFT_PATH = $(EXTERN_LIB_PATH)/p3dfft/P3DFFT
+P3DFFT_PATH = $(EXTERN_LIB_PATH)/p3dfft/P3DFFT/$(SUFFIX)
 endif
 FFT_FLAGS = -DFFTW -I$(FFTW_INC) -DP3DFFT -I$(P3DFFT_PATH)/include
 ADD_LIBS += -L$(P3DFFT_PATH)/lib -lp3dfft -L$(FFTW_PATH)/lib -lfftw3_mpi -lfftw3
@@ -138,6 +144,7 @@ all: $(ERROR_CODE) $(ADDITIONAL_TARGETS) check-bin check-git-tag main check util
 # Check bin directory to make sure it exists
 #=====================================================================
 check-bin:
+	if [ ! -d $(OODIR) ]; then echo $(OODIR) "folder does not exist and I am creating one ..."; mkdir $(OODIR); fi
 	if [ ! -d $(ODIR) ]; then echo $(ODIR) "folder does not exist and I am creating one ..."; mkdir $(ODIR); fi
 
 check-git-tag:
@@ -156,67 +163,67 @@ gen_link:
 
 main:
 	cd $(ODIR); make "FC=$(FC)" "FFLAGS=$(FFLAGS)" "F77FLAGS=$(F77FLAGS)" "MSTLIB=$(MSTLIB)" "PREPROC=$(PREPROC)" "ODIR=$(ODIR)" \
-"XLC_I=$(XLC_I)" "ARCHV=$(ARCHV)" "PREPROC_FFLAGS=$(PREPROC_FFLAGS)" -f ../lib/Makefile
+"XLC_I=$(XLC_I)" "ARCHV=$(ARCHV)" "PREPROC_FFLAGS=$(PREPROC_FFLAGS)" -f $(TOP_DIR)/lib/Makefile
 	if test "$(Acceleration)" = "1"; then cd $(ODIR); \
 make "FC=$(FC)" "FFLAGS=$(FFLAGS)" "F77FLAGS=$(F77FLAGS)" "PREPROC=$(PREPROC)" "CC=$(CC)" "CXX=$(CXX)" \
 "ACCEL_CXX=$(ACCEL_CXX)" "ACCEL_OPT=$(ACCEL_OPT)" "CFLAGS=$(CFLAGS)" \
-"XLC_I=$(XLC_I)" "ODIR=$(ODIR)" "ARCHV=$(ARCHV)" "ACCLIB=$(ACCLIB)" "PREPROC_FFLAGS=$(PREPROC_FFLAGS)" -f ../Accelerator/Makefile; fi
+"XLC_I=$(XLC_I)" "ODIR=$(ODIR)" "ARCHV=$(ARCHV)" "ACCLIB=$(ACCLIB)" "PREPROC_FFLAGS=$(PREPROC_FFLAGS)" -f $(TOP_DIR)/Accelerator/Makefile; fi
 	cd $(ODIR); make "FC=$(FC)" "FFLAGS=$(FFLAGS)" "F77FLAGS=$(F77FLAGS)" "IOLIB=$(IOLIB)" \
 "PREPROC=$(PREPROC)" "PREPROC_FFLAGS=$(PREPROC_FFLAGS)" \
-"CC=$(CC)" "CFLAGS=$(CFLAGS)" "ODIR=$(ODIR)" "XLC_I=$(XLC_I)" "ARCHV=$(ARCHV)" -f ../iolib/Makefile
+"CC=$(CC)" "CFLAGS=$(CFLAGS)" "ODIR=$(ODIR)" "XLC_I=$(XLC_I)" "ARCHV=$(ARCHV)" -f $(TOP_DIR)/iolib/Makefile
 	cd $(ODIR); make "FC=$(FC)" "FFLAGS=$(FFLAGS)" "MPPLIB=$(MPPLIB)" "PREPROC=$(PREPROC)" "PREPROC_FFLAGS=$(PREPROC_FFLAGS)" \
-"ODIR=$(ODIR)" "XLC_I=$(XLC_I)" "ARCHV=$(ARCHV)" -f ../plib/Makefile
+"ODIR=$(ODIR)" "XLC_I=$(XLC_I)" "ARCHV=$(ARCHV)" -f $(TOP_DIR)/plib/Makefile
 	if test "$(SuperLU)" = "1"; then cd $(ODIR); \
 make "FC=$(FC)" "FFLAGSSLU=$(FFLAGS)" "SLULIB=$(SLULIB)" "MPI2INCLUDE_PATH=$(MPI2INCLUDE_PATH)" "SLUPATH=$(SLUPATH)" "PREPROC=$(PREPROC)" \
-"PREPROC_FFLAGS=$(PREPROC_FFLAGS)" "ODIR=$(ODIR)" "ARCHV=$(ARCHV)" "XLC_I=$(XLC_I)" -f ../slulib/Makefile; fi
+"PREPROC_FFLAGS=$(PREPROC_FFLAGS)" "ODIR=$(ODIR)" "ARCHV=$(ARCHV)" "XLC_I=$(XLC_I)" -f $(TOP_DIR)/slulib/Makefile; fi
 	cd $(ODIR); make "FC=$(FC)" "FFLAGS=$(FFLAGS)" "F77FLAGS=$(F77FLAGS)" "MSTLIB=$(MSTLIB)" \
 "PREPROC=$(PREPROC)" "PREPROC_FFLAGS=$(PREPROC_FFLAGS)" \
 "CC=$(CC)" "CFLAGS=$(CFLAGS)" "IOLIB=$(IOLIB)" "DSUPERLULIB=$(DSUPERLULIB)" "MPPLIB=$(MPPLIB)" "SLULIB=$(SLULIB)" "SLUPATH=$(SLUPATH)" \
 "ODIR=$(ODIR)" "ADDLIBS=$(ADD_LIBS)" "XLC_I=$(XLC_I)" "LD=$(LD)" "Use_FFTW=$(Use_FFTW)" "FFTW_INC=$(FFTW_INC)" "EXEC_NAME=$(EXEC_NAME)" \
--f ../src/Makefile
+-f $(TOP_DIR)/src/Makefile
 	if test -d $(HOME)/bin; then echo "copy the executable $(EXEC_NAME) to $(HOME)/bin"; else mkdir $(HOME)/bin; fi
 	cp $(ODIR)/$(EXEC_NAME) $(HOME)/bin
 
 check: main
 	cd $(ODIR); make "FC=$(FC)" "FFLAGS=$(FFLAGS)" "F77FLAGS=$(F77FLAGS)" "MSTLIB=$(MSTLIB)" "IOLIB=$(IOLIB)" "MPPLIB=$(MPPLIB)" \
 "PREPROC=$(PREPROC)" "ODIR=$(ODIR)" "ADDLIBS=$(ADD_LIBS)" "XLC_I=$(XLC_I)" \
-"PREPROC_FFLAGS=$(PREPROC_FFLAGS)" "Use_FFTW=$(Use_FFTW)" "FFTW_INC=$(FFTW_INC)" "LD=$(LD)" -f ../driver/Makefile
+"PREPROC_FFLAGS=$(PREPROC_FFLAGS)" "Use_FFTW=$(Use_FFTW)" "FFTW_INC=$(FFTW_INC)" "LD=$(LD)" -f $(TOP_DIR)/driver/Makefile
 
 util: check
 	cd $(ODIR); make "FC=$(FC)" "FFLAGS=$(FFLAGS)" "MPICC=$(MPICC)" "F77FLAGS=$(F77FLAGS)" "MSTLIB=$(MSTLIB)" \
 "PREPROC=$(PREPROC)" "PREPROC_FFLAGS=$(PREPROC_FFLAGS)" \
 "CC=$(CC)" "CFLAGS=$(CFLAGS)" "IOLIB=$(IOLIB)" "MPPLIB=$(MPPLIB)" "ODIR=$(ODIR)" "LD=$(LD)" "ADDLIBS=$(ADD_LIBS)" "XLC_I=$(XLC_I)" \
--f ../util/Makefile
+-f $(TOP_DIR)/util/Makefile
 
 clear:
-	cd $(ODIR); make "ODIR=$(ODIR)" "MSTLIB=$(MSTLIB)" "EXEC_NAME=$(EXEC_NAME)" clear -f ../lib/Makefile
-	cd $(ODIR); make "ODIR=$(ODIR)" "IOLIB=$(IOLIB)" "EXEC_NAME=$(EXEC_NAME)" clear -f ../lib/Makefile
-	cd $(ODIR); make "ODIR=$(ODIR)" "MPPLIB=$(MPPLIB)" "EXEC_NAME=$(EXEC_NAME)" clear -f ../plib/Makefile 
-	cd $(ODIR); make "ODIR=$(ODIR)" "EXEC_NAME=$(EXEC_NAME)" clear -f ../src/Makefile
+	cd $(ODIR); make "ODIR=$(ODIR)" "MSTLIB=$(MSTLIB)" "EXEC_NAME=$(EXEC_NAME)" clear -f $(TOP_DIR)/lib/Makefile
+	cd $(ODIR); make "ODIR=$(ODIR)" "IOLIB=$(IOLIB)" "EXEC_NAME=$(EXEC_NAME)" clear -f $(TOP_DIR)/lib/Makefile
+	cd $(ODIR); make "ODIR=$(ODIR)" "MPPLIB=$(MPPLIB)" "EXEC_NAME=$(EXEC_NAME)" clear -f $(TOP_DIR)/plib/Makefile 
+	cd $(ODIR); make "ODIR=$(ODIR)" "EXEC_NAME=$(EXEC_NAME)" clear -f $(TOP_DIR)/src/Makefile
 
 clear_slulib:
-	cd $(ODIR); make "ODIR=$(ODIR)" "SLULIB=$(SLULIB)" clear -f ../slulib/Makefile
+	cd $(ODIR); make "ODIR=$(ODIR)" "SLULIB=$(SLULIB)" clear -f $(TOP_DIR)/slulib/Makefile
 
 clear_util:
-	cd $(ODIR); make "ODIR=$(ODIR)" clear -f ../util/Makefile
+	cd $(ODIR); make "ODIR=$(ODIR)" clear -f $(TOP_DIR)/util/Makefile
 
 clean_util:
-	cd $(ODIR); make "ODIR=$(ODIR)" clean -f ../util/Makefile
+	cd $(ODIR); make "ODIR=$(ODIR)" clean -f $(TOP_DIR)/util/Makefile
 
 clear_check:
-	cd $(ODIR); make "ODIR=$(ODIR)" clear -f ../driver/Makefile
+	cd $(ODIR); make "ODIR=$(ODIR)" clear -f $(TOP_DIR)/driver/Makefile
 
 clean_check:
-	cd $(ODIR); make "ODIR=$(ODIR)" clean -f ../driver/Makefile
+	cd $(ODIR); make "ODIR=$(ODIR)" clean -f $(TOP_DIR)/driver/Makefile
 
 clear_src:
-	cd $(ODIR); make "ODIR=$(ODIR)" "EXEC_NAME=$(EXEC_NAME)" clear -f ../src/Makefile
+	cd $(ODIR); make "ODIR=$(ODIR)" "EXEC_NAME=$(EXEC_NAME)" clear -f $(TOP_DIR)/src/Makefile
 
 clean:
 	rm -f $(ODIR)/*.o $(ODIR)/*.mod $(ODIR)/*.a
 
 distclean:
-	rm -rf $(ODIR) architecture.h
+	rm -rf $(OODIR) architecture.h
 
 error:
 	@echo $(ERROR_MESSAGE); exit 1
@@ -231,21 +238,21 @@ p3dfft:
 	@cd $(EXTERN_LIB_PATH) && make "ARCH_FILE=$(ARCH_FILE)" p3dfft
 
 install:
-	ln -fs $(ODIR)/assk $(PREFIX)/bin/assk; \
-ln -fs $(ODIR)/bireft $(PREFIX)/bin/bireft; \
-ln -fs $(ODIR)/cart2direct $(PREFIX)/bin/cart2direct; \
-ln -fs $(ODIR)/charge $(PREFIX)/bin/charge; \
-ln -fs $(ODIR)/chgaver $(PREFIX)/bin/chgaver; \
-ln -fs $(ODIR)/eosfit $(PREFIX)/bin/eosfit; \
-ln -fs $(ODIR)/extrpot $(PREFIX)/bin/extrpot; \
-ln -fs $(ODIR)/findBoundStates $(PREFIX)/bin/findBoundStates; \
-ln -fs $(ODIR)/findResonance $(PREFIX)/bin/findResonance; \
-ln -fs $(ODIR)/genap $(PREFIX)/bin/genap; \
-ln -fs $(ODIR)/measureVoronoi $(PREFIX)/bin/measureVoronoi; \
-ln -fs $(ODIR)/$(EXEC_NAME) $(PREFIX)/bin/$(EXEC_NAME); \
-ln -fs $(ODIR)/murn $(PREFIX)/bin/murn; \
-ln -fs $(ODIR)/newa $(PREFIX)/bin/newa; \
-ln -fs $(ODIR)/newss $(PREFIX)/bin/newss; \
-ln -fs $(ODIR)/setEvec $(PREFIX)/bin/setEvec; \
-ln -fs $(ODIR)/slice $(PREFIX)/bin/slice; \
-ln -fs $(ODIR)/ssk $(PREFIX)/bin/ssk
+	ln -fs $(ODIR)/assk $(PREFIX)/bin/$(SUFFIX)/assk; \
+ln -fs $(ODIR)/bireft $(PREFIX)/bin/$(SUFFIX)/bireft; \
+ln -fs $(ODIR)/cart2direct $(PREFIX)/bin/$(SUFFIX)/cart2direct; \
+ln -fs $(ODIR)/charge $(PREFIX)/bin/$(SUFFIX)/charge; \
+ln -fs $(ODIR)/chgaver $(PREFIX)/bin/$(SUFFIX)/chgaver; \
+ln -fs $(ODIR)/eosfit $(PREFIX)/bin/$(SUFFIX)/eosfit; \
+ln -fs $(ODIR)/extrpot $(PREFIX)/bin/$(SUFFIX)/extrpot; \
+ln -fs $(ODIR)/findBoundStates $(PREFIX)/bin/$(SUFFIX)/findBoundStates; \
+ln -fs $(ODIR)/findResonance $(PREFIX)/bin/$(SUFFIX)/findResonance; \
+ln -fs $(ODIR)/genap $(PREFIX)/bin/$(SUFFIX)/genap; \
+ln -fs $(ODIR)/measureVoronoi $(PREFIX)/bin/$(SUFFIX)/measureVoronoi; \
+ln -fs $(ODIR)/$(EXEC_NAME) $(PREFIX)/bin/$(SUFFIX)/$(EXEC_NAME); \
+ln -fs $(ODIR)/murn $(PREFIX)/bin/$(SUFFIX)/murn; \
+ln -fs $(ODIR)/newa $(PREFIX)/bin/$(SUFFIX)/newa; \
+ln -fs $(ODIR)/newss $(PREFIX)/bin/$(SUFFIX)/newss; \
+ln -fs $(ODIR)/setEvec $(PREFIX)/bin/$(SUFFIX)/setEvec; \
+ln -fs $(ODIR)/slice $(PREFIX)/bin/$(SUFFIX)/slice; \
+ln -fs $(ODIR)/ssk $(PREFIX)/bin/$(SUFFIX)/ssk

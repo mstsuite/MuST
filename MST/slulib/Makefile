@@ -6,7 +6,7 @@
 #  Creation date:   July 29, 2003   version 2.0
 #
 #######################################################################
-VPATH = $(ODIR)/../slulib
+VPATH = $(TOP_DIR)/slulib
 
 MODULE = superlupara.o superlu_mod.o SuperLUSolverModule.o
 

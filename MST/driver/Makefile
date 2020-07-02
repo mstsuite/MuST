@@ -1,4 +1,4 @@
-VPATH = ../driver
+VPATH = $(TOP_DIR)/driver
 
 .SUFFIXES:	.o .f .f90 .F90
 
