@@ -1133,7 +1133,7 @@ contains
    endif
 !
    positive_def = .false.
-   if (minval(f,nr) >= ZERO) then
+   if (minval(f(1:nr)) >= ZERO) then
       positive_def = .true.
    endif
 !
