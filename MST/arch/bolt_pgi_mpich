@@ -3,6 +3,7 @@ MATHLIB_PATH = /opt/packages/pgi/19.7/linux86-64-llvm/19.7/lib
 LIBXC_PATH = /usr/local/libxc/libxc-5.0.0/PGI-MPICH
 FFTW_PATH = /usr/local/fftw/fftw-3.3.8/PGI-MPICH
 P3DFFT_PATH = /usr/local/p3dfft/p3dfft-2.7.9/PGI-MPICH
+export MKLROOT = /opt/intel/compilers_and_libraries_2019.3.199/linux/mkl
 #=====================================================================
 # Compilers and archiver tool
 #=====================================================================
@@ -32,9 +33,8 @@ LD=$(FC)
 #=====================================================================
 # Compiler flags
 #=====================================================================
-#FFLAGS=-I. -assume byterecl -openmp -O3 -axSSE4.2
-#FFLAGS=-I. -assume byterecl -openmp -g -C -traceback -check all -check nopointer -check noshape #-warn all
-FFLAGS=-I. -fast -fastsse -Mbounds -traceback -Mchkptr -Mchkstk
+# FFLAGS=-I. -fast -fastsse -Mbounds -traceback -Mchkptr -Mchkstk
+FFLAGS=-I. -fast -fastsse
 #FFLAGS=-I. -O3
 F77FLAGS=$(FFLAGS)
 FPPDEFS=-Mpreprocess
@@ -49,7 +49,8 @@ CPPFLAGS=-DUnderscore
 #  -Wl,--start-group -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lmkl_blacs_intelmpi_lp64 -Wl,--end-group \
 #  -lpthread -lm -L$(ACCEL_PATH)/lib64 -lcudart -lcuda -lcublas -lstdc++ \
 #  /lvol/intel/composer_xe_2013.1.117/compiler/lib/intel64/libiomp5.a
-ADD_LIBS = -L$(MATHLIB_PATH) -llapack -lblas -L/opt/packages/ScaLAPACK/scalapack-2.1.0/MPICH -lscalapack
+# ADD_LIBS = -L$(MATHLIB_PATH) -llapack -lblas -L/opt/packages/ScaLAPACK/scalapack-2.1.0/MPICH -lscalapack
+ADD_LIBS = -Mmkl -L/opt/packages/ScaLAPACK/scalapack-2.1.0/MPICH -lscalapack
 
 ifdef LIBXC_PATH
 ADD_LIBS += -L$(LIBXC_PATH)/lib -lxcf90 -lxc
