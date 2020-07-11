@@ -26,12 +26,18 @@ ArchName = $(MAKECMDGOALS)
 
 MuST_PATH = $(shell pwd)
 
+ifndef SUFFIX
+SUFFIX = .
+else
+SUFFIX_d = $(SUFFIX)
+endif
+
 %:
 	@if [ ! -e ./architecture/$(ArchName) ]; then echo "Architecture file" \"$(ArchName)\" "does not exist under ./architecture directory"; \
 exit 1; fi
 	@if [ ! -d bin ]; then @echo "bin folder does not exist and I am creating one ..."; mkdir bin; fi
-	@if [ "${SUFFIX}" ] && [ ! -d bin/$(SUFFIX) ]; then @echo "creating subdirectory $(SUFFIX) under bin ..."; mkdir bin/$(SUFFIX); fi
-	@if [ "${SUFFIX}" ]; then echo $(SUFFIX) | tee bin/.SUFFIX; else echo "." | tee bin/.SUFFIX; fi
+	@if [ "${SUFFIX_d}" ] && [ ! -d bin/$(SUFFIX_d) ]; then @echo "creating subdirectory $(SUFFIX_d) under bin ..."; mkdir bin/$(SUFFIX_d); fi
+	@if [ "${SUFFIX_d}" ]; then echo $(SUFFIX_d) | tee bin/.SUFFIX; else echo "." | tee bin/.SUFFIX; fi
 	@cd external; ln -fs ../architecture/$(ArchName) architecture.h; make "EXTERNAL=1" "SUFFIX=$(SUFFIX)"
 	@cd lsms; ln -fs ../architecture/$(ArchName) architecture.h; make "EXTERN_LIB_PATH=$(MuST_PATH)/external" "ArchName=$(ArchName)" \
 "SUFFIX=$(SUFFIX)"
@@ -55,6 +61,7 @@ lsms:
 	@cd lsms; make "EXTERN_LIB_PATH=$(MuST_PATH)/external" "SUFFIX=$(SUFFIX)"
 
 clean: clean-lsms clean-MST clean-external
+	$(eval SUFFIX := "$(shell tail -n 1 bin/.SUFFIX)")
 	@if [ "${SUFFIX}" ]; then rm -f bin/$(SUFFIX)/*; else rm -f bin/*; fi
 
 clean-external:
@@ -71,4 +78,4 @@ distclean:
 	@cd external; make "SUFFIX=$(SUFFIX)" distclean
 	@cd lsms; make "SUFFIX=$(SUFFIX)" distclean
 	@cd MST; make "SUFFIX=$(SUFFIX)" distclean
-	@if [ "${SUFFIX}" ]; then rm -f bin/$(SUFFIX)/*; else rm -rf bin/*; fi
+	rm -rf bin

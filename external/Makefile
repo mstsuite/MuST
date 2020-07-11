@@ -48,14 +48,14 @@ hdf5:
 DIR_NAME="$(shell tar -tzf hdf5/hdf5.tar.gz | head -1 | cut -f1 -d"/")" && cd hdf5 && tar xfz hdf5.tar.gz && \
 ln -fs $$DIR_NAME HDF5; fi
 	if [ ! -e hdf5/HDF5/$(SUFFIX)/lib/libhdf5.a ]; then \
-cd hdf5/HDF5 && echo $$PWD && make distclean && ./configure --prefix=$$PWD/$(SUFFIX) $(HDF5_CONFIG_FLAGS) && make && make -i install; fi
+cd hdf5/HDF5 && echo $$PWD && ./configure --prefix=$$PWD/$(SUFFIX) $(HDF5_CONFIG_FLAGS) && make clean && make && make -i install; fi
 
 lua:
 	if [ ! -d lua/LUA ]; then \
 DIR_NAME="$(shell tar -tzf lua/lua.tar.gz | head -1 | cut -f1 -d"/")" && cd lua && rm -f LUA && tar xfz lua.tar.gz && \
-ln -fs $$DIR_NAME LUA; fi 
+ln -fs $$DIR_NAME LUA; fi
 	if [ ! -e lua/LUA/$(SUFFIX)/lib/liblua.a ]; then \
-cd lua/LUA && echo $$PWD && make distclean && make INSTALL_TOP=$$PWD/$(SUFFIX) PLAT=generic CC="$(CC) -std=gnu99" ; \
+cd lua/LUA && echo $$PWD && make clean; make INSTALL_TOP=$$PWD/$(SUFFIX) PLAT=generic CC="$(CC) -std=gnu99" ; \
 make INSTALL_TOP=$$PWD/$(SUFFIX) PLAT=generic install; fi
 
 libxc:
@@ -63,14 +63,14 @@ libxc:
 DIR_NAME="$(shell tar -tzf libxc/libxc.tar.gz | head -1 | cut -f1 -d"/")" && cd libxc && rm -f LibXC && tar xfz libxc.tar.gz && \
 ln -fs $$DIR_NAME LibXC; fi
 	if [ ! -e libxc/LibXC/$(SUFFIX)/lib/libxc.a ]; then \
-cd libxc/LibXC && echo $$PWD && make distclean && ./configure --prefix=$$PWD/$(SUFFIX) $(LIBXC_CONFIG_FLAGS) && make && make install; fi
+cd libxc/LibXC && echo $$PWD && ./configure --prefix=$$PWD/$(SUFFIX) $(LIBXC_CONFIG_FLAGS) && make clean && make && make install; fi
 
 fftw:
 	if [ ! -d fftw/FFTW ]; then \
 DIR_NAME="$(shell tar -tzf fftw/fftw.tar.gz | head -1 | cut -f1 -d"/")" && cd fftw && rm -f FFTW && tar xfz fftw.tar.gz && \
 ln -fs $$DIR_NAME FFTW; fi
 	if [ ! -e fftw/FFTW/$(SUFFIX)/lib/libfftw3.a ]; then \
-cd fftw/FFTW && echo $$PWD && make distclean && ./configure --prefix=$$PWD/$(SUFFIX) --enable-fortran $(FFTW_CONFIG_FLAGS) && \
+cd fftw/FFTW && echo $$PWD && ./configure --prefix=$$PWD/$(SUFFIX) --enable-fortran $(FFTW_CONFIG_FLAGS) && make clean && \
 make && make install; fi
 
 p3dfft: fftw
@@ -78,7 +78,7 @@ p3dfft: fftw
 DIR_NAME="$(shell tar -tzf p3dfft/p3dfft.tar.gz | head -1 | cut -f1 -d"/")" && cd p3dfft && rm -f P3DFFT && tar xfz p3dfft.tar.gz && \
 ln -fs $$DIR_NAME P3DFFT; fi
 	if [ ! -e p3dfft/P3DFFT/$(SUFFIX)/lib/libp3dfft.a ]; then \
-cd p3dfft/P3DFFT && echo $$PWD && make distclean && ./configure --prefix=$$PWD/$(SUFFIX) --enable-fftw $(P3DFFT_CONFIG_FLAGS) && \
+cd p3dfft/P3DFFT && echo $$PWD && ./configure --prefix=$$PWD/$(SUFFIX) --enable-fftw $(P3DFFT_CONFIG_FLAGS) && make clean && \
 make && make -i install; fi
 
 clean:

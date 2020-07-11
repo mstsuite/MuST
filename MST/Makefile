@@ -30,7 +30,11 @@ endif
 #=====================================================================
 
 ifdef SUFFIX
+ifeq "$(SUFFIX)" "."
+ODIR = $(OODIR)
+else
 ODIR = $(OODIR)/$(SUFFIX)
+endif
 else
 ODIR = $(OODIR)
 endif

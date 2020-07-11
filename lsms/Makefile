@@ -13,7 +13,9 @@ endif
 ifndef SUFFIX
 SUFFIX=.
 else
+ifneq "$(SUFFIX)" "."
 OBJ_DIR = $(SUFFIX)
+endif
 endif
 
 ifndef HDF5_PATH
