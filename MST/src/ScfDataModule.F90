@@ -403,8 +403,8 @@ contains
 !
    rstatus = getKeyValue(tbl_id,'Effective Medium Mixing Scheme',EM_mix_type)
    rstatus = getKeyValue(tbl_id,'Maximum Effective Medium Iterations',EM_max_iter)
-   rstatus = getKeyValue(tbl_id,'Number of SRO Parameters', sro_param_num)
    rstatus = getKeyValue(tbl_id,'Maximum SRO Medium Iterations',SRO_max_iter)
+   rstatus = getKeyValue(tbl_id,'Number of SRO Parameters', sro_param_num)
    
    if (rstatus == 0) then
       allocate(sro_params(sro_param_num))
