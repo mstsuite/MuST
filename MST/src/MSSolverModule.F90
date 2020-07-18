@@ -757,6 +757,14 @@ contains
 !        -------------------------------------------------------------
          call computeCPAMedium(e, do_sro=.true.)
 !        -------------------------------------------------------------
+         call populateBigTCPA()
+!        -------------------------------------------------------------
+         call calCrystalMatrix(e, getSingleSiteMatrix, use_tmat=.true.,tau_needed=.true., use_sro=.true.)
+!        -------------------------------------------------------------
+         call retrieveTauSRO()
+!        -------------------------------------------------------------
+         call calSpeciesTauMatrix()
+!        -------------------------------------------------------------
       else
 !        ----------------------------------------------------------------
          call computeCPAMedium(e, do_sro=.true.)
@@ -965,7 +973,7 @@ contains
              kau00 => getKauFromTau(e=e, n=id, ic=ia) ! Calculates Kau Matrix From Tau
 !            kau00 => getImpurityMatrix('Kau_a',site=id,atom=ia)
          else if (isKKRCPASRO() .and. isSROSCF() == 1) then
-            kau00 => getImpurityMatrix('Kau_a',site=id,atom=ia)
+            kau00 => getKauFromTau(e=e, n=id, ic = ia)
          endif
 !        -------------------------------------------------------------
 !        call writeMatrix('Kau_a',kau00(:,:,1),kmaxk,kmaxk,TEN2m6)
