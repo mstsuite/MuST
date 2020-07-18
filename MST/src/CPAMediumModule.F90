@@ -764,7 +764,7 @@ contains
    endif
 
 !  ----------------------------------------------------------------
-   call setupHostMedium(e,getSingleSiteTmat,configuration=site_config)
+!  call setupHostMedium(e,getSingleSiteTmat,configuration=site_config)
 !  ----------------------------------------------------------------
 
    if (print_instruction >= 1) then
@@ -780,7 +780,7 @@ contains
          call writeMatrix('Final t-cpa-inv',CPAMedium(n)%TcpaInv,nsize,nsize,TEN2m8)
       enddo
    endif
-   if (.not. use_sro .or. sro_scf == 1) then
+   if (.not. use_sro) then
 !  ===================================================================
 !  Calculate Tau_a and Kau_a for each species in local spin framework
 !  ===================================================================
