@@ -11,6 +11,7 @@ public :: initSROMatrix,             &
           generateBigTAMatrix,       &
           generateBigTCPAMatrix,     &
           obtainPosition,            &
+          obtainNeighborIndex,       &
           populateTau,               &
           assembleTauFromBlocks,     &
           calculateImpurityMatrix,   &
@@ -169,7 +170,9 @@ contains
                  endif
               endif
             enddo
-            
+
+!           Print *, SROMedium(il)%SROTMatrix(i)%sro_param_a
+ 
             tm => getScatteringMatrix('T-Matrix',spin=1,site=SROMedium(il)%local_index,atom=i)
             
             SROMedium(il)%blk_size = size(tm, 1)
@@ -392,7 +395,7 @@ contains
       endif
    enddo
  
-!  call writeMatrix('Big-TA matrix with nnn', SROMedium(1)%SROTMatrix(ia)%tmat_s(1)%T_inv, nsize*delta, nsize*delta) 
+!  call writeMatrix('Big-TA', SROMedium(1)%SROTMatrix(ia)%tmat_s(1)%T_inv, nsize*delta, nsize*delta) 
 
    end subroutine generateBigTAMatrix
 !  ===================================================================
@@ -444,6 +447,36 @@ contains
    endif
 
    end subroutine obtainPosition
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function obtainNeighborIndex (local_index, p_vec)  result(neigh_index)
+!  ===================================================================
+
+   integer (kind=IntKind), intent(in) :: local_index
+   real (kind=RealKind), intent(in) :: p_vec(3)
+
+   real (kind=RealKind) :: temp(3)
+   integer (kind=IntKind) :: in, num
+
+   integer (kind=IntKind) :: neigh_index
+
+   neigh_index = 1
+   num = SROMedium(local_index)%neigh_size
+   
+   if (p_vec(1) == 0 .and. p_vec(2) == 0 .and. p_vec(3) == 0) then
+     neigh_index = 1
+   else
+     do in = 2, num
+        temp = SROMedium(local_index)%Neighbor%Position(1:3, in - 1)
+        if (p_vec(1) == temp(1) .and. p_vec(2) == temp(2) .and. p_vec(3) == temp(3)) then
+           neigh_index = in
+           EXIT
+        endif
+     enddo
+   endif
+
+   end function obtainNeighborIndex
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -546,6 +579,8 @@ contains
    call computeAprojB('L', dsize*nsize, SROMedium(n)%tau_cpa(:,:, 1), z, y)
 
    SROMedium(n)%SROTMatrix(ic)%tau_ab(:, :, 1) = y
+!  call writeMatrix('tau_a11', SROMedium(n)%SROTMatrix(ic)%tau_ab(1:dsize, 1:dsize, 1), &
+!                 dsize, dsize, TEN2m8) 
 !  enddo
 
    end subroutine calculateImpurityMatrix
@@ -586,6 +621,8 @@ contains
       SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%proj_a = proj_c(1:dsize, 1:dsize)
    enddo 
 
+!  call writeMatrix('tau_a11', SROMedium(n)%SROTMatrix(ic)%tau_ab(1:dsize,1:dsize,1), dsize, dsize, TEN2m8) 
+
    end subroutine calculateSCFSpeciesTerm
 !  ===================================================================
 
@@ -620,6 +657,7 @@ contains
 !  call writeMatrix('pre-tauinv', temp, dsize, dsize, TEN2m8)
 
    tau_inv = SROMedium(n)%tau_cpa(1:dsize, 1:dsize, 1)
+!  call writeMatrix('tau_cpa11', tau_inv, dsize, dsize, TEN2m8)
 !  -----------------------------------------------------------
    call MtxInv_LU(tau_inv, dsize)
 !  -----------------------------------------------------------
@@ -657,20 +695,19 @@ contains
        do is = 1, nSpinCant
         SROMedium(j)%SROTMatrix(ic)%tmat_s(is)%tmat => getScatteringMatrix('T-Matrix', spin=is, site=j, atom=ic)
         SROMedium(j)%SROTMatrix(ic)%tmat_s(is)%tmat_inv => getScatteringMatrix('TInv-Matrix', spin=is, site=j, atom=ic)
-!       call writeMatrix('TmatInv', SROMedium(j)%SROTMatrix(ic)%tmat_s(is)%tmat_inv, dsize, dsize)
+!       call writeMatrix('TmatInv', SROMedium(j)%SROTMatrix(ic)%tmat_s(is)%tmat_inv, dsize, dsize, TEN2m8)
        enddo
      enddo
 
      do ic = 1, SROMedium(j)%num_species
        call averageSROMatrix(j, ic)
+!      call writeMatrix('TmatTildeInv', SROMedium(j)%SROTMatrix(ic)%tmat_s(1)%tmat_tilde_inv, dsize, dsize, TEN2m8)
      enddo
 
      do ic = 1, SROMedium(j)%num_species
        call generateBigTAMatrix(j, ic)
      enddo
    enddo
-
-!  if (isSROSCF() == 0) then
 
    do j = 1, LocalNumSites
      do ic = 1, SROMedium(j)%num_species
@@ -680,6 +717,13 @@ contains
      enddo
    enddo
 
+!  if (isSROSCF() == 0) then
+!    do ic = 1, SROMedium(1)%num_species
+!      --------------------------------------------------------------------------------
+!      call writeMatrix('tau_a', SROMedium(1)%SROTMatrix(ic)%tau_ab, &
+!             dsize*nsize, dsize*nsize, TEN2m8)
+!      --------------------------------------------------------------------------------
+!    enddo
 !  endif
    
    end subroutine calSpeciesTauMatrix
@@ -742,6 +786,7 @@ contains
    enddo
  
    kau_a => SROMedium(n)%SROTMatrix(ic)%kau11
+!  call writeMatrix('kau_a11', kau_a(:,:,1), dsize, dsize, TEN2m8)
    
    end function getKauFromTau
 !  ===================================================================
