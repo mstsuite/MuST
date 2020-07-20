@@ -46,7 +46,9 @@ private
 !11920integer (kind=IntKind) :: ifit_XC
       integer (kind=IntKind) :: NumFlagJl
       real (kind=RealKind) :: Madelung_Shift
-      real (kind=RealKind) :: VcoulombR0(3)
+      real (kind=RealKind), allocatable :: VIntraR0(:)
+      real (kind=RealKind) :: VInterR0
+      real (kind=RealKind) :: VPseudoR0
 !
       type (GridStruct), pointer :: Grid
 !
@@ -497,6 +499,7 @@ contains
    do id = 1,LocalNumAtoms
       num_species = getLocalNumSpecies(id)
       Potential(id)%NumSpecies = num_species
+      allocate(Potential(id)%VIntraR0(num_species))
       p_Pot => Potential(id)
       lmax_pot = lmax_p(id)
       Grid => getGrid(id)
@@ -728,6 +731,7 @@ contains
       deallocate( Potential(n)%potL_Coulomb_flag )
       deallocate( Potential(n)%potL_Exch_flag )
       deallocate( Potential(n)%potL_XCHat_flag )
+      deallocate( Potential(n)%VIntraR0 )
       nullify( Potential(n)%potr_sph)
       nullify( Potential(n)%Grid )
       nullify( Potential(n)%potL )
@@ -874,15 +878,17 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getVcoulomb_R0(id) result(vc_0)
+   function getVcoulomb_R0(id,ia) result(vc_0)
 !  ===================================================================
    implicit none
 !
-   integer (kind=IntKind), intent(in) :: id
+   integer (kind=IntKind), intent(in) :: id, ia
 !
    real (kind=RealKind) :: vc_0(3)
 !
-   vc_0 = Potential(id)%VcoulombR0
+   vc_0(1) = Potential(id)%VIntraR0(ia)
+   vc_0(2) = Potential(id)%VInterR0
+   vc_0(3) = Potential(id)%VPseudoR0
 !
    end function getVcoulomb_R0
 !  ===================================================================
@@ -1284,7 +1290,7 @@ contains
    else 
       V0_inter = ZERO
       do id = 1,LocalNumAtoms
-         Potential(id)%VcoulombR0 = ZERO
+         Potential(id)%VIntraR0 = ZERO
       enddo
       if (isMTFP) then
 !        -------------------------------------------------------------
@@ -1334,9 +1340,9 @@ contains
       t1 = getTime()
       do id = 1,LocalNumAtoms
          nRpts = Potential(id)%n_Rpts
+         Potential(id)%potL = CZERO
+         Potential(id)%potr_sph = ZERO
          do ia = 1, Potential(id)%NumSpecies
-            Potential(id)%potL = CZERO
-            Potential(id)%potr_sph = ZERO
             do is = 1,n_spin_pola
                do jl = 1,Potential(id)%jmax
                   if ( is==1 ) then
@@ -1357,7 +1363,7 @@ contains
                enddo
 !
                r_mesh => Potential(id)%Grid%r_mesh(1:nRpts)
-               if (node_print_level >= 0) then
+               if (node_print_level >= 1) then
                   write(6,'(a,4d15.8)')'r,v_til,v_mad,v_pse = ',r_mesh(50),       &
                      real(Potential(id)%potL_Tilda(50,1,ia),kind=RealKind),       &
                      real(Potential(id)%potL_Madelung(50,1),kind=RealKind),       &
@@ -3005,11 +3011,14 @@ contains
 
 
    use PotentialModule, only: getPotential, getPotLmax
+!
    use ChargeDensityModule, only: getChargeDensity,          &
                                   getMomentDensity,          &
                                   getRhoLmax,                &
                                   getPseudoNumRPts
-   use AtomModule, only : getMaxLmax, getLocalAtomicNumber
+!
+   use AtomModule, only : getMaxLmax, getLocalAtomicNumber, getLocalSpeciesContent
+!
    use InterpolationModule, only : FitInterp
    use IntegrationModule, only : calIntegration
 !
@@ -3131,7 +3140,7 @@ contains
 !              Note: VcoulombR0 will be added to the total energy
 !                    calculation in the rho*v_coul term.
 !              =======================================================
-               Potential(id)%VcoulombR0(1) = FOUR*PI4*V2R0_r*Y0
+               Potential(id)%VIntraR0(ia) = FOUR*PI4*V2R0_r*Y0
             else if ( m == 0 ) then
                do ir = 1, nRpts_ps
                   potl(ir) = cmplx( (FOUR*PI4/(2*l+1))*                     &
@@ -3337,7 +3346,7 @@ contains
                                 PI4*THIRD*rho_neutral*r_mesh(ir)**2), &
                                 kind=RealKind), ZERO,kind=CmplxKind)
             enddo
-            Potential(local_id)%VcoulombR0(2) = TWO*sumjl*Y0
+            Potential(local_id)%VInterR0 = TWO*sumjl*Y0
          else if ( m_pot == 0 ) then
             do ir = 1,n_RPts
                v_tilt(ir,jl_pot) = v_tilt(ir,jl_pot) +                &
@@ -3555,7 +3564,7 @@ contains
                V1_r(ir) = pot_r
             enddo
             call FitInterp(4,r_mesh(1:4),V1_r(1:4),ZERO,vc_0,dps)
-            Potential(id)%VcoulombR0(3) = vc_0*Y0
+            Potential(id)%VPseudoR0 = vc_0*Y0
 !ywg        Potential(id)%VcoulombR0 = Potential(id)%VcoulombR0 +    &
 !ywg                                   real(V_L0,kind=RealKind)*Y0
             if ( print_level(1) >=0 ) then

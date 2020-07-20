@@ -2518,19 +2518,6 @@ contains
                write(6,'(a,f20.14,a,i4)')'Checking -- Missing charge in atomic cell      = ', &
                     getLocalAtomicNumber(id,ia)-q_tmp,', of species',ia
             endif
-!
-!           ==========================================================
-!           Use getVolumeIntegration to calculate the volume will help
-!           offsetting the numerical error in the determination of
-!           interstitial charge density.
-!           ==========================================================
-            den_r = ONE
-            omega_vp = omega_vp + getVolumeIntegration( id, nr, r_mesh, 0, den_r(1:nr), q_tmp_mt )
-            omega_mt = omega_mt + q_tmp_mt
-!           ==========================================================
-         else
-            omega_vp = omega_vp + getVolume(id)
-            omega_mt = omega_mt + PI4*r_mesh(jmt)**3*THIRD
          endif
 !
          if (rad_derivative) then
@@ -2672,6 +2659,21 @@ contains
          endif
 !
       enddo
+!
+      if ( .not.isSphericalCharge ) then
+!        =============================================================
+!        Use getVolumeIntegration to calculate the volume will help
+!        offsetting the numerical error in the determination of
+!        interstitial charge density.
+!        =============================================================
+         den_r = ONE
+         omega_vp = omega_vp + getVolumeIntegration( id, nr, r_mesh, 0, den_r(1:nr), q_tmp_mt )
+         omega_mt = omega_mt + q_tmp_mt
+!        =============================================================
+      else
+         omega_vp = omega_vp + getVolume(id)
+         omega_mt = omega_mt + PI4*r_mesh(jmt)**3*THIRD
+      endif
    enddo
    msgbuf(1) = qlost; msgbuf(2) = omega_vp; msgbuf(3) = omega_mt
    call GlobalSumInGroup(GroupID,msgbuf,3)

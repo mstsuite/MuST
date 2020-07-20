@@ -27,6 +27,7 @@ private
    integer (kind=IntKind) :: GlobalNumAtoms
    integer (kind=IntKind) :: NumVacancies
    integer (kind=IntKind) :: n_spin_pola
+   integer (kind=IntKind) :: n_spin_cant
    integer (kind=IntKind) :: PotentialType
    integer (kind=IntKind), allocatable :: Print_Level(:)
 !
@@ -55,7 +56,7 @@ contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine initTotalEnergy(nlocal,num_atoms,num_vacancies,         &
-                              npola,istop,iprint,isGGA)
+                              npola,ncant,istop,iprint,isGGA)
 !  ===================================================================
    use GroupCommModule, only : getGroupID, getNumPEsInGroup, getMyPEinGroup
    use Atom2ProcModule, only : getGlobalIndex
@@ -68,7 +69,7 @@ contains
    logical, intent(in), optional :: isGGA
 !
    integer (kind=IntKind), intent(in) :: nlocal,num_atoms,num_vacancies
-   integer (kind=IntKind), intent(in) :: npola
+   integer (kind=IntKind), intent(in) :: npola, ncant
    integer (kind=IntKind), intent(in) :: iprint(nlocal)
 !
    integer (kind=IntKind) :: id, ia, max_ns
@@ -77,6 +78,7 @@ contains
    GlobalNumAtoms = num_atoms
    NumVacancies = num_vacancies
    n_spin_pola = npola
+   n_spin_cant = ncant
 !
    GroupID = getGroupID('Unit Cell')
    NumPEsInGroup = getNumPEsInGroup(GroupID)
@@ -261,7 +263,7 @@ contains
 !
    use Atom2ProcModule, only : getGlobalIndex
    use AtomModule, only : getLocalAtomicNumber, getLocalnumSpecies,   &
-                          getLocalSpeciesContent
+                          getLocalSpeciesContent, getLocalEvec
 !
    use PolyhedraModule, only : getVolume, getInscrSphVolume
 !
@@ -314,8 +316,8 @@ contains
    real (kind=RealKind) :: fact1, vint_mt
    real (kind=RealKind) :: onsite_term, esum_term, kine_term
    real (kind=RealKind) :: rhov_term_e, rhov_term_pv, exc_term, exc_term_mt
-   real (kind=RealKind) :: vc0(3)
-   real (kind=RealKind) :: ezpt, tpzpt, ke
+   real (kind=RealKind) :: vc0(3), evec(3)
+   real (kind=RealKind) :: ezpt, tpzpt, ezpt_ia, tpzpt_ia, ke, es
 !
    real (kind=RealKind), pointer :: r_mesh(:)
    real (kind=RealKind), pointer :: rho_sph(:)
@@ -324,6 +326,10 @@ contains
    complex (kind=CmplxKind), pointer :: rho_tot(:,:)
    complex (kind=CmplxKind), pointer :: mom_tot(:,:)
    complex (kind=CmplxKind), pointer :: rho_val(:,:)
+   complex (kind=CmplxKind), pointer :: mom_val_cant(:,:,:)
+   complex (kind=CmplxKind), pointer :: mom_val_cant_1(:,:)
+   complex (kind=CmplxKind), pointer :: mom_val_cant_2(:,:)
+   complex (kind=CmplxKind), pointer :: mom_val_cant_3(:,:)
    complex (kind=CmplxKind), pointer :: mom_val(:,:)
    complex (kind=CmplxKind), pointer :: rho_tilda(:,:)
    complex (kind=CmplxKind), pointer :: mom_tilda(:,:)
@@ -372,7 +378,7 @@ contains
       call initIntegerFactors(lmax_max)
       InitFactors = .true.
    endif
-   allocate(ws_rho(jend_max*jmax_max))
+   allocate(ws_rho(jend_max*jmax_max*n_spin_cant))
    allocate(ws_pot(jend_max*jmax_max))
    allocate(ws_prod(jend_max*(2*lmax_max+1)*(lmax_max+1)))
    allocate(LocalEnergy(2,GlobalNumAtoms))
@@ -386,7 +392,6 @@ contains
          write(6,'( 20x,a )')'*        computeFullTotalEnergy       *'
          write(6,'(20x,a,/)')'***************************************'
          write(6,'(80(''=''))')
-         write(6,'(/,a,i5)')'Local Atom Index::',na
       endif
       Grid => getGrid(na)
       jend = Grid%jend
@@ -398,17 +403,6 @@ contains
       jmax_pot = (lmax_pot+1)*(lmax_pot+2)/2
       kmax_pot = (lmax_pot+1)*(lmax_pot+1)
 !
-      esum_term   = ZERO
-      do is = 1, n_spin_pola
-         esum_term = esum_term + getBandEnergy(na,is)
-      enddo
-      do is = 1, n_spin_pola
-         esum_term = esum_term + getSemiCoreEnergy(na,is) 
-      enddo
-      do is = 1, n_spin_pola
-         esum_term = esum_term + getDeepCoreEnergy(na,is) 
-      enddo
-!
       v_tmp => aliasArray2_c(ws_pot,jend,jmax_pot)
       rho_tmp => aliasArray2_c(ws_rho,jend,jmax_rho)
 !
@@ -417,6 +411,9 @@ contains
       kmax_prod = (lmax_prod+1)**2
       prod => aliasArray2_c(ws_prod,jend,jmax_prod)
 !
+      ezpt = ZERO
+      tpzpt = ZERO
+      esum_term   = ZERO
       kine_term    = ZERO
       exc_term     = ZERO
       exc_term_mt  = ZERO
@@ -429,8 +426,10 @@ contains
          content = getLocalSpeciesContent(na,ia)
 !
 !        -------------------------------------------------------------
-         call zeropt(ezpt,tpzpt,omega_vp,Zi)
+         call zeropt(ezpt_ia,tpzpt_ia,omega_vp,Zi)
 !        -------------------------------------------------------------
+         ezpt = ezpt + ezpt_ia*content
+         tpzpt = tpzpt + tpzpt_ia*content
 !
          rho_tot => getChargeDensity("TotalNew",na,ia)
          rho_val => getValenceElectronDensity(na,ia)
@@ -438,7 +437,7 @@ contains
          rho_pseudo => getChargeDensity("Pseudo",na,ia)
          if (n_spin_pola == 2) then
             mom_tot => getMomentDensity('TotalNew',na,ia)
-            mom_val => getValenceElectronDensity(na,ia)
+            mom_val_cant => getValenceMomentDensity(na,ia)
             mom_tilda => getMomentDensity('Tilda',na,ia)
             mom_pseudo => getMomentDensity('Pseudo',na,ia)
          endif
@@ -451,6 +450,11 @@ contains
 !        for calcultaing the kinetic energy.
 !        =============================================================
          do is = 1, n_spin_pola
+            if (Print_Level(na) >= 0) then
+               write(6,'(/,a,i5,a,i5,a,i5)')'Local Site Index =',na,  &
+                                            ', Local Species Index =',ia, &
+                                            ', Spin Index =',is
+            endif
             v_eff => getOldPotential(na,ia,is)
             v_tmp = CZERO
             v_tmp(1:jend,1) = v_eff(1:jend,1)
@@ -468,10 +472,10 @@ contains
                write(6,'(51x,a)')'At Rmt            At Rcs'
                write(6,'(a,18x,2f18.8)')'R_mesh                  =',r_mesh(Grid%jmt),r_mesh(Grid%jend)
                write(6,'(a,3f18.8)')    'Deep core E, int[rho*v] =',      &
-                 getDeepCoreEnergy(na,is), vint_mt, fact1
+                 getDeepCoreEnergy(na,ia,is), vint_mt, fact1
                write(6,'(a,3f18.8)')    'Deep core K.E.          =',      &
-                 getDeepCoreKineticEnergy(na,ia,is), getDeepCoreEnergy(na,is)-vint_mt, &
-                 getDeepCoreEnergy(na,is)-fact1
+                 getDeepCoreKineticEnergy(na,ia,is), getDeepCoreEnergy(na,ia,is)-vint_mt, &
+                 getDeepCoreEnergy(na,ia,is)-fact1
             endif
 !
             rho_sph => getSemiCoreDensity(na,ia,is)
@@ -486,14 +490,24 @@ contains
 !           ----------------------------------------------------------
             if (Print_Level(na) >= 0) then
                write(6,'(a,3f18.8)')'Semi core E, int[rho*v] =',      &
-                 getSemiCoreEnergy(na,is), fact1, vint_mt
+                 getSemiCoreEnergy(na,ia,is), fact1, vint_mt
                write(6,'(a,3f18.8)')'Semi core K.E.          =',      &
-                 getSemiCoreKineticEnergy(na,ia,is), getSemiCoreEnergy(na,is)-fact1, &
-                 getSemiCoreEnergy(na,is)-vint_mt
+                 getSemiCoreKineticEnergy(na,ia,is), getSemiCoreEnergy(na,ia,is)-fact1, &
+                 getSemiCoreEnergy(na,ia,is)-vint_mt
             endif
 !
             v_tmp = v_eff
             if ( n_spin_pola==2 ) then
+               if (n_spin_cant == 1) then
+                  mom_val => mom_val_cant(:,:,1)
+               else
+                  mom_val => aliasArray2_c(ws_rho(jend*jmax_rho+1:),jend,jmax_rho)
+                  mom_val_cant_1 => mom_val_cant(:,:,1)
+                  mom_val_cant_2 => mom_val_cant(:,:,2)
+                  mom_val_cant_3 => mom_val_cant(:,:,3)
+                  evec = getLocalEvec(na,'new')
+                  mom_val = mom_val_cant_1*evec(1)+mom_val_cant_2*evec(2)+mom_val_cant_3*evec(3)
+               endif
                rho_tmp = (rho_val+(3-2*is)*mom_val)*HALF
             else
                rho_tmp = rho_val
@@ -503,9 +517,9 @@ contains
             fact1 = getVolumeIntegration( na, jend, r_mesh(1:jend), kmax_prod, jmax_prod, 0, prod, vint_mt)
 !           ----------------------------------------------------------
             if (Print_Level(na) >= 0) then
-               write(6,'(a,3f18.8)')'Band energy, int[rho*v] =',getBandEnergy(na,is), fact1, vint_mt
-               write(6,'(a,3f18.8,/)')'Valence kinetic energy  =',      &
-                  getValenceKineticEnergy(na,ia,is), getBandEnergy(na,is)-fact1, getBandEnergy(na,is)-vint_mt
+               write(6,'(a,3f18.8)')'Band energy, int[rho*v] =',getBandEnergy(na,ia,is), fact1, vint_mt
+               write(6,'(a,3f18.8)')'Valence kinetic energy  =',      &
+                  getValenceKineticEnergy(na,ia,is), getBandEnergy(na,ia,is)-fact1, getBandEnergy(na,ia,is)-vint_mt
             endif
 !
             v_tmp = ZERO
@@ -552,16 +566,26 @@ contains
 !           ----------------------------------------------------------
             call computeProdExpan(jend,0,rho_tmp,0,v_tmp,0,prod)
             fact1 = getVolumeIntegration( na, jend, r_mesh(1:jend), 1, 1, 0, prod, vint_mt)
-            ke = ke + (getSemiCoreEnergy(na,is)-fact1)
+            ke = ke + (getSemiCoreEnergy(na,ia,is)-fact1)
 !           ==========================================================
 !
             ke = ke + getDeepCoreKineticEnergy(na,ia,is)
 !
             kine_term = kine_term + ke*content
+!
+            es = getBandEnergy(na,ia,is)
+            es = es + getSemiCoreEnergy(na,ia,is) 
+            es = es + getDeepCoreEnergy(na,ia,is) 
+!
+            esum_term = esum_term + es*content
+!
             if (Print_Level(na) >= 0) then
+               write(6,'(/,a,i5,a,i5,a,i5)')'Local Site Index =',na,  &
+                                            ', Local Species Index =',ia, &
+                                            ', Spin Index =',is
                write(6,'(a,f18.8)') 'Deep core electron K.E. = ',getDeepCoreKineticEnergy(na,ia,is)
 !              write(6,'(a,f18.8)') 'Semi core electron K.E. = ',getSemiCoreKineticEnergy(na,ia,is)
-               write(6,'(a,f18.8)') 'Semi core electron K.E. = ',getSemiCoreEnergy(na,is)-fact1
+               write(6,'(a,f18.8)') 'Semi core electron K.E. = ',getSemiCoreEnergy(na,ia,is)-fact1
                write(6,'(a,f18.8)') 'Valence electron K.E.   = ',getValenceKineticEnergy(na,ia,is)
             endif
 !
@@ -579,7 +603,7 @@ contains
 !           ----------------------------------------------------------
             if (Print_Level(na) >= 0) then
                write(6,'(a,2f18.8)')'Total kinetic energy v1 = ',ke
-               write(6,'(a,2f18.8)')'Total kinetic energy v2 = ',esum_term-fact1
+               write(6,'(a,2f18.8)')'Total kinetic energy v2 = ',es-fact1
             endif
 !
             v_tmp = e_xc
@@ -681,11 +705,11 @@ contains
             endif
          enddo  ! Loop over spin
 !
-         vc0 = getVcoulomb_R0(na)
+         vc0 = getVcoulomb_R0(na,ia)
          if (Print_Level(na) >= 0) then
-            write(6,'(a,f18.8)') '-Z*V_intra(Rn)/2        = ', -HALF*Zi*vc0(1)
-            write(6,'(a,f18.8)') '-Z*(V_mad+V_int)(Rn)/2  = ', -HALF*Zi*vc0(2)
-            write(6,'(a,f18.8)') '-Z*V_pseudo(Rn)/2       = ', -HALF*Zi*vc0(3)
+            write(6,'(/,a,f18.8)') '-Z*V_intra(Rn)/2        = ', -HALF*Zi*vc0(1)
+            write(6,'(  a,f18.8)') '-Z*(V_mad+V_int)(Rn)/2  = ', -HALF*Zi*vc0(2)
+            write(6,'(  a,f18.8)') '-Z*V_pseudo(Rn)/2       = ', -HALF*Zi*vc0(3)
          endif
          if (formula == 0 .or. formula == 1) then
             onsite_term = onsite_term - HALF*Zi*(vc0(1)+vc0(2)+vc0(3))*content
@@ -713,22 +737,24 @@ contains
       SiteEnPres(2,na) = SiteEnPres(2,na) + tpzpt + 2.0d0*kine_term + rhov_term_pv + onsite_term
 !
       if (Print_Level(na) >= 0) then
+         write(6,'(/,a,i5)')'Local Site Index =',na
          write(6,'(a,f18.8)') 'Kinetic energy term     = ', kine_term
          write(6,'(a,f18.8)') 'Coulomb energy term     = ', rhov_term_e+onsite_term
          write(6,'(a,f18.8)') 'Exc energy term         = ', exc_term
          write(6,'(a,f18.8)') 'Exc energy term in IS   = ', exc_term_mt
          write(6,'(a,f18.8)') 'Exc energy term in VP-IS= ', exc_term-exc_term_mt
-         write(6,'(a)') 'Energy terms break up:'
+         write(6,'(/,a)') 'Energy terms break up:'
          do is = 1, n_spin_pola
+            write(6,'(a,i5,a,i5)')'Spin Index =',is
             write(6,'(a,f18.8)') 'Band energy             = ',getBandEnergy(na,is)
             write(6,'(a,f18.8)') 'Semi core energy sum    = ',getSemiCoreEnergy(na,is) 
             write(6,'(a,f18.8)') 'Deep core energy sum    = ',getDeepCoreEnergy(na,is) 
             write(6,'(a,f18.8)') 'Band + semi core energy = ',getBandEnergy(na,is)+getSemiCoreEnergy(na,is)
          enddo
-         write(6,'(a,f18.8)') 'Eigenvalue sum term     = ', esum_term
-         write(6,'(a,f18.8)') 'Rho*V term in Energy    = ', rhov_term_e
-         write(6,'(a,f18.8)') 'On site -Z*V(Rn)/2 term = ', onsite_term
-         write(6,'(a,f18.8)') 'Rho*V term in 3PV       = ', rhov_term_pv
+         write(6,'(/,a,f18.8)') 'Eigenvalue sum term     = ', esum_term
+         write(6,'(  a,f18.8)') 'Rho*V term in Energy    = ', rhov_term_e
+         write(6,'(  a,f18.8)') 'On site -Z*V(Rn)/2 term = ', onsite_term
+         write(6,'(  a,f18.8)') 'Rho*V term in 3PV       = ', rhov_term_pv
       endif
    enddo
 !

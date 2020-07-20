@@ -1348,7 +1348,7 @@ program mst2
                                 isGGA = isGGAFunctional().and.(.not.isDOSCalculationOnly))
 !  -------------------------------------------------------------------
    call initTotalEnergy(LocalNumAtoms,GlobalNumAtoms,getNumVacancies(),&
-                        n_spin_pola,istop,atom_print_level,            &
+                        n_spin_pola,n_spin_cant,istop,atom_print_level,&
                         isGGA = isGGAFunctional().and.(.not.isDOSCalculationOnly))
 !  -------------------------------------------------------------------
 !  ===================================================================

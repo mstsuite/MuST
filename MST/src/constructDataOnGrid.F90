@@ -184,8 +184,8 @@
                                                  n=n_mult)*getLocalSpeciesContent(id,ia)
                enddo
             endif
-!write(6,'(a,3i5,3f12.5,2x,d15.8)')'id,gCounter,n_mult = ',id,gCounter,n_mult, &
-!                                  getGridPosition(gp,id,ig_box),den_local(ig)
+!           write(6,'(a,3i5,3f12.5,2x,d15.8)')'id,gCounter,n_mult = ',id,gCounter,n_mult, &
+!                                 getGridPosition(gp,id,ig_box),den_local(ig)
          else
             if (present(lmax) .and. present(spin)) then
                do ia = 1, getLocalNumSpecies(id)

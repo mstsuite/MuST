@@ -96,7 +96,11 @@
    p_item = 0
    do id = 1, LocalNumAtoms
       nr = getNumRmesh(id)
-      flag_jl => getPotComponentFlag(id)
+      if (isPotentialMixing()) then
+         flag_jl => getPotComponentFlag(id)
+      else
+         flag_jl => getChargeComponentFlag(id)
+      endif
       do ia = 1, getLocalNumSpecies(id)
          p_item = p_item + 1
          p_CAL%vector_old => pStore_old(1:data_size_ns,p_item)
@@ -119,7 +123,6 @@
             else
                lmax = getRhoLmax(id)
                factor = real(3-is*2,kind=RealKind)
-               flag_jl => getChargeComponentFlag(id)
                do jl = 1, (lmax+1)*(lmax+2)/2
                   if ( flag_jl(jl) /=0  ) then
                      ptmp1 => getChargeDensity('TotalNew', id, ia, jl)

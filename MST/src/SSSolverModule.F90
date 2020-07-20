@@ -3,7 +3,7 @@ module SSSolverModule
 !
    use MathParamModule, only : TEN2m12, TEN2m10, TEN2m8, TEN2m6, TEN2m4, TEN2m11
    use MathParamModule, only : ZERO, ONE, TWO, THREE, FOUR, FIVE, SIX, NINE, TEN
-   use MathParamModule, only : PI, PI2, SQRT_PI, HALF, TEN2m5, TEN2m16
+   use MathParamModule, only : PI, PI2, SQRT_PI, HALF, TEN2m5, TEN2m7, TEN2m16
    use MathParamModule, only : CZERO, CONE, SQRTm1, Y0
 !
    use ErrorHandlerModule, only : ErrorHandler, StopHandler, WarningHandler
@@ -1955,7 +1955,7 @@ use MPPModule, only : MyPE, syncAllPEs
          endif
 !        call writeMatrix('Sine Matrix',sin_mat,kmax_int,kmax_kkr,5.0d0*TEN2m8)
 !        call writeMatrix('Cosine Matrix',cos_mat,kmax_int,kmax_kkr,5.0d0*TEN2m8)
-!        call writeMatrix('OmegaHatInv Matrix',OmegaHatInv_mat,kmax_kkr,kmax_kkr,5.0d0*TEN2m8)
+!        call writeMatrix('OmegaHatInv Matrix',OmegaHatInv_mat,kmax_kkr,kmax_kkr,TEN2m7)
 !        -------------------------------------------------------------
          OmegaHat_mat = OmegaHatInv_mat
          call MtxInv_LU(OmegaHat_mat,kmax_kkr)

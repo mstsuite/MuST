@@ -2687,7 +2687,8 @@ contains
             endif
          enddo
 !        -------------------------------------------------------------
-         call GlobalSumInGroup(eGID,msgbuf,n,NumPEsInEGroup)
+         call GlobalSumInGroup(eGID,msgbuf,4*getLocalNumSpecies(id)+1,&
+                               NumPEsInEGroup)
 !        -------------------------------------------------------------
          if ( node_print_level >= 0) then
             if (getLocalNumSpecies(id) == 1) then
@@ -3575,7 +3576,7 @@ contains
                   call WarningHandler('calSingleScatteringIDOS','scaling_factor < 10^-6',scaling_factor)
                else if (renorm > 0) then
 !                 ----------------------------------------------------
-                  call scaleSpeciesElectroStruct(ia,scaling_factor,ssLastValue(id),eIntegral_only=.false.)
+                  call scaleSpeciesElectroStruct(ia,ns,scaling_factor,ssLastValue(id),eIntegral_only=.false.)
 !                 ----------------------------------------------------
                endif
             enddo
@@ -4846,7 +4847,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine scaleSpeciesElectroStruct(ia,alp,ESV,eIntegral_only)
+   subroutine scaleSpeciesElectroStruct(ia,ns,alp,ESV,eIntegral_only)
 !  ===================================================================
 !
 !  Perform ESV = alp*ESV
@@ -4854,7 +4855,7 @@ contains
 !  ===================================================================
    implicit none
 !
-   integer (kind=IntKind), intent(in) :: ia
+   integer (kind=IntKind), intent(in) :: ia, ns
 !
    real (kind=RealKind), intent(in) :: alp
 !
@@ -4867,20 +4868,20 @@ contains
    alpc = alp
 !
    if (.not.eIntegral_only) then
-      ESV%dos(:,ia) = alpc*ESV%dos(:,ia)
-      ESV%dos_mt(:,ia) = alpc*ESV%dos_mt(:,ia)
+      ESV%dos(ns,ia) = alpc*ESV%dos(ns,ia)
+      ESV%dos_mt(ns,ia) = alpc*ESV%dos_mt(ns,ia)
    endif
 !
-   ESV%dos_r_jl(:,:,:,ia) = alpc*ESV%dos_r_jl(:,:,:,ia)
+   ESV%dos_r_jl(:,:,ns,ia) = alpc*ESV%dos_r_jl(:,:,ns,ia)
    if (rad_derivative) then
-      ESV%der_dos_r_jl(:,:,:,ia) = alpc*ESV%der_dos_r_jl(:,:,:,ia)
+      ESV%der_dos_r_jl(:,:,ns,ia) = alpc*ESV%der_dos_r_jl(:,:,ns,ia)
    endif
-   ESV%evalsum(:,ia) = alpc*ESV%evalsum(:,ia)
+   ESV%evalsum(ns,ia) = alpc*ESV%evalsum(ns,ia)
    if (isDensityMatrixNeeded) then
-      ESV%density_matrix(:,:,:,ia) = alpc*ESV%density_matrix(:,:,:,ia)
+      ESV%density_matrix(:,:,ns,ia) = alpc*ESV%density_matrix(:,:,ns,ia)
    endif
 !
-   if (n_spin_cant == 2) then
+   if (n_spin_cant == 2) then ! This needs to be fixed for the spin canted case
 !     ----------------------------------------------------------------
       call scaleSpinCantStruct(alp,ESV%pSC(ia))
 !     ----------------------------------------------------------------
