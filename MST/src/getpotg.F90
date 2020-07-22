@@ -318,7 +318,8 @@
          if (imsgbuf(1,ia) > 0) then
             fp_pos=table_size*integer4_size*10+(present_atom-1)*msg_bytes+1
          else
-            fp_pos=imsgbuf(12,ia)*real8_size +                        &
+            fp_pos=imsgbuf(12,ia)*real8_size +                         &
+                   (ia-1)*(imsgbuf(13,ia)+imsgbuf(14,ia))*real8_size + &
                    table_size*integer4_size*20+(present_atom-1)*msg_bytes+1
          endif
 !        -------------------------------------------------------------
@@ -516,7 +517,8 @@
 !     perform interpolation: added by Yang @08/06/14
 !     Note : imsgbuf(4) = nspin_old; imsgbuf(17) = jmax_pot_old
 !     ================================================================
-      nr_old = dsize_nspot/(2*imsgbuf(17,1)*n_spin_pola*num_species)
+!     nr_old = dsize_nspot/(2*imsgbuf(17,1)*n_spin_pola*num_species)
+      nr_old = dsize_nspot/(2*imsgbuf(17,1)*n_spin_pola)
       allocate(r_mesh_old(nr_old), c_data_nspot(dsize_nspot/2))
       jmt0=imsgbuf(5,1)
       hh=(xmt-xst)/real(jmt0-1,kind=RealKind) ! Assuming hin = hout
