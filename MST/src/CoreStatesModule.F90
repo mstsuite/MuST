@@ -1510,6 +1510,8 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine calCoreStates(evb)
 !  ===================================================================
+   use MPPModule, only : syncAllPEs
+!
    use GroupCommModule, only : GlobalMaxInGroup, GlobalSumInGroup
 !
    use Atom2ProcModule, only : getLocalIndex, getAtom2ProcInGroup,     &
@@ -1991,9 +1993,12 @@ contains
    call updateGlobalCoreStatesTable()
 !
    if(stop_routine.eq.sname) then
-      do id =1, LocalNumAtoms
-         call printCoreStates(id)
-      enddo
+      if (print_level >= 0) then
+         do id =1, LocalNumAtoms
+            call printCoreStates(id)
+         enddo
+      endif
+      call syncAllPEs()
       call StopHandler(sname)
    endif
 !

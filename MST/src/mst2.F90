@@ -312,7 +312,7 @@ program mst2
    real (kind=RealKind) :: vcell(3,3), vorigin(3)
    real (kind=RealKind) :: bravais(3,3)
    real (kind=RealKind) :: alat
-   real (kind=RealKind) :: rmt, rinsc, rend, rws, hin, rmt_grid
+   real (kind=RealKind) :: rmt, rinsc, rend, rws, hin, rmt_grid, rc
    real (kind=RealKind) :: Efermi, volume, cfac
    real (kind=RealKind) :: v0, val, evb
    real (kind=RealKind) :: t0, t1, t2, t3
@@ -975,10 +975,18 @@ program mst2
 !        call genRadialGrid( i, rmt, rinsc, rend, ndivin = ndivin)
 !        -------------------------------------------------------------
       endif
-!     ----------------------------------------------------------------
-      call genRadialGrid(id=i, rmt=rmt, rinsc=rinsc, rend=rend,    &
-                         ndivin=ndivin, xstep=hin)
-!     ----------------------------------------------------------------
+      rc = getAtomCoreRad(i)
+      if (hin > TEN2m6 .or. rc < ONE) then
+!        -------------------------------------------------------------
+         call genRadialGrid(id=i, rmt=rmt, rinsc=rinsc, rend=rend,    &
+                            ndivin=ndivin, xstep=hin)
+!        -------------------------------------------------------------
+      else
+!        -------------------------------------------------------------
+         call genRadialGrid(id=i, rmt=rmt, rinsc=rinsc, rend=rend,    &
+                            ndivin=ndivin, rfix=rc)
+!        -------------------------------------------------------------
+      endif
       if (atom_print_level(i) >= 0) then
 !        -------------------------------------------------------------
          call printRadialGrid(i)
