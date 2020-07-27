@@ -11,14 +11,14 @@ has been included locally with this code. To use this interface, you will need t
 .. _Atomic Simulation Environment (ASE): https://wiki.fysik.dtu.dk/ase/about.html
 
 Setting Up
----------------------
+----------
 
 To use this interface, build the MuST package, `install ASE`_ and then add the path to ``MuST/ase_must`` folder of your MuST installation to your :code:`PYTHONPATH` variable.
 
 .. _install ASE: https://wiki.fysik.dtu.dk/ase/install.html
 
 Getting Started
-________________
+---------------
 It is highly recommended to get familiar with basics of ASE before using this interface. In particular, you should go through
 ASE's guide for its `Atoms object`_.
 
@@ -110,6 +110,12 @@ object.
 If your atoms object has multiple atoms, you can define multiple CPA sites in the same way::
 
     atoms.info = {'CPA': [{'index': 0, 'Al': 0.5, 'Ni': 0.5}, {'index': 1, 'Al': 0.5, 'Ni': 0.5}]}
+
+Parallelization
+_______________
+MuST calculator uses single core by default. You can pass the :code:`ntasks` keyword while creating the MuST object to
+define the number of cores you want to use for your calculation. Please note that it will run :code:`mpirun -np <ntasks> mst2 < i_new`
+command when you do so. ``i_new`` is the filename used for the input file that :code:`MuST` object creates.
 
 Parameter Keywords
 ------------------
