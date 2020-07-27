@@ -7,7 +7,7 @@ import os
 import subprocess
 import glob
 from ase.units import Bohr, Rydberg
-from ase_must.default_params import defaults
+from default_params import defaults
 from ase.data import atomic_numbers
 
 magmoms = {'Fe': 2.1,
