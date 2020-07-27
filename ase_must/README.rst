@@ -113,7 +113,7 @@ If your atoms object has multiple atoms, you can define multiple CPA sites in th
 
 Parameter Keywords
 ------------------
-Keyword related to each :code:`MuST <MuST.ase_must.must.MuST>`
+Keyword related to each :code:`MuST`
 parameter is mentioned in this table:
 
 ==========================      =====================================
