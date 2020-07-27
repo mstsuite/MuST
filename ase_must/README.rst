@@ -33,9 +33,6 @@ Every calculation requires starting potentials. You can generate single site sta
 present in the :code:`Atoms` object using
 :code:`generate_starting_potentials` function.
 
-.. autofunction:: MuST.ase_must.must.generate_starting_potentials
-   :members:
-
 ::
 
     from ase_must.must import generate_starting_potentials
@@ -48,7 +45,7 @@ You will see the output files generated in your working directory.
 KKR Calculation
 ---------------
 Use ``El_ss_pot`` (El is the element),
-as starting potential file name in :class:`MuST <MuST.ase_must.must.MuST>` calculator to perform a KKR calculation::
+as starting potential file name in :code:`MuST` calculator to perform a KKR calculation::
 
     from ase_must.must import MuST
 
@@ -79,7 +76,7 @@ object.
 * Here, ``index`` should match the index from :code:`Atoms` object. That's where it's position is taken
   from. Length of this list should match the number of atoms in :code:`Atoms` object.
 * The cell dimensions and positions are still taken from the :code:`Atoms` object. Use ``method=3``
-  in :class:`MuST <MuST.ase_must.must.MuST>` calculator to perform a KKR-CPA calculation
+  in :code:`MuST <MuST.ase_must.must.MuST>` calculator to perform a KKR-CPA calculation
 
 ::
 
@@ -116,7 +113,7 @@ If your atoms object has multiple atoms, you can define multiple CPA sites in th
 
 Parameter Keywords
 ------------------
-Keyword related to each :class:`MuST <MuST.ase_must.must.MuST>`
+Keyword related to each :code:`MuST <MuST.ase_must.must.MuST>`
 parameter is mentioned in this table:
 
 ==========================      =====================================
