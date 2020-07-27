@@ -66,6 +66,24 @@ as starting potential file name in :code:`MuST` calculator to perform a KKR calc
     energy = atoms.get_potential_energy()
     print(energy, 'eV')
 
+Different Starting Potential for Each Site
+___________________________________________________
+If you have a different starting potential file that you want to use for each site in your structure,
+you can pass them in as a dictionary using :code:`in_pot` parameter::
+
+    in_pot = {'1': 'Al_pot_1',
+              '2': 'Al_pot_2'}
+
+    calc = MuST(in_pot=in_pot,
+           default_out_pot='Al',
+           pot_in_form=0,
+           method=2,
+           potential_type=0,
+           xc=4,
+           spin=1,
+           kpts=(12,12,12),
+           bzsym=1)
+
 KKR-CPA Calculation
 -------------------
 To perform a CPA calculation, you need to pass the CPA formulation using ``info`` attribute of :code:`Atoms`
@@ -76,7 +94,7 @@ object.
 * Here, ``index`` should match the index from :code:`Atoms` object. That's where it's position is taken
   from. Length of this list should match the number of atoms in :code:`Atoms` object.
 * The cell dimensions and positions are still taken from the :code:`Atoms` object. Use ``method=3``
-  in :code:`MuST <MuST.ase_must.must.MuST>` calculator to perform a KKR-CPA calculation
+  in :code:`MuST` calculator to perform a KKR-CPA calculation
 
 ::
 
