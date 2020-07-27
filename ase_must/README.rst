@@ -35,7 +35,7 @@ present in the :code:`Atoms` object using
 
 ::
 
-    from ase_must.must import generate_starting_potentials
+    from must import generate_starting_potentials
 
     atoms = bulk('Al', a=4.05)
     generate_starting_potentials(atoms, crystal_type=1, a=4.05) # crystal_type=1 for FCC, 2 for BCC
@@ -47,7 +47,7 @@ KKR Calculation
 Use ``El_ss_pot`` (El is the element),
 as starting potential file name in :code:`MuST` calculator to perform a KKR calculation::
 
-    from ase_must.must import MuST
+    from must import MuST
 
     calc = MuST(default_in_pot='Al_ss_pot', # Starting potential file name
            default_out_pot='Al',        # Output potential file name
