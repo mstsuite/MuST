@@ -122,5 +122,6 @@ defaults = {
     "em_tmatrix_tol": "Effective Medium T-matrix Tol (> 0)",
     "core_radius": "Default Core Radius",
     "mt_radius": "Default Muffin-tin Radius",
-    "radical_plane_ratio": "Default Radical Plane Ratio"
+    "radical_plane_ratio": "Default Radical Plane Ratio",
+    "ntasks": "Number of Tasks"
 }
