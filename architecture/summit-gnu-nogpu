@@ -3,6 +3,8 @@
 # Acceleration = 0: otherwise
 #=====================================================================
 Acceleration = 0
+COMPILER_MODULE = gcc/9.1.0 
+MODULES = hdf5 essl netlib-scalapack
 
 #=====================================================================
 # Library paths and elements, e.g.,
@@ -15,15 +17,18 @@ Acceleration = 0
 # If LUA_PATH, LIBXC_PATH, FFTW_PATH, and/or P3DFFT_PATH are empty, the
 # corresponding packages will be installed under $(EXTERN_LIB_PATH)
 #=====================================================================
-HDF5_PATH   = 
+HDF5_PATH   = $(OLCF_HDF5_ROOT)
 ACCEL       = CUDA
-ACCEL_PATH  = /usr/local/cuda
-LIBXC_PATH  = 
-FFTW_PATH   = 
-P3DFFT_PATH =
+ACCEL_PATH  = $(OLCF_CUDA_ROOT)
+LIBXC_PATH  = /gpfs/alpine/proj-shared/mat020/libxc-5.0.0/GNU
+FFTW_PATH   = $(OLCF_FFTW_ROOT)
+P3DFFT_PATH = /gpfs/alpine/proj-shared/mat020/p3dfft-2.7.9/GNU
 LUA_PATH    =
-LIBS       += -L${OLCF_ESSL_ROOT}/lib64 -lessl -lscalapack
+LIBS       += -L${OLCF_ESSL_ROOT}/lib64 -lessl -L$(OLCF_NETLIB_SCALAPACK_ROOT)/lib -lscalapack
 ADD_LIBS   += -lgfortran -lm
+
+ADD_LIBS   += -L$(LIBXC_PATH)/lib -lxcf90 -lxc
+Use_LibXC   = -DLIBXC5 -I$(LIBXC_PATH)/include
 
 #=====================================================================
 # Compiler tools, gnu version 7.0 seems requiried by lsms.
@@ -33,7 +38,7 @@ CXX         = mpicxx
 F77         = mpif90
 FC          = mpif90
 MPICC       = mpicc
-ACCEL_CXX   = nvcc -arch=sm_35
+ACCEL_CXX   = nvcc -arch=sm_60
 ARCHV       = ar -r
 
 #=====================================================================
@@ -43,7 +48,7 @@ ARCHV       = ar -r
 #=====================================================================
 FPPDEFS     = -cpp
 CPPDEFS     = -cpp
-FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK
+FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK $(Use_LibXC)
 CPPFLAGS    = 
 
 CFLAGS      = -O3

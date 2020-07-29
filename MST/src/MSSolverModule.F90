@@ -824,6 +824,8 @@ contains
 !
    use SROModule, only : getKauFromTau
 !
+   use IBZRotationModule, only : symmetrizeMatrix, checkMatrixSymmetry
+!
    implicit none
 !
    logical, optional, intent(in) :: add_Ts, add_Gs, isSphSolver
@@ -963,10 +965,11 @@ contains
 !kau00=>getCrystalTau(local_id=id)
 !call writeMatrix('Tau',kau00(:,:,1),kmaxk,kmaxk,TEN2m6)
             kau00 => getCrystalKau(local_id=id) ! Kau00 = energy * S^{-1} * [Tau00 - t_matrix] * S^{-T*}
+!call checkMatrixSymmetry('Kau00',kau00(:,:,1),kmaxk,TEN2m6)
          else if (isKKRCPA() .or.  isEmbeddedCluster()) then
 !p_kau00 => getCPAMatrix('Tcpa',site=id)
 !call writeMatrix('Tcpa',p_kau00,kmaxk,kmaxk,TEN2m6)
-!kau00=>getImpurityMatrix('Tau_a',site=id,atom=0)
+!kau00=>getImpurityMatrix('Tau_a',site=id,atom=ia)
 !call writeMatrix('Tau_a',kau00(:,:,1),kmaxk,kmaxk,TEN2m6)
             kau00 => getImpurityMatrix('Kau_a',site=id,atom=ia) ! Kau00 = energy * S^{-1} * [Tau_a - t_matrix] * S^{-T*}
          else if (isKKRCPASRO() .and. isSROSCF() == 0) then

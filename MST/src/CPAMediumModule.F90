@@ -62,7 +62,7 @@ private
    complex (kind=CmplxKind), allocatable, target :: TauA(:)
    complex (kind=CmplxKind), allocatable, target :: KauA(:)
    complex (kind=CmplxKind), allocatable, target :: Tmat_global(:,:)
-   complex (kind=CmplxKind), allocatable, target :: WORK0(:), WORK1(:), WORK2(:)
+   complex (kind=CmplxKind), allocatable, target :: WORK0(:), WORK1(:), WORK2(:), WORK3(:)
 !
    real (kind=RealKind) :: CPA_tolerance = TEN2m8
    real (kind=RealKind) :: CPA_alpha = 0.10d0
@@ -153,7 +153,8 @@ contains
 !
    allocate(WORK0(kmax_kkr_max*nSpinCant*kmax_kkr_max*nSpinCant))
    allocate(WORK1(kmax_kkr_max*nSpinCant*kmax_kkr_max*nSpinCant))
-   allocate(WORK2(kmax_kkr_max*nSpinCant*kmax_kkr_max*nSpinCant))
+   allocate(WORK2(2*kmax_kkr_max*nSpinCant*kmax_kkr_max*nSpinCant))
+   allocate(WORK3(kmax_kkr_max*nSpinCant*kmax_kkr_max*nSpinCant))
    allocate(isCPAMedium(LocalNumSites))
 !
    NumImpurities = 0
@@ -281,7 +282,7 @@ contains
 !
    integer (kind=IntKind) :: n, ic
 !
-   deallocate(WORK0, WORK1, WORK2, isCPAMedium)
+   deallocate(WORK0, WORK1, WORK2, WORK3, isCPAMedium)
 !
    do n = 1, LocalNumSites
       nullify(CPAMedium(n)%tau_c, CPAMedium(n)%Tcpa, CPAMedium(n)%TcpaInv)
@@ -395,11 +396,6 @@ contains
    logical, intent(in), optional :: do_sro
 !
    complex (kind=CmplxKind) :: kappa
-   complex (kind=CmplxKind), pointer :: tau_a(:,:,:)
-   complex (kind=CmplxKind), pointer :: mat_a(:,:)
-   complex (kind=CmplxKind), pointer :: kau_a(:,:)
-   complex (kind=CmplxKind), pointer :: Jost(:,:), OH(:,:), Tinv(:,:), Jinv(:,:)
-   complex (kind=CmplxKind), pointer :: SinvL(:,:), SinvR(:,:)
    complex (kind=CmplxKind), pointer :: tm1(:,:), tm2(:,:), tm0(:,:)
    complex (kind=CmplxKind), allocatable :: t_proj(:,:)
 !
@@ -780,73 +776,199 @@ contains
          call writeMatrix('Final t-cpa-inv',CPAMedium(n)%TcpaInv,nsize,nsize,TEN2m8)
       enddo
    endif
+!
    if (.not. use_sro) then
-!  ===================================================================
-!  Calculate Tau_a and Kau_a for each species in local spin framework
-!  ===================================================================
-    do n = 1, LocalNumSites
-      id = CPAMedium(n)%local_index
-      dsize = CPAMedium(n)%dsize
-      nsize = dsize*nSpinCant
-      do ia = 1, CPAMedium(n)%num_species
-         tau_a => getTau(local_id=1) ! Associated tau_a space with the space
-                                     ! allocated in EmbeddedCluster module
-!        =============================================================
-!        Substitute one CPA medium site by a real atom. The returning
-!        xmat_a is the tau_a matrix.
-!        Note: This needs to be carefully checked in the spin-canted case
-!              for which tau_a needs to be transformed from the global
-!              spin framework to the local spin framework in subroutine
-!              substituteTcByTa
-!        -------------------------------------------------------------
-         call substituteTcByTa(id,ia,spin=1,mat_a=tau_a(:,:,1))
-!        -------------------------------------------------------------
-         CPAMedium(n)%CPAMatrix(ia)%tau_a = tau_a
-         ns = 0
-         do js = 1, nSpinCant
-            Jinv => getScatteringMatrix('JostInv-Matrix',spin=js,site=id,atom=ia)
-            Tinv => getScatteringMatrix('TInv-Matrix',spin=js,site=id,atom=ia)
-            SinvL => aliasArray2_c(WORK0,dsize,dsize)
-!           ==========================================================
-!           S^{-1} = Jost^{-1}*tmat_a^{-1}/kappa
-!           ----------------------------------------------------------
-            call zgemm( 'n', 'n', dsize, dsize, dsize, CONE/kappa,    &
-                        Jinv, dsize, Tinv, dsize, CZERO, SinvL, dsize)
-!           ----------------------------------------------------------
-            do is = 1, nSpinCant
-               Jost => getScatteringMatrix('Jost-Matrix',spin=is,site=id,atom=ia)
-               OH => getScatteringMatrix('OmegaHat-Matrix',spin=is,site=id,atom=ia)
-               SinvR => aliasArray2_c(WORK1,dsize,dsize)
-!              =======================================================
-!              OmegaHat = S^{-1} * tmat_a * S^{-T*}/kappa
-!              S^{-T*} = Jost*OmegaHat
-!              -------------------------------------------------------
-               call zgemm( 'n', 'n', dsize, dsize, dsize, CONE,       &
-                           Jost, dsize, OH, dsize, CZERO, SinvR, dsize)
-!              -------------------------------------------------------
-               ns = ns + 1
-               if (print_instruction >= 1) then
-                  call writeMatrix('Tau_a',CPAMedium(n)%CPAMatrix(ia)%tau_a(:,:,ns), &
-                                   dsize,dsize,TEN2m8)
-               endif
-               kau_a => CPAMedium(n)%CPAMatrix(ia)%kau_a(:,:,ns)
-               mat_a => CPAMedium(n)%CPAMatrix(ia)%tau_a(:,:,ns)
-!              =======================================================
-!              kau_a = energy * S^{-1} * tau_a * S^{-T*}
-!              -------------------------------------------------------
-               call computeUAU(SinvL,dsize,dsize,SinvR,dsize,e,       &
-                               mat_a,dsize,CZERO,kau_a,dsize,WORK2)
-!              -------------------------------------------------------
-               if (is == js) then
-                  kau_a = kau_a - kappa*OH
-               endif
-            enddo
-         enddo
+      do n = 1, LocalNumSites
+         call computeImpurityMatrix(energy=e, site=n, kau_method=0)
       enddo
-    enddo
    endif
 !
    end subroutine computeCPAMedium
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine computeImpurityMatrix(energy,site,kau_method)
+!  ===================================================================
+!
+!  This routine calculates Tau_a and Kau_a for each species in local 
+!  spin framework at the specified site.
+!  ===================================================================
+   use SSSolverModule, only : getScatteringMatrix
+!
+   use EmbeddedClusterModule, only : getTau, getTmatInvDiff
+!
+   use WriteMatrixModule,  only : writeMatrix
+!
+   use MatrixModule,  only : computeUAU, computeUAUts, computeUtsAU,  &
+                             setupUnitMatrix, computeABprojC
+!
+   use MatrixInverseModule, only : MtxInv_LU, MtxInv_GE
+!
+   use IBZRotationModule, only : symmetrizeMatrix, checkMatrixSymmetry
+!
+   use PotentialTypeModule, only : isFullPotential
+!
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: site, kau_method
+   integer (kind=IntKind) :: dsize, nsize
+   integer (kind=IntKind) :: n, id, ia, ns, js, is
+!
+   complex (kind=CmplxKind), intent(in) :: energy
+   complex (kind=CmplxKind) :: e, kappa
+   complex (kind=CmplxKind), pointer :: tau_a(:,:,:)
+   complex (kind=CmplxKind), pointer :: mat_a(:,:)
+   complex (kind=CmplxKind), pointer :: kau_a(:,:)
+   complex (kind=CmplxKind), pointer :: Jost(:,:), JostL(:,:), JostR(:,:)
+   complex (kind=CmplxKind), pointer :: OH(:,:), OHL(:,:)
+   complex (kind=CmplxKind), pointer :: tau_c(:,:)
+   complex (kind=CmplxKind), pointer :: Amat(:,:), Bmat(:,:), tmat_a(:,:)
+   complex (kind=CmplxKind), pointer :: Sine(:,:), SinvL(:,:), SinvR(:,:)
+!
+   e = energy
+   kappa = sqrt(energy)
+   n = site
+!
+   id = CPAMedium(n)%local_index
+   dsize = CPAMedium(n)%dsize
+   nsize = dsize*nSpinCant
+   do ia = 1, CPAMedium(n)%num_species
+      tau_a => getTau(local_id=1) ! Associated tau_a space with the space
+                                  ! allocated in EmbeddedCluster module
+!     ================================================================
+!     Substitute one CPA medium site by a real atom. The returning
+!     xmat_a is the tau_a matrix.
+!     Note: This needs to be carefully checked in the spin-canted case
+!           for which tau_a needs to be transformed from the global
+!           spin framework to the local spin framework in subroutine
+!           substituteTcByTa
+!     ----------------------------------------------------------------
+      call substituteTcByTa(id,ia,spin=1,mat_a=tau_a(:,:,1))
+!     ----------------------------------------------------------------
+      CPAMedium(n)%CPAMatrix(ia)%tau_a = tau_a
+!
+!     ================================================================
+!     Calculate Kau_a = e * sine^{-1} * (tau_a - tmat_a) * sine^{-T*} <= kau_method = 0
+!                     = kappa*[kappa*OmegaHat*Jost^{T*} * tau_a * Jost - 1] * OmegaHat <= kau_method = 1
+!     ================================================================
+      ns = 0
+      do js = 1, nSpinCant
+         if (kau_method == 0) then
+            Sine => getScatteringMatrix('Sine-Matrix',spin=js,site=id,atom=ia)
+!           call checkMatrixSymmetry('Sine',Sine,dsize,TEN2m6)
+            SinvR => aliasArray2_c(WORK3,dsize,dsize)
+            SinvR = Sine
+            if (isFullPotential()) then
+               call symmetrizeMatrix(SinvR,dsize)
+            endif
+            call MtxInv_LU(SinvR,dsize)
+!           call checkMatrixSymmetry('Sinv',SinvR,dsize,TEN2m6)
+         else
+            OH => getScatteringMatrix('OmegaHat-Matrix',spin=js,site=id,atom=ia)
+            Jost => getScatteringMatrix('Jost-Matrix',spin=js,site=id,atom=ia)
+!           call checkMatrixSymmetry('Jost',Jost,dsize,TEN2m8)
+            if (isFullPotential()) then
+               JostR => aliasArray2_c(WORK3,dsize,dsize)
+               JostR = Jost
+               call symmetrizeMatrix(JostR,dsize)
+            else
+               JostR => Jost
+            endif
+         endif
+         do is = 1, nSpinCant
+            ns = ns + 1
+            if (print_instruction >= 1) then
+               call writeMatrix('Tau_a',CPAMedium(n)%CPAMatrix(ia)%tau_a(:,:,ns), &
+                                dsize,dsize,TEN2m6)
+            endif
+            kau_a => CPAMedium(n)%CPAMatrix(ia)%kau_a(:,:,ns)
+            mat_a => CPAMedium(n)%CPAMatrix(ia)%tau_a(:,:,ns)
+            if (kau_method == 0) then
+               Amat => aliasArray2_c(WORK0,dsize,dsize)
+               if (is == js) then
+                  tmat_a => getScatteringMatrix('T-Matrix',spin=js,site=id,atom=ia)
+                  Amat = mat_a - tmat_a
+               else
+                  Amat = mat_a
+               endif
+               if (nSpinCant == 1) then
+                  SinvL => SinvR
+               else
+                  Sine => getScatteringMatrix('Sine-Matrix',spin=is,site=id,atom=ia)
+                  SinvL => aliasArray2_c(WORK1,dsize,dsize)
+                  SinvL = Sine
+                  if (isFullPotential()) then
+                     call symmetrizeMatrix(SinvL,dsize)
+                  endif
+                  call MtxInv_LU(SinvL,dsize)
+               endif
+!              -------------------------------------------------------
+               call computeUAUts(SinvL,dsize,dsize,SinvR,dsize,e,     &
+                                 Amat,dsize,CZERO,kau_a,dsize,WORK2)
+!              -------------------------------------------------------
+            else
+               if (nSpinCant == 1) then
+                  OHL => OH
+                  JostL => JostR
+               else
+                  OHL => getScatteringMatrix('OmegaHat-Matrix',spin=is,site=id,atom=ia)
+                  Jost => getScatteringMatrix('Jost-Matrix',spin=is,site=id,atom=ia)
+                  if (isFullPotential()) then
+                     JostL => aliasArray2_c(WORK1,dsize,dsize)
+                     JostL = Jost
+                     call symmetrizeMatrix(JostL,dsize)
+                  else
+                     JostL => Jost
+                  endif
+               endif
+               Amat => aliasArray2_c(WORK0,dsize,dsize)
+!              =======================================================
+!              compute Amat = Jost^{T*} * tau_a * Jost
+!              -------------------------------------------------------
+               call computeUtsAU(JostL,dsize,dsize,JostR,dsize,CONE,  &
+                                 mat_a,dsize,CZERO,Amat,dsize,WORK2)
+!              -------------------------------------------------------
+!
+!              =======================================================
+!              compute Bmat = energy * Omega * Jost^{T*} * tau_a * Jost - kappa
+!              =======================================================
+               Bmat => aliasArray2_c(WORK1,dsize,dsize)
+               if (is == js) then
+!                 ----------------------------------------------------
+                  call setupUnitMatrix(dsize,Bmat)
+!                 ----------------------------------------------------
+                  call zgemm('n','n',dsize,dsize,dsize,e,OHL,dsize,   &
+                             Amat,dsize,-kappa,Bmat,dsize)
+!                 ----------------------------------------------------
+               else
+!                 ----------------------------------------------------
+                  call zgemm('n','n',dsize,dsize,dsize,e,OHL,dsize,   &
+                             Amat,dsize,CZERO,Bmat,dsize)
+!                 ----------------------------------------------------
+               endif
+!
+!              =======================================================
+!              compute kau_a = [energy * OH * Jost^{T*} * tau_a * Jost - kappa] * OH
+!              -------------------------------------------------------
+               call zgemm('n','n',dsize,dsize,dsize,CONE,Bmat,dsize,  &
+                          OH,dsize,CZERO,kau_a,dsize)
+!              -------------------------------------------------------
+            endif
+            if (isFullPotential()) then
+               call symmetrizeMatrix(kau_a,dsize)  ! symmetrize kau_a according to the crystal symmetry.
+!              call checkMatrixSymmetry('Kau',kau_a,dsize,TEN2m6)
+            endif
+            if (print_instruction >= 1) then
+               call writeMatrix('Kau_a',CPAMedium(n)%CPAMatrix(ia)%kau_a(:,:,ns), &
+                                dsize,dsize,TEN2m6)
+            endif
+         enddo
+      enddo
+   enddo
+!
+   end subroutine computeImpurityMatrix
 !  ===================================================================
 !
 !  *******************************************************************

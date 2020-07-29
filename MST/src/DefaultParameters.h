@@ -203,10 +203,11 @@
    n = n + 1; Keys(n) = 'Default No. Rad Points ndivout';        Values(n) = '0'
 !                     = 0: Not specified; > 0: Speciflied. Note: rmt < r(j)=exp(j*hout) <= rmax, j=1,2,...,ndivout
    n = n + 1; Keys(n) = 'Default Integer Factor nmult';          Values(n) = '1'
-!                     = 0: Not specified; > 0: Speciflied. Note: r(j) = exp(j*h), hin = nmult*hout
+!                     = 0: Not specified; > 0: Speciflied. Note: r(j) = exp(j*hin), hin = nmult*hout
    n = n + 1; Keys(n) = 'Default Radial Grid Exponential Step';  Values(n) = '0.0'
 !                     = 0.0: Not specified; 
-!                     > 0.0: 0.005 - 0.02 is recommended. Note: r(j) = exp(j*h), here h is the exponential step
+!                     > 0.0: 0.005 - 0.02 is recommended. Note: r(j) = exp(j*hin), here hin is the 
+!                            exponential step. In this case, you may want to leave ndivin unspecified
    n = n + 1; Keys(n) = 'Default Pseudo Charge Radius';          Values(n) = '0.9'
 !             Note: This is the ratio of the pseudo charge radius and the muffin-tin radius
    n = n + 1; Keys(n) = 'Default Screen Pot.';                   Values(n) = '3.0'
@@ -232,18 +233,44 @@
 !                     = 0: Using the inscribed sphere radius for full-potential calculations,
 !                          the muffin-tin radius for muffin-tin calculations, or the ASA radius for ASA calculations.
 !                     = 1: Using the implicit core radius defined in ChemElementModule
-!                     = A specific real value (> 0.0, in atomic units)
+!                     = A specific real value (> 0.0, in atomic units). However, if this value < 1.0, it will be treated
+!                       as a multiplier, and the core radius is this value times the inscribed sphere radius.
    n = n + 1; Keys(n) = 'Default Muffin-tin Radius';             Values(n) = '0'
 !                     = 0: Using the inscribed sphere radius
 !                     = 1: Using the implicit muffin-tin radius defined in ChemElementModule
-!                     = A specific real value (> 0.0, in atomic units)
-   n = n + 1; Keys(n) = 'Default Radical Plane Ratio';           Values(n) = '0.000'
+!                     = A specific real value (> 0.0, in atomic units). However, if this value < 1.0, it will be treated
+!                       as a multiplier, and the muffin-tin radius is this value times the inscribed sphere radius.
+   n = n + 1; Keys(n) = 'Default Radical Plane Ratio';           Values(n) = '1.000'
+!  Note: "Ratio" here is the radical plane distance from atom ralative to a 
+!        universal value applied to the entire system. This universal value does 
+!        not have to be specified, so long as all the atoms in the system have 
+!        the same denominator when choosing this value. If all atoms have the same
+!        radical plane ratio (RPR), a radical plane is set at half way between two
+!        atoms. If each atom has its own RPR, which is in effect treated as a 
+!        "weight" for the atom when setting up a radical plane. Specifically, a 
+!        radical plane between atom i and atom j, separated by distance D, will be 
+!        set at distance from atom i at D*RPR(i)/(RPR(i)+RPR(j)), and at distance 
+!        from atom j at D*RPR(j)/(RPR(i)+RPR(j))
    n = n + 1; Keys(n) = 'Uniform Grid Origin';                   Values(n) = '0'
 !                     = 0: Using unit cell corner             
 !                     = 1: Using Unit cell center
    n = n + 1; Keys(n) = 'Core States Normalization Range';       Values(n) = '0'
 !                     = 0: Up to bounding sphere radius
 !                     = 1: Up to infinity
+   n = n + 1; Keys(n) = 'Mixing Parameter for Finding Ef';       Values(n) = '0.5'
+!        Note: At each SCF step, the calculated fermi energy will be mixing with the old fermi energy
+!              to determine the new fermi energy for the next SCF iteration
+   n = n + 1; Keys(n) = 'Mixing Switch for Finding Ef';          Values(n) = '0.01'
+!        Note: If the difference between the calculated fermi energy and the old fermi energy is
+!              greater than this switching value, mixing will be engaged. otherwise, no fermi energy
+!              mixing is applied. One may keep the fermi energy fixed by setting this switching value 
+!              to 0.0 and also setting fermi energy mixing parameter to 0.0.
+   n = n + 1; Keys(n) = 'Renormalize Green function';            Values(n) = '0'
+!        Note: The Green function may be renormalized using the the integrated DOS value
+!              calculated from multiple scattering Lloyd formula and/or single scattering
+!              Krein formula.
+!                     = 0: Do NOT renormalize the Green function
+!                     = 1: Renormalize the Green function
 !  =============================================================================
 !  Additional input parameters can be added to this table using the 
 !  following format:

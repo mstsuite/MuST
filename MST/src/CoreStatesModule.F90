@@ -208,6 +208,7 @@ contains
    real (kind=RealKind), intent(in) :: evb
 !
    real (kind=RealKind), pointer :: r_mesh(:)
+   real (kind=RealKind) :: rc
 !
    interface
       subroutine hunt(n,xx,x,jlo)
@@ -279,22 +280,25 @@ contains
 !     otherwise, the value is chosen to be either the inscribed sphere radius 
 !     or the circumscribed sphere radius of the atomic cell.
 !     ================================================================
-      if ( getAtomCoreRad(id) < ZERO .and. isFullPotential()) then
+      rc = getAtomCoreRad(id)
+      if ( rc < ZERO .and. isFullPotential()) then
          jcore = getRadialGridPoint(id, getOutscrSphRadius(id))
-      else if ( getAtomCoreRad(id) < 0.10d0 ) then
+      else if ( rc < TEN2m6 ) then
 !012620===============================
 !012620  jcore = Core(id)%Grid%jmt
 !        jcore = Core(id)%Grid%jinsc
-         if (isFullPotential() .or. getMuffinTinRadius(id) < 0.10d0) then
+         if (isFullPotential() .or. getMuffinTinRadius(id) < ONE) then
             jcore = getRadialGridPoint(id, getInscrSphRadius(id))
          else
             jcore = getRadialGridPoint(id, getMuffinTinRadius(id))
          endif
 !012620===============================
+      else if ( rc < ONE ) then
+         jcore = getRadialGridPoint(id, rc*getInscrSphRadius(id))
       else
 !012620===============================
 !        jcore = Core(id)%Grid%jmt
-!        Core(id)%rcore_mt = getAtomCoreRad(id)
+!        Core(id)%rcore_mt = rc
 !        Find the first point on the radial grid that is smaller
 !        than the input rcore_mt
 !        jend = Core(id)%Grid%jend
@@ -306,7 +310,7 @@ contains
 !           Core(id)%rcore_mt = r_mesh(jcore)
 !           Core(id)%jcore = jcore
 !        endif
-         jcore = getRadialGridPoint(id,getAtomCoreRad(id))
+         jcore = getRadialGridPoint(id,rc)
 !012620===============================
       endif
       Core(id)%rcore_mt = r_mesh(jcore)
@@ -1506,6 +1510,8 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine calCoreStates(evb)
 !  ===================================================================
+   use MPPModule, only : syncAllPEs
+!
    use GroupCommModule, only : GlobalMaxInGroup, GlobalSumInGroup
 !
    use Atom2ProcModule, only : getLocalIndex, getAtom2ProcInGroup,     &
@@ -1987,9 +1993,12 @@ contains
    call updateGlobalCoreStatesTable()
 !
    if(stop_routine.eq.sname) then
-      do id =1, LocalNumAtoms
-         call printCoreStates(id)
-      enddo
+      if (print_level >= 0) then
+         do id =1, LocalNumAtoms
+            call printCoreStates(id)
+         enddo
+      endif
+      call syncAllPEs()
       call StopHandler(sname)
    endif
 !
@@ -2019,7 +2028,7 @@ contains
 !
    write(6,'(''Local Atom Index: '',i6)')id
    write(6,'(''jend, jcore     : '',2i6)')Core(id)%Grid%jend,Core(id)%jcore
-   write(6,'(''Core radius     : '',f12.8)')Core(id)%Rcore_mt
+   write(6,'(''Core radius     : '',f12.8)')Core(id)%rcore_mt
    write(6,'(''Upper limit of core level'',t31,''='',f20.11)')etopcor
    do ia = 1, Core(id)%NumSpecies
       write(6,'(80(''=''))')
@@ -2452,7 +2461,7 @@ contains
 !
    real (kind=RealKind) :: drg(ipdeq2)
    real (kind=RealKind) :: drf(ipdeq2)
-   real (kind=RealKind) :: rg(last), der_rg(last)
+   real (kind=RealKind), allocatable :: rg(:), der_rg(:)
    real (kind=RealKind) :: dk
    real (kind=RealKind) :: dm
    real (kind=RealKind) :: gam
@@ -2476,6 +2485,8 @@ contains
                         nws+ipdeq2,last)
 !     ----------------------------------------------------------------
    endif
+!
+   allocate(rg(last), der_rg(last))
 !
 !  ===================================================================
 !  initialize quantities
@@ -2676,6 +2687,8 @@ contains
 !
    h2nrm = fnrm**2
 !
+   deallocate(rg, der_rg)
+!
    if (sname == stop_routine) then
       call StopHandler(sname,'Forced to stop')
    endif
@@ -2869,7 +2882,7 @@ contains
    real (kind=RealKind), intent(in) :: rv(last2)
    real (kind=RealKind), intent(in) :: r(last2)
    real (kind=RealKind), intent(in) :: sqrt_r(0:last2)
-   real (kind=RealKind) :: rg(last2), der_rg(last2)
+   real (kind=RealKind), allocatable :: rg(:), der_rg(:)
    real (kind=RealKind) :: drg(ipdeq*2)
    real (kind=RealKind) :: drf(ipdeq*2)
    real (kind=RealKind) :: fnrm
@@ -2910,6 +2923,8 @@ contains
 !  no. of nodes for the current states big component
 !  ===================================================================
    nodes=nqn-lqn
+!
+   allocate( rg(last2), der_rg(last2) )
 !
 !  ===================================================================
 !  first power of small r expansion
@@ -3083,6 +3098,8 @@ contains
    enddo
 !
    h2nrm = fnrm**2
+!
+   deallocate( rg, der_rg )
 !
    end subroutine semcst
 !  ===================================================================
@@ -3349,12 +3366,12 @@ contains
    real (kind=RealKind), intent(in) :: slp
    real (kind=RealKind), intent(in) :: dk
    real (kind=RealKind), intent(in) :: dm
-   real (kind=RealKind), intent(in) :: r(:)
-   real (kind=RealKind), intent(in) :: rv(:)
-   real (kind=RealKind), intent(out) :: rg(:)
-   real (kind=RealKind), intent(out) :: rf(:)
-   real (kind=RealKind), intent(out) :: der_rg(:)
-   real (kind=RealKind), intent(out) :: der_rf(:)
+   real (kind=RealKind), intent(in) :: r(nws)
+   real (kind=RealKind), intent(in) :: rv(nws)
+   real (kind=RealKind), intent(out) :: rg(nws)
+   real (kind=RealKind), intent(out) :: rf(nws)
+   real (kind=RealKind), intent(out) :: der_rg(nws)
+   real (kind=RealKind), intent(out) :: der_rf(nws)
    real (kind=RealKind), intent(out) :: drf(ipdeq2)
    real (kind=RealKind), intent(out) :: drg(ipdeq2)
    real (kind=RealKind) :: vor

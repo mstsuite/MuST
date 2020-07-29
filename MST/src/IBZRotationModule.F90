@@ -13,7 +13,9 @@ public :: initIBZRotation,          &
           printIBZRotationMatrix,   &
           checkCrystalSymmetry,     &
           setupBasisRotationTable,  &
-          getBasisRotationTable
+          getBasisRotationTable,    &
+          symmetrizeMatrix,         & ! average A matrix by performing sum U^{*} * A * U^{t} / num_rotations
+          checkMatrixSymmetry         ! print diff = U^{*} * A * U^{t} - A
 !
 private
 !
@@ -1363,5 +1365,99 @@ contains
       p => rt
 !
       end function getBasisRotationTable
+!     ================================================================
+!
+!     cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+      subroutine symmetrizeMatrix(A,n)
+!     ================================================================
+!
+!     average A matrix by performing sum U^{*} * A * U / num_rotations
+!
+!     ****************************************************************
+      use MatrixModule, only : computeUAUtc
+!
+      use ErrorHandlerModule, only : ErrorHandler
+!
+      implicit none
+!
+      integer (kind=IntKind), intent(in) :: n
+      integer (kind=IntKind) :: irot
+!
+      complex (kind=CmplxKind), intent(inout) :: A(n,n)
+      complex (kind=CmplxKind), pointer :: rotmat(:,:)
+      complex (kind=CmplxKind) :: w0(n,n), WORK(n*n)
+      complex (kind=CmplxKind) :: cfac
+!
+      if (n /= kkrsz) then
+         call ErrorHandler('symmetrizeMatrix','kkrsz <> n',kkrsz,n)
+      endif
+!
+      w0 = CZERO
+      cfac = CONE/real(NumIBZRotations,RealKind)
+      do irot = 1, NumIBZRotations
+         rotmat => getIBZRotationMatrix('c',irot)
+!        -------------------------------------------------------------
+         call computeUAUtc(rotmat,n,n,rotmat,n,cfac,A,n,CONE,w0,n,WORK)
+!        -------------------------------------------------------------
+      enddo
+      A = w0
+!
+      end subroutine symmetrizeMatrix
+!     ================================================================
+!
+!     cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+      subroutine checkMatrixSymmetry(Aname,A,n,tol)
+!     ================================================================
+!
+!     print diff = U^{*} * A * U - A
+!
+!     ****************************************************************
+      use MatrixModule, only : computeUAUtc
+!
+      use ErrorHandlerModule, only : ErrorHandler
+!
+      implicit none
+!
+      character (len=*), intent(in) :: Aname
+!
+      integer (kind=IntKind), intent(in) :: n
+      integer (kind=IntKind) :: irot, i, j, k, izamax
+!
+      logical :: symm
+!
+      real (kind=RealKind) :: tol
+!
+      complex (kind=CmplxKind), intent(inout) :: A(n,n)
+      complex (kind=CmplxKind), pointer :: rotmat(:,:)
+      complex (kind=CmplxKind) :: w0(n,n), WORK(n*n)
+!
+      if (n /= kkrsz) then
+         call ErrorHandler('checkMatrixSymmetry','kkrsz <> n',kkrsz,n)
+      endif
+!
+      symm = .true.
+      do irot = 1, NumIBZRotations
+         rotmat => getIBZRotationMatrix('c',irot)
+!        -------------------------------------------------------------
+         call computeUAUtc(rotmat,n,n,rotmat,n,CONE,A,n,CZERO,w0,n,WORK)
+!        -------------------------------------------------------------
+         w0 = w0 - A
+         k = izamax(n*n,w0,1)
+         i = mod(k-1,n) + 1
+         j = (k-i)/n + 1
+         if (abs(w0(i,j)) > tol) then
+            write(6,'(a,i3,a,2i4,a,d15.8)')'irot = ',irot,', i, j = ',i,j,  &
+                                           ', diff = ',abs(w0(i,j))
+            symm = .false.
+         endif
+      enddo
+!
+      if (symm) then
+         write(6,'(a,x,a)')trim(Aname),'has proper symmetry.'
+      else
+         write(6,'(a,x,a)')trim(Aname),'has no proper symmetry.'
+      endif
+!
+      end subroutine checkMatrixSymmetry
 !     ================================================================
 end module IBZRotationModule

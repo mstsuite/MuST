@@ -175,7 +175,7 @@ contains
          enddo
       endif
       deallocate(o_atom, p_lvl)
-      if ( maxval(ATOM_based_print_level)>=0 ) then
+      if ( maxval(ATOM_based_print_level(1:LocalNumAtoms))>=0 ) then
          AtomBasedPrintDefined = .true.
       else
          AtomBasedPrintDefined = .false.
@@ -245,10 +245,10 @@ contains
       endif
       deallocate(o_pe, p_lvl)
       if (AtomBasedPrintDefined) then
-         CPU_based_print_level = max(maxval(ATOM_based_print_level),CPU_based_print_level)
+         CPU_based_print_level = max(maxval(ATOM_based_print_level(1:LocalNumAtoms)),CPU_based_print_level)
          ATOM_based_print_level = CPU_based_print_level
       else if (CPU_based_print_level >= 0 .and.                       &
-               minval(ATOM_based_print_level) == undefined_lvl ) then
+               minval(ATOM_based_print_level(1:LocalNumAtoms)) == undefined_lvl ) then
          ATOM_based_print_level = CPU_based_print_level
 !        AtomBasedPrintDefined = .true.
       endif
@@ -262,11 +262,11 @@ contains
    endif
 !
    if ( CPU_based_print_level < 0 ) then
-      if ( maxval(ATOM_based_print_level) > -1 ) then
+      if ( maxval(ATOM_based_print_level(1:LocalNumAtoms)) > -1 ) then
          CPU_based_print_level = 0
       endif
-   else if (minval(ATOM_based_print_level) > undefined_lvl .and.      &
-            maxval(ATOM_based_print_level) < 0) then
+   else if (minval(ATOM_based_print_level(1:LocalNumAtoms)) > undefined_lvl .and.      &
+            maxval(ATOM_based_print_level(1:LocalNumAtoms)) < 0) then
       CPU_based_print_level = -1
    endif
 !

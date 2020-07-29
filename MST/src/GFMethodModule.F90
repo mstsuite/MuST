@@ -98,6 +98,7 @@ private
    integer (kind=IntKind), allocatable :: lmax_green(:)
 !
    integer (kind=IntKind) :: RECORD_LENGTH
+   integer (kind=IntKind) :: MaxRs
 !
    integer (kind=IntKind), parameter :: n_inter = 5 ! order of polynomial
                                                     ! interpolation
@@ -402,6 +403,7 @@ contains
 !
    green_size = 0
    nsize = 0
+   MaxRs = 0
    do id = 1,LocalNumAtoms
       Grid => getGrid(id)
       NumRs(id) = Grid%jend
@@ -413,6 +415,7 @@ contains
       else
          nsize = max(nsize,NumRs(id)*jmax*getLocalNumSpecies(id))
       endif
+      MaxRs = max(MaxRs,NumRs(id))
    enddo
 !
    if (getAdaptiveIntegrationMethod() == 1) then
@@ -1971,6 +1974,9 @@ contains
             enddo
          enddo
 !        =============================================================
+!        If efermi-efermi_old < 0, the following code could potentially
+!        cause IntegrValue(id)%dos_r_jl(1,1,:,:) < 0
+!        =============================================================
          call addElectroStruct(efermi-efermi_old,LastValue(id),IntegrValue(id))
 !        -------------------------------------------------------------
       enddo
@@ -2681,7 +2687,8 @@ contains
             endif
          enddo
 !        -------------------------------------------------------------
-         call GlobalSumInGroup(eGID,msgbuf,n,NumPEsInEGroup)
+         call GlobalSumInGroup(eGID,msgbuf,4*getLocalNumSpecies(id)+1,&
+                               NumPEsInEGroup)
 !        -------------------------------------------------------------
          if ( node_print_level >= 0) then
             if (getLocalNumSpecies(id) == 1) then
@@ -3082,6 +3089,8 @@ contains
 !
    use GroupCommModule, only : GlobalSumInGroup
 !
+   use InputModule, only : getKeyValue
+!
    use ScfDataModule, only : NumSS_IntEs, getAdaptiveIntegrationMethod, &
                              Contourtype, ErBottom, NumExtraEs
 !
@@ -3100,13 +3109,13 @@ contains
    logical :: LC, UC, REL !xianglin
 !
    integer (kind=IntKind) :: id, is, ns, info(4), nm, ie, NumEs, ilc !xianglin
-   integer (kind=IntKind) :: ia
+   integer (kind=IntKind) :: ia, renorm
 !
    real (kind=RealKind), intent(in), optional :: Ebegin, Eend
    logical, intent(in), optional :: relativity !xianglin
 !
    real (kind=RealKind) :: ssdos_int, IDOS_cell, ps, peak_pos, e0, ps0, ssDOS
-   real (kind=RealKind) :: ebot, etop, er, ei
+   real (kind=RealKind) :: ebot, etop, er, ei, scaling_factor, IDOS_space, IDOS_out
    real (kind=RealKind), allocatable :: xg(:), wg(:)
 !
    complex (kind=CmplxKind) :: int_test, ec, es
@@ -3156,6 +3165,10 @@ contains
 !
    if (.not.LC .and. .not.UC .and. etop < ebot) then
       call ErrorHandler('calSingleScatteringIDOS','ebot > etop',ebot,etop)
+   endif
+!
+   if (getKeyValue(1,'Renormalize Green function',renorm) /= 0) then
+      renorm = 0
    endif
 !
 !  ===================================================================
@@ -3520,28 +3533,51 @@ contains
                   write(6,'(a)')   '=========================================================================================='
                   write(6,'(a,i4)')'Number of mesh points for the integration: ',nm
                endif
+!
+!              =======================================================
+!              Get the energy integrated quantities by calling ...
 !              -------------------------------------------------------
                p_aux => getAuxDataAdaptIntegration()
 !              -------------------------------------------------------
 !              write(6,'(a,i5)')'size of p_aux = ',size(p_aux)
+!              =======================================================
+!              Store the quantities in p_aux to ssLastValue
 !              ----------------------------------------------------------
                call calElectroStruct(info,1,p_aux,ssLastValue(id),ss_int=.true.)
                ps = returnSingleSitePS(info,etop) - ps0  ! Relative to the phase shift at energy = e0.
 !              -------------------------------------------------------
+               do while (ps < ZERO)
+                  ps = ps + PI
+               enddo
+               IDOS_space = (2/n_spin_pola)*(ps+getVolume(id)*sqrt(etop**3)/(6.0d0*PI))/PI
+               IDOS_out = ssIDOS_out(id)%rarray2(ns,ia)
+               IDOS_cell = IDOS_space - IDOS_out
+               scaling_factor = IDOS_cell/ssdos_int
+!              =======================================================
                if ( node_print_level >= 0) then
                   write(6,'(a,f12.8,a,d15.8)')'At energy = ',etop,     &
                                               ': Single site IDOS given by Green function  =',ssdos_int
-                  write(6,'(26x,a,d15.8)')      'Integrated DOS outside the atomic cell    =', &
-                                              ssIDOS_out(id)%rarray2(ns,ia)
+                  write(6,'(26x,a,d15.8)')      'Integrated DOS outside the atomic cell    =', IDOS_out
 !                 ====================================================
                   write(6,'(26x,a,d15.8)')      'Single site sum. of partial phase shifts  =',ps
                   write(6,'(26x,a,d15.8)')      'Integrated DOS in space due to single site=',(2/n_spin_pola)*ps/PI
                   write(6,'(26x,a,d15.8)')      'Free electron DOS in the atomic cell      =', &
                                           (2/n_spin_pola)*getVolume(id)*sqrt(etop**3)/(6.0d0*PI**2)
-                  IDOS_cell = (2/n_spin_pola)*(ps+getVolume(id)*sqrt(etop**3)/(6.0d0*PI))/PI - &
-                              ssIDOS_out(id)%rarray2(ns,ia)
                   write(6,'(26x,a,d15.8)')      'Single site {phase shift sum-OutsideIDOS} =',IDOS_cell
+                  write(6,'(26x,a,d15.8)')      'Renormalization factor to Green function  =',scaling_factor
 !                 ====================================================
+               endif
+!              =======================================================
+!              Ideally, scaling_factor = 1.0. We use this factor to
+!              renormalize the single site Green function, which is
+!              stored in ssLastValue
+!              =======================================================
+               if (scaling_factor < TEN2m6) then
+                  call WarningHandler('calSingleScatteringIDOS','scaling_factor < 10^-6',scaling_factor)
+               else if (renorm > 0) then
+!                 ----------------------------------------------------
+                  call scaleSpeciesElectroStruct(ia,ns,scaling_factor,ssLastValue(id),eIntegral_only=.false.)
+!                 ----------------------------------------------------
                endif
             enddo
 !           ----------------------------------------------------------
@@ -4043,6 +4079,8 @@ contains
    use MSSolverModule, only : getMSGreenFunction, getMSGreenMatrix
    use MSSolverModule, only : getMSGreenFunctionDerivative
 !
+   use SSSolverModule, only : getFreeElectronDOS
+!
    use PotentialTypeModule, only : isASAPotential
 !
    use RadialGridModule, only : getGrid
@@ -4061,7 +4099,7 @@ contains
    complex (kind=CmplxKind), intent(inout), target :: dos_array(:)
 !
    integer (kind=IntKind), intent(in) :: info(:)
-   integer (kind=IntKind) :: is, id, atom, ia
+   integer (kind=IntKind) :: is, id, atom, ia, ir, nr
    integer (kind=IntKind) :: ks, jid, j, l, m, jl, kl, klc, p0, n, i
    integer (kind=IntKind) :: jmax, kmax, iend, ns_sqr, gform
 !
@@ -4081,7 +4119,12 @@ contains
    complex (kind=CmplxKind), pointer :: der_green(:,:,:,:), der_dos_r_jl(:,:)
    complex (kind=CmplxKind), pointer :: pcv_x(:), pcv_y(:), pcv_z(:), p1(:)
 !
+   real (kind=RealKind), pointer :: fedos(:)
+   real (kind=RealKind) :: der_fedos(MaxRs)
+!
    type (GridStruct), pointer :: Grid
+!
+   logical :: isPositive
 !
    is = info(1); id = info(2); atom = info(3)
    energy = adjustEnergy(is,e)
@@ -4266,9 +4309,50 @@ contains
                pca_y = cmul*SQRTm1*pca_x
                p0 = p0 + kmax*kmax
             endif
+! =============================================================================
+! Note: It is possible that due to numerical round off error, the imaginary part
+!       of Green function becomes negative. If this happens, in non-full-potential 
+!       case, DOS is replaced with the free-electron DOS. An investigation of this
+!       issue is necessary in the future.  06/14/2020....
+! =============================================================================
+            if (jmax == 1) then
+               isPositive = .false.
+               LOOP_ir: do ir = Grid%jend, 1, -1
+                  if (aimag(green(ir,1,ks,ia)) > ZERO) then
+!                    write(6,'(a,2i5,2d16.8)')'id,ir,r,-Im[green(ir)]/PI = ',     &
+!                          id,ir,Grid%r_mesh(ir),-aimag(green(ir,1,ks,ia))/Grid%r_mesh(ir)**2/PI
+                     nr = ir
+                     isPositive = .true.
+                     exit LOOP_ir
+                  endif
+               enddo LOOP_ir
+               if (isPositive) then
+                  if (rad_derivative) then
+                     fedos => getFreeElectronDOS(site=id,gfac=cmul,derivative=der_fedos)
+                  else
+                     fedos => getFreeElectronDOS(site=id,gfac=cmul)
+                  endif
+                  if (rad_derivative) then
+                     do ir = 1, nr
+                        if (aimag(green(ir,1,ks,ia)) > ZERO) then
+                           dos_r_jl(ir,1) = sfac*fedos(ir)
+                           der_dos_r_jl(ir,1) = sfac*der_fedos(ir)
+                        endif
+                     enddo
+                  else
+                     do ir = 1, nr
+                        if (aimag(green(ir,1,ks,ia)) > ZERO) then
+                           dos_r_jl(ir,1) = sfac*fedos(ir)
+                        endif
+                     enddo
+                  endif
+               endif
+            endif
+! =============================================================================
          enddo
       endif
    enddo
+   nullify(fedos)
 !
 !! The following codes will be uncommented and implemented later....................................
 !! if (n_spin_cant == 2) then
@@ -4763,7 +4847,53 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine scaleElectroStruct(alp,ESV)
+   subroutine scaleSpeciesElectroStruct(ia,ns,alp,ESV,eIntegral_only)
+!  ===================================================================
+!
+!  Perform ESV = alp*ESV
+!
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: ia, ns
+!
+   real (kind=RealKind), intent(in) :: alp
+!
+   type(ElectroStruct), intent(inout) :: ESV
+!
+   complex (kind=CmplxKind) :: alpc
+!
+   logical, intent(in) :: eIntegral_only
+!
+   alpc = alp
+!
+   if (.not.eIntegral_only) then
+      ESV%dos(ns,ia) = alpc*ESV%dos(ns,ia)
+      ESV%dos_mt(ns,ia) = alpc*ESV%dos_mt(ns,ia)
+   endif
+!
+   ESV%dos_r_jl(:,:,ns,ia) = alpc*ESV%dos_r_jl(:,:,ns,ia)
+   if (rad_derivative) then
+      ESV%der_dos_r_jl(:,:,ns,ia) = alpc*ESV%der_dos_r_jl(:,:,ns,ia)
+   endif
+   ESV%evalsum(ns,ia) = alpc*ESV%evalsum(ns,ia)
+   if (isDensityMatrixNeeded) then
+      ESV%density_matrix(:,:,ns,ia) = alpc*ESV%density_matrix(:,:,ns,ia)
+   endif
+!
+   if (n_spin_cant == 2) then ! This needs to be fixed for the spin canted case
+!     ----------------------------------------------------------------
+      call scaleSpinCantStruct(alp,ESV%pSC(ia))
+!     ----------------------------------------------------------------
+   endif
+!
+   end subroutine scaleSpeciesElectroStruct
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine scaleElectroStruct(alp,ESV,eIntegral_only)
 !  ===================================================================
 !
 !  Perform ESV = alp*ESV
@@ -4779,14 +4909,19 @@ contains
 !
    integer (kind=IntKind) :: ia
 !
+   logical, intent(in) :: eIntegral_only
+!
    alpc = alp
+!
+   if (.not.eIntegral_only) then
+      ESV%dos = alpc*ESV%dos
+      ESV%dos_mt = alpc*ESV%dos_mt
+   endif
 !
    ESV%dos_r_jl = alpc*ESV%dos_r_jl
    if (rad_derivative) then
       ESV%der_dos_r_jl = alpc*ESV%der_dos_r_jl
    endif
-   ESV%dos = alpc*ESV%dos
-   ESV%dos_mt = alpc*ESV%dos_mt
    ESV%evalsum = alpc*ESV%evalsum
    if (isDensityMatrixNeeded) then
       ESV%density_matrix = alpc*ESV%density_matrix
@@ -4895,7 +5030,7 @@ contains
 !
    use GroupCommModule, only : GlobalSumInGroup
 !
-   use ScfDataModule, only : isLloyd, getLloydMode
+   use ScfDataModule, only : isLloyd, getLloydMode, getMixingParamForFermiEnergy
 !
    use KreinModule, only : isLloydOn
 !
@@ -4917,7 +5052,7 @@ contains
    real (kind=RealKind) :: efdif
    real (kind=RealKind) :: dosefpa
    real (kind=RealKind) :: ztdif
-   real (kind=RealKind) :: r
+   real (kind=RealKind) :: ef_mixing, mixing_switch
    real (kind=RealKind) :: N_Green_Contour(2)
    real (kind=RealKind) :: wspace(6)
 !
@@ -5004,6 +5139,13 @@ contains
 !  falls into a band gap, where the DOS is very small, the new Fermi
 !  energy is adjusted by an amount <= 0.01.
 !  +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+!
+!  ===================================================================
+!  The following line is added on 06/14/2020 to enable fermi energy  
+!  mixing if the change is found greater than mixing_switch
+!  ===================================================================
+   ef_mixing = getMixingParamForFermiEnergy(mixing_switch)
+!
    if (iharris > 1) then
       efermi = efermi_old
    else if (tnen < 0.0001d0) then
@@ -5027,14 +5169,13 @@ contains
 !     ----------------------------------------------------------------
 !     efermi = efermi_old + efdif/real(NumPEsInAGroup,kind=RealKind)
 !  ===================================================================
-!  The following code added on 05/27/2020 to modify the way the
-!  new Fermi energy is determined
+!  The following code added on 05/27/2020 and updated on 06/14/2020 to 
+!  change the way the new Fermi energy is determined
 !  ===================================================================
-   else if (abs(xtws/tnen) > 0.010d0) then
-      r = 0.5d0              ! r is essentially a mixing parameter
-      efermi = efermi_old -r*xtws/tnen
+   else if (abs(xtws/tnen) > mixing_switch) then
+      efermi = efermi_old -ef_mixing*xtws/tnen
       if ( node_print_level >= 0) then
-         write(6,'(/,a,4d17.8,/)')'tnen,xtws,x/t,r = ',tnen,xtws,xtws/tnen,r
+         write(6,'(/,a,4d17.8,/)')'tnen,xtws,x/t,ef_mixing = ',tnen,xtws,xtws/tnen,ef_mixing
       endif
    else
       efermi = efermi_old - xtws/tnen
@@ -5263,7 +5404,8 @@ contains
       do is = 1, n_spin_pola/n_spin_cant
          if (isLloyd().and.(getLloydMode().eq.1) ) then
 !           ----------------------------------------------------------
-            call scaleElectroStruct(Lloyd_factor(is),IntegrValue(id))
+            call scaleElectroStruct(Lloyd_factor(is),IntegrValue(id), &
+                                    eIntegral_only=.false.)
 !           ----------------------------------------------------------
          endif
       enddo
@@ -5381,7 +5523,7 @@ contains
 !
    character (len=17) :: sname='calDensity'
 !
-   integer (kind=IntKind) :: id, ir, ia
+   integer (kind=IntKind) :: id, ir, ia, is
 !
    real (kind=RealKind), intent(in):: efermi
    real (kind=RealKind) :: dos(4)

@@ -19,10 +19,10 @@ public ::           &
    pushRadialGridToAccel, &
    deleteRadialGridOnAccel
 !
-   interface genRadialGrid
-      module procedure genRadialGrid0, genRadialGrid1, genRadialGrid2, &
-                       genRadialGrid3
-   end interface
+!  interface genRadialGrid
+!     module procedure genRadialGrid0, genRadialGrid1
+!     module procedure genRadialGrid2, genRadialGrid3
+!  end interface
 !
 private
    type (GridStruct), allocatable, target :: Grid(:)
@@ -38,6 +38,7 @@ private
    integer (kind=IntKind) :: MaxNumRmesh
 !
    integer (kind=IntKind), parameter :: n_extra=10
+   integer (kind=IntKind), parameter :: ndivin_default=1001
 !
 !  ===================================================================
 !  rstart_default = the starting point of the radial grid from the origin
@@ -47,6 +48,7 @@ private
 !  ===================================================================
    real (kind=RealKind), parameter :: xstart_default=-.1113096740000D+02
    real (kind=RealKind), parameter :: rstart_default=exp(xstart_default)
+   real (kind=RealKind), parameter :: xstep_default=0.01d0
 !
 contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -183,7 +185,7 @@ contains
       call ErrorHandler(sname,'Bad parameters: ndivin < 2', ndivin)
    endif
 !
-   xstart=log(rstart_default)
+   xstart=xstart_default
 !
 !  Grid(id)%rinsc=rinsc 
 !  Grid(id)%rws=rws 
@@ -381,7 +383,7 @@ contains
       call ErrorHandler(sname,'if rend = rmt, we should have ndivin > 1')
    endif
 !
-   xstart=log(rstart_default)
+   xstart=xstart_default
 !
    Grid(id)%rend=rend
    Grid(id)%xend=log(rend)
@@ -785,41 +787,56 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!  subroutine genRadialGrid3(id,rmt,rinsc,rend,ndivin,rstart) ! Causing conflict with genRadialGrid0 when using gnu compiler
-   subroutine genRadialGrid3(id,rmt,rinsc,rend,ndivin)
+!  subroutine genRadialGrid3(id,rmt,rinsc,rend,ndivin,ndivout,nmult,xstep,rstart)
+   subroutine genRadialGrid(id,rmt,rinsc,rend,ndivin,ndivout,nmult,xstep,rfix,nfix)
 !  ===================================================================
-   use MathParamModule, only : HALF, ONE, TEN2m6
+   use MathParamModule, only : ZERO, HALF, ONE, TEN2m6, TEN2m4, TEN2m8, TEN2m10
 !
    implicit none
 !
    character (len=13), parameter :: sname='genRadialGrid'
 !
    integer (kind=IntKind), intent(in) :: id
-   integer (kind=IntKind), intent(in) :: ndivin   ! including rmt
+   integer (kind=IntKind), intent(in), optional :: ndivin   ! including rmt
+   integer (kind=IntKind), intent(in), optional :: ndivout  ! excluding rmt
+   integer (kind=IntKind), intent(in), optional :: nmult
+   integer (kind=IntKind), intent(in), optional :: nfix
 !
    real (kind=RealKind), intent(in) :: rmt
    real (kind=RealKind), intent(in) :: rinsc
    real (kind=RealKind), intent(in) :: rend
-!  real (kind=RealKind), intent(in), optional :: rstart   ! The starting point
-!                                                         ! of the radial grid
+   real (kind=RealKind), intent(in), optional :: xstep
+   real (kind=RealKind), intent(in), optional :: rfix     ! An r-value fixed
+                                                          ! at a grid point
 !
-   integer (kind=IntKind) :: j, ndivout
+   integer (kind=IntKind) :: j, n, nout, nin, mfix
 !
-   real (kind=RealKind) :: xend, xg
+   real (kind=RealKind) :: xend, xg, hin, rstart
 !    
 !  ===================================================================
 !  genRadialGrid3: making grid points along r using double logrithm
 !
 !        Assuming the following parameters are known
-!           rmt     = the muffin-tin sphere radius
-!           rinsc   = the inscribed sphere radius
+!           rmt     = the muffin-tin sphere radius. The radial grid is setup in
+!                     such a way that rmt is at a grid point
+!           rinsc   = the inscribed sphere radius. It is used to determine jinsc
+!                     and it is not necessarily at a grid point, but
+!                     rmesh(jinsc) is.
 !           rend    = an end point estimate of the radial grid.
 !                     Note: rend may not be on the radial grid point
+!
+!        Optionally, the following parameters are also given
+!           xstep   = x-step bewteen xstart and log(rmt)
 !           ndivin  = the number of grid points from 
 !                     rstart to rmt, including both rmt and rstart
-!           rstart  = the starting point of the radial grid (optional)
-!                     It will take the default value if it is not given from
-!                     the input
+!           ndivout = the number of grid points from 
+!                     rmt to rend, excluding the rmt point
+!           nmult   = the multiplier of the x-step outside (finer)
+!                     compared to the x-step inside (coarser)
+!           rfix    = A fixed r-value. If this number is given the radial
+!                     grid will be set in such a way that it is at a grid point
+!           nfix    = The grid point index of rfix. If nfix = 1, rstart = rfix
+!                     rmesh is established so that rmesh(nfix) = rfix
 !            
 !        genGrid setup the following parameters
 !           xend    = log(rend)
@@ -848,36 +865,152 @@ contains
 !     ----------------------------------------------------------------
       call ErrorHandler('genRadialGrid','rend < rmt',rend,rmt)
 !     ----------------------------------------------------------------
-   else if ( ndivin < 2 ) then
-      call ErrorHandler(sname,'Bad parameters: ndivin < 2', ndivin)
    endif
 !
-!  if (present(rstart)) then
-!     if (rstart > 1.0d-5) then
-!        call WarningHandler(sname,'rstart > 0.00001',rstart)
-!     endif
-!     Grid(id)%rstart = rstart
-!     Grid(id)%xstart = log(rstart)
-!  else
+!  ===================================================================
+!  determine rstart
+!  ===================================================================
+   mfix = 0
+   if (present(nfix) .and. .not.present(rfix)) then
+      call ErrorHandler(sname,'While nfix is given, rfix is missing from the input')
+   else if (present(nfix) .and. present(rfix)) then
+      mfix = nfix
+      if (nfix == 1) then
+         if (rfix > 1.0d-5) then
+            call WarningHandler(sname,'Input rstart > 0.00001',rfix)
+         else if (rfix < ZERO) then
+            call ErrorHandler(sname,'rfix < 0',rfix)
+         endif
+         rstart = rfix
+      else if (nfix < 1) then
+         call ErrorHandler(sname,'Invalid nfix',nfix)
+      else
+         rstart = ZERO
+      endif
+   else
+      rstart = ZERO
+   endif
+!
+!  ===================================================================
+!  determine nin
+!  ===================================================================
+   if (present(ndivin)) then
+      if ( ndivin < 0 ) then
+         call ErrorHandler(sname,'Bad parameters: ndivin < 0', ndivin)
+      else if ( ndivin == 1 ) then
+         call ErrorHandler(sname,'Bad parameters: ndivin == 1', ndivin)
+      else 
+         if (present(rfix)) then
+            if (abs(rmt-rfix) < TEN2m8) then
+               mfix = ndivin
+            endif
+         endif
+         nin = ndivin
+      endif
+   else
+      nin = 0
+   endif
+!
+!  ===================================================================
+!  determine hin
+!  ===================================================================
+   if (present(xstep) .and. present(rfix)) then
+      call ErrorHandler(sname,'xstep and rfix can not be fixed at the same time')
+   else if (present(xstep)) then
+      if (xstep < ZERO) then
+         call ErrorHandler(sname,'Bad parameters: xstep < 0.0', xstep)
+      else if (xstep < TEN2m6) then
+         hin = ZERO
+      else if (xstep < TEN2m4) then
+         call ErrorHandler(sname,'Bad parameters: xstep < 0.0001', xstep)
+      else
+         hin = xstep
+      endif
+   else if (present(rfix) .and. nin /= mfix) then
+      if (nin > 0 .and. mfix > 0) then
+         hin = log(rmt/rfix)/real(nin-mfix,kind=RealKind)
+      else
+         n = floor(log(rmt/rfix)/xstep_default+TEN2m6) + 1
+         hin = log(rmt/rfix)/real(n-1,kind=RealKind)
+         nin = floor(log(rmt/rstart_default)/hin+TEN2m6)+1
+      endif
+   else
+      hin = ZERO
+   endif
+!
+!  ===================================================================
+!  Determine Grid%rstart, Grid%xstart
+!  ===================================================================
+   if (rstart > TEN2m10) then
+      Grid(id)%rstart = rstart
+      Grid(id)%xstart = log(rstart)
+   else if (hin > TEN2m4 .and. nin > 0) then
+      Grid(id)%xstart = log(rmt) - (nin-1)*hin
+      Grid(id)%rstart = exp(Grid(id)%xstart)
+   else
       Grid(id)%rstart = rstart_default
-      Grid(id)%xstart = log(rstart_default)
-!  endif
+      Grid(id)%xstart = xstart_default
+   endif
 !
-   Grid(id)%rmt = rmt
+!  ===================================================================
+!  Determine Grid%hin, Grid%jmt, Grid%xmt, and Grid%rmt
+!    In version v1.4.2 or older, Grid%rmt is not fixed to the input rmt.
+!    It is now changed to Grid%rmt = rmt.
+!  ===================================================================
+   Grid(id)%rmt = rmt ! rmt is set to be a grid point
    Grid(id)%xmt = log(rmt)
-   Grid(id)%jmt = ndivin
-   Grid(id)%hin = (Grid(id)%xmt-Grid(id)%xstart)/real(Grid(id)%jmt-1,RealKind)
-   Grid(id)%nmult = 1
-   Grid(id)%hout = Grid(id)%hin
+   if (hin > TEN2m4) then 
+      Grid(id)%hin = hin
+      if (nin > 0) then
+         Grid(id)%jmt = nin
+      else
+         Grid(id)%jmt = floor((Grid(id)%xmt-Grid(id)%xstart)/hin+TEN2m6) + 1
+      endif
+      Grid(id)%xstart = Grid(id)%xmt - hin*(Grid(id)%jmt-1) 
+      Grid(id)%rstart = exp(Grid(id)%xstart)
+   else
+      if (nin > 0) then
+         Grid(id)%jmt = nin
+      else
+         Grid(id)%jmt = ndivin_default  ! If ndivin is not specified, use the default value
+      endif
+      Grid(id)%hin = (Grid(id)%xmt-Grid(id)%xstart)/real(Grid(id)%jmt-1,RealKind)
+   endif
 !
+!  ===================================================================
+!  Determine Grid%nmult, Grid%hout, xend, nout
+!  ===================================================================
+   if (present(nmult)) then
+      if (nmult < 1) then
+         call ErrorHandler(sname,'Bad parameters: nmult < 1', nmult)
+      endif
+      Grid(id)%nmult = nmult
+   else if (present(ndivout)) then
+      if ( ndivout < 2 ) then
+         call ErrorHandler(sname,'Bad parameters: ndivout < 2', ndivout)
+      endif
+      xend = log(rend)
+      Grid(id)%nmult = max(floor((xend-Grid(id)%xmt)/real(ndivout,kind=RealKind)/Grid(id)%hin+TEN2m6),1)
+   else
+      Grid(id)%nmult = 1
+   endif
+   Grid(id)%hout = Grid(id)%hin/real(Grid(id)%nmult,kind=RealKind)
    xend = log(rend)
-   ndivout = ceiling((xend-Grid(id)%xmt)/Grid(id)%hout)
-   Grid(id)%xend = Grid(id)%xmt+ndivout*Grid(id)%hout
+   nout = ceiling((xend-Grid(id)%xmt)/Grid(id)%hout)
+   if (present(ndivout)) then
+      nout = max(ndivout,nout)
+   endif
+!
+!  ===================================================================
+!  Determine Grid%xend, Grid%rend
+!  ===================================================================
+   Grid(id)%xend = Grid(id)%xmt+nout*Grid(id)%hout
    Grid(id)%rend = exp(Grid(id)%xend)
    if (Grid(id)%rend < rend) then
       call ErrorHandler(sname,'Grid(id)%rend < rend',Grid(id)%rend,rend)
    endif
-   Grid(id)%jend = Grid(id)%jmt + ndivout
+!
+   Grid(id)%jend = Grid(id)%jmt + nout
    Grid(id)%jend_plus_n = Grid(id)%jend+n_extra
 !
 !  -------------------------------------------------------------------
@@ -903,7 +1036,8 @@ contains
 !
    MaxNumRmesh = max(MaxNumRmesh, Grid(id)%jend_plus_n)
 !
-   end subroutine genRadialGrid3
+   end subroutine genRadialGrid
+!  end subroutine genRadialGrid3
 !  ===================================================================
 !
 !  *******************************************************************
@@ -945,11 +1079,9 @@ contains
       call ErrorHandler('resetRadialGrid','rend < rmt',rend,rmt)
 !     ----------------------------------------------------------------
    else if(Grid(id)%jmt<=0 .or. Grid(id)%jend<=0 .or. Grid(id)%nmult<=0) then
-      print *,'jmt = ',Grid(id)%jmt
-      print *,'jend  = ',Grid(id)%jend
-      print *,'nmult   = ',Grid(id)%nmult
 !     ----------------------------------------------------------------
-      call ErrorHandler('resetRadialGrid','invalid initial radial grid')
+      call ErrorHandler('resetRadialGrid','invalid initial radial grid', &
+                        Grid(id)%jmt, Grid(id)%jend, Grid(id)%nmult)
 !     ----------------------------------------------------------------
    endif
 !
@@ -1020,6 +1152,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine printRadialGrid(id)
 !  ===================================================================
+   use MathParamModule, only : THIRD, PI, FOUR
    implicit none
    integer (kind=IntKind), intent(in) :: id
 !
@@ -1055,6 +1188,7 @@ contains
 !  write(6,'(  ''rinsc      '',t40,''='',d20.13)')Grid(id)%rinsc
    write(6,'(  ''rend       '',t40,''='',d20.13)')Grid(id)%rend 
 !  write(6,'(  ''rws        '',t40,''='',d20.13)')Grid(id)%rws 
+   write(6,'(  ''4pi/3*rmt^3'',t40,''='',d20.13)')FOUR*PI*Grid(id)%rmt**3*THIRD 
    write(6,'(a)')'============================================================'
 !
    end subroutine printRadialGrid
@@ -1160,11 +1294,15 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getRadialGridRadius(id) result(r)
+   function getRadialGridRadius(id,MT,nr) result(r)
 !  ===================================================================
    implicit none
    integer (kind=IntKind), intent(in) :: id
+   integer (kind=IntKind), intent(out), optional :: nr
    integer (kind=IntKind) :: n
+!
+   logical, intent(in), optional :: MT
+   logical :: muffin_tin_rad
 !
    real (kind=RealKind) :: r
 !
@@ -1178,8 +1316,23 @@ contains
 !     ----------------------------------------------------------------
    endif
 !
-   n = Grid(id)%jend_plus_n
-   r = Grid(id)%r_mesh(n)
+   if (present(MT)) then
+      muffin_tin_rad = MT
+   else
+      muffin_tin_rad = .false.
+   endif
+!
+   if (muffin_tin_rad) then
+      n = Grid(id)%jmt
+      r = Grid(id)%r_mesh(n)
+   else
+      n = Grid(id)%jend_plus_n
+      r = Grid(id)%r_mesh(n)
+   endif
+!
+   if (present(nr)) then
+      nr = n
+   endif
 !
    end function getRadialGridRadius
 !  ===================================================================

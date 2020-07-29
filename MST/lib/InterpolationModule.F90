@@ -865,12 +865,13 @@ contains
 !
    integer (kind=IntKind) :: i, j, ir
    real (kind=RealKind) :: Sum_ri0, Sum_rim, detS
-   real (kind=RealKind) :: S(1:m+1,1:m+1),Sxy(1:m+1)
+   real (kind=RealKind), allocatable :: S(:,:),Sxy(:)
 !
    if ( m<0 ) then
       call ErrorHandler("leastSqFit","Wrong polynomial order",m)
    endif
 !
+   allocate(S(1:m+1,1:m+1),Sxy(1:m+1))
    Sxy  = ZERO
    do  i = 0,m
        Sum_ri0 = ZERO
@@ -902,6 +903,7 @@ contains
          enddo
       enddo
    endif
+   deallocate(S,Sxy)
 !
    end subroutine leastSqFit_r
 !  ===================================================================
@@ -928,12 +930,13 @@ contains
 !
    integer (kind=IntKind) :: i, j, ir
    complex (kind=CmplxKind) :: Sum_ri0, Sum_rim, detS
-   complex (kind=CmplxKind) :: S(1:m+1,1:m+1),Sxy(1:m+1)
+   complex (kind=CmplxKind), allocatable :: S(:,:),Sxy(:)
 !
    if ( m<0 ) then
       call ErrorHandler("leastSqFit","Wrong polynomial order",m)
    endif
 !
+   allocate(S(1:m+1,1:m+1),Sxy(1:m+1))
    Sxy  = CZERO
    do  i = 0,m
        Sum_ri0 = CZERO
@@ -965,6 +968,7 @@ contains
          enddo
       enddo
    endif
+   deallocate(S,Sxy)
 !
    end subroutine leastSqFit_c
 !  ===================================================================

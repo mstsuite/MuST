@@ -1,6 +1,6 @@
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine constructDataOnGrid( grid_name, value_name, value_type, &
-                                   getDataAtPoint, DenOnGrid, lmax, spin )
+                                   getDataAtPoint, DenOnGrid, lmax, spin, tol_in )
 !  ===================================================================
    use KindParamModule, only : IntKind, RealKind
    use ErrorHandlerModule, only : ErrorHandler
@@ -26,6 +26,7 @@
    use Uniform3DGridModule, only : getUniform3DGrid, getGridIndex, getGridPosition
    use Uniform3DGridModule, only : isOnAtomicCellBoundary, isLocalGrid
    use Uniform3DGridModule, only : getSourceProc, getTargetProc
+   use Uniform3DGridModule, only : getToleranceParam
 !
    implicit none
 !
@@ -34,6 +35,7 @@
    character(len=*), intent(in) :: grid_name, value_name, value_type
 !
    real (kind=RealKind), intent(out) :: DenOnGrid(:)
+   real (kind=RealKind), intent(in), optional :: tol_in
 !
    type (UniformGridStruct), pointer :: gp
 !
@@ -48,16 +50,16 @@
    integer (kind=IntKind), allocatable :: recv_msgid2(:), send_msgid2(:)
    integer (kind=IntKind), allocatable :: grid_local(:), grid_remote(:,:)
 !
-   real (kind=RealKind) :: r(3)
+   real (kind=RealKind) :: r(3), tol
    real (kind=RealKind), allocatable :: den_local(:), den_remote(:,:)
 !
    interface
-      function getDataAtPoint( dname, id, ia, r, jmax_in, n, grad ) result(v)
+      function getDataAtPoint( dname, id, ia, r, tol, jmax_in, n, grad ) result(v)
          use KindParamModule, only : IntKind, RealKind
          implicit none
          character (len=*), intent(in) :: dname
          integer (kind=IntKind), intent(in) :: id, ia
-         real (kind=RealKind), intent(in) :: r(3)
+         real (kind=RealKind), intent(in) :: r(3), tol
          integer (kind=IntKind), intent(in), optional :: jmax_in, n
          real (kind=RealKind), intent(out), optional :: grad(3)
          real (kind=RealKind) :: v
@@ -124,6 +126,11 @@
    call setCommunicator(comm,MyPEinAGroup,NumPEsInAGroup,sync=.true.)
 !  -------------------------------------------------------------------
 !
+   if (present(tol_in)) then
+      tol = tol_in
+   else
+      tol = getToleranceParam()
+   endif
    DenOnGrid = ZERO
 !  ===================================================================
 !  loop over grid points in each atom box on my process
@@ -167,39 +174,41 @@
             if (present(lmax)) then
                do ia = 1, getLocalNumSpecies(id)
                   den_local(ig) = den_local(ig) +                          &
-                                  getDataAtPoint(value_type, id, ia, r,    &
+                                  getDataAtPoint(value_type, id, ia, r, tol, &
                                                  jmax_in=jmax, n=n_mult)*getLocalSpeciesContent(id,ia)
                enddo
             else
                do ia = 1, getLocalNumSpecies(id)
                   den_local(ig) = den_local(ig) +                          &
-                                  getDataAtPoint(value_type, id, ia, r,    &
+                                  getDataAtPoint(value_type, id, ia, r, tol, &
                                                  n=n_mult)*getLocalSpeciesContent(id,ia)
                enddo
             endif
+!           write(6,'(a,3i5,3f12.5,2x,d15.8)')'id,gCounter,n_mult = ',id,gCounter,n_mult, &
+!                                 getGridPosition(gp,id,ig_box),den_local(ig)
          else
             if (present(lmax) .and. present(spin)) then
                do ia = 1, getLocalNumSpecies(id)
                   den_local(ig) = den_local(ig) +                             &
-                                  getDataAtPoint(value_type, id, ia, r,       &
+                                  getDataAtPoint(value_type, id, ia, r, tol,  &
                                                  jmax_in=jmax, n=spin)*getLocalSpeciesContent(id,ia)
                enddo
             else if (present(lmax)) then
                do ia = 1, getLocalNumSpecies(id)
                   den_local(ig) = den_local(ig) +                             &
-                                  getDataAtPoint(value_type, id, ia, r,       &
+                                  getDataAtPoint(value_type, id, ia, r, tol,  &
                                                  jmax_in=jmax)*getLocalSpeciesContent(id,ia)
                enddo
             else if (present(spin)) then
                do ia = 1, getLocalNumSpecies(id)
                   den_local(ig) = den_local(ig) +                             &
-                                  getDataAtPoint(value_type, id, ia, r,       &
+                                  getDataAtPoint(value_type, id, ia, r, tol,  &
                                                  n=spin)*getLocalSpeciesContent(id,ia)
                enddo
             else
                do ia = 1, getLocalNumSpecies(id)
                   den_local(ig) = den_local(ig) +                             &
-                                  getDataAtPoint(value_type, id, ia, r)*getLocalSpeciesContent(id,ia)
+                                  getDataAtPoint(value_type, id, ia, r, tol)*getLocalSpeciesContent(id,ia)
                enddo
             endif
          endif

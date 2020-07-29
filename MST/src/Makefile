@@ -1,4 +1,4 @@
-VPATH = $(ODIR)/../src
+VPATH = $(TOP_DIR)/src
 
 BasicModules = \
 PhysParamModule.o \
@@ -154,7 +154,7 @@ printScfResults.o
 all: $(ODIR)/preproc print_version $(ODIR)/$(EXEC_NAME)
 
 print_version:
-	cd .. && ./src/get_svn.sh ./src/print_version_include.h
+	cd $(TOP_DIR) && ./src/get_svn.sh ./src/print_version_include.h
 	rm -f $(ODIR)/print_version.o
 
 $(ODIR)/preproc: preproc.o
@@ -177,5 +177,6 @@ clean:
 printSystemMovie.o: $(Modules_2)
 
 DefaultParamModule.o: DefaultParameters.h
+InputModule.o: DefaultParamModule.o
 
 keep.o: git_version.h

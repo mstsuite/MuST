@@ -190,9 +190,9 @@ contains
    subroutine initSystem(tbl_id)
 !  ===================================================================
    use MPPModule, only : MyPE
-   use ChemElementModule, only : getZtot, getZval, getName
+   use ChemElementModule, only : getZtot, getZval, getName, getAtomicRadius
 !
-   use MathParamModule, only : TEN2m8, THIRD, ONE
+   use MathParamModule, only : TEN2m6, TEN2m8, THIRD, ONE
 !
    use DataServiceCenterModule, only : isDataStorageExisting,         &
                                        createDataStorage,             &
@@ -429,7 +429,19 @@ contains
          reset_lmax = 1
       endif
       LmaxPot(i) = lmax_pot(ind_lmax_pot(i))
-      RadicalPlaneRatio(i) = radplane(ind_radplane(i))
+      if (radplane(ind_radplane(i)) < ZERO) then
+         call ErrorHandler('initSystem','Radical Plane Ration < 0',radplane(ind_radplane(i)))
+      else if (radplane(ind_radplane(i)) < TEN2m6) then
+!        =============================================================
+!        For the sublattice with CPA medium, its atomic radius is set 
+!        to 0. In this case, the radical plane ratio value will be
+!        recalculated later by taking the averaged atomic radius value
+!        from the atomic species.
+!        =============================================================
+         RadicalPlaneRatio(i) = getAtomicRadius(AtomicNum(i))
+      else
+         RadicalPlaneRatio(i) = radplane(ind_radplane(i))
+      endif
    enddo
    if (MyPE == 0 .and. reset_lmax > 0) then
       call WarningHandler('initSystem','LmaxPhi and LmaxRho are set to new values')
@@ -515,6 +527,19 @@ contains
             AlloyElementAN(lig) = p_AlloyElement(j,i)
             AlloyElementContent(lig) = p_AlloyContent(j,i)
          enddo
+!        =============================================================
+!        For the sublattice with CPA medium, if its radical plane ratio
+!        was set to ZERO, it needs to be set the maximum atomic radius value
+!        of the sublattice.
+!        =============================================================
+         if (RadicalPlaneRatio(ig) < TEN2m6) then
+            RadicalPlaneRatio(ig) = ZERO
+            do j = 1, NumAlloyElements(ig)
+               RadicalPlaneRatio(ig) = RadicalPlaneRatio(ig) +        &
+                    p_AlloyContent(j,i)*getAtomicRadius(p_AlloyElement(j,i))
+            enddo
+         endif
+!        =============================================================
       enddo
    else
       do ig = 1, NumAtoms

@@ -1,4 +1,4 @@
-VPATH = $(ODIR)/../util
+VPATH = $(TOP_DIR)/util
 
 .SUFFIXES:	.o .f .c .f90 .F90
 
@@ -133,7 +133,7 @@ $(ODIR)/measureVoronoi: measureVoronoi.o $(ODIR)/readInputs.o $(ODIR)/PolyhedraM
 	$(LD) -o $(ODIR)/measureVoronoi measureVoronoi.o $(ODIR)/readInputs.o \
 $(SRC_OBJS) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
-$(ODIR)/readInputs.o: ../driver/readInputs.F90
+$(ODIR)/readInputs.o: $(TOP_DIR)/driver/readInputs.F90
 	$(FC) $(FFLAGS) $<
 
 $(ODIR)/cart2direct: cart2direct.o $(MSTLIB)

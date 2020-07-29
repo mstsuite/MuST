@@ -59,6 +59,7 @@ public :: initScfData,                 &
           retreiveEffectiveMediumParams,   &
           isNextNearestSRO,            &
           retrieveSROParams,           &
+          getMixingParamForFermiEnergy, &
           printScfData
 !
 public
@@ -154,6 +155,8 @@ public
    integer (kind=IntKind), private :: RealEIntMethod = 0
 !
    real (kind=RealKind), private :: ctq
+   real (kind=RealKind), private :: efermi_mix = 1.0d0
+   real (kind=RealKind), private :: efermi_mix_switch = 0.10d0
 !
    character (len=1),  private :: j_ij
    character (len=50), private :: UJfile
@@ -446,6 +449,15 @@ contains
 
    rstatus = getKeyValue(tbl_id,'Effective Medium T-matrix Tol (> 0)',EM_tol)
    rstatus = getKeyValue(tbl_id,'Effective Medium Mixing eSwitch Value',EM_switch)
+!
+   rstatus = getKeyValue(tbl_id,'Mixing Parameter for Finding Ef',efermi_mix)
+   if (efermi_mix < ZERO .or. efermi_mix > ONE) then
+      call ErrorHandler('initScfData','Invalid efermi_mix value',efermi_mix)
+   endif
+   rstatus = getKeyValue(tbl_id,'Mixing Switch for Finding Ef',efermi_mix_switch)
+   if (efermi_mix_switch < ZERO) then
+      call ErrorHandler('initScfData','Invalid efermi_mix_switch value',efermi_mix_switch)
+   endif
 !
    end subroutine initScfData
 !  ===================================================================
@@ -1493,4 +1505,20 @@ contains
 !
    end subroutine retrieveSROParams
 !  ==================================================================
+!
+!  *******************************************************************
+!  
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
+   function getMixingParamForFermiEnergy(mixing_switch) result(alp)
+!  ===================================================================
+   implicit none
+!
+   real (kind=RealKind), intent(out) :: mixing_switch
+   real (kind=RealKind) :: alp
+!
+   alp = efermi_mix
+   mixing_switch = efermi_mix_switch
+!
+   end function getMixingParamForFermiEnergy
+!  ===================================================================
 end module ScfDataModule

@@ -193,8 +193,9 @@ program test_ScreenTau
       write(6,*) i, getInscrSphRadius(i), getOutscrSphRadius(i),        &
                 ndivin,ndivout,nmult
 !     ----------------------------------------------------------------
-      call genRadialGrid(i,getInscrSphRadius(i),getOutscrSphRadius(i), &
-                         ndivin,ndivout,nmult)
+      call genRadialGrid(i,getInscrSphRadius(i), getInscrSphRadius(i),&
+                         getOutscrSphRadius(i),                       &
+                         ndivin = ndivin, ndivout = ndivout, nmult = nmult)
 !     ----------------------------------------------------------------
       call printRadialGrid(i)
 !     ----------------------------------------------------------------

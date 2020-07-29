@@ -10,15 +10,23 @@ ifneq (,$(wildcard ./architecture.h))
 include architecture.h 
 endif
 
+ifndef SUFFIX
+SUFFIX=.
+else
+ifneq "$(SUFFIX)" "."
+OBJ_DIR = $(SUFFIX)
+endif
+endif
+
 ifndef HDF5_PATH
 #export ERROR_TARGETS=no_hdf5
 export ADDITIONAL_TARGETS+=no_hdf5
-HDF5_PATH=$(EXTERN_LIB_PATH)/hdf5/HDF5
+HDF5_PATH=$(EXTERN_LIB_PATH)/hdf5/HDF5/$(SUFFIX)
 endif
 
 ifndef LUA_PATH
 export ADDITIONAL_TARGETS+=no_lua
-LUA_PATH=$(EXTERN_LIB_PATH)/lua/LUA
+LUA_PATH=$(EXTERN_LIB_PATH)/lua/LUA/$(SUFFIX)
 endif
 
 export ADD_LIBS += -Wl,-rpath $(HDF5_PATH)/lib -L$(HDF5_PATH)/lib -lhdf5 -L$(LUA_PATH)/lib -llua
@@ -26,7 +34,7 @@ export INC_PATH +=  -I$(HDF5_PATH)/include -I$(LUA_PATH)/include
 
 ifndef LIBXC_PATH
 export ADDITIONAL_TARGETS+=no_libxc
-LIBXC_PATH=$(EXTERN_LIB_PATH)/libxc/LibXC
+LIBXC_PATH=$(EXTERN_LIB_PATH)/libxc/LibXC/$(SUFFIX)
 endif
 
 export ADD_LIBS += -L$(LIBXC_PATH)/lib -lxc
@@ -40,14 +48,18 @@ endif
 export CC += $(CFLAGS) $(OPT_OPENMP) $(OPT_DEFINES)
 export CXX += $(CXXFLAGS) $(OPT_OPENMP) $(OPT_DEFINES)
 export F77 += $(FFLAGS) $(OPT_OPENMP)
+export ODIR=$(TOP_DIR)/bin/$(SUFFIX)
 
-all: $(ERROR_TARGETS) $(ADDITIONAL_TARGETS) libmjson LSMS
+all: odir $(ERROR_TARGETS) $(ADDITIONAL_TARGETS) libmjson LSMS
 # all: liblua $(ADDITIONAL_TARGETS) libmjson LSMS
 # all: liblua libjson $(ADDITIONAL_TARGETS) libmjson LSMS
 # all: liblua LSMS Documentation
 
 .PHONY: $(ERROR_TARGETS) $(ADDITIONAL_TARGETS) liblua libxc clean LSMS Documentation libmjson
 # .PHONY: libxc clean LSMS Documentation liblua libjson libmjson Tools
+
+odir:
+	@if [ ! -d $(ODIR) ]; then echo "$(ODIR) folder does not exist and I am creating one ..."; mkdir $(ODIR); fi
 
 clean:
 	cd mjson && $(MAKE) clean
@@ -59,7 +71,8 @@ clean:
 #	cd libjson && $(MAKE) clean
 
 distclean: clean
-	rm -f architecture.h
+	rm -f architecture.h $(ODIR)/lsms $(ODIR)/wl-lsms
+	@if [ "${OBJ_DIR}" ] && [ -d bin/$(OBJ_DIR) ]; then rm -rf bin/$(OBJ_DIR); fi
 
 LSMS: libmjson $(ADDITIONAL_TARGETS)
 # LSMS: liblua libmjson $(ADDITIONAL_TARGETS)
@@ -89,7 +102,7 @@ test: $(ADDITIONAL_TARGETS)
 	cd src && $(MAKE) test
 
 install:
-	ln -fs $(TOP_DIR)/bin/lsms $(PREFIX)/bin/lsms; ln -fs $(TOP_DIR)/bin/wl-lsms $(PREFIX)/bin/wl-lsms
+	ln -fs $(ODIR)/lsms $(PREFIX)/bin/$(SUFFIX)/lsms; ln -fs $(ODIR)/wl-lsms $(PREFIX)/bin/$(SUFFIX)/wl-lsms
 
 no_hdf5:
 	@cd $(EXTERN_LIB_PATH) && make "ARCH_FILE=$(TOP_DIR)/architecture.h" hdf5

@@ -16,6 +16,7 @@ public :: initEmbeddedCluster,     &
           embedScatterInHostMedium,&
           calEmbeddedSiteMatrix,   &
           calEmbeddedClusterMatrix,&
+          getTmatInvDiff,          &
           getTau
 !
 private
@@ -290,8 +291,51 @@ contains
    deallocate( WORK, t_host_inv )
 !
    host_kmax_kkr = 0
+   NumEmbeddedAtoms = 0
 !
    end subroutine endEmbeddedCluster
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getTmatInvDiff(site_id,embed_id) result(p)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: site_id, embed_id
+   integer (kind=IntKind) :: i
+!
+   logical :: found
+!
+   complex (kind=CmplxKind), pointer :: p(:,:)
+!
+   if (site_id < 1) then
+      call ErrorHandler('getTmatInvDiff','Invalid site id',site_id)
+   else if (embed_id < 1 .or. embed_id > NumEmbeddedAtoms) then
+      call ErrorHandler('getTmatInvDiff','Invalid embed id',embed_id)
+   endif
+!
+   present_embed => EmbeddedCluster
+!
+   found = .false.
+   LOOP_i: do i = 1, NumEmbeddedAtoms
+      if (present_embed%embed_index == embed_id .and.                 &
+          present_embed%local_index == site_id) then
+         found = .true.
+         exit LOOP_i
+      else
+         present_embed => present_embed%next
+      endif
+   enddo LOOP_i
+!
+   if (found) then
+      p => present_embed%diff_TmatInv
+   else
+      call ErrorHandler('getTmatInvDiff','Embedded structure is not found')
+   endif
+!
+   end function getTmatInvDiff
 !  ===================================================================
 !
 !  *******************************************************************

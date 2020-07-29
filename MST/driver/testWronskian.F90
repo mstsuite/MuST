@@ -35,7 +35,7 @@ program testWronskian
    use StepFunctionModule, only : getVolumeIntegration
 !
    use PotentialModule, only : initPotential, endPotential
-   use PotentialModule, only : readPotential, setPotentialOutsideMT, getPotential
+   use PotentialModule, only : readPotential, getPotential
    use PotentialModule, only : getPotEf, setV0, setPotential, isPotComponentZero, getSphPotr
 !
    use ScfDataModule, only : ngaussr, ngaussq
@@ -321,7 +321,7 @@ contains
 !  ===================================================================
 !  initialize radial grid
 !  -------------------------------------------------------------------
-   call initRadialGrid(LocalNumAtoms, istop, node_print_level)
+!  call initRadialGrid(LocalNumAtoms, istop, node_print_level)
 !  -------------------------------------------------------------------
 !
    if (isDataStorageExisting('Bravais Vector')) then
@@ -337,106 +337,8 @@ contains
 !  -------------------------------------------------------------------
 !   call initPolyhedra(NumAtoms,bravais,'main',0)
 !  -------------------------------------------------------------------
-   do i=1,LocalNumAtoms
-      ig=getGlobalIndex(i)
-      GlobalIndex(i)=ig
-!     ----------------------------------------------------------------
-      call getRadialGridData(i,ndivin,ndivout,nmult,hin)
-!     ----------------------------------------------------------------
-!     call genPolyhedron(i,ig,NumAtoms,AtomPosition)
-!     ----------------------------------------------------------------
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printPolyhedron(i)
-!        call printPolyhedronBoundary(i)
-!        -------------------------------------------------------------
-      endif
-      rend =  getOutscrSphRadius(i)
-      if (isMuffinTinPotential() .or. isMuffinTinTestPotential()) then
-         rmt = getMuffinTinRadius(i)
-         rinsc = getInscrSphRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = rinsc
-         endif
-         rws = getWignerSeitzRadius(i)
-         if (getSingleSiteSolverType()==1) then
-            rend=rws
-         endif
-!        -------------------------------------------------------------
-         call genRadialGrid(i,xstart, rmt, rinsc, rend, ndivin)
-!        -------------------------------------------------------------
-      else if ( isASAPotential() ) then
-         rend =  getWignerSeitzRadius(i)
-         rmt = getMuffinTinRadius(i)
-         rinsc = getWignerSeitzRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = rinsc
-         endif
-!        -------------------------------------------------------------
-         call genRadialGrid(i,xstart, rmt, rinsc, rend, ndivin )
-!        -------------------------------------------------------------
-      else if (isMuffinTinASAPotential()) then
-         rend =  getWignerSeitzRadius(i)
-         rmt = getMuffinTinRadius(i)
-         rinsc = getWignerSeitzRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = rinsc
-         endif
-!        -------------------------------------------------------------
-         call genRadialGrid( i, xstart, rmt, rinsc, rend, ndivin )
-!        -------------------------------------------------------------
-      else
-         if (getNeighborDistance(i,1)-getOutscrSphRadius(i) < TEN2m8) then
-!           ----------------------------------------------------------
-            call WarningHandler('testSSSolver',                       &
-                     'Ill condition found: Neighbor distance <= Rcs', &
-                     getNeighborDistance(i,1),getOutscrSphRadius(i))
-!           ----------------------------------------------------------
-         endif
-         rmt = getMuffinTinRadius(i)
-         rinsc = getInscrSphRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = getInscrSphRadius(i)
-         endif
-         rws = getWignerSeitzRadius(i)
-!        -------------------------------------------------------------
-         call genRadialGrid( i, rmt, rinsc, rws, rend, ndivin, ndivout, nmult)
-!        call genRadialGrid(i,getInscrSphRadius(i),getOutscrSphRadius(i), &
-!                           ndivin,ndivout,nmult)
-!        -------------------------------------------------------------
-      endif
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printRadialGrid(i)
-!        -------------------------------------------------------------
-      endif
-   enddo
-!
-!  ===================================================================
-!  initialize step function module
-!  ===================================================================
-   allocate( ngr(LocalNumAtoms), ngt(LocalNumAtoms) )
-   do i=1,LocalNumAtoms
-      ngr(i) = ngaussr
-      ngt(i) = ngaussq
-   enddo
-!
+   call setupRadGridAndCell(NumAtoms,lmax_max)
 !  -------------------------------------------------------------------
-   call initStepFunction(LocalNumAtoms, lmax_max, lmax_step, ngr, ngt, &
-                         istop,node_print_level)
-!  -------------------------------------------------------------------
-   deallocate( ngr, ngt )
-!
-   do i=1,LocalNumAtoms
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printStepFunction(i)
-!        -------------------------------------------------------------
-      endif
-!     ----------------------------------------------------------------
-      call testStepFunction(i)
-!     ----------------------------------------------------------------
-   enddo
 !
 !  ===================================================================
 !  initialize potential module

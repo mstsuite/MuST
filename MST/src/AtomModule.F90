@@ -795,6 +795,17 @@ contains
       else if ( isRealNumber( rmt_input(ind_rmt_input(ig)) ) ) then
 !        Using the specified value as the muffin-tin radius
          read(rmt_input(ind_rmt_input(ig)),*)AtomProperty(n)%Rmt
+         if (AtomProperty(n)%Rmt < ZERO) then
+!           ----------------------------------------------------------
+            call ErrorHandler('initAtom','Invalid muffin-tin radius parameter', &
+                              AtomProperty(n)%Rmt)
+!           ----------------------------------------------------------
+         else if (AtomProperty(n)%Rmt == ZERO .and. present(rinsc)) then
+            AtomProperty(n)%Rmt=rinsc(n)
+         else if (AtomProperty(n)%Rmt < ONE .and. present(rinsc)) then 
+!           The read-in value is used as a multiplier to the inscribed sphere radius
+            AtomProperty(n)%Rmt=AtomProperty(n)%Rmt*rinsc(n)
+         endif
       else
 !        -------------------------------------------------------------
          call ErrorHandler('initAtom','Invalid muffin-tin radius parameter', &
@@ -1925,9 +1936,6 @@ contains
       call ErrorHandler('setMuffinTinRadius','Invalid atom index',i)
    endif
    AtomProperty(i)%Rmt = rmt
-   if (AtomProperty(i)%Rcore < 0.001d0) then
-      AtomProperty(i)%Rcore=AtomProperty(i)%Rmt
-   endif
 !
    end subroutine setMuffinTinRadius
 !  ===================================================================

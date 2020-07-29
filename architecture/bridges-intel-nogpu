@@ -24,6 +24,11 @@ P3DFFT_PATH = /opt/packages/p3dfft/p3dfft-2.7.5
 LUA_PATH    =
 LIBS       += -mkl=cluster -lifcore
 
+ifdef LIBXC_PATH
+ADD_LIBS   += -L$(LIBXC_PATH)/lib -lxcf90 -lxc
+Use_LibXC = -DLIBXC -I$(LIBXC_PATH)/include
+endif
+
 #=====================================================================
 # Compiler tools
 #=====================================================================
@@ -42,7 +47,7 @@ ARCHV       = xiar -r
 #=====================================================================
 FPPDEFS     = -fpp
 CPPDEFS     = -cpp
-FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK
+FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK $(Use_LibXC)
 
 CFLAGS      = -O3
 CXXFLAGS    = -O3 -std=c++14
