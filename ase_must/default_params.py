@@ -123,5 +123,9 @@ defaults = {
     "core_radius": "Default Core Radius",
     "mt_radius": "Default Muffin-tin Radius",
     "radical_plane_ratio": "Default Radical Plane Ratio",
-    "ntasks": "Number of Tasks"
+    "ntasks": "Number of Tasks",
+    "radial_grid_step": "Default Radial Grid Exponential Step",
+    "uniform_grid_origin": "Uniform Grid Origin",
+    "core_norm_range": "Core States Normalization Range",
+    "renorm_gf": "Renormalize Green function"
 }
