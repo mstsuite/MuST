@@ -88,7 +88,8 @@ contains
    subroutine initSROMatrix (cant, pola)
 !  ===================================================================
    
-   use MediumHostModule, only  : getNumSites, getLocalNumSites, getGlobalSiteIndex, getNumSpecies
+   use MediumHostModule, only  : getNumSites, getLocalNumSites, &
+                     getGlobalSiteIndex, getNumSpecies, getSpeciesContent
    use ScfDataModule, only : retrieveSROParams, isNextNearestSRO, isSROSCF
    use NeighborModule, only : getNeighbor
    use SSSolverModule, only : getScatteringMatrix
@@ -100,6 +101,7 @@ contains
    integer(kind=IntKind) :: sro_param_nums, num, il, ic, is, ig, i, j, iter1, iter2, temp
    integer(kind=IntKind) :: in, jn
    integer(kind=IntKind) :: type
+   real (kind=RealKind) :: spec_i, spec_j
    real(kind=RealKind), allocatable :: sro_params(:), sro_params_nn(:)
 
 !  --------------------------------------------------------
@@ -155,12 +157,14 @@ contains
             if (next_near_option == 1) then
               allocate(SROMedium(il)%SROTMatrix(i)%sro_param_a_nn(num))
             endif
+            spec_i = getSpeciesContent(i, ig)
             do j = 1, num
+              spec_j = getSpeciesContent(j, ig)
               if (j < i) then
-                 SROMedium(il)%SROTMatrix(i)%sro_param_a(j) = SROMedium(il)%SROTMatrix(j)%sro_param_a(i)
+                 SROMedium(il)%SROTMatrix(i)%sro_param_a(j) = (spec_j/spec_i)*SROMedium(il)%SROTMatrix(j)%sro_param_a(i)
                  if (next_near_option == 1) then
                     SROMedium(il)%SROTMatrix(i)%sro_param_a_nn(j) =  &
-                        SROMedium(il)%SROTMatrix(j)%sro_param_a_nn(i)
+                        (spec_j/spec_i)*SROMedium(il)%SROTMatrix(j)%sro_param_a_nn(i)
                  endif
               else
                  temp = (i - 1)*num - (i - 1)*(i - 2)/2
@@ -171,7 +175,7 @@ contains
               endif
             enddo
 
-!           Print *, SROMedium(il)%SROTMatrix(i)%sro_param_a
+            Print *, SROMedium(il)%SROTMatrix(i)%sro_param_a
  
             tm => getScatteringMatrix('T-Matrix',spin=1,site=SROMedium(il)%local_index,atom=i)
             
