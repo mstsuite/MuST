@@ -175,7 +175,7 @@ contains
               endif
             enddo
 
-            Print *, SROMedium(il)%SROTMatrix(i)%sro_param_a
+!           Print *, SROMedium(il)%SROTMatrix(i)%sro_param_a
  
             tm => getScatteringMatrix('T-Matrix',spin=1,site=SROMedium(il)%local_index,atom=i)
             
