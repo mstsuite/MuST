@@ -134,6 +134,12 @@ private
    real (kind=RealKind), parameter :: pot_tol = TEN2m8
 !
    real (kind=RealKind), allocatable :: vmt1(:)
+   type ChargeCorrectionData
+      real (kind=RealKind) :: fs_radius
+      real (kind=RealKind), allocatable :: vmt1_corr(:)
+   end type ChargeCorrectionData
+
+   type (ChargeCorrectionData), allocatable :: scr(:)
 !
    type AngularIntegrationData
       integer (kind=IntKind) :: kmax
@@ -240,6 +246,8 @@ contains
    use SystemModule, only : getUniformGridParam, getBravaisLattice
    use SystemModule, only : getSystemCenter, getAtomPosition
 !
+   use NeighborModule, only : getShellRadius
+!
    use Atom2ProcModule, only : getGlobalIndex
 !
    use AtomModule, only : getLocalNumSpecies
@@ -340,6 +348,11 @@ contains
    call initIntegerFactors(lmax_max)
 !  ------------------------------------------------------------------
    allocate(vmt1(LocalNumAtoms))
+   allocate(scr(LocalNumAtoms))
+   do id = 1, LocalNumAtoms
+     allocate(scr(id)%vmt1_corr(getLocalNumSpecies(id)))
+     scr(id)%fs_radius = getShellRadius(id, 1)
+   enddo
    if ( isFullPot ) then
       allocate(V0_inter(n_spin_pola) )
    endif
@@ -1922,6 +1935,8 @@ contains
    use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies
    use AtomModule, only : getLocalSpeciesContent
 !
+   use Atom2ProcModule, only : getGlobalIndex
+!
    use SystemModule, only : getAtomicNumber, getAlloyElementContent, &
                             getNumAlloyElements
 !
@@ -1961,7 +1976,7 @@ contains
    real (kind=RealKind) :: ztotss
    real (kind=RealKind) :: surfamt
    real (kind=RealKind) :: rmt
-   real (kind=RealKind) :: qsub, dq, dq_mt
+   real (kind=RealKind) :: qsub, dq, dq_mt, qtemp
    real (kind=RealKind) :: V2rmt
    real (kind=RealKind) :: sums(2)
    real (kind=RealKind) :: vsum, vmad_corr
@@ -1974,13 +1989,13 @@ contains
    real (kind=RealKind), pointer :: r_mesh(:)
    real (kind=RealKind), allocatable, target :: der_rho_ws(:), der_mom_ws(:)
 !
-!   real (kind=RealKind), allocatable :: vmt1(:)
+!  real (kind=RealKind), allocatable :: vmt1(:)
 !
    rhoint = getInterstitialElectronDensityOld()
    global_table_line => getGlobalTableLine()
    Q_Table => getGlobalOnSiteElectronTableOld()
    Qmt_Table => getGlobalMTSphereElectronTableOld()
-!
+
 !  ===================================================================
 !  vmt1_i = pi4*rho_0*Rmt_i^2 + 2*sum_j[madmat(j,i)*qsub_j], where:
 !
@@ -1994,7 +2009,7 @@ contains
 !         dq_i = Q_i - Qmt_i - rho_0*Omega0_i = dQ_i - Z_i + Q_i
 !         dq_int = sum_i[dq_i] = sum_i[Q_i - Z_i]
 !  ===================================================================
-!
+
    vsum = ZERO
    jmt_max = 0
    do na=1, LocalNumAtoms
@@ -2006,7 +2021,8 @@ contains
          qsub = ZERO
          do ia = 1, getNumAlloyElements(j)
             lig = global_table_line(j) + ia
-            qsub = qsub + getAlloyElementContent(j,ia)*(getAtomicNumber(j,ia)-Q_Table(lig))
+            qtemp = getAlloyElementContent(j,ia)*(getAtomicNumber(j,ia)-Q_Table(lig))
+            qsub = qsub + qtemp
          enddo
          qsub = qsub + rhoint*getAtomicVPVolume(j)
          vmt1(na) = vmt1(na) + madmat(j)*qsub
@@ -2017,6 +2033,18 @@ contains
    enddo
    allocate(der_rho_ws(jmt_max), der_mom_ws(jmt_max))
    der_rho_ws = ZERO; der_mom_ws = ZERO
+
+!  Implementing Screening term to account for charge correlations in KKR-CPA
+
+   do na = 1, LocalNumAtoms
+     j = getGlobalIndex(na)
+     do ia = 1, getNumAlloyElements(j)
+        lig = global_table_line(j) + ia
+        qtemp = getAlloyElementContent(j, ia)*(getAtomicNumber(j, ia) - Q_Table(lig))
+        scr(na)%vmt1_corr(ia) = TWO*(qtemp/scr(na)%fs_radius)
+     enddo
+   enddo
+   
 !
 !  ===================================================================
 !  If vshift_switch_on is false, the unit cell summation of the Madelung
@@ -2170,7 +2198,7 @@ contains
             do ir = 1, jmt
                Potential(na)%potr_sph(ir,is,ia) =                                  &
                      TWO*(-ztotss+PI8*(V1_r(ir)+(V2rmt-V2_r(ir))*r_mesh(ir))) + &
-                     (Vexc(ir) - vmt1(na))*r_mesh(ir)
+                     (Vexc(ir) - vmt1(na) + scr(na)%vmt1_corr(ia))*r_mesh(ir)
             enddo
             do ir = jmt+1, n_Rpts
                Potential(na)%potr_sph(ir,is,ia) = ZERO
