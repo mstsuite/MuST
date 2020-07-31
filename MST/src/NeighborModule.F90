@@ -19,6 +19,7 @@ public :: initNeighbor,            &
           setMaxReceives,          &
           setSendTable,            &
           getSendTable,            &
+          getShellRadius,          &
           getRecvTable,            &
           printNeighbor,           &
           printCommunicationTable
@@ -898,6 +899,27 @@ contains
    ptbl => SendTable(id)
 !
    end function getSendTable
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getShellRadius(id, nshell) result (shell_rad)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: id, nshell
+   real (kind=RealKind) :: shell_rad
+
+   if (id < 1 .or. id > LocalNumAtoms) then
+     call ErrorHandler('getShellRadius', 'invalid local atom index', id)
+   else if (nshell < 1 .or. nshell > Neighbor(id)%NumShells) then
+     call ErrorHandler('getShellRadius', 'invalid shell index', nshell)
+   endif
+
+   shell_rad = Neighbor(id)%ShellRad(nshell)
+
+   end function getShellRadius
 !  ===================================================================
 !
 !  *******************************************************************
