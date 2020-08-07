@@ -2021,7 +2021,7 @@ contains
          qsub = ZERO
          do ia = 1, getNumAlloyElements(j)
             lig = global_table_line(j) + ia
-            qtemp = getAlloyElementContent(j,ia)*(getAtomicNumber(j,ia)-Q_Table(lig))
+            qtemp = getAlloyElementContent(j,ia)*(getAtomicNumber(j,ia) - Q_Table(lig))
             qsub = qsub + qtemp
          enddo
          qsub = qsub + rhoint*getAtomicVPVolume(j)
