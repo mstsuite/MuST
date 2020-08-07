@@ -814,6 +814,8 @@ contains
    use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies,   &
                           getLocalSpeciesContent
 !
+   use NeighborModule, only : getShellRadius
+!
    use PolyhedraModule, only : getVolume
 !
    use PotentialTypeModule, only : isMuffintinASAPotential,           &
@@ -824,6 +826,7 @@ contains
                                         getInterstitialMomentDensity,   &
                                         getGlobalMTSphereElectronTable, &
                                         getGlobalVPCellElectronTable,   &
+                                        getGlobalOnSiteElectronTable,   &
                                         getGlobalTableLine
 !
    use PotentialModule, only : getOldSphPotr => getSphPotr
@@ -875,6 +878,7 @@ contains
    real (kind=RealKind), pointer :: rr(:)
    real (kind=RealKind), pointer :: Qmt_Table(:)
    real (kind=RealKind), pointer :: Qvp_Table(:)
+   real (kind=RealKind), pointer :: Q_Table(:)
 !
    real (kind=RealKind) :: msgbuf(4)
    real (kind=RealKind) :: evalsum
@@ -884,7 +888,7 @@ contains
    real (kind=RealKind) :: omegmt
    real (kind=RealKind) :: content
    real (kind=RealKind) :: ztotss
-   real (kind=RealKind) :: dq
+   real (kind=RealKind) :: dq, dqtemp
    real (kind=RealKind) :: omega_vp
    real (kind=RealKind) :: emad, dummy
    real (kind=RealKind) :: emadp
@@ -894,12 +898,13 @@ contains
    real (kind=RealKind) :: sfac
    real (kind=RealKind) :: fac
    real (kind=RealKind) :: etot_is, press_is
-   real (kind=RealKind) :: etot, press, ecorr
+   real (kind=RealKind) :: etot, press, ecorr, echarge
    real (kind=RealKind) :: u0i(LocalNumAtoms)
 !
    global_table_line => getGlobalTableLine()
    Qmt_Table => getGlobalMTSphereElectronTable()
    Qvp_Table => getGlobalVPCellElectronTable()
+   Q_Table => getGlobalOnSiteElectronTable()
 !
    jmt = 0
    do na = 1, LocalNumAtoms
@@ -1070,6 +1075,7 @@ contains
 !  ===================================================================
    emad = ZERO
    emadp = ZERO
+   echarge = ZERO
    if ( isMuffintinPotential() ) then
       if (gga_functional) then
          if (n_spin_pola == 1) then
@@ -1101,6 +1107,14 @@ contains
       do na = 1, LocalNumAtoms
          SiteEnPres(1,na) = SiteEnPres(1,na) + emad/GlobalNumAtoms
          SiteEnPres(2,na) = SiteEnPres(2,na) + emadp/GlobalNumAtoms
+         ! Charge Correlation Addition to the Total Energy
+         ig = GlobalIndex(na)
+         do ia = 1, getLocalNumSpecies(na)
+           lig = global_table_line(ig) + ia
+           dqtemp = getLocalSpeciesContent(na, ia)*(getLocalAtomicNumber(na,ia) - Q_Table(lig))
+           echarge = echarge - &
+             (TWO/getShellRadius(na, 1))*getLocalSpeciesContent(na, ia)*(dqtemp*dqtemp)
+         enddo
       enddo
    else if (isMuffintinASAPotential()) then
 !     ================================================================
@@ -1173,7 +1187,7 @@ contains
 !  -------------------------------------------------------------------
    call setAtomEnergy(localEnergy)
 !  -------------------------------------------------------------------
-   total_energy=total_energy+u0+emad
+   total_energy=total_energy+u0+emad + echarge
    pressure=pressure+u0+emadp
 !
 #ifdef DEBUG_EPRINT
