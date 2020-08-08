@@ -2040,7 +2040,7 @@ contains
      j = getGlobalIndex(na)
      do ia = 1, getNumAlloyElements(j)
         lig = global_table_line(j) + ia
-        qtemp = getAlloyElementContent(j, ia)*(getAtomicNumber(j, ia) - Q_Table(lig))
+        qtemp = getAtomicNumber(j, ia) - Q_Table(lig)
         scr(na)%vmt1_corr(ia) = TWO*(qtemp/scr(na)%fs_radius)
      enddo
    enddo
