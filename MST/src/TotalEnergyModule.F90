@@ -1111,9 +1111,9 @@ contains
          ig = GlobalIndex(na)
          do ia = 1, getLocalNumSpecies(na)
            lig = global_table_line(ig) + ia
-           dqtemp = getLocalSpeciesContent(na, ia)*(getLocalAtomicNumber(na,ia) - Q_Table(lig))
+           dqtemp = (getLocalAtomicNumber(na,ia) - Q_Table(lig))
            echarge = echarge - &
-             (TWO/getShellRadius(na, 1))*getLocalSpeciesContent(na, ia)*(dqtemp*dqtemp)
+             (1.0/getShellRadius(na, 1))*getLocalSpeciesContent(na, ia)*(dqtemp*dqtemp)
          enddo
       enddo
    else if (isMuffintinASAPotential()) then
