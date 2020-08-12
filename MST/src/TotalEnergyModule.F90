@@ -805,10 +805,13 @@ contains
 !
    use SystemVolumeModule, only : getTotalInterstitialVolume
 !
-   use ScfDataModule, only : isInterstitialElectronPolarized
+   use ScfDataModule, only : isInterstitialElectronPolarized, &
+                             retrieveSROParams, isKKRCPASRO
 !
    use PublicTypeDefinitionsModule, only : GridStruct
    use RadialGridModule, only : getGrid
+!
+   use SystemModule, only : getLatticeConstant
 !
    use Atom2ProcModule, only : getGlobalIndex
    use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies,   &
@@ -854,8 +857,8 @@ contains
 !
    type (GridStruct), pointer :: Grid
 !
-   integer (kind=IntKind) :: jmt
-   integer (kind=IntKind) :: is, ir, na, ia, ig, lig
+   integer (kind=IntKind) :: jmt, temp, i, j, sro_param_num
+   integer (kind=IntKind) :: is, ir, na, ia, ig, lig, lig1
 !
    integer (kind=IntKind), parameter :: janak_form = 2
    integer (kind=IntKind), pointer :: global_table_line(:)
@@ -867,6 +870,7 @@ contains
    real (kind=RealKind), allocatable, target :: mom_tmp(:)
    real (kind=RealKind), allocatable :: rho_spin(:)
    real (kind=RealKind), allocatable :: LocalEnergy(:,:)
+   real (kind=RealKind), allocatable :: sro_params(:)
    real (kind=RealKind), pointer :: vrold(:)
    real (kind=RealKind), pointer :: vrnew(:)
    real (kind=RealKind), pointer :: valden_rho(:)
@@ -879,6 +883,7 @@ contains
    real (kind=RealKind), pointer :: Qmt_Table(:)
    real (kind=RealKind), pointer :: Qvp_Table(:)
    real (kind=RealKind), pointer :: Q_Table(:)
+   real (kind=RealKind), pointer :: w_ab(:,:)
 !
    real (kind=RealKind) :: msgbuf(4)
    real (kind=RealKind) :: evalsum
@@ -900,6 +905,7 @@ contains
    real (kind=RealKind) :: etot_is, press_is
    real (kind=RealKind) :: etot, press, ecorr, echarge
    real (kind=RealKind) :: u0i(LocalNumAtoms)
+   real (kind=RealKind) :: spec_i, spec_j, dq_a, dq_b
 !
    global_table_line => getGlobalTableLine()
    Qmt_Table => getGlobalMTSphereElectronTable()
@@ -1107,14 +1113,47 @@ contains
       do na = 1, LocalNumAtoms
          SiteEnPres(1,na) = SiteEnPres(1,na) + emad/GlobalNumAtoms
          SiteEnPres(2,na) = SiteEnPres(2,na) + emadp/GlobalNumAtoms
+
          ! Charge Correlation Addition to the Total Energy
-         ig = GlobalIndex(na)
-         do ia = 1, getLocalNumSpecies(na)
-           lig = global_table_line(ig) + ia
-           dqtemp = (getLocalAtomicNumber(na,ia) - Q_Table(lig))
-           echarge = echarge - &
-             (1.0/getShellRadius(na, 1))*getLocalSpeciesContent(na, ia)*(dqtemp*dqtemp)
-         enddo
+         if (isKKRCPASRO()) then
+         !  --------------------------------------------------------
+            call retrieveSROParams(sro_param_list=sro_params, param_num=sro_param_num)
+         !  --------------------------------------------------------
+            do i = 1, getLocalNumSpecies(na)
+              allocate(w_ab(getLocalNumSpecies(na), getLocalNumSpecies(na)))
+              spec_i = getLocalSpeciesContent(na, i)
+              do j = 1, getLocalNumSpecies(na)
+                spec_j = getLocalSpeciesContent(na, j)
+                if (j < i) then
+                  w_ab(i, j) = (spec_j/spec_i)*w_ab(j, i)
+                else
+                  temp = (i - 1)*getLocalNumSpecies(na) - (i - 1)*(i - 2)/2
+                  w_ab(i, j) = sro_params(temp + j - i + 1)
+                endif
+              enddo
+            enddo
+            
+            ig = GlobalIndex(na)
+            do i = 1, getLocalNumSpecies(na)
+               lig = global_table_line(ig) + i
+               dq_a = getLocalAtomicNumber(na, i) - Q_Table(lig)
+               do j = 1, getLocalNumSpecies(na)
+                  lig1 = global_table_line(ig) + j  
+                  dq_b = getLocalAtomicNumber(na, j) - Q_Table(lig1)
+                  echarge = echarge - &
+                  getLocalSpeciesContent(na, i)*w_ab(i, j)*(-(dq_a*dq_a)/(getLatticeConstant()) & 
+                   -(dq_b*dq_b)*(1.0/getShellRadius(na, 1) - 1.0/getLatticeConstant()))
+               enddo
+            enddo 
+         else
+           ig = GlobalIndex(na)
+           do ia = 1, getLocalNumSpecies(na)
+             lig = global_table_line(ig) + ia
+             dqtemp = (getLocalAtomicNumber(na,ia) - Q_Table(lig))
+             echarge = echarge - &
+               (1.0/getShellRadius(na, 1))*getLocalSpeciesContent(na, ia)*(dqtemp*dqtemp)
+           enddo
+         endif
       enddo
    else if (isMuffintinASAPotential()) then
 !     ================================================================
