@@ -1119,8 +1119,9 @@ contains
          !  --------------------------------------------------------
             call retrieveSROParams(sro_param_list=sro_params, param_num=sro_param_num)
          !  --------------------------------------------------------
+            allocate(w_ab(getLocalNumSpecies(na), getLocalNumSpecies(na)))
+            w_ab = ZERO
             do i = 1, getLocalNumSpecies(na)
-              allocate(w_ab(getLocalNumSpecies(na), getLocalNumSpecies(na)))
               spec_i = getLocalSpeciesContent(na, i)
               do j = 1, getLocalNumSpecies(na)
                 spec_j = getLocalSpeciesContent(na, j)
@@ -1132,7 +1133,7 @@ contains
                 endif
               enddo
             enddo
-            
+            Print *, w_ab 
             ig = GlobalIndex(na)
             do i = 1, getLocalNumSpecies(na)
                lig = global_table_line(ig) + i
@@ -1140,11 +1141,12 @@ contains
                do j = 1, getLocalNumSpecies(na)
                   lig1 = global_table_line(ig) + j  
                   dq_b = getLocalAtomicNumber(na, j) - Q_Table(lig1)
-                  echarge = echarge - &
+                  echarge = echarge + &
                   getLocalSpeciesContent(na, i)*w_ab(i, j)*(-(dq_a*dq_a)/(getLatticeConstant()) & 
                    -(dq_b*dq_b)*(1.0/getShellRadius(na, 1) - 1.0/getLatticeConstant()))
                enddo
-            enddo 
+            enddo
+            Print *, echarge
          else
            ig = GlobalIndex(na)
            do ia = 1, getLocalNumSpecies(na)
