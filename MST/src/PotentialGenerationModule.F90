@@ -134,12 +134,6 @@ private
    real (kind=RealKind), parameter :: pot_tol = TEN2m8
 !
    real (kind=RealKind), allocatable :: vmt1(:)
-   type ChargeCorrectionData
-      real (kind=RealKind) :: fs_radius
-      real (kind=RealKind), allocatable :: vmt1_corr(:)
-   end type ChargeCorrectionData
-
-   type (ChargeCorrectionData), allocatable :: scr(:)
 !
    type AngularIntegrationData
       integer (kind=IntKind) :: kmax
@@ -262,6 +256,8 @@ contains
    use Uniform3DGridModule, only : createProcessorMesh, getUniform3DGrid
    use Uniform3DGridModule, only : distributeUniformGrid, insertAtomsInGrid
 !
+   use ChargeScreeningModule, only : initChargeScreeningModule
+!
    implicit none
 !
    character (len=*), intent(in) :: istop
@@ -348,11 +344,6 @@ contains
    call initIntegerFactors(lmax_max)
 !  ------------------------------------------------------------------
    allocate(vmt1(LocalNumAtoms))
-   allocate(scr(LocalNumAtoms))
-   do id = 1, LocalNumAtoms
-     allocate(scr(id)%vmt1_corr(getLocalNumSpecies(id)))
-     scr(id)%fs_radius = getShellRadius(id, 1)
-   enddo
    if ( isFullPot ) then
       allocate(V0_inter(n_spin_pola) )
    endif
@@ -716,7 +707,12 @@ contains
    Initialized = .true.
    EmptyTable = .true.
    isFirstExchg = .true.
-!
+
+!  Initialize the Charge Screening Module
+!  --------------------------------------------------
+   call initChargeScreeningModule(nlocal, num_atoms)
+!  --------------------------------------------------
+
    end subroutine initPotentialGeneration
 !  ===================================================================
 !
@@ -731,6 +727,8 @@ contains
 #endif
 !
    use ParallelFFTModule, only : endParallelFFT
+!
+   use ChargeScreeningModule, only : endChargeScreeningModule
 !
    implicit none
 !
@@ -801,7 +799,10 @@ contains
    Initialized = .false.
    EmptyTable = .true.
    isChargeSymmOn = .false.
-!
+!  -----------------------------------------
+   call endChargeScreeningModule()
+!  -----------------------------------------
+
    end subroutine endPotentialGeneration
 !  ===================================================================
 !
@@ -1954,10 +1955,14 @@ contains
 !
    use ChargeDensityModule, only : getSphChargeDensity, getSphMomentDensity
 !
+   use ChargeScreeningModule, only : calChargeCorrection, getSpeciesPotentialCorrection
+!
    use ExchCorrFunctionalModule, only : calSphExchangeCorrelation
    use ExchCorrFunctionalModule, only : getExchCorrPot
 !
    use PotentialTypeModule, only : isMuffintinASAPotential
+!
+   use ScfDataModule, only : isChargeCorr
 !
    implicit   none
 !
@@ -2035,17 +2040,11 @@ contains
    der_rho_ws = ZERO; der_mom_ws = ZERO
 
 !  Implementing Screening term to account for charge correlations in KKR-CPA
-
-   do na = 1, LocalNumAtoms
-     j = getGlobalIndex(na)
-     do ia = 1, getNumAlloyElements(j)
-        lig = global_table_line(j) + ia
-        qtemp = getAtomicNumber(j, ia) - Q_Table(lig)
-        scr(na)%vmt1_corr(ia) = TWO*(qtemp/scr(na)%fs_radius)
-     enddo
-   enddo
-   
-!
+   if (isChargeCorr()) then
+   !  -------------------------------------
+      call calChargeCorrection()
+   !  -------------------------------------
+   endif
 !  ===================================================================
 !  If vshift_switch_on is false, the unit cell summation of the Madelung
 !  shift is not zero. We will calculate the Madelung potential in
@@ -2196,9 +2195,15 @@ contains
          do is =1, n_spin_pola
             Vexc => getExchCorrPot(jmt,is)
             do ir = 1, jmt
-               Potential(na)%potr_sph(ir,is,ia) =                                  &
+               if (isChargeCorr()) then
+                  Potential(na)%potr_sph(ir,is,ia) =                                  &
                      TWO*(-ztotss+PI8*(V1_r(ir)+(V2rmt-V2_r(ir))*r_mesh(ir))) + &
-                     (Vexc(ir) - vmt1(na) + scr(na)%vmt1_corr(ia))*r_mesh(ir)
+                     (Vexc(ir) - vmt1(na))*r_mesh(ir)
+               else if (isChargeCorr()) then
+                  Potential(na)%potr_sph(ir,is,ia) =                                  &
+                     TWO*(-ztotss+PI8*(V1_r(ir)+(V2rmt-V2_r(ir))*r_mesh(ir))) + &
+                     (Vexc(ir) - vmt1(na) + getSpeciesPotentialCorrection(na, ia))*r_mesh(ir)
+               endif
             enddo
             do ir = jmt+1, n_Rpts
                Potential(na)%potr_sph(ir,is,ia) = ZERO
