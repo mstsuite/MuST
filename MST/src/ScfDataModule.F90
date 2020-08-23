@@ -189,6 +189,7 @@ public
    integer (kind=IntKind), private :: sro_scf = 0
    real (kind=RealKind), private, allocatable :: sro_params(:)
    real (kind=RealKind), private, allocatable :: sro_params_nn(:)
+   logical, private :: charge_corr = .false.
 !
 contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -449,6 +450,8 @@ contains
 
    rstatus = getKeyValue(tbl_id,'Effective Medium T-matrix Tol (> 0)',EM_tol)
    rstatus = getKeyValue(tbl_id,'Effective Medium Mixing eSwitch Value',EM_switch)
+!
+   rstatus = getKeyValue(tbl_id,'Include CPA/SRO Charge Correction', charge_corr)
 !
    rstatus = getKeyValue(tbl_id,'Mixing Parameter for Finding Ef',efermi_mix)
    if (efermi_mix < ZERO .or. efermi_mix > ONE) then
@@ -965,6 +968,24 @@ contains
    endif
 !
    end function isFittedChargeDen
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isChargeCorr() result (isChargeCorrelated)
+!  ===================================================================
+   implicit none
+!
+   logical :: isChargeCorrelated
+!
+   if (charge_corr = .false.) then
+      isChargeCorrelated = .false.
+   else
+      isChargeCorrelated = .true.
+   endif
+!
+   end function isChargeCorr
 !  ===================================================================
 !
 !  *******************************************************************
