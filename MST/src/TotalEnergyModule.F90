@@ -806,7 +806,7 @@ contains
    use SystemVolumeModule, only : getTotalInterstitialVolume
 !
    use ScfDataModule, only : isInterstitialElectronPolarized, &
-                             retrieveSROParams, isKKRCPASRO
+                             retrieveSROParams, isKKRCPASRO, isChargeCorr
 !
    use PublicTypeDefinitionsModule, only : GridStruct
    use RadialGridModule, only : getGrid
@@ -844,6 +844,8 @@ contains
 !
 !  use DataServiceCenterModule, only : getDataStorage, RealMark
    use ChargeDensityModule, only : getSphChargeDensity, getSphMomentDensity
+!
+   use ChargeScreeningModule, only : getEnergyCorrection
 !
    use LdaCorrectionModule, only : checkLdaCorrection, getEnergyCorrection
 !
@@ -1115,46 +1117,8 @@ contains
          SiteEnPres(2,na) = SiteEnPres(2,na) + emadp/GlobalNumAtoms
 
          ! Charge Correlation Addition to the Total Energy
-         if (isKKRCPASRO()) then
-         !  --------------------------------------------------------
-            call retrieveSROParams(sro_param_list=sro_params, param_num=sro_param_num)
-         !  --------------------------------------------------------
-            allocate(w_ab(getLocalNumSpecies(na), getLocalNumSpecies(na)))
-            w_ab = ZERO
-            do i = 1, getLocalNumSpecies(na)
-              spec_i = getLocalSpeciesContent(na, i)
-              do j = 1, getLocalNumSpecies(na)
-                spec_j = getLocalSpeciesContent(na, j)
-                if (j < i) then
-                  w_ab(i, j) = (spec_j/spec_i)*w_ab(j, i)
-                else
-                  temp = (i - 1)*getLocalNumSpecies(na) - (i - 1)*(i - 2)/2
-                  w_ab(i, j) = sro_params(temp + j - i + 1)
-                endif
-              enddo
-            enddo
-            Print *, w_ab 
-            ig = GlobalIndex(na)
-            do i = 1, getLocalNumSpecies(na)
-               lig = global_table_line(ig) + i
-               dq_a = getLocalAtomicNumber(na, i) - Q_Table(lig)
-               do j = 1, getLocalNumSpecies(na)
-                  lig1 = global_table_line(ig) + j  
-                  dq_b = getLocalAtomicNumber(na, j) - Q_Table(lig1)
-                  echarge = echarge + &
-                  getLocalSpeciesContent(na, i)*w_ab(i, j)*(-(dq_a*dq_a)/(getLatticeConstant()) & 
-                   -(dq_b*dq_b)*(1.0/getShellRadius(na, 1) - 1.0/getLatticeConstant()))
-               enddo
-            enddo
-            Print *, echarge
-         else
-           ig = GlobalIndex(na)
-           do ia = 1, getLocalNumSpecies(na)
-             lig = global_table_line(ig) + ia
-             dqtemp = (getLocalAtomicNumber(na,ia) - Q_Table(lig))
-             echarge = echarge - &
-               (1.0/getShellRadius(na, 1))*getLocalSpeciesContent(na, ia)*(dqtemp*dqtemp)
-           enddo
+         if (isChargeCorr()) then
+            echarge = getEnergyCorrection(na)
          endif
       enddo
    else if (isMuffintinASAPotential()) then
@@ -1228,7 +1192,7 @@ contains
 !  -------------------------------------------------------------------
    call setAtomEnergy(localEnergy)
 !  -------------------------------------------------------------------
-   total_energy=total_energy+u0+emad + echarge
+   total_energy=total_energy+u0+emad+echarge
    pressure=pressure+u0+emadp
 !
 #ifdef DEBUG_EPRINT
