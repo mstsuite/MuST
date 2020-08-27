@@ -1,6 +1,6 @@
 module ChargeScreeningModule
    use KindParamModule, only : IntKind, RealKind, CmplxKind
-   use MathParamModule, only : ZERO, ONE, CZERO, CONE, SQRTm1, TEN2m6, TEN2m8
+   use MathParamModule, only : ZERO, ONE, TWO, CZERO, CONE, SQRTm1, TEN2m6, TEN2m8
   use ErrorHandlerModule, only : ErrorHandler, WarningHandler
   use PublicTypeDefinitionsModule, only : NeighborStruct
 
@@ -9,9 +9,9 @@ public :: initChargeScreeningModule,     &
           calPotentialCorrection,        &
           calCPAEnergyShift,             &
           calSROEnergyShift,             &
-          calEnergyCorrection,           &
+          calChargeCorrection,           &
           getSpeciesPotentialCorrection, &
-          getEnergyCorrection,           &
+          getEnergyCorrectionTerm,       &
           endChargeScreeningModule      
 !
 
@@ -54,8 +54,8 @@ contains
    GlobalNumSites = num_atoms
    LocalNumSites  = nlocal
 
-   allocate(scr(LocalNumAtoms))
-   do i = 1, LocalNumAtoms
+   allocate(scr(LocalNumSites))
+   do i = 1, LocalNumSites
       NumSpecies = getLocalNumSpecies(i)
       allocate(scr(i)%vmt1_corr(getLocalNumSpecies(i)))
       scr(i)%fs_radius = getShellRadius(i, 1)
@@ -72,7 +72,7 @@ contains
         call retrieveSROParams(sro_param_list=sro_params, param_num=sro_param_num)
      !  --------------------------------------------------------
         w_ab = ZERO
-        do i = 1, LocalNumAtoms
+        do i = 1, LocalNumSites
           spec_i = getLocalSpeciesContent(na, i)
           do j = 1, getLocalNumSpecies(na)
             spec_j = getLocalSpeciesContent(na, j)
@@ -95,20 +95,21 @@ contains
 
    use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies,   &
             getLocalSpeciesContent
-   
+   use Atom2ProcModule, only : getGlobalIndex
    use ChargeDistributionModule, only : getGlobalOnSiteElectronTableOld, &
                                      getGlobalTableLine
                                         
    integer (kind=IntKind) :: i, j, ia, na, lig
    real (kind=RealKind) :: qtemp
    real (kind=RealKind), pointer :: Q_Table(:)
+   integer (kind=IntKind), pointer :: global_table_line(:)
 
    Q_Table => getGlobalOnSiteElectronTableOld()
    global_table_line => getGlobalTableLine()
 
-   do na = 1, LocalNumAtoms
+   do na = 1, LocalNumSites
       j = getGlobalIndex(na)
-      do ia = 1, getNumAlloyElements(j)
+      do ia = 1, getLocalNumSpecies(na)
         lig = global_table_line(j) + ia
         qtemp = getLocalAtomicNumber(j, ia) - Q_Table(lig)
         scr(na)%vmt1_corr(ia) = TWO*(qtemp/scr(na)%fs_radius)
@@ -122,8 +123,10 @@ contains
    subroutine calCPAEnergyShift ()
 !  ===================================================================
 
-   use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies,   &
-            getLocalSpeciesContent
+   use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies,  &
+                                        getLocalSpeciesContent
+
+   use Atom2ProcModule, only : getGlobalIndex
 
    use ChargeDistributionModule, only : getGlobalOnSiteElectronTable, &
                                      getGlobalTableLine
@@ -131,11 +134,13 @@ contains
    integer (kind=IntKind) :: i, j, ia, na, lig
    real (kind=RealKind) :: qtemp
    real (kind=RealKind), pointer :: Q_Table(:)
+   integer (kind=IntKind), pointer :: global_table_line(:)
 
-   Q_Table => getGlobalOnSiteElectronTableOld()
+   Q_Table => getGlobalOnSiteElectronTable()
    global_table_line => getGlobalTableLine()
    
-   do na = 1, LocalNumAtoms
+   do na = 1, LocalNumSites
+      scr(na)%echarge = ZERO
       j = getGlobalIndex(na)
       do ia = 1, getLocalNumSpecies(na)
         lig = global_table_line(j) + ia
@@ -145,28 +150,30 @@ contains
       enddo
    enddo
 
-   end subroutine calEnergyCorrection
+   end subroutine calCPAEnergyShift
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calSROEnergyShift ()
+   subroutine calSROEnergyShift()
 !  ===================================================================
 
    use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies,   &
-            getLocalSpeciesContent
-
+                              getLocalSpeciesContent
+   use Atom2ProcModule, only : getGlobalIndex
    use ChargeDistributionModule, only : getGlobalOnSiteElectronTable, &
                                      getGlobalTableLine
 
    integer (kind=IntKind) :: i, j, ig, ia, na, lig, lig1
    real (kind=RealKind) :: dq_a, dq_b
    real (kind=RealKind), pointer :: Q_Table(:)
+   integer (kind=IntKind), pointer :: global_table_line(:)
 
-   Q_Table => getGlobalOnSiteElectronTableOld()
+   Q_Table => getGlobalOnSiteElectronTable()
    global_table_line => getGlobalTableLine()
 
-   do na = 1, LocalNumAtoms
-      ig = GlobalIndex(na)
+   do na = 1, LocalNumSites
+      scr(na)%echarge = ZERO
+      ig = getGlobalIndex(na)
       do i = 1, getLocalNumSpecies(na)
          lig = global_table_line(ig) + i
          dq_a = getLocalAtomicNumber(na, i) - Q_Table(lig)
@@ -185,7 +192,7 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calChargeCorrection ()
+   subroutine calChargeCorrection()
 !  ===================================================================
 
    use ScfDataModule, only : isKKRCPASRO, isKKRCPA
@@ -214,7 +221,7 @@ contains
    integer (kind=IntKind), intent(in) :: na, ia
    real (kind=RealKind) :: corr
 
-   if (na < 1 .or. na > LocalNumAtoms) then
+   if (na < 1 .or. na > LocalNumSites) then
       call ErrorHandler('getSpeciesPotentialCorrection', &
               'Invalid Local Index', na)
    else if (ia < 1 .or. ia > getLocalNumSpecies(na)) then
@@ -228,19 +235,21 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getEnergyCorrection(na)  result(corr)
+   function getEnergyCorrectionTerm(na)  result(corr)
 !  ===================================================================
 
    integer (kind=IntKind), intent(in) :: na
 
-   if (na < 1 .or. na > LocalNumAtoms) then
+   real (kind=RealKind) :: corr
+
+   if (na < 1 .or. na > LocalNumSites) then
       call ErrorHandler('getEnergyCorrection', &
               'Invalid Local Index', na)
    endif
 
    corr = scr(na)%echarge
 
-   end function getEnergyCorrection
+   end function getEnergyCorrectionTerm
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -249,7 +258,7 @@ contains
    
    integer (kind=IntKind) :: i
 
-   do i = 1, LocalNumAtoms
+   do i = 1, LocalNumSites
       deallocate(scr(i)%vmt1_corr)
    enddo
 
