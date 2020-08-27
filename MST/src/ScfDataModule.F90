@@ -189,7 +189,7 @@ public
    integer (kind=IntKind), private :: sro_scf = 0
    real (kind=RealKind), private, allocatable :: sro_params(:)
    real (kind=RealKind), private, allocatable :: sro_params_nn(:)
-   logical, private :: charge_corr = .false.
+   integer (kind=IntKind), private :: charge_corr = 0
 !
 contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -979,9 +979,9 @@ contains
 !
    logical :: isChargeCorrelated
 !
-   if (charge_corr = .false.) then
+   if (charge_corr == 0) then
       isChargeCorrelated = .false.
-   else
+   else if (charge_corr == 1) then
       isChargeCorrelated = .true.
    endif
 !
