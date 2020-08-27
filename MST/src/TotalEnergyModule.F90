@@ -845,7 +845,7 @@ contains
 !  use DataServiceCenterModule, only : getDataStorage, RealMark
    use ChargeDensityModule, only : getSphChargeDensity, getSphMomentDensity
 !
-   use ChargeScreeningModule, only : getEnergyCorrection
+   use ChargeScreeningModule, only : getEnergyCorrectionTerm
 !
    use LdaCorrectionModule, only : checkLdaCorrection, getEnergyCorrection
 !
@@ -1116,9 +1116,9 @@ contains
          SiteEnPres(1,na) = SiteEnPres(1,na) + emad/GlobalNumAtoms
          SiteEnPres(2,na) = SiteEnPres(2,na) + emadp/GlobalNumAtoms
 
-         ! Charge Correlation Addition to the Total Energy
+      ! Charge Correlation Addition to the Total Energy
          if (isChargeCorr()) then
-            echarge = getEnergyCorrection(na)
+            echarge = getEnergyCorrectionTerm(na)
          endif
       enddo
    else if (isMuffintinASAPotential()) then
