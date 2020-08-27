@@ -2195,7 +2195,7 @@ contains
          do is =1, n_spin_pola
             Vexc => getExchCorrPot(jmt,is)
             do ir = 1, jmt
-               if (isChargeCorr()) then
+               if (.not. isChargeCorr()) then
                   Potential(na)%potr_sph(ir,is,ia) =                                  &
                      TWO*(-ztotss+PI8*(V1_r(ir)+(V2rmt-V2_r(ir))*r_mesh(ir))) + &
                      (Vexc(ir) - vmt1(na))*r_mesh(ir)
