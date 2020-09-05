@@ -65,6 +65,7 @@ ExchCorrFunctionalModule.o \
 ValenceDensityModule.o \
 ChargeDensityModule.o \
 ChargeDistributionModule.o \
+ChargeScreeningModule.o \
 PotentialGenerationModule.o \
 TotalEnergyModule.o \
 ConvergenceCheckModule.o \

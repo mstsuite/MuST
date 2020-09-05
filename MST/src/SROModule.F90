@@ -11,6 +11,7 @@ public :: initSROMatrix,             &
           generateBigTAMatrix,       &
           generateBigTCPAMatrix,     &
           obtainPosition,            &
+          obtainNeighborIndex,       &
           populateTau,               &
           assembleTauFromBlocks,     &
           calculateImpurityMatrix,   &
@@ -42,7 +43,9 @@ private
       complex (kind=CmplxKind), pointer :: tmat_inv(:,:)
       complex (kind=CmplxKind), pointer :: tmat_tilde_inv(:,:)
       complex (kind=CmplxKind), pointer :: tmat_tilde_inv_nn(:,:)
-      complex  (kind=CmplxKind), pointer :: T_inv(:,:)
+      complex (kind=CmplxKind), pointer :: T_inv(:,:)
+      complex (kind=CmplxKind), pointer :: proj_a(:,:)
+      complex (kind=CmplxKind), pointer :: proj_b(:,:)
    end type TmatBlockStruct
 !
    type SROTMatrixStruct
@@ -85,8 +88,9 @@ contains
    subroutine initSROMatrix (cant, pola)
 !  ===================================================================
    
-   use MediumHostModule, only  : getNumSites, getLocalNumSites, getGlobalSiteIndex, getNumSpecies
-   use ScfDataModule, only : retrieveSROParams, isNextNearestSRO
+   use MediumHostModule, only  : getNumSites, getLocalNumSites, &
+                     getGlobalSiteIndex, getNumSpecies, getSpeciesContent
+   use ScfDataModule, only : retrieveSROParams, isNextNearestSRO, isSROSCF
    use NeighborModule, only : getNeighbor
    use SSSolverModule, only : getScatteringMatrix
    use SystemModule, only : getAtomPosition
@@ -97,6 +101,7 @@ contains
    integer(kind=IntKind) :: sro_param_nums, num, il, ic, is, ig, i, j, iter1, iter2, temp
    integer(kind=IntKind) :: in, jn
    integer(kind=IntKind) :: type
+   real (kind=RealKind) :: spec_i, spec_j
    real(kind=RealKind), allocatable :: sro_params(:), sro_params_nn(:)
 
 !  --------------------------------------------------------
@@ -152,12 +157,14 @@ contains
             if (next_near_option == 1) then
               allocate(SROMedium(il)%SROTMatrix(i)%sro_param_a_nn(num))
             endif
+            spec_i = getSpeciesContent(i, ig)
             do j = 1, num
+              spec_j = getSpeciesContent(j, ig)
               if (j < i) then
-                 SROMedium(il)%SROTMatrix(i)%sro_param_a(j) = SROMedium(il)%SROTMatrix(j)%sro_param_a(i)
+                 SROMedium(il)%SROTMatrix(i)%sro_param_a(j) = (spec_j/spec_i)*SROMedium(il)%SROTMatrix(j)%sro_param_a(i)
                  if (next_near_option == 1) then
                     SROMedium(il)%SROTMatrix(i)%sro_param_a_nn(j) =  &
-                        SROMedium(il)%SROTMatrix(j)%sro_param_a_nn(i)
+                        (spec_j/spec_i)*SROMedium(il)%SROTMatrix(j)%sro_param_a_nn(i)
                  endif
               else
                  temp = (i - 1)*num - (i - 1)*(i - 2)/2
@@ -167,7 +174,9 @@ contains
                  endif
               endif
             enddo
-            
+
+!           Print *, SROMedium(il)%SROTMatrix(i)%sro_param_a
+ 
             tm => getScatteringMatrix('T-Matrix',spin=1,site=SROMedium(il)%local_index,atom=i)
             
             SROMedium(il)%blk_size = size(tm, 1)
@@ -187,6 +196,10 @@ contains
                        SROMedium(il)%blk_size))
                allocate(SROMedium(il)%SROTMatrix(i)%tmat_s(is)%T_inv(SROMedium(il)%blk_size*SROMedium(il)%neigh_size, &
                        SROMedium(il)%blk_size*SROMedium(il)%neigh_size))
+               if (isSROSCF() == 1) then
+                  allocate(SROMedium(il)%SROTMatrix(i)%tmat_s(is)%proj_a(SROMedium(il)%blk_size, SROMedium(il)%blk_size))
+                  allocate(SROMedium(il)%SROTMatrix(i)%tmat_s(is)%proj_b(SROMedium(il)%blk_size, SROMedium(il)%blk_size))
+               endif
             enddo
 
          enddo
@@ -368,7 +381,7 @@ contains
                      SROMedium(n)%Tcpa_inv(iter1, iter2)
                
                  else if (test_pure) then
-                    if (i < 6) then
+                    if (i < 3) then
                        SROMedium(n)%SROTMatrix(ia)%tmat_s(is)%T_inv(iter1+tmp, iter2+tmp) = &
                          SROMedium(n)%SROTMatrix(ia)%tmat_s(is)%tmat_tilde_inv(iter1, iter2)
                     else
@@ -386,7 +399,7 @@ contains
       endif
    enddo
  
-!  call writeMatrix('Big-TA matrix with nnn', SROMedium(1)%SROTMatrix(ia)%tmat_s(1)%T_inv, nsize*delta, nsize*delta) 
+!  call writeMatrix('Big-TA', SROMedium(1)%SROTMatrix(ia)%tmat_s(1)%T_inv, nsize*delta, nsize*delta) 
 
    end subroutine generateBigTAMatrix
 !  ===================================================================
@@ -438,6 +451,36 @@ contains
    endif
 
    end subroutine obtainPosition
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function obtainNeighborIndex (local_index, p_vec)  result(neigh_index)
+!  ===================================================================
+
+   integer (kind=IntKind), intent(in) :: local_index
+   real (kind=RealKind), intent(in) :: p_vec(3)
+
+   real (kind=RealKind) :: temp(3)
+   integer (kind=IntKind) :: in, num
+
+   integer (kind=IntKind) :: neigh_index
+
+   neigh_index = 1
+   num = SROMedium(local_index)%neigh_size
+   
+   if (p_vec(1) == 0 .and. p_vec(2) == 0 .and. p_vec(3) == 0) then
+     neigh_index = 1
+   else
+     do in = 2, num
+        temp = SROMedium(local_index)%Neighbor%Position(1:3, in - 1)
+        if (p_vec(1) == temp(1) .and. p_vec(2) == temp(2) .and. p_vec(3) == temp(3)) then
+           neigh_index = in
+           EXIT
+        endif
+     enddo
+   endif
+
+   end function obtainNeighborIndex
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -540,15 +583,109 @@ contains
    call computeAprojB('L', dsize*nsize, SROMedium(n)%tau_cpa(:,:, 1), z, y)
 
    SROMedium(n)%SROTMatrix(ic)%tau_ab(:, :, 1) = y
+!  call writeMatrix('tau_a11', SROMedium(n)%SROTMatrix(ic)%tau_ab(1:dsize, 1:dsize, 1), &
+!                 dsize, dsize, TEN2m8) 
 !  enddo
 
    end subroutine calculateImpurityMatrix
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calSpeciesTauMatrix()
+   subroutine calculateSCFSpeciesTerm (n, ic, c_ic)
+!  ===================================================================   
+   
+   use MatrixModule, only : computeAprojB
+   use WriteMatrixModule, only : writeMatrix
+
+   integer (kind=IntKind), intent(in) :: n, ic
+   real (kind=RealKind), intent(in) :: c_ic
+   integer (kind=IntKind) :: dsize, nsize, is
+
+   complex (kind=CmplxKind), allocatable :: tmp(:,:), proj_c(:,:)
+
+   dsize = SROMedium(n)%blk_size
+   nsize = SROMedium(n)%neigh_size
+   allocate(tmp(dsize*nsize, dsize*nsize))
+   allocate(proj_c(dsize*nsize, dsize*nsize))
+
+   do is = 1, nSpinCant**2
+      y = CZERO
+      z = SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%T_inv - SROMedium(n)%T_CPA_inv
+
+      call zgemm('N', 'n', dsize*nsize, dsize*nsize, dsize*nsize,    &
+        c_ic, z, dsize*nsize, SROMedium(n)%SROTMatrix(ic)%tau_ab(1,1,1), dsize*nsize,  &
+        CZERO, tmp, dsize*nsize)
+
+!     call writeMatrix('Ta(1 + tau(ta - tcpa))^-1', tmp, dsize*nsize, dsize*nsize, TEN2m8) 
+!     ------------------------------------------------------------------------
+      call zgemm('N', 'n', dsize*nsize, dsize*nsize, dsize*nsize,    &
+        CONE, SROMedium(n)%tau_cpa(1,1,1), dsize*nsize, tmp, dsize*nsize, CZERO, proj_c, dsize*nsize)
+!     ------------------------------------------------------------------------
+!     call writeMatrix('tauTa(1 + tau(ta - tcpa))^-1', proj_c(1:dsize, 1:dsize), dsize, dsize, TEN2m8)
+      SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%proj_a = proj_c(1:dsize, 1:dsize)
+   enddo 
+
+!  call writeMatrix('tau_a11', SROMedium(n)%SROTMatrix(ic)%tau_ab(1:dsize,1:dsize,1), dsize, dsize, TEN2m8) 
+
+   end subroutine calculateSCFSpeciesTerm
 !  ===================================================================
 
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function calculateNewTCPA(n)  result(total_proj)
+!  ===================================================================
+
+   use MatrixInverseModule, only : MtxInv_LU
+   use WriteMatrixModule, only : writeMatrix
+
+   integer (kind=IntKind), intent(in) :: n
+   integer (kind=IntKind) :: dsize, ic
+   
+   complex (kind=CmplxKind), allocatable :: tau_inv(:,:), temp(:,:), temp2(:,:)
+   complex (kind=CmplxKind) :: total_proj(SROMedium(n)%blk_size,SROMedium(n)%blk_size)
+
+   dsize = SROMedium(n)%blk_size
+   allocate(tau_inv(dsize, dsize), temp(dsize, dsize), temp2(dsize, dsize))
+
+   total_proj = CZERO
+   temp = CZERO
+
+   do is = 1, nSpinCant**2
+     do ic = 1, SROMedium(n)%num_species
+!       -------------------------------------------------------------
+        call zaxpy(dsize*dsize, CONE, SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%proj_a, &
+             1, temp, 1)
+!       -------------------------------------------------------------
+     enddo
+   enddo
+
+!  call writeMatrix('pre-tauinv', temp, dsize, dsize, TEN2m8)
+
+   tau_inv = SROMedium(n)%tau_cpa(1:dsize, 1:dsize, 1)
+!  call writeMatrix('tau_cpa11', tau_inv, dsize, dsize, TEN2m8)
+!  -----------------------------------------------------------
+   call MtxInv_LU(tau_inv, dsize)
+!  -----------------------------------------------------------
+   call zgemm('N', 'n', dsize, dsize, dsize, CONE, temp, &
+        dsize, tau_inv, dsize, CZERO, temp2, dsize)
+!  -----------------------------------------------------------
+   call zgemm('N', 'n', dsize, dsize, dsize, CONE, tau_inv, &
+        dsize, temp2, dsize, CZERO, total_proj, dsize)
+!  -----------------------------------------------------------
+!  call writeMatrix('new_tcpa_inv', total_proj, dsize, dsize, TEN2m8)'
+
+
+   end function calculateNewTCPA
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine calSpeciesTauMatrix()
+!  ===================================================================
+!  -------------------------------------------------------------------
+!  If SCF mode is off, it will calculate tau_a for all species
+!  If SCF mode in on, then it will only calculate the average and block matrices (old scheme)
+!  ------------------------------------------------------------------
+
+   use ScfDataModule, only : isSROSCF
    use WriteMatrixModule, only : writeMatrix
    use SSSolverModule, only : getScatteringMatrix
 !
@@ -562,12 +699,13 @@ contains
        do is = 1, nSpinCant
         SROMedium(j)%SROTMatrix(ic)%tmat_s(is)%tmat => getScatteringMatrix('T-Matrix', spin=is, site=j, atom=ic)
         SROMedium(j)%SROTMatrix(ic)%tmat_s(is)%tmat_inv => getScatteringMatrix('TInv-Matrix', spin=is, site=j, atom=ic)
-!       call writeMatrix('TmatInv', SROMedium(j)%SROTMatrix(ic)%tmat_s(is)%tmat_inv, dsize, dsize)
+!       call writeMatrix('TmatInv', SROMedium(j)%SROTMatrix(ic)%tmat_s(is)%tmat_inv, dsize, dsize, TEN2m8)
        enddo
      enddo
 
      do ic = 1, SROMedium(j)%num_species
        call averageSROMatrix(j, ic)
+!      call writeMatrix('TmatTildeInv', SROMedium(j)%SROTMatrix(ic)%tmat_s(1)%tmat_tilde_inv, dsize, dsize, TEN2m8)
      enddo
 
      do ic = 1, SROMedium(j)%num_species
@@ -582,6 +720,15 @@ contains
 !      -------------------------------------------
      enddo
    enddo
+
+!  if (isSROSCF() == 0) then
+!    do ic = 1, SROMedium(1)%num_species
+!      --------------------------------------------------------------------------------
+!      call writeMatrix('tau_a', SROMedium(1)%SROTMatrix(ic)%tau_ab, &
+!             dsize*nsize, dsize*nsize, TEN2m8)
+!      --------------------------------------------------------------------------------
+!    enddo
+!  endif
    
    end subroutine calSpeciesTauMatrix
 !  ===================================================================
@@ -643,6 +790,7 @@ contains
    enddo
  
    kau_a => SROMedium(n)%SROTMatrix(ic)%kau11
+!  call writeMatrix('kau_a11', kau_a(:,:,1), dsize, dsize, TEN2m8)
    
    end function getKauFromTau
 !  ===================================================================

@@ -805,14 +805,19 @@ contains
 !
    use SystemVolumeModule, only : getTotalInterstitialVolume
 !
-   use ScfDataModule, only : isInterstitialElectronPolarized
+   use ScfDataModule, only : isInterstitialElectronPolarized, &
+                             retrieveSROParams, isKKRCPASRO, isChargeCorr
 !
    use PublicTypeDefinitionsModule, only : GridStruct
    use RadialGridModule, only : getGrid
 !
+   use SystemModule, only : getLatticeConstant
+!
    use Atom2ProcModule, only : getGlobalIndex
    use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies,   &
                           getLocalSpeciesContent
+!
+   use NeighborModule, only : getShellRadius
 !
    use PolyhedraModule, only : getVolume
 !
@@ -824,6 +829,7 @@ contains
                                         getInterstitialMomentDensity,   &
                                         getGlobalMTSphereElectronTable, &
                                         getGlobalVPCellElectronTable,   &
+                                        getGlobalOnSiteElectronTable,   &
                                         getGlobalTableLine
 !
    use PotentialModule, only : getOldSphPotr => getSphPotr
@@ -839,6 +845,8 @@ contains
 !  use DataServiceCenterModule, only : getDataStorage, RealMark
    use ChargeDensityModule, only : getSphChargeDensity, getSphMomentDensity
 !
+   use ChargeScreeningModule, only : getEnergyCorrectionTerm
+!
    use LdaCorrectionModule, only : checkLdaCorrection, getEnergyCorrection
 !
    use SystemModule, only : setAtomEnergy
@@ -851,8 +859,8 @@ contains
 !
    type (GridStruct), pointer :: Grid
 !
-   integer (kind=IntKind) :: jmt
-   integer (kind=IntKind) :: is, ir, na, ia, ig, lig
+   integer (kind=IntKind) :: jmt, temp, i, j, sro_param_num
+   integer (kind=IntKind) :: is, ir, na, ia, ig, lig, lig1
 !
    integer (kind=IntKind), parameter :: janak_form = 2
    integer (kind=IntKind), pointer :: global_table_line(:)
@@ -864,6 +872,7 @@ contains
    real (kind=RealKind), allocatable, target :: mom_tmp(:)
    real (kind=RealKind), allocatable :: rho_spin(:)
    real (kind=RealKind), allocatable :: LocalEnergy(:,:)
+   real (kind=RealKind), allocatable :: sro_params(:)
    real (kind=RealKind), pointer :: vrold(:)
    real (kind=RealKind), pointer :: vrnew(:)
    real (kind=RealKind), pointer :: valden_rho(:)
@@ -875,6 +884,8 @@ contains
    real (kind=RealKind), pointer :: rr(:)
    real (kind=RealKind), pointer :: Qmt_Table(:)
    real (kind=RealKind), pointer :: Qvp_Table(:)
+   real (kind=RealKind), pointer :: Q_Table(:)
+   real (kind=RealKind), pointer :: w_ab(:,:)
 !
    real (kind=RealKind) :: msgbuf(4)
    real (kind=RealKind) :: evalsum
@@ -884,7 +895,7 @@ contains
    real (kind=RealKind) :: omegmt
    real (kind=RealKind) :: content
    real (kind=RealKind) :: ztotss
-   real (kind=RealKind) :: dq
+   real (kind=RealKind) :: dq, dqtemp
    real (kind=RealKind) :: omega_vp
    real (kind=RealKind) :: emad, dummy
    real (kind=RealKind) :: emadp
@@ -894,12 +905,14 @@ contains
    real (kind=RealKind) :: sfac
    real (kind=RealKind) :: fac
    real (kind=RealKind) :: etot_is, press_is
-   real (kind=RealKind) :: etot, press, ecorr
+   real (kind=RealKind) :: etot, press, ecorr, echarge
    real (kind=RealKind) :: u0i(LocalNumAtoms)
+   real (kind=RealKind) :: spec_i, spec_j, dq_a, dq_b
 !
    global_table_line => getGlobalTableLine()
    Qmt_Table => getGlobalMTSphereElectronTable()
    Qvp_Table => getGlobalVPCellElectronTable()
+   Q_Table => getGlobalOnSiteElectronTable()
 !
    jmt = 0
    do na = 1, LocalNumAtoms
@@ -1070,6 +1083,7 @@ contains
 !  ===================================================================
    emad = ZERO
    emadp = ZERO
+   echarge = ZERO
    if ( isMuffintinPotential() ) then
       if (gga_functional) then
          if (n_spin_pola == 1) then
@@ -1101,6 +1115,11 @@ contains
       do na = 1, LocalNumAtoms
          SiteEnPres(1,na) = SiteEnPres(1,na) + emad/GlobalNumAtoms
          SiteEnPres(2,na) = SiteEnPres(2,na) + emadp/GlobalNumAtoms
+
+      ! Charge Correlation Addition to the Total Energy
+         if (isChargeCorr()) then
+            echarge = getEnergyCorrectionTerm(na)
+         endif
       enddo
    else if (isMuffintinASAPotential()) then
 !     ================================================================
@@ -1173,7 +1192,7 @@ contains
 !  -------------------------------------------------------------------
    call setAtomEnergy(localEnergy)
 !  -------------------------------------------------------------------
-   total_energy=total_energy+u0+emad
+   total_energy=total_energy+u0+emad+echarge
    pressure=pressure+u0+emadp
 !
 #ifdef DEBUG_EPRINT

@@ -2768,6 +2768,7 @@ contains
    complex (kind=CmplxKind), allocatable, target :: tau(:,:,:)
    allocate(tau(kmax_kkr_max, kmax_kkr_max, nSpinCant**2))
 !
+!  call writeMatrix('tau_cpa11', MatrixBand(1)%MatrixBlock(1)%NeighMat_l(1)%tau_l_sro(:,:,1), kmax_kkr_max, kmax_kkr_max, TEN2m8)
    do j = 1, LocalNumAtoms
      ig = MatrixBand(j)%global_index
      i = gid_array(ig)

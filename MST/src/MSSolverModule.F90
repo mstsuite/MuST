@@ -295,8 +295,6 @@ contains
                          cpa_eswitch=em_eswitch, cpa_tol=em_tol,      &
                          istop=istop, iprint=iprint, is_sro=.true.)
 !     ----------------------------------------------------------------
-!     call retrieveSROParams(sro_params, sro_param_num)
-!     Print *,sro_params
       call initSROMatrix(cant=cant, pola=pola)
 !     ----------------------------------------------------------------
    else if (isEmbeddedCluster()) then
@@ -712,7 +710,8 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine computeMSTMatrix(is,e)
 !  ===================================================================
-   use ScfDataModule, only : isLSMS, isScreenKKR, isKKRCPA, isKKRCPASRO, isKKR, isEmbeddedCluster
+   use ScfDataModule, only : isLSMS, isScreenKKR, isKKRCPA,  &
+                isKKRCPASRO, isKKR, isEmbeddedCluster, isSROSCF
 !
    use SSSolverModule, only : getScatteringMatrix
 !
@@ -754,19 +753,30 @@ contains
       call computeCPAMedium(e)
 !     ----------------------------------------------------------------
    else if (isKKRCPASRO()) then ! Needs some more thought here
-!     ----------------------------------------------------------------
-      call computeCPAMedium(e, do_sro=.true.)
-      call populateBigTCPA()
-!     ----------------------------------------------------------------
-      call calCrystalMatrix(e, getSingleSiteMatrix ,use_tmat=.true.,tau_needed=.true., use_sro=.true.)
-!     ----------------------------------------------------------------
-      call retrieveTauSRO()
-!     ----------------------------------------------------------------
-      call calSpeciesTauMatrix()
-!     ----------------------------------------------------------------
- 
-!     Print *, "Executed ok"
-!     ----------------------------------------------------------------
+      if (isSROSCF() == 1) then
+!        -------------------------------------------------------------
+         call computeCPAMedium(e, do_sro=.true.)
+!        -------------------------------------------------------------
+         call populateBigTCPA()
+!        -------------------------------------------------------------
+         call calCrystalMatrix(e, getSingleSiteMatrix, use_tmat=.true.,tau_needed=.true., use_sro=.true.)
+!        -------------------------------------------------------------
+         call retrieveTauSRO()
+!        -------------------------------------------------------------
+         call calSpeciesTauMatrix()
+!        -------------------------------------------------------------
+      else
+!        ----------------------------------------------------------------
+         call computeCPAMedium(e, do_sro=.true.)
+         call populateBigTCPA()
+!        ----------------------------------------------------------------
+         call calCrystalMatrix(e, getSingleSiteMatrix ,use_tmat=.true.,tau_needed=.true., use_sro=.true.)
+!        ----------------------------------------------------------------
+         call retrieveTauSRO()
+!        ----------------------------------------------------------------
+         call calSpeciesTauMatrix()
+!        ----------------------------------------------------------------
+      endif 
    else if (isEmbeddedCluster()) then  ! Needs further work.....
 !     ----------------------------------------------------------------
       call calClusterMatrix(e,getScatteringMatrix)
@@ -789,7 +799,8 @@ contains
 !
    use GroupCommModule, only : GlobalSumInGroup
 !
-   use ScfDataModule, only : isKKR, isScreenKKR, isLSMS, isKKRCPA, isKKRCPASRO, isEmbeddedCluster
+   use ScfDataModule, only : isKKR, isScreenKKR, isLSMS, isKKRCPA, &
+                      isKKRCPASRO, isEmbeddedCluster, isSROSCF
 !
    use SystemSymmetryModule, only : getSymmetryFlags
 !
@@ -961,9 +972,11 @@ contains
 !kau00=>getImpurityMatrix('Tau_a',site=id,atom=ia)
 !call writeMatrix('Tau_a',kau00(:,:,1),kmaxk,kmaxk,TEN2m6)
             kau00 => getImpurityMatrix('Kau_a',site=id,atom=ia) ! Kau00 = energy * S^{-1} * [Tau_a - t_matrix] * S^{-T*}
-         else if (isKKRCPASRO()) then
+         else if (isKKRCPASRO() .and. isSROSCF() == 0) then
              kau00 => getKauFromTau(e=e, n=id, ic=ia) ! Calculates Kau Matrix From Tau
 !            kau00 => getImpurityMatrix('Kau_a',site=id,atom=ia)
+         else if (isKKRCPASRO() .and. isSROSCF() == 1) then
+            kau00 => getKauFromTau(e=e, n=id, ic = ia)
          endif
 !        -------------------------------------------------------------
 !        call writeMatrix('Kau_a',kau00(:,:,1),kmaxk,kmaxk,TEN2m6)

@@ -33,6 +33,7 @@ public :: initScfData,                 &
           isKKRCPA,                    &
           isEmbeddedCluster,           &
           isKKRCPASRO,                 &
+          isSROSCF,                    &
           isScreenKKR_LSMS,            &
           isSingleSite,                &
           isFrozenCore,                &
@@ -56,7 +57,8 @@ public :: initScfData,                 &
           setSCFMethod,                &
           getPoleSearchStep,           &
           retreiveEffectiveMediumParams,   &
-          retrieveSROParams, &
+          isNextNearestSRO,            &
+          retrieveSROParams,           &
           getMixingParamForFermiEnergy, &
           printScfData
 !
@@ -177,10 +179,17 @@ public
    real (kind=RealKind), private ::   EM_mix_1 = 0.01d0
    real (kind=RealKind), private ::   EM_tol = 0.0000001d0
    real (kind=RealKind), private ::   EM_switch = 0.003
+   real (kind=RealKind), private ::   SRO_mix_type=1
+   real (kind=RealKind), private ::   SRO_mix_0 = 0.1d0
+   real (kind=RealKind), private ::   SRO_mix_1 = 0.01d0
+   real (kind=RealKind), private ::   SRO_tol = 0.00001d0
+   integer (kind=IntKind), private :: SRO_max_iter = 5
    integer (kind=IntKind), private :: sro_param_num = 0
    integer (kind=IntKind), private :: next_nearest
+   integer (kind=IntKind), private :: sro_scf = 0
    real (kind=RealKind), private, allocatable :: sro_params(:)
    real (kind=RealKind), private, allocatable :: sro_params_nn(:)
+   integer (kind=IntKind), private :: charge_corr = 0
 !
 contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -398,6 +407,7 @@ contains
 !
    rstatus = getKeyValue(tbl_id,'Effective Medium Mixing Scheme',EM_mix_type)
    rstatus = getKeyValue(tbl_id,'Maximum Effective Medium Iterations',EM_max_iter)
+   rstatus = getKeyValue(tbl_id,'Maximum SRO Medium Iterations',SRO_max_iter)
    rstatus = getKeyValue(tbl_id,'Number of SRO Parameters', sro_param_num)
    
    if (rstatus == 0) then
@@ -424,13 +434,24 @@ contains
       call ErrorHandler('initScfData','Number of SRO Parameters not found')
    endif
 
+   rstatus = getKeyValue(tbl_id, 'SCF Mode', sro_scf)
+   rstatus = getKeyValue(tbl_id, 'SRO Medium Mixing Scheme', SRO_mix_type)
+   rstatus = getKeyValue(tbl_id, 'SRO Medium T-matrix Tol (> 0)', SRO_tol)
+   
    if ( getKeyValue(tbl_id,'Effective Medium Mixing Parameters',2,rp) == 0) then
       EM_mix_0 = rp(1); EM_mix_1 = rp(2)
    else
       call ErrorHandler('initScfData','Effective Medium Mixing Parameters are not found')
    endif
+
+   if ( getKeyValue(tbl_id, 'SRO Medium Mixing Parameters',2,rp) == 0) then
+      SRO_mix_0 = rp(1); SRO_mix_1 = rp(2)
+   endif
+
    rstatus = getKeyValue(tbl_id,'Effective Medium T-matrix Tol (> 0)',EM_tol)
    rstatus = getKeyValue(tbl_id,'Effective Medium Mixing eSwitch Value',EM_switch)
+!
+   rstatus = getKeyValue(tbl_id,'Include CPA/SRO Charge Correction', charge_corr)
 !
    rstatus = getKeyValue(tbl_id,'Mixing Parameter for Finding Ef',efermi_mix)
    if (efermi_mix < ZERO .or. efermi_mix > ONE) then
@@ -780,6 +801,19 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isSROSCF() result(md)
+!  ===================================================================
+   implicit none
+   integer (kind=Intkind) :: md
+
+   md = sro_scf
+
+   end function isSROSCF
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function isScreenKKR_LSMS() result(md)
 !  ===================================================================
    implicit none
@@ -934,6 +968,24 @@ contains
    endif
 !
    end function isFittedChargeDen
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isChargeCorr() result (isChargeCorrelated)
+!  ===================================================================
+   implicit none
+!
+   logical :: isChargeCorrelated
+!
+   if (charge_corr == 0) then
+      isChargeCorrelated = .false.
+   else if (charge_corr == 1) then
+      isChargeCorrelated = .true.
+   endif
+!
+   end function isChargeCorr
 !  ===================================================================
 !
 !  *******************************************************************
@@ -1421,6 +1473,26 @@ contains
 !  *******************************************************************
 !  
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
+   subroutine retrieveSROSCFParams(mix_type, alpha_0, alpha_1, tol, max_iter)
+!  ===================================================================
+   implicit none
+
+   integer (kind=IntKind), intent(out) :: mix_type, max_iter
+
+   real (kind=RealKind), intent(out) :: alpha_0, alpha_1, tol
+
+   mix_type = SRO_mix_type
+   alpha_0 = SRO_mix_0
+   alpha_1 = SRO_mix_1
+   tol = SRO_tol
+   max_iter = SRO_max_iter
+
+   end subroutine retrieveSROSCFParams
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function isNextNearestSRO() result(nn)
 !  ===================================================================
    implicit none

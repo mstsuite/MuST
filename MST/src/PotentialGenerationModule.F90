@@ -240,6 +240,8 @@ contains
    use SystemModule, only : getUniformGridParam, getBravaisLattice
    use SystemModule, only : getSystemCenter, getAtomPosition
 !
+   use NeighborModule, only : getShellRadius
+!
    use Atom2ProcModule, only : getGlobalIndex
 !
    use AtomModule, only : getLocalNumSpecies
@@ -253,6 +255,8 @@ contains
    use Uniform3DGridModule, only : isUniform3DGridInitialized, createUniform3DGrid, printUniform3DGrid
    use Uniform3DGridModule, only : createProcessorMesh, getUniform3DGrid
    use Uniform3DGridModule, only : distributeUniformGrid, insertAtomsInGrid
+!
+   use ChargeScreeningModule, only : initChargeScreeningModule
 !
    implicit none
 !
@@ -703,7 +707,12 @@ contains
    Initialized = .true.
    EmptyTable = .true.
    isFirstExchg = .true.
-!
+
+!  Initialize the Charge Screening Module
+!  --------------------------------------------------
+   call initChargeScreeningModule(nlocal, num_atoms)
+!  --------------------------------------------------
+
    end subroutine initPotentialGeneration
 !  ===================================================================
 !
@@ -718,6 +727,8 @@ contains
 #endif
 !
    use ParallelFFTModule, only : endParallelFFT
+!
+   use ChargeScreeningModule, only : endChargeScreeningModule
 !
    implicit none
 !
@@ -788,7 +799,10 @@ contains
    Initialized = .false.
    EmptyTable = .true.
    isChargeSymmOn = .false.
-!
+!  -----------------------------------------
+   call endChargeScreeningModule()
+!  -----------------------------------------
+
    end subroutine endPotentialGeneration
 !  ===================================================================
 !
@@ -1922,6 +1936,8 @@ contains
    use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies
    use AtomModule, only : getLocalSpeciesContent
 !
+   use Atom2ProcModule, only : getGlobalIndex
+!
    use SystemModule, only : getAtomicNumber, getAlloyElementContent, &
                             getNumAlloyElements
 !
@@ -1939,10 +1955,14 @@ contains
 !
    use ChargeDensityModule, only : getSphChargeDensity, getSphMomentDensity
 !
+   use ChargeScreeningModule, only : calChargeCorrection, getSpeciesPotentialCorrection
+!
    use ExchCorrFunctionalModule, only : calSphExchangeCorrelation
    use ExchCorrFunctionalModule, only : getExchCorrPot
 !
    use PotentialTypeModule, only : isMuffintinASAPotential
+!
+   use ScfDataModule, only : isChargeCorr
 !
    implicit   none
 !
@@ -1961,7 +1981,7 @@ contains
    real (kind=RealKind) :: ztotss
    real (kind=RealKind) :: surfamt
    real (kind=RealKind) :: rmt
-   real (kind=RealKind) :: qsub, dq, dq_mt
+   real (kind=RealKind) :: qsub, dq, dq_mt, qtemp
    real (kind=RealKind) :: V2rmt
    real (kind=RealKind) :: sums(2)
    real (kind=RealKind) :: vsum, vmad_corr
@@ -1974,13 +1994,13 @@ contains
    real (kind=RealKind), pointer :: r_mesh(:)
    real (kind=RealKind), allocatable, target :: der_rho_ws(:), der_mom_ws(:)
 !
-!   real (kind=RealKind), allocatable :: vmt1(:)
+!  real (kind=RealKind), allocatable :: vmt1(:)
 !
    rhoint = getInterstitialElectronDensityOld()
    global_table_line => getGlobalTableLine()
    Q_Table => getGlobalOnSiteElectronTableOld()
    Qmt_Table => getGlobalMTSphereElectronTableOld()
-!
+
 !  ===================================================================
 !  vmt1_i = pi4*rho_0*Rmt_i^2 + 2*sum_j[madmat(j,i)*qsub_j], where:
 !
@@ -1994,7 +2014,7 @@ contains
 !         dq_i = Q_i - Qmt_i - rho_0*Omega0_i = dQ_i - Z_i + Q_i
 !         dq_int = sum_i[dq_i] = sum_i[Q_i - Z_i]
 !  ===================================================================
-!
+
    vsum = ZERO
    jmt_max = 0
    do na=1, LocalNumAtoms
@@ -2006,7 +2026,8 @@ contains
          qsub = ZERO
          do ia = 1, getNumAlloyElements(j)
             lig = global_table_line(j) + ia
-            qsub = qsub + getAlloyElementContent(j,ia)*(getAtomicNumber(j,ia)-Q_Table(lig))
+            qtemp = getAlloyElementContent(j,ia)*(getAtomicNumber(j,ia) - Q_Table(lig))
+            qsub = qsub + qtemp
          enddo
          qsub = qsub + rhoint*getAtomicVPVolume(j)
          vmt1(na) = vmt1(na) + madmat(j)*qsub
@@ -2017,7 +2038,13 @@ contains
    enddo
    allocate(der_rho_ws(jmt_max), der_mom_ws(jmt_max))
    der_rho_ws = ZERO; der_mom_ws = ZERO
-!
+
+!  Implementing Screening term to account for charge correlations in KKR-CPA
+   if (isChargeCorr()) then
+   !  -------------------------------------
+      call calChargeCorrection()
+   !  -------------------------------------
+   endif
 !  ===================================================================
 !  If vshift_switch_on is false, the unit cell summation of the Madelung
 !  shift is not zero. We will calculate the Madelung potential in
@@ -2168,9 +2195,15 @@ contains
          do is =1, n_spin_pola
             Vexc => getExchCorrPot(jmt,is)
             do ir = 1, jmt
-               Potential(na)%potr_sph(ir,is,ia) =                                  &
+               if (.not. isChargeCorr()) then
+                  Potential(na)%potr_sph(ir,is,ia) =                                  &
                      TWO*(-ztotss+PI8*(V1_r(ir)+(V2rmt-V2_r(ir))*r_mesh(ir))) + &
                      (Vexc(ir) - vmt1(na))*r_mesh(ir)
+               else if (isChargeCorr()) then
+                  Potential(na)%potr_sph(ir,is,ia) =                                  &
+                     TWO*(-ztotss+PI8*(V1_r(ir)+(V2rmt-V2_r(ir))*r_mesh(ir))) + &
+                     (Vexc(ir) - vmt1(na) + getSpeciesPotentialCorrection(na, ia))*r_mesh(ir)
+               endif
             enddo
             do ir = jmt+1, n_Rpts
                Potential(na)%potr_sph(ir,is,ia) = ZERO
