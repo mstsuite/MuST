@@ -6,14 +6,19 @@ program testCoreStates
    use DataServiceCenterModule, only : isDataStorageExisting, &
                                        getDataStorage, RealMark
 !
-   use SystemModule, only : getNumAtoms, getAtomPosition
+   use SystemModule, only : getNumAtoms, getAtomPosition, getAtomicNumber
 !
    use ScfDataModule, only : n_spin_pola, n_spin_cant
    use ScfDataModule, only : istop, EvBottom, isNonRelativisticCore
    use ScfDataModule, only : ngaussr, ngaussq
    use ScfDataModule, only : isFrozenCore
+   use ScfDataModule, only : isRelativisticValence, Symmetrize
 !
-   use AtomModule, only : getPhiLmax, getStepFuncLmax, getPotLmax
+   use AtomModule, only : getPhiLmax, getStepFuncLmax, getPotLmax, getKKRLmax
+!
+   use LatticeModule, only : initLattice, endLattice, getLatticeType
+!
+   use IBZRotationModule, only : initIBZRotation, endIBZRotation, computeRotationMatrix
 !
    use MathParamModule, only : ZERO, TEN2m6, ONE, CZERO, SQRTm1, TEN2m8, PI4, PI
 !
@@ -44,6 +49,8 @@ program testCoreStates
    use PotentialModule, only : initPotential, endPotential
    use PotentialModule, only : readPotential
 !
+   use PotentialTypeModule, only : isFullPotential
+!
    implicit   none
 !
    logical :: FrozenCoreFileExist = .false.
@@ -52,12 +59,13 @@ program testCoreStates
 !
    integer (kind=IntKind) :: iprint = 0
    integer (kind=IntKind) :: NumAtoms, LocalNumAtoms
-   integer (kind=IntKind) :: lmax_max, lmax_pot_max
+   integer (kind=IntKind) :: lmax_max, lmax_pot_max, lmax_kkr_max
    integer (kind=IntKind) :: id, ig
 !
    integer (kind=IntKind), allocatable :: atom_print_level(:)
    integer (kind=IntKind), allocatable :: lmax_pot(:), lmax_step(:)
    integer (kind=IntKind), allocatable :: GlobalIndex(:)
+   integer (kind=IntKind), allocatable :: AtomicNumber(:)
 !
    real (kind=RealKind), pointer :: bravais(:,:)
    real (kind=RealKind), allocatable :: AtomPosition(:,:)
@@ -81,18 +89,22 @@ program testCoreStates
    allocate(atom_print_level(1:LocalNumAtoms))
    allocate(lmax_step(LocalNumAtoms),lmax_pot(LocalNumAtoms))
    allocate(GlobalIndex(LocalNumAtoms), AtomPosition(3,NumAtoms))
+   allocate(AtomicNumber(NumAtoms))
 !
    do ig = 1, NumAtoms
       AtomPosition(1:3,ig)=getAtomPosition(ig)
+      AtomicNumber(ig) = getAtomicNumber(ig)
    enddo
 !
    lmax_max = 0
    lmax_pot_max = 0
+   lmax_kkr_max = 0
    do id = 1, LocalNumAtoms
       lmax_pot(id) = getPotLmax(id)
       lmax_step(id)  = getStepFuncLmax(id)
-      lmax_max = max(lmax_max,2*getPhiLmax(id),lmax_step(id))
+      lmax_max = max(lmax_max,2*getPhiLmax(id),2*lmax_pot(id),lmax_step(id))
       lmax_pot_max = max(lmax_pot_max,lmax_pot(id))
+      lmax_kkr_max = max(lmax_kkr_max,getKKRLmax(id))
       atom_print_level(id) = getStandardOutputLevel(id)
       GlobalIndex(id)=getGlobalIndex(id)
    enddo
@@ -126,7 +138,19 @@ program testCoreStates
    call initPotential(LocalNumAtoms,lmax_pot,lmax_step,               &
                       n_spin_pola,n_spin_cant,istop,atom_print_level)
 !  -------------------------------------------------------------------
-   call initCoreStates(LocalNumAtoms,EvBottom,n_spin_pola,         &
+!
+!  ===================================================================
+!  Initialize the the lattice system and crystal symmetry
+!  -------------------------------------------------------------------
+   call initLattice(bravais)
+!  -------------------------------------------------------------------
+   call initIBZRotation(isRelativisticValence(),getLatticeType(),     &
+                        lmax_kkr_max,Symmetrize)
+   call computeRotationMatrix(bravais,NumAtoms,AtomPosition,anum=AtomicNumber)
+!  -------------------------------------------------------------------
+!
+!  -------------------------------------------------------------------
+   call initCoreStates(LocalNumAtoms,EvBottom,n_spin_pola,            &
                        isNonRelativisticCore(),istop,1)
 !  ===================================================================
 !  read potential data
@@ -171,10 +195,12 @@ program testCoreStates
       endif
    enddo
 !
-   deallocate(GlobalIndex,AtomPosition)
+   deallocate(GlobalIndex,AtomPosition,AtomicNumber)
    deallocate(atom_print_level,lmax_step,lmax_pot)
 !
 !  -------------------------------------------------------------------
+   call endIBZRotation()
+   call endLattice()
    call endCoreStates()
    call endPotential()
    call endSystemSymmetry()

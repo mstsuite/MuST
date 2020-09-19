@@ -1,0 +1,8 @@
+It is found that running with directly setting "Default No. Rad Points ndivin  :: 2001" is difficult to converge. 
+I have to take the following steps to achieve the convergence:
+1. Set "Default No. Rad Points ndivin  :: 1201"
+2. Set "Default No. Rad Points ndivin  :: 1501"
+3. Set "Default No. Rad Points ndivin  :: 1801"
+4. Set "Default No. Rad Points ndivin  :: 1901"
+and finally
+5. Set "Default No. Rad Points ndivin  :: 2001"

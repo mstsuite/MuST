@@ -9,7 +9,9 @@ AdaptIntegrationModule.o \
 MatrixBlockInversionModule.o \
 BinvMatrix.o \
 WriteFunctionModule.o \
-DefaultParamModule.o
+DefaultParamModule.o \
+LatticeModule.o \
+IBZRotationModule.o
 
 BasicRoutines = \
 readPositionData.o \
@@ -46,7 +48,6 @@ SystemSymmetryModule.o \
 LdaCorrectionModule.o \
 RadialGridModule.o \
 PotentialModule.o \
-CoreStatesModule.o \
 StrConstModule.o \
 RSpaceStrConstModule.o \
 TriangleModule.o \
@@ -54,12 +55,15 @@ PolygonModule.o \
 SurfElementsModule.o \
 SpinRotationModule.o \
 SSSolverModule.o \
-SCPolesModule.o \
-Uniform3DGridModule.o \
-ParallelFFTModule.o \
-KreinModule.o \
 DiracSolverModule.o \
 RelScattererModule.o \
+RelSSSolverModule.o \
+SCPolesModule.o \
+SMatrixPolesModule.o \
+KreinModule.o \
+CoreStatesModule.o \
+Uniform3DGridModule.o \
+ParallelFFTModule.o \
 ConstrainLocalMomentModule.o \
 ExchCorrFunctionalModule.o \
 ValenceDensityModule.o \
@@ -73,13 +77,10 @@ MixingModule.o \
 TestPotentialModule.o \
 BookKeepingModule.o \
 ForceModule.o \
-RelSSSolverModule.o \
 
 #HDF5Module.o
 
 Modules_2 = \
-LatticeModule.o \
-IBZRotationModule.o \
 ClusterMatrixModule.o \
 MediumHostModule.o \
 SROModule.o \

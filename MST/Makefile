@@ -3,8 +3,8 @@
 #=====================================================================
 # SystemName is the filename found under ./arch
 #=====================================================================
-# SystemName = bolt_intel_O3
 SystemName = bolt_intel
+# SystemName = bolt_pgi
 
 #=====================================================================
 # Paths and internal libraries setup - This unlikely needs to be changed

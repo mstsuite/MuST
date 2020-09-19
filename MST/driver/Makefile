@@ -94,6 +94,7 @@ $(ODIR)/TestPotentialModule.o \
 $(ODIR)/TriangleModule.o \
 $(ODIR)/calNicholsonPoles.o \
 $(ODIR)/polyfermi.o \
+$(ODIR)/SMatrixPolesModule.o \
 $(ODIR)/VPI_main.o
 
 TEST_CASES = $(ODIR)/testStrConst \
@@ -136,6 +137,7 @@ TEST_CASES = $(ODIR)/testStrConst \
              $(ODIR)/assk \
              $(ODIR)/testCoreStates \
              $(ODIR)/findBoundStates \
+             $(ODIR)/testSMatrixPoles \
              $(ODIR)/testPolyFermi \
              $(ODIR)/testBandStructure \
              $(ODIR)/testExchCorr
@@ -330,6 +332,9 @@ $(ODIR)/testCoreStates: testCoreStates.o $(SRC_OBJS)
 
 $(ODIR)/findBoundStates: findBoundStates.o $(SRC_OBJS)
 	$(LD) -o $(ODIR)/findBoundStates findBoundStates.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
+
+$(ODIR)/testSMatrixPoles: testSMatrixPoles.o $(SRC_OBJS)
+	$(LD) -o $(ODIR)/testSMatrixPoles testSMatrixPoles.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/testPolyFermi: testPolyFermi.o $(SRC_OBJS)
 	$(LD) -o $(ODIR)/testPolyFermi testPolyFermi.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)

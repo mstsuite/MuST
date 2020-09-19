@@ -44,7 +44,8 @@ public :: initSSSolver,          &
           getRegSolutionDerivative, &
           getGreenFunctionDerivative, &
           getFreeElectronHighLDOS, &
-          getFreeElectronDOS
+          getFreeElectronDOS,    &
+          isInitialized
 !
 !tmat_global          convertTmatToGlobalFrame
 !
@@ -7873,5 +7874,19 @@ use MPPModule, only : MyPE, syncAllPEs
    enddo
 !  
    end subroutine calIntSphHankelSq1
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isInitialized() result(y)
+!  ===================================================================
+   implicit none
+!
+   logical :: y
+!
+   y = Initialized
+!
+   end function isInitialized
 !  ===================================================================
 end module SSSolverModule
