@@ -28,6 +28,8 @@ MST/: contains MST packages targeted to physics development and capabilities, e.
 
 Potentials/: contains the starting potential for selected elements.
 
+Tutorials/: contains hands-on exercises and training materials.
+
 
 ## Selected references on KKR Method/Multiple Scattering Theory
 * J. Korringa, _On the calculation of the energy of a Bloch wave in a metal_, Physica **13**, 392 (1947).

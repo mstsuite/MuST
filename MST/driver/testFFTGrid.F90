@@ -237,6 +237,7 @@ contains
    do i=1,LocalNumAtoms
       atom_print_level(i) = getStandardOutputLevel(i)
       LocalAtomPosi(1:3,i)=getLocalAtomPosition(i)
+      GlobalIndex(i)=getGlobalIndex(i)
    enddo
 !
 !  ===================================================================

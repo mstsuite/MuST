@@ -15,6 +15,7 @@ public :: initPotential,         &
           setTitle,              &
           getTitle,              &
           getPotential,          &
+          getPotentialRmeshSize, &
           getTruncatedPotential, &
           isPotComponentZero,    &
           getPotComponentFlag,   &
@@ -96,6 +97,7 @@ private
       integer (kind=IntKind) :: jmax_trunc
       integer (kind=IntKind) :: iend_trunc
       integer (kind=IntKind) :: NumSpecies
+      integer (kind=IntKind) :: rsize
       real (kind=RealKind), allocatable :: ztss(:)
       integer (kind=IntKind), pointer :: PotCompFlag(:)
       integer (kind=IntKind), pointer :: PotCompFlag_trunc(:)
@@ -380,6 +382,7 @@ contains
       allocate(Potential(id)%ztss(NumSpecies(id)))
       allocate(Potential(id)%isTruncDone(NumSpecies(id)))
       allocate(Potential(id)%PotCompFlag(1:jmax_pot))
+      Potential(id)%rsize = jend
       Potential(id)%NumSpecies = NumSpecies(id)
       Potential(id)%PotCompFlag(1:jmax_pot)=0
       Potential(id)%pot_l=>getDataStorage(id,"OldLDAPotential_l",    &
@@ -1110,6 +1113,21 @@ contains
    endif
 !
    end function getPoten_r
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getPotentialRmeshSize(id) result(nr)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: id
+   integer (kind=IntKind) :: nr
+!
+   nr = Potential(id)%rsize
+!
+   end function getPotentialRmeshSize
 !  ===================================================================
 !
 !  *******************************************************************

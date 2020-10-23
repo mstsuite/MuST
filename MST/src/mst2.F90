@@ -1173,6 +1173,49 @@ program mst2
 !  -------------------------------------------------------------------
 !
    allocate(LocalNumValenceElectrons(LocalNumAtoms))
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ===================================================================
+   if (isKKR() .or. isScreenKKR_LSMS() .or. isKKRCPA() .or. isKKRCPASRO()) then
+!     ================================================================
+!     initialize IBZ rotation matrix module
+!     ----------------------------------------------------------------
+      call initIBZRotation(isRelativisticValence(),getLatticeType(),  &
+                           lmax_kkr_max,Symmetrize)
+      call computeRotationMatrix(bravais,GlobalNumAtoms,AtomPosition,anum=AtomicNumber)
+!     ----------------------------------------------------------------
+      if( checkCrystalSymmetry(bravais,GlobalNumAtoms,AtomPosition,   &
+                               anum=AtomicNumber) ) then
+         if (node_print_level >= 0) then
+            write(6,'(/,a,/)')'The crystal system has the point group symmetry!'
+         endif
+      else
+         call ErrorHandler('main',                                    &
+                           'The crystal system does not have the point group symmetry')
+      endif
+      if (node_print_level >= 0) then
+!        -------------------------------------------------------------
+         call printIBZRotationMatrix(Rot3D_Only=.true.)
+!        -------------------------------------------------------------
+      endif
+!
+!     if ( Symmetrize<0 .or. Symmetrize==1 ) then
+!        NumRotations = getNumRotations()
+!        -------------------------------------------------------------
+!        call initSpecKInteg(lmax_kkr_max, NumRotations)
+!        -------------------------------------------------------------
+!     endif
+!
+!     ================================================================
+!     Llody Module
+!     ----------------------------------------------------------------
+      call initKrein(LocalNumAtoms, n_spin_cant, n_spin_pola, lmax_kkr, &
+                     getNumKs(), istop)
+!     ----------------------------------------------------------------
+   endif
+!  ===================================================================
 !
    if (isTestPotential()) then
 !     ----------------------------------------------------------------
@@ -1219,6 +1262,7 @@ program mst2
 !     ----------------------------------------------------------------
       call initCoreStates(LocalNumAtoms,ErBottom,n_spin_pola,         &
                           isNonRelativisticCore(),istop,node_print_level)
+!                         fp_semicore=isFullPotential())
 !     ----------------------------------------------------------------
 !
 !     ================================================================
@@ -1244,48 +1288,6 @@ program mst2
    endif
 !  -------------------------------------------------------------------
    call syncAllPEs()
-!  ===================================================================
-!
-!  *******************************************************************
-!
-!  ===================================================================
-   if (isKKR() .or. isScreenKKR_LSMS() .or. isKKRCPA() .or. isKKRCPASRO()) then
-!     ================================================================
-!     initialize IBZ rotation matrix module
-!     ----------------------------------------------------------------
-      call initIBZRotation(isRelativisticValence(),getLatticeType(),  &
-                           lmax_kkr_max,Symmetrize)
-      call computeRotationMatrix(bravais,GlobalNumAtoms,AtomPosition,anum=AtomicNumber)
-!     ----------------------------------------------------------------
-      if( checkCrystalSymmetry(bravais,GlobalNumAtoms,AtomPosition,   &
-                               anum=AtomicNumber) ) then
-         if (node_print_level >= 0) then
-            write(6,'(/,a,/)')'The crystal system has the point group symmetry!'
-         endif
-      else
-         call ErrorHandler('main',                                    &
-                           'The crystal system does not have the point group symmetry')
-      endif
-      if (node_print_level >= 0) then
-!        -------------------------------------------------------------
-         call printIBZRotationMatrix(Rot3D_Only=.true.)
-!        -------------------------------------------------------------
-      endif
-!
-!     if ( Symmetrize<0 .or. Symmetrize==1 ) then
-!        NumRotations = getNumRotations()
-!        -------------------------------------------------------------
-!        call initSpecKInteg(lmax_kkr_max, NumRotations)
-!        -------------------------------------------------------------
-!     endif
-!
-!     ================================================================
-!     Llody Module
-!     ----------------------------------------------------------------
-      call initKrein(LocalNumAtoms, n_spin_cant, n_spin_pola, lmax_kkr, &
-                     getNumKs(), istop)
-!     ----------------------------------------------------------------
-   endif
 !  ===================================================================
 !
 !  *******************************************************************

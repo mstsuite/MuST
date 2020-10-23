@@ -109,7 +109,6 @@ program testNeighbor
    integer (kind=IntKind), allocatable :: atom_print_level(:)
    integer (kind=IntKind), allocatable :: AtomicNumber(:)
    integer (kind=IntKind), allocatable :: LocalAtomicNumber(:)
-   integer (kind=IntKind), allocatable :: GlobalIndex(:)
    integer (kind=IntKind), allocatable :: fit_pot(:)
    integer (kind=IntKind), allocatable :: fit_rho(:)
    integer (kind=IntKind), allocatable :: lmax_pot(:)

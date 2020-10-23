@@ -327,6 +327,7 @@ contains
    use ScfDataModule, only : n_spin_pola
    use AtomModule, only : getLocalNumSpecies, getLocalSpeciesContent
    use CoreStatesModule, only : getDeepCoreDensity, getSemiCoreDensity
+   use CoreStatesModule, only : getCoreDensityRmeshSize
    use PotentialGenerationModule, only : getOldPotential => getPotential
    use InterpolationModule, only : FitInterp
    use IntegrationModule, only : calIntegration
@@ -345,6 +346,11 @@ contains
 !
    complex (kind=CmplxKind) :: cfact
    complex (kind=CmplxKind), pointer :: pot(:)
+!
+   if (jrc > getCoreDensityRmeshSize(id)) then
+      call ErrorHandler('calForceOnCoreStates','jrc > Core density size', &
+                        jrc, getCoreDensityRmeshSize(id))
+   endif
 !
    sqrt_r(0) = ZERO
    do ir=1,jrc
@@ -383,7 +389,8 @@ contains
             call newder(vr2(1:jrc),dv(1:jrc),sqrt_r(1:jrc),jrc)
 !           ---------------------------------------------------------
             do ir=1,jrc
-               rdv(ir)=(deepcore(ir)+semicore(ir))*dv(ir)
+               rdv(ir)=(deepcore(ir)+semicore(ir))*dv(ir) ! This needs to be checked/fixed in the 
+                                                          ! full-potential semi-core case
             enddo
 !           ---------------------------------------------------------
             call FitInterp(4,sqrt_r(1:4),rdv(1:4),ZERO,rdv(0),dummy)

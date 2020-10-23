@@ -280,7 +280,9 @@ contains
 !
    use CoreStatesModule, only : getDeepCoreEnergy, getSemiCoreEnergy
    use CoreStatesModule, only : getDeepCoreDensity, getSemiCoreDensity
+   use CoreStatesModule, only : getCoreDensityRmeshSize
    use CoreStatesModule, only : getDeepCoreKineticEnergy, getSemiCoreKineticEnergy
+   use CoreStatesModule, only : isFullPotentialSemiCore, getFPSemiCoreDensity
 !
    use LdaCorrectionModule, only : checkLdaCorrection, getEnergyCorrection
 !
@@ -307,7 +309,8 @@ contains
 !
    integer (kind=IntKind) :: jend, jend_max, jmax_max, lmax_max
    integer (kind=IntKind) :: jmax_pot, jmax_rho, kmax_pot, kmax_rho
-   integer (kind=IntKind) :: lmax_rho, lmax_pot
+   integer (kind=IntKind) :: lmax_rho, lmax_pot, jmax_core, lmax_core
+   integer (kind=IntKind) :: lmax_pcore, jmax_pcore, kmax_pcore
    integer (kind=IntKind) :: lmax_prod, jmax_prod, kmax_prod
    integer (kind=IntKind) :: is, ir, na, jl, lmax, ia, nr
 !
@@ -335,6 +338,7 @@ contains
    complex (kind=CmplxKind), pointer :: mom_tilda(:,:)
    complex (kind=CmplxKind), pointer :: rho_pseudo(:,:)
    complex (kind=CmplxKind), pointer :: mom_pseudo(:,:)
+   complex (kind=CmplxKind), pointer :: rho_fpsc(:,:)
 !
    complex (kind=CmplxKind), pointer :: rho_tmp(:,:)
    complex (kind=CmplxKind), pointer :: v_tmp(:,:)
@@ -395,6 +399,10 @@ contains
       endif
       Grid => getGrid(na)
       jend = Grid%jend
+      if (jend > getCoreDensityRmeshSize(na)) then
+         call ErrorHandler('computeFullTotalEnergy','jend > Core density size', &
+                           jend, getCoreDensityRmeshSize(na))
+      endif
       r_mesh => Grid%r_mesh(1:jend)
       lmax_rho = getRhoLmax(na)
       jmax_rho = (lmax_rho+1)*(lmax_rho+2)/2
@@ -457,7 +465,8 @@ contains
             endif
             v_eff => getOldPotential(na,ia,is)
             v_tmp = CZERO
-            v_tmp(1:jend,1) = v_eff(1:jend,1)
+!           v_tmp(1:jend,1) = v_eff(1:jend,1)
+            v_tmp = v_eff
             rho_sph => getDeepCoreDensity(na,ia,is)
             rho_tmp = CZERO
 !           rho_tmp(1:jend,1) = rho_sph(1:jend)*Y0inv
@@ -478,16 +487,37 @@ contains
                  getDeepCoreEnergy(na,ia,is)-fact1
             endif
 !
-            rho_sph => getSemiCoreDensity(na,ia,is)
-            rho_tmp = CZERO
-!           rho_tmp(1:jend,1) = rho_sph(1:jend)*Y0inv
-            do ir = 1, jend
-               rho_tmp(ir,1) = cmplx(rho_sph(ir)*Y0inv,ZERO,kind=CmplxKind)
-            enddo
-!           ----------------------------------------------------------
-            call computeProdExpan(jend,0,rho_tmp,0,v_tmp,0,prod)
-            fact1 = getVolumeIntegration( na, jend, r_mesh(1:jend), 1, 1, 0, prod, vint_mt)
-!           ----------------------------------------------------------
+            if (isFullPotentialSemiCore()) then
+               rho_fpsc => getFPSemiCoreDensity(na,ia,is,jmax_rho=jmax_core)
+               rho_tmp = CZERO
+               do jl = 1, jmax_core
+                  do ir = 1, jend
+                     rho_tmp(ir,jl) = rho_fpsc(ir,jl)
+                  enddo
+               enddo
+               lmax_core = lofj(jmax_core)
+               if (lmax_core > lmax_rho) then
+                  call ErrorHandler('computeFullTotalEnergy','lmax_core > lmax_rho',lmax_core,lmax_rho)
+               endif
+               lmax_pcore = lmax_core + lmax_pot
+               jmax_pcore = (lmax_pcore+1)*(lmax_pcore+2)/2
+               kmax_pcore = (lmax_pcore+1)**2
+!              -------------------------------------------------------
+               call computeProdExpan(jend,lmax_core,rho_tmp,lmax_pot,v_tmp,lmax_pcore,prod)
+               fact1 = getVolumeIntegration(na, jend, r_mesh(1:jend), kmax_pcore, jmax_pcore, 0, prod, vint_mt)
+!              -------------------------------------------------------
+            else
+               rho_sph => getSemiCoreDensity(na,ia,is)
+               rho_tmp = CZERO
+!              rho_tmp(1:jend,1) = rho_sph(1:jend)*Y0inv
+               do ir = 1, jend
+                  rho_tmp(ir,1) = cmplx(rho_sph(ir)*Y0inv,ZERO,kind=CmplxKind)
+               enddo
+!              -------------------------------------------------------
+               call computeProdExpan(jend,0,rho_tmp,0,v_tmp,0,prod)
+               fact1 = getVolumeIntegration( na, jend, r_mesh(1:jend), 1, 1, 0, prod, vint_mt)
+!              -------------------------------------------------------
+            endif
             if (Print_Level(na) >= 0) then
                write(6,'(a,3f18.8)')'Semi core E, int[rho*v] =',      &
                  getSemiCoreEnergy(na,ia,is), fact1, vint_mt
@@ -496,7 +526,6 @@ contains
                  getSemiCoreEnergy(na,ia,is)-vint_mt
             endif
 !
-            v_tmp = v_eff
             if ( n_spin_pola==2 ) then
                if (n_spin_cant == 1) then
                   mom_val => mom_val_cant(:,:,1)
@@ -556,19 +585,41 @@ contains
 !           ke = ke + getSemiCoreKineticEnergy(na,ia,is)
 !           ==========================================================
             v_tmp = CZERO
-            v_tmp(1:jend,1) = v_eff(1:jend,1)
-            rho_sph => getSemiCoreDensity(na,ia,is)
-            rho_tmp = CZERO
-!           rho_tmp(1:jend,1) = rho_sph(1:jend)*Y0inv
-            do ir = 1, jend
-               rho_tmp(ir,1) = cmplx(rho_sph(ir)*Y0inv,ZERO,kind=CmplxKind)
-            enddo
-!           ----------------------------------------------------------
-            call computeProdExpan(jend,0,rho_tmp,0,v_tmp,0,prod)
-            fact1 = getVolumeIntegration( na, jend, r_mesh(1:jend), 1, 1, 0, prod, vint_mt)
+            v_tmp = v_eff
+            if (isFullPotentialSemiCore()) then
+               rho_fpsc => getFPSemiCoreDensity(na,ia,is,jmax_rho=jmax_core)
+               rho_tmp = CZERO
+               do jl = 1, jmax_core
+                  do ir = 1, jend
+                     rho_tmp(ir,jl) = rho_fpsc(ir,jl)
+                  enddo
+               enddo
+               lmax_core = lofj(jmax_core)
+               if (lmax_core > lmax_rho) then
+                  call ErrorHandler('computeFullTotalEnergy','lmax_core > lmax_rho',lmax_core,lmax_rho)
+               endif
+               lmax_pcore = lmax_core + lmax_pot
+               jmax_pcore = (lmax_pcore+1)*(lmax_pcore+2)/2
+               kmax_pcore = (lmax_pcore+1)**2
+!              -------------------------------------------------------
+               call computeProdExpan(jend,lmax_core,rho_tmp,lmax_pot,v_tmp,lmax_pcore,prod)
+               fact1 = getVolumeIntegration(na, jend, r_mesh(1:jend), kmax_pcore, jmax_pcore, 0, prod, vint_mt)
+!              -------------------------------------------------------
+            else
+!              v_tmp(1:jend,1) = v_eff(1:jend,1)
+               rho_sph => getSemiCoreDensity(na,ia,is)
+               rho_tmp = CZERO
+!              rho_tmp(1:jend,1) = rho_sph(1:jend)*Y0inv
+               do ir = 1, jend
+                  rho_tmp(ir,1) = cmplx(rho_sph(ir)*Y0inv,ZERO,kind=CmplxKind)
+               enddo
+!              -------------------------------------------------------
+               call computeProdExpan(jend,0,rho_tmp,0,v_tmp,0,prod)
+               fact1 = getVolumeIntegration( na, jend, r_mesh(1:jend), 1, 1, 0, prod, vint_mt)
+!              -------------------------------------------------------
+            endif
             ke = ke + (getSemiCoreEnergy(na,ia,is)-fact1)
 !           ==========================================================
-!
             ke = ke + getDeepCoreKineticEnergy(na,ia,is)
 !
             kine_term = kine_term + ke*content

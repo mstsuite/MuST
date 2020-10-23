@@ -1,6 +1,8 @@
 subroutine startProcess(ss_mode)
    use KindParamModule, only : IntKind, RealKind, CmplxKind
 !
+   use MathParamModule, only : TEN2m6, ONE
+!
    use TimerModule, only : initTimer
 !
    use ErrorHandlerModule, only : ErrorHandler, WarningHandler
@@ -30,29 +32,35 @@ subroutine startProcess(ss_mode)
    use SystemModule, only : initSystem, printSystem, getNumAtoms, getLmaxKKR
    use SystemModule, only : getBravaisLattice, getAtomPosition, getAtomicNumber
 !
-   use SystemVolumeModule, only : initSystemVolume
+   use SystemVolumeModule, only : initSystemVolume, setSystemVolumeMT,  &
+                                  updateSystemVolume
 !
    use ProcMappingModule, only : initProcMapping, createParallelization
 !
-   use Atom2ProcModule, only : initAtom2Proc
+   use Atom2ProcModule, only : initAtom2Proc, getLocalNumAtoms
 !
-   use AtomModule, only : initAtom, printAtom
+   use AtomModule, only : initAtom, printAtom, getMuffinTinRadius, setMuffinTinRadius
+   use AtomModule, only : getAtomCoreRad, setAtomCoreRad
 !
    use ContourModule, only : initContour, getNumEs
 !
    use BZoneModule, only : initBZone, getNumKs
 !
+   use PolyhedraModule, only : getInscrSphRadius
+!
    implicit none
+!
+   logical :: isRmtUpdated
 !
    character (len=8)  :: exec_date
    character (len=10) :: exec_time
 !
    integer (kind=IntKind), intent(in), optional :: ss_mode
    integer (kind=IntKind) :: def_id, info_id
-   integer (kind=IntKind) :: NumAtoms, ne, nk
+   integer (kind=IntKind) :: NumAtoms, ne, nk, i, LocalNumAtoms
    integer (kind=IntKind), pointer :: AtomicNumber(:)
 !
-   real (kind=RealKind) :: bravais(3,3)
+   real (kind=RealKind) :: bravais(3,3), rmt, rinsc
    real (kind=RealKind), pointer :: AtomPosition(:,:)
 !
 !  -------------------------------------------------------------------
@@ -108,6 +116,7 @@ subroutine startProcess(ss_mode)
 !        -------------------------------------------------------------
       else if (NumKMeshs > 0) then
 !        -------------------------------------------------------------
+print *, ' Kdiv = ',Kdiv(1:3,1)
          call initBZone(NumKMeshs,kGenScheme,Kdiv,Symmetrize,bravais, &
                         NumAtoms,AtomPosition,AtomicNumber,'none',-1)
 !        -------------------------------------------------------------
@@ -149,6 +158,54 @@ subroutine startProcess(ss_mode)
 !  -------------------------------------------------------------------
    call initAtom(info_id,'none',getStandardOutputLevel())
 !  -------------------------------------------------------------------
+!
+   LocalNumAtoms=getLocalNumAtoms()
+   isRmtUpdated = .false.
+   do i = 1,LocalNumAtoms
+      rmt   = getMuffinTinRadius(i)
+      rinsc = getInscrSphRadius(i)
+      if (rmt < ONE) then
+         if (abs(rmt) < TEN2m6) then
+!           ==========================================================
+!           The muffin-tin radius is set to be the inscribed radius.
+!           ==========================================================
+            rmt = rinsc
+         else
+!           ==========================================================
+!           In this case, rmt is treated as a scaling factor for rinsc
+!           The muffin-tin radius is set to be the inscribed radius
+!           multiplied by the scaling factor
+!           ==========================================================
+            rmt = rmt*rinsc
+         endif
+!        -------------------------------------------------------------
+         call setMuffinTinRadius(i,rmt)
+!        -------------------------------------------------------------
+         if (.not.isFullPotential()) then
+!           ==========================================================
+!           For Muffin-tin, ASA, or Muffin-tin-ASA calculations, since
+!           potential outside rmt is 0, core radius is set to rmt
+!           ----------------------------------------------------------
+            call setAtomCoreRad(i,rmt)
+!           ----------------------------------------------------------
+         endif
+      endif
+!
+      if ( abs(rinsc-rmt) > TEN2m6) then
+!        =============================================================
+!        The muffin-tin radius is set to be other than the inscribed radius.
+!        -------------------------------------------------------------
+         call setSystemVolumeMT(i,rmt)
+!        -------------------------------------------------------------
+         isRmtUpdated = .true.
+      endif
+   enddo
+   if ( isRmtUpdated ) then
+!     ----------------------------------------------------------------
+      call updateSystemVolume()
+!     ----------------------------------------------------------------
+   endif
+!
    if (getStandardOutputLevel() >= 0) then
 !     ----------------------------------------------------------------
       call printPotentialType()

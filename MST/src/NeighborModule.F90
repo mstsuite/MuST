@@ -416,16 +416,24 @@ contains
    allocate(nat(nshells))
    nat=0
    do j=1,nshells
-   do i=1, n
-    if(Neighbor(id)%ShellIndex(i) == j) then
-      write(6,'(x,i3,5x,i2,4x,i5,5x,i5,4x,i5,3x,i4,x,3f10.5)')     &
-            Neighbor(id)%Z(i), Neighbor(id)%Lmax(i),               &
-            Neighbor(id)%ProcIndex(i), Neighbor(id)%LocalIndex(i), &
-            Neighbor(id)%GlobalIndex(i),Neighbor(id)%ShellIndex(i),&
-            Neighbor(id)%Position(1:3,i)
-      nat(j)=nat(j)+1
-    endif
-   enddo
+      do i=1, n
+         if (Neighbor(id)%ShellIndex(i) == j) then
+            if (Neighbor(id)%Z(i) > 1000) then
+               write(6,'(2x,a3,4x,i2,4x,i5,5x,i5,4x,i5,3x,i4,x,3f10.5)')    &
+                     'CPA', Neighbor(id)%Lmax(i),                           &
+                     Neighbor(id)%ProcIndex(i), Neighbor(id)%LocalIndex(i), &
+                     Neighbor(id)%GlobalIndex(i),Neighbor(id)%ShellIndex(i),&
+                     Neighbor(id)%Position(1:3,i)
+            else
+               write(6,'(x,i3,5x,i2,4x,i5,5x,i5,4x,i5,3x,i4,x,3f10.5)')     &
+                     Neighbor(id)%Z(i), Neighbor(id)%Lmax(i),               &
+                     Neighbor(id)%ProcIndex(i), Neighbor(id)%LocalIndex(i), &
+                     Neighbor(id)%GlobalIndex(i),Neighbor(id)%ShellIndex(i),&
+                     Neighbor(id)%Position(1:3,i)
+            endif
+            nat(j)=nat(j)+1
+         endif
+      enddo
    enddo
    write(6,'(a)')   &
 ' ============================================================================'

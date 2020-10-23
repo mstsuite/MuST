@@ -2052,17 +2052,17 @@ contains
       write(6,'(''Moment    Mixing Parameter: '',f8.5)')MixParam(i)%alpha_mom
       write(6,'(''Evec      Mixing Algorithm: '',f8.5)')MixParam(i)%alpha_evec
       write(6,'(''Number of Shells in LIZ: '',i4)')LizLmax(i)%NumShells
-      write(6,'(''Lmax for each LIZ shell: '',10i4)') &
+      write(6,'(''Lmax for each LIZ shell: '',10i4)')                 &
             LizLmax(i)%lmax_shell(1:LizLmax(i)%NumShells)
-      write(6,'(''Number of r-mesh less or equal than Rmt: '',i5)')   &
-            GridData(i)%ndivin
-      write(6,'(''Number of r-mesh greater than Rmt      : '',i5)')   &
-            GridData(i)%ndivout
-      write(6,'(''Ratio of r-mesh steps, hin and hout    : '',i5)')   &
-            GridData(i)%nmult
+      if (GridData(i)%ndivin > 0) then
+         write(6,'(''Number of r-mesh less or equal than Rmt: '',i5)') GridData(i)%ndivin
+      endif
+      if (GridData(i)%ndivout > 0) then
+         write(6,'(''Number of r-mesh greater than Rmt      : '',i5)') GridData(i)%ndivout
+      endif
+      write(6,'(''Ratio of r-mesh steps, hin and hout    : '',i5)') GridData(i)%nmult
       if (GridData(i)%hin > 0.000001d0) then
-         write(6,'(''exponential step of inside r-mesh   : '',f10.6)')&
-            GridData(i)%hin
+         write(6,'(''exponential step of inside r-mesh   : '',f10.6)') GridData(i)%hin
       endif
       if (AtomProperty(i)%Rmt > 0.000001d0) then
          write(6,'(''Desired Rmt         : '',f10.5)') AtomProperty(i)%Rmt
