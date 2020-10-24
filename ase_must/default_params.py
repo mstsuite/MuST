@@ -113,6 +113,8 @@ defaults = {
     "rcut_screen": "Default Rcut-Screen",
     "local_sic": "Local SIC",
     "mix_param": "Default Mixing Parameter",
+    "ef_mix_param": "Mixing Parameter for Finding Ef",
+    "ef_mixing_switch": "Mixing Switch for Finding Ef",
     "frozen_core_calc": "Frozen-Core Calculation",
     "frozen_core_file": "Frozen-Core File Name",
     "em_iter": "Maximum Effective Medium Iterations",
@@ -127,5 +129,6 @@ defaults = {
     "radial_grid_step": "Default Radial Grid Exponential Step",
     "uniform_grid_origin": "Uniform Grid Origin",
     "core_norm_range": "Core States Normalization Range",
-    "renorm_gf": "Renormalize Green function"
+    "renorm_gf": "Renormalize Green function",
+    "fp_semi_core": "Full-potential Semi-core"
 }
