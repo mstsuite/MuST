@@ -5,8 +5,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #ifndef NoXDR_format
-#include <rpc/types.h>
-#include <rpc/xdr.h>
+#include <types.h>
+#include <xdr.h>
 #endif
 
 struct FileListStruct {
