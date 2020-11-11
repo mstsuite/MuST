@@ -1,4 +1,4 @@
-VPATH = $(TOP_DIR)/util
+VPATH = $(ODIR)/../util
 
 .SUFFIXES:	.o .f .c .f90 .F90
 
@@ -49,7 +49,8 @@ UTILITIES = $(ODIR)/measureVoronoi \
             $(ODIR)/genap \
             $(ODIR)/setEvec \
             $(ODIR)/cart2direct \
-            $(ODIR)/bireft
+            $(ODIR)/bireft \
+            $(ODIR)/poscar2mst
 
 UTILITIES_O = $(ODIR)/measureVoronoi.o \
               $(ODIR)/charge.o \
@@ -64,7 +65,8 @@ UTILITIES_O = $(ODIR)/measureVoronoi.o \
               $(ODIR)/genap.o \
               $(ODIR)/setEvec.o \
               $(ODIR)/cart2direct.o \
-              $(ODIR)/bireft.o
+              $(ODIR)/bireft.o \
+              $(ODIR)/poscar2mst.o
 
 SRC_OBJS = $(ODIR)/PublicTypeDefinitionsModule.o \
            $(ODIR)/PublicParamDefinitionsModule.o $(ODIR)/DefaultParamModule.o \
@@ -133,8 +135,11 @@ $(ODIR)/measureVoronoi: measureVoronoi.o $(ODIR)/readInputs.o $(ODIR)/PolyhedraM
 	$(LD) -o $(ODIR)/measureVoronoi measureVoronoi.o $(ODIR)/readInputs.o \
 $(SRC_OBJS) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
-$(ODIR)/readInputs.o: $(TOP_DIR)/driver/readInputs.F90
+$(ODIR)/readInputs.o: ../driver/readInputs.F90
 	$(FC) $(FFLAGS) $<
 
 $(ODIR)/cart2direct: cart2direct.o $(MSTLIB)
 	$(LD) -o $(ODIR)/cart2direct $(ODIR)/cart2direct.o $(MSTLIB) $(ADDLIBS)
+
+$(ODIR)/poscar2mst: poscar2mst.o $(MSTLIB)
+	$(LD) -o $(ODIR)/poscar2mst $(ODIR)/poscar2mst.o $(MSTLIB) $(ADDLIBS)
