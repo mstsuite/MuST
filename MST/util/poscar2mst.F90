@@ -81,8 +81,8 @@ program poscar2mst
             write(6,'(6x,3d24.16)')bra(1:3,j)*fac
             if (j == 3) then
                write(6,'(a)')' '
-               write(6,'(a)')'DirectCoordinates'
-               call invm3(bra,brainv,status)
+               write(6,'(a)')'CartCoordinates'
+ !             call invm3(bra,brainv,status)
             endif
          endif
       else if (j == 4) then
@@ -151,9 +151,10 @@ program poscar2mst
          i = i + 1
          read(text,*) b0(1:3)
          if (cart) then
-            b1(1:3) = brainv(1:3,1)*b0(1)+brainv(1:3,2)*b0(2)+brainv(1:3,3)*b0(3)
-         else
             b1 = b0
+         else
+!           b1(1:3) = brainv(1:3,1)*b0(1)+brainv(1:3,2)*b0(2)+brainv(1:3,3)*b0(3)
+            b1(1:3) = bra(1:3,1)*b0(1)+bra(1:3,2)*b0(2)+bra(1:3,3)*b0(3)
          endif
          write(6,'(2x,a,2x,3d24.16)')atom_name(n),b1(1:3)*fac
 !        b0(1:3) = bra(1:3,1)*b1(1)+bra(1:3,2)*b1(2)+bra(1:3,3)*b1(3)
