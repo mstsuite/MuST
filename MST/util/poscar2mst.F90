@@ -3,6 +3,8 @@ program poscar2mst
    use KindParamModule, only : IntKind, RealKind
    use Matrix3dModule, only : invm3
    use StringModule, only : initString, endString, getNumTokens, setString
+   use PhysParamModule, only : Angstrom2Bohr
+   use MathParamModule, only : ONE, TEN2m6
    implicit none
 !
    character (len=80) :: text, tmp
@@ -10,7 +12,7 @@ program poscar2mst
 ! 
    logical :: cart = .false.
 !
-   real (kind=RealKind) :: b0(3), b1(3), fac
+   real (kind=RealKind) :: b0(3), b1(3), fac, a0
    real (kind=RealKind) :: bra(3,3), brainv(3,3)
 !
    integer (kind=IntKind) :: i, j, k, n, m, status
@@ -42,8 +44,17 @@ program poscar2mst
       end function nocaseCompare
    end interface
 !
+   interface
+      function trim_string(s1,c) result(s2)
+         character (len=*), intent(in) :: s1
+         character (len=len(s1)) :: s2
+         character (len=1), optional, intent(in) :: c
+      end function trim_string
+   end interface
+!
    call initString(80)
 !
+   a0 = ONE
    tot_num_atoms = 0
    j = 0
    do 
@@ -57,6 +68,7 @@ program poscar2mst
             cycle
          endif
       endif
+      text = trim_string(tmp,'#')
       if (j <= 3) then
          if (j == 0) then
             if (isNumber(text)) then
@@ -64,21 +76,33 @@ program poscar2mst
                if (status /= 0) then
                   write(6,'(a)')text
                   stop 'Error'
+               else if (fac < TEN2m6) then
+                  write(6,'(a,d15.8)')'# WARNING: the scaling factor < 1.0^-6. Check the results!'
+                  fac = ONE
                endif
                write(6,'(a)')'#****************************************************'
                write(6,'(a)')'# Insert the scaling factor in the following line:  *'
                write(6,'(a)')'#     The length will be in atomic units            *'
                write(6,'(a)')'#****************************************************'
-               write(6,'(1d12.6)')1.88973d0
-               write(6,'(a)')' '
-               write(6,'(a)')'# Bravais Lattice..........'
             else
                write(6,'(a,a)')'# ',trim(text)
                cycle
             endif
          else
             read(text,*)bra(1:3,j)
-            write(6,'(6x,3d24.16)')bra(1:3,j)*fac
+            if (j == 1) then
+               if (abs(fac*bra(1,1)) > ONE) then
+                  a0 = abs(bra(1,1))
+               else if (abs(fac*bra(2,1)) > ONE) then
+                  a0 = abs(bra(2,1))
+               else if (abs(fac*bra(3,1)) > ONE) then
+                  a0 = abs(bra(3,1))
+               endif
+               write(6,'(1d15.8)')a0*fac*Angstrom2Bohr
+               write(6,'(a)')' '
+               write(6,'(a)')'# Bravais Lattice..........'
+            endif
+            write(6,'(6x,3d24.16)')bra(1:3,j)/a0
             if (j == 3) then
                write(6,'(a)')' '
                write(6,'(a)')'CartCoordinates'
@@ -156,7 +180,7 @@ program poscar2mst
 !           b1(1:3) = brainv(1:3,1)*b0(1)+brainv(1:3,2)*b0(2)+brainv(1:3,3)*b0(3)
             b1(1:3) = bra(1:3,1)*b0(1)+bra(1:3,2)*b0(2)+bra(1:3,3)*b0(3)
          endif
-         write(6,'(2x,a,2x,3d24.16)')atom_name(n),b1(1:3)*fac
+         write(6,'(2x,a,2x,3d24.16)')atom_name(n),b1(1:3)/a0
 !        b0(1:3) = bra(1:3,1)*b1(1)+bra(1:3,2)*b1(2)+bra(1:3,3)*b1(3)
 !        write(6,'(a,2x,3d24.16)')'check: ',b0(1:3)*fac
          if (i == num_atoms(n)) then
@@ -168,6 +192,8 @@ program poscar2mst
       endif
       j = j + 1
    enddo
+!
+   call endString()
 !
    stop 'Ok'
 end program poscar2mst
