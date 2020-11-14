@@ -8,22 +8,21 @@ function trim_string(s1,c) result(s2)
 !
    n = len(trim(s1))
 !
+   m = n
+   LOOP_i : do i = n, 1, -1
+      if (iachar(s1(i:i)) > 32 .and. iachar(s1(i:i)) < 129) then
+         m = i
+         exit LOOP_i
+      endif
+   enddo LOOP_i
+!
    if (present(c)) then
-      m = n
-      LOOP_j : do i = 1, n
+      LOOP_j : do i = 1, m
          if (s1(i:i) == c) then
             m = i-1
             exit LOOP_j
          endif
       enddo LOOP_j
-   else
-      m = 0
-      LOOP_i : do i = n, 1, -1
-         if (iachar(s1(i:i)) > 32) then
-            m = i
-            exit LOOP_i
-         endif
-      enddo LOOP_i
    endif
 !
    if (m == 0) then
