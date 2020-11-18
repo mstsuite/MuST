@@ -5,6 +5,7 @@
 #=====================================================================
 SystemName = bolt_intel
 # SystemName = bolt_pgi
+# SystemName = bolt_pgi_mpich
 
 #=====================================================================
 # Paths and internal libraries setup - This unlikely needs to be changed
@@ -13,16 +14,16 @@ export TOP_DIR = $(shell pwd)
 OODIR=$(TOP_DIR)/bin
 
 ifndef EXTERN_LIB_PATH
-EXTERN_LIB_PATH=$(TOP_DIR)/../external
+   EXTERN_LIB_PATH=$(TOP_DIR)/../external
 endif
 
 ifneq (,$(wildcard ./architecture.h))
-MST = 1
-include architecture.h
-ARCH_FILE = $(TOP_DIR)/architecture.h
+   MST = 1
+   include architecture.h
+   ARCH_FILE = $(TOP_DIR)/architecture.h
 else
-include ./arch/$(SystemName)
-ARCH_FILE = $(TOP_DIR)/arch/$(SystemName)
+   include ./arch/$(SystemName)
+   ARCH_FILE = $(TOP_DIR)/arch/$(SystemName)
 endif
 
 #=====================================================================
@@ -30,17 +31,26 @@ endif
 #=====================================================================
 
 ifdef SUFFIX
-ifeq "$(SUFFIX)" "."
-ODIR = $(OODIR)
+   ifeq "$(SUFFIX)" "."
+      ODIR = $(OODIR)
+   else
+      ODIR = $(OODIR)/$(SUFFIX)
+   endif
 else
-ODIR = $(OODIR)/$(SUFFIX)
-endif
-else
-ODIR = $(OODIR)
+   ifdef suffix
+      SUFFIX = $(suffix)
+      ifeq "$(suffix)" "."
+         ODIR = $(OODIR)
+      else
+         ODIR = $(OODIR)/$(suffix)
+      endif
+   else
+      ODIR = $(OODIR)
+   endif
 endif
 
 ifndef EXEC_NAME
-EXEC_NAME = mst2
+   EXEC_NAME = mst2
 endif
 
 ADD_LIBS += $(LIBS)
@@ -55,72 +65,72 @@ ACCLIB = $(ODIR)/libMatAcc.a
 
 SuperLU=0
 ifeq "$(SuperLU)" "0"
-SLULIB =
-DSUPERLULIB =
+   SLULIB =
+   DSUPERLULIB =
 endif
  
 ifeq "$(Acceleration)" "1"
-ifndef ACCEL_PATH
-ERROR_CODE = error
-ERROR_MESSAGE = "ACCEL_PATH is undefined..."
-endif
-ifndef ACCEL
-ERROR_CODE = error
-ERROR_MESSAGE = "ACCEL is undefined..."
-endif
-ifndef ACCEL_CXX
-ERROR_CODE = error
-ERROR_MESSAGE = "ACCEL_CXX is undefined..."
-endif
-ACCEL_OPT = -I$(ACCEL_PATH)/include -I. -DLSMS2 -D$(ACCEL)
-ADD_LIBS += $(ACCLIB)
-FPPFLAGS += -DACCEL -DCUDA
+   ifndef ACCEL_PATH
+      ERROR_CODE = error
+      ERROR_MESSAGE = "ACCEL_PATH is undefined..."
+   endif
+   ifndef ACCEL
+      ERROR_CODE = error
+      ERROR_MESSAGE = "ACCEL is undefined..."
+   endif
+   ifndef ACCEL_CXX
+      ERROR_CODE = error
+      ERROR_MESSAGE = "ACCEL_CXX is undefined..."
+   endif
+   ACCEL_OPT = -I$(ACCEL_PATH)/include -I. -DLSMS2 -D$(ACCEL)
+   ADD_LIBS += $(ACCLIB)
+   FPPFLAGS += -DACCEL -DCUDA
 endif
 
 ifdef ARCHV_LSMS
-ARCHV = $(ARCHV_LSMS) $(ARCHV_OPT)
+   ARCHV = $(ARCHV_LSMS) $(ARCHV_OPT)
 endif
 
 ifndef ARCHV
-ARCHV = ar -r
+   ARCHV = ar -r
 endif
 
 ifndef PREPROC
-PREPROC = $(FC)
+   PREPROC = $(FC)
 endif
 
 ifndef XLC_I
-XLC_I = 0
+   XLC_I = 0
 endif
 
 ifndef LIBXC_PATH
-ADDITIONAL_TARGETS = libxc
-LIBXC_PATH = $(EXTERN_LIB_PATH)/libxc/LibXC/$(SUFFIX)
+   ADDITIONAL_TARGETS = libxc
+   LIBXC_PATH = $(EXTERN_LIB_PATH)/libxc/LibXC/$(SUFFIX)
 # ADD_LIBS  += -L$(LIBXC_PATH)/lib -lxcf90 -lxc
-ADD_LIBS  += $(LIBXC_PATH)/lib/libxcf90.a $(LIBXC_PATH)/lib/libxc.a
-FPPFLAGS += -DLIBXC5 -I$(LIBXC_PATH)/include
+   ADD_LIBS  += $(LIBXC_PATH)/lib/libxcf90.a $(LIBXC_PATH)/lib/libxc.a
+   FPPFLAGS += -DLIBXC5 -I$(LIBXC_PATH)/include
 endif
 
 ifndef Use_FFTW
-Use_FFTW = 1
+   Use_FFTW = 1
 endif
 
 ifndef FFTW_PATH
-ADDITIONAL_TARGETS += fftw
-FFTW_PATH = $(EXTERN_LIB_PATH)/fftw/FFTW/$(SUFFIX)
+   ADDITIONAL_TARGETS += fftw
+   FFTW_PATH = $(EXTERN_LIB_PATH)/fftw/FFTW/$(SUFFIX)
 endif
 FFTW_INC = $(FFTW_PATH)/include
 
 ifndef NotUse_P3DFFT
-ifndef P3DFFT_PATH
-ADDITIONAL_TARGETS += p3dfft
-P3DFFT_PATH = $(EXTERN_LIB_PATH)/p3dfft/P3DFFT/$(SUFFIX)
-endif
-FFT_FLAGS = -DFFTW -I$(FFTW_INC) -DP3DFFT -I$(P3DFFT_PATH)/include
-ADD_LIBS += -L$(P3DFFT_PATH)/lib -lp3dfft -L$(FFTW_PATH)/lib -lfftw3_mpi -lfftw3
+   ifndef P3DFFT_PATH
+      ADDITIONAL_TARGETS += p3dfft
+      P3DFFT_PATH = $(EXTERN_LIB_PATH)/p3dfft/P3DFFT/$(SUFFIX)
+   endif
+   FFT_FLAGS = -DFFTW -I$(FFTW_INC) -DP3DFFT -I$(P3DFFT_PATH)/include
+   ADD_LIBS += -L$(P3DFFT_PATH)/lib -lp3dfft -L$(FFTW_PATH)/lib -lfftw3_mpi -lfftw3
 else
-FFT_FLAGS = -DFFTW -I$(FFTW_INC)
-ADD_LIBS += -L$(FFTW_PATH)/lib -lfftw3_mpi -lfftw3
+   FFT_FLAGS = -DFFTW -I$(FFTW_INC)
+   ADD_LIBS += -L$(FFTW_PATH)/lib -lfftw3_mpi -lfftw3
 endif
 
 PREPROC_FFLAGS = $(FPPDEFS) $(FPPFLAGS) $(FFT_FLAGS)
@@ -132,16 +142,16 @@ F77FLAGS = $(FFLAGS)
 
 UNAME_S := $(shell uname -s)
 ifneq (,$(wildcard /usr/include/rpc/xdr.h))
-CFLAGS += -I/usr/include/rpc
+   CFLAGS += -I/usr/include/rpc
 else ifneq (,$(wildcard /usr/include/tirpc/rpc/xdr.h))
-CFLAGS += -I/usr/include/tirpc -I/usr/include/tirpc/rpc
-ADD_LIBS += -ltirpc
+   CFLAGS += -I/usr/include/tirpc -I/usr/include/tirpc/rpc
+   ADD_LIBS += -ltirpc
 else ifneq (,$(wildcard /usr/include/gssrpc/xdr.h))
-CFLAGS += -I/usr/include/gssrpc
-ADD_LIBS += -lgssrpc
+   CFLAGS += -I/usr/include/gssrpc
+   ADD_LIBS += -lgssrpc
 else ifneq ($(UNAME_S),Darwin)
-ERROR_CODE = error
-ERROR_MESSAGE = "In your system, /usr/include/rpc or /usr/include/tirpc is missing. Please install librpc or libtirpc."
+   ERROR_CODE = error
+   ERROR_MESSAGE = "In your system, /usr/include/rpc or /usr/include/tirpc is missing. Please install librpc or libtirpc."
 endif
 
 #=====================================================================
