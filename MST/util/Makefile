@@ -1,4 +1,4 @@
-VPATH = $(ODIR)/../util
+VPATH = $(TOP_DIR)/util
 
 .SUFFIXES:	.o .f .c .f90 .F90
 
