@@ -2840,7 +2840,9 @@ contains
 !  n = nr*Potential(id)%jmax*n_spin_pola
    n = jwsmax*Potential(id)%jmax*n_spin_pola*NumSpecies(id)
    allocate( r_pot_l(2*n) )
-   r_pot_l = transfer(Potential(id)%pot_l,r_pot_l)
+   r_pot_l = ZERO
+   n = Potential(id)%rsize*Potential(id)%jmax*n_spin_pola*NumSpecies(id)
+   r_pot_l = transfer(Potential(id)%pot_l,r_pot_l,2*n)
 !  -------------------------------------------------------------------
    call putpotg(id, na, NumSpecies(id),                               &
                 nspin, n_spin_pola, efermi, evec,                     &

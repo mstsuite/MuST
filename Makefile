@@ -27,9 +27,14 @@ ArchName = $(MAKECMDGOALS)
 MuST_PATH = $(shell pwd)
 
 ifndef SUFFIX
-SUFFIX = .
+   ifdef suffix
+      SUFFIX = $(suffix)
+      SUFFIX_d = $(suffix)
+   else
+      SUFFIX = .
+   endif
 else
-SUFFIX_d = $(SUFFIX)
+   SUFFIX_d = $(SUFFIX)
 endif
 
 %:
