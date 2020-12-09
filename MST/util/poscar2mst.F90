@@ -154,10 +154,15 @@ program poscar2mst
             atom_name(num_atom_types) = trim(text(k:))
          endif
       else if (j == 5) then
+         call setString(text)
          do n = 1, num_atom_types-1
             i = getTokenPosition(n,text)
             k = getTokenPosition(n+1,text)
-            read(text(i:k-1),*)num_atoms(n)
+            read(text(i:k-1),*,iostat=status)num_atoms(n)
+            if (status /= 0) then
+               write(6,'(a,2i3,2x,a)')'string range: ',i,k-1,text
+               stop 'Error!'
+            endif
          enddo
          read(text(k:),*)num_atoms(num_atom_types)
       else if (nocaseCompare(text(1:3),'Sel')) then
