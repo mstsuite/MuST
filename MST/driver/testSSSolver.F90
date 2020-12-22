@@ -292,7 +292,7 @@ program testSSSolver
 !  -------------------------------------------------------------------
 !   call initPolyhedra(NumAtoms,bravais,'main',0)
 !  -------------------------------------------------------------------
-   call setupRadGridAndCell(NumAtoms,lmax_max)
+   call setupRadGridAndCell(LocalNumAtoms,lmax_max)
 !  -------------------------------------------------------------------
    if (MyPE == 0) then
       if (getKeyValue(1,'Large sphere radius (a.u.)',Rb) > 0) then

@@ -254,7 +254,7 @@ program adaptiveSSK
 !  ===================================================================
 !  initialize radial grid
 !  -------------------------------------------------------------------
-   call setupRadGridAndCell(NumAtoms,lmax_max)
+   call setupRadGridAndCell(LocalNumAtoms,lmax_max)
 !  -------------------------------------------------------------------
 !
    if (MyPE == 0) then
