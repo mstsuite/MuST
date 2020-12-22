@@ -370,15 +370,17 @@ contains
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getResonanceStateEnergy(id,ia,is,ib) result(e)
+   function getResonanceStateEnergy(id,ia,is,ib,hw) result(e)
 !  ===================================================================
    implicit none
 !
    integer (kind=IntKind), intent(in) :: ib, is, id, ia
 !
+   real (kind=RealKind), optional :: hw ! Half width
    real (kind=RealKind) :: e
 !
    e = Pole(id)%ResPoles(ib,is,ia)
+   hw = Pole(id)%ResWidth(ib,is,ia)
 !
    end function getResonanceStateEnergy
 !  ===================================================================
@@ -806,7 +808,7 @@ contains
 !                 Pole(id)%ResPoles(nr,is,ia) = pe
 !                 Pole(id)%ResWidth(nr,is,ia) = aimag(sqrt(pv(ie)))**2
                   rpe(nr) = cmplx(pe,aimag(sqrt(pv(ie)))**2)
-                  rpdeg(nb) = 1
+                  rpdeg(nr) = 1
 !write(6,'(a,2d15.8,a,2d15.8)')'Pole = ',pv(ie)+e0,', kappa = ',sqrt(pv(ie)+e0)
 !                 ----------------------------------------------------
                   call zcopy(kmax_kkr*kmax_kkr,em,1,rmat(1,nr),1)
