@@ -1937,7 +1937,7 @@ contains
          enddo LOOP_j
       enddo
 !
-      if (iremov .gt. 0) then
+      if (iremov .gt. 0 .and. print_level >= 0) then
          write(iout,'(2x,''some of these mesh points are related by '',&
               &          ''lattice translation vectors''/1x,i6,        &
               &          '' of the mesh points removed.''/)')iremov
