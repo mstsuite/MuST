@@ -3810,9 +3810,19 @@ contains
       endif
 !
 !     ================================================================
+!     The following 3 lines of code are trying to fool gfortran 10.1.0,
+!     which is found problematic when compiling LOOP_j2: for some reason
+!     it sometimes skips the loop without executing it.
+!     ****************************************************************
+      if (invp <= ipdeq) then
+         write(6,'(a,2i5)')'start LOOP_j2: ',ipdeq, invp
+      endif
+!     ****************************************************************
+!
+!     ================================================================
 !     solve dirac eqs. now
 !     ================================================================
-      LOOP_j2 : do j=ipdeq+1,invp
+      LOOP_j2: do j=ipdeq+1,invp
 !        =============================================================
 !        5 points predictor
 !        =============================================================
@@ -3870,8 +3880,10 @@ contains
 !        =============================================================
 !        check number of nodes
 !        =============================================================
-         if( rg(j-1) /= ZERO .and. rg(j)/rg(j-1) <= ZERO ) then
-            nd=nd+1
+         if( rg(j-1) /= ZERO) then
+            if ( rg(j)/rg(j-1) <= ZERO ) then
+               nd=nd+1
+            endif
          endif
          if( nd .gt. nodes ) then
 !            =========================================================
