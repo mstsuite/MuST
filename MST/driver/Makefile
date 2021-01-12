@@ -138,6 +138,7 @@ TEST_CASES = $(ODIR)/testStrConst \
              $(ODIR)/testCoreStates \
              $(ODIR)/findBoundStates \
              $(ODIR)/testSMatrixPoles \
+             $(ODIR)/testResonanceStates \
              $(ODIR)/testPolyFermi \
              $(ODIR)/testBandStructure \
              $(ODIR)/testExchCorr
@@ -335,6 +336,9 @@ $(ODIR)/findBoundStates: findBoundStates.o $(SRC_OBJS)
 
 $(ODIR)/testSMatrixPoles: testSMatrixPoles.o $(SRC_OBJS)
 	$(LD) -o $(ODIR)/testSMatrixPoles testSMatrixPoles.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
+
+$(ODIR)/testResonanceStates: testResonanceStates.o $(SRC_OBJS)
+	$(LD) -o $(ODIR)/testResonanceStates testResonanceStates.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/testPolyFermi: testPolyFermi.o $(SRC_OBJS)
 	$(LD) -o $(ODIR)/testPolyFermi testPolyFermi.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)

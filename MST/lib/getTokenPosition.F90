@@ -32,7 +32,7 @@
 !
    p = 0
    m = n
-   if (k < 1 .or. n < 1 .or. k > n-2) then
+   if (k < 1 .or. n < 1 .or. k > n) then
       if (present(token_len)) then
          token_len = m
       endif

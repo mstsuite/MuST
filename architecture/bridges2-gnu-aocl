@@ -19,12 +19,12 @@ Acceleration = 0
 MATH_PATH   = /opt/packages/amd/aocl/2.1
 HDF5_PATH   = 
 ACCEL       = CUDA
-ACCEL_PATH  = /usr/local/cuda
+ACCEL_PATH  = 
 LIBXC_PATH  =
 FFTW_PATH   = $(MATH_PATH)/amd-fftw
 P3DFFT_PATH =
 LUA_PATH    =
-LIBS       += $(HOME)/scalapack/libscalapack.a $(MATH_PATH)/libs/libflame.a \
+LIBS       += /opt/packages/scalapack/2.1.0/libscalapack.a $(MATH_PATH)/libs/libflame.a \
 	      $(MATH_PATH)/libs/libamdlibm.a -no-pie -lpthread \
 	      $(MATH_PATH)/libs/libblis.a
 ADD_LIBS   += -lgfortran
@@ -54,13 +54,8 @@ FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK
 
 CFLAGS      = -O3
 CXXFLAGS    = -O3 -std=c++14
-# FFLAGS      = -O3
-# F77FLAGS    = -O3
-# the following option "-w -fallow-argument-mismatch" is needed for gcc.10.1.0
 FFLAGS      = -O3 -w -fallow-argument-mismatch
 F77FLAGS    = -O3 -w -fallow-argument-mismatch
-# FFLAGS      = -O3 -fcheck=all -w -fallow-argument-mismatch
-# F77FLAGS    = -O3 -fcheck=all -w -fallow-argument-mismatch
 OPT_OPENMP  = -fopenmp
 
 LD_FLAGS    =

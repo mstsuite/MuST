@@ -38,7 +38,8 @@
 !
    real (kind=RealKind) :: mom
 !
-   character (len=80) :: string_tmp, text, myunit
+   character (len=200) :: string_tmp
+   character (len=80) :: text, myunit
    character (len=8) :: snum
    character (len=30) :: ver
 !

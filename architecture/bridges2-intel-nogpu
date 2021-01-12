@@ -6,62 +6,49 @@ Acceleration = 0
 
 #=====================================================================
 # Library paths and elements, e.g.,
-#    HDF5_PATH   = /opt/packages/HDF5/hdf5-1.10.5/PGI
-#    LIBXC_PATH  = /opt/packages/LibXC/libxc-4.3.4/PGI
+#    HDF5_PATH   = /opt/packages/HDF5/hdf5-1.10.5
+#    LIBXC_PATH  = /opt/packages/LibXC/libxc-4.3.4/INTEL
 #    ACCEL_PATH  = /usr/local/cuda
-#    FFTW_PATH   = /usr/local/FFTW/fftw-3.3.8/PGI
-#    P3DFFT_PATH = /opt/packages/P3DFFT/p3dfft-2.7.9/PGI
-#    LUA_PATH    = /opt/packages/Lua/lua-5.3.5/PGI
+#    FFTW_PATH   = /usr/local/FFTW/fftw-3.3.8/INTEL
+#    P3DFFT_PATH = /opt/packages/P3DFFT/p3dfft-2.7.9/INTEL
+#    LUA_PATH    = /opt/packages/Lua/lua-5.3.5
 #  
 # If LUA_PATH, LIBXC_PATH, FFTW_PATH, and/or P3DFFT_PATH are empty, the
 # corresponding packages will be installed under $(EXTERN_LIB_PATH)
 #=====================================================================
-MATH_PATH   = /opt/packages/amd/aocl/2.1
 HDF5_PATH   = 
 ACCEL       = CUDA
-ACCEL_PATH  = /usr/local/cuda
+ACCEL_PATH  = 
 LIBXC_PATH  =
-FFTW_PATH   = $(MATH_PATH)/amd-fftw
+FFTW_PATH   =
 P3DFFT_PATH =
 LUA_PATH    =
-LIBS       += $(HOME)/scalapack/libscalapack.a $(MATH_PATH)/libs/libflame.a \
-	      $(MATH_PATH)/libs/libamdlibm.a -no-pie -lpthread \
-	      $(MATH_PATH)/libs/libblis.a
-ADD_LIBS   += -lgfortran
+LIBS       += -mkl=cluster -lifcore
 
 #=====================================================================
 # Compiler tools
 #=====================================================================
-CC          = mpicc
-CXX         = mpicxx
-F77         = mpif90
-FC          = mpif90
-MPICC       = mpicc
+CC          = mpiicc
+CXX         = mpiicpc
+F77         = mpiifort
+FC          = mpiifort
+MPICC       = mpiicc
 ACCEL_CXX   = nvcc -arch=sm_35
-ARCHV       = ar -r
+ARCHV       = xiar -r
 
 #=====================================================================
 # Preprocessor/Compiler/Linker flags, e.g.,
 #    FFLAGS = -I. -O3 -CB -CU -traceback -ftrapuv -fpe0 -ftz -fp-stack-check
 # Note: "FPPFLAGS = -DMPI" enables MPI parallel processing.
-# Unfortunately, rpc on b2t02 is not properly installed.
-#     Specifically, gssrpc_xdr_double is missing from libgssrpc.so
-#     I have to disable using XDR format.
 #=====================================================================
-FPPDEFS     = -cpp
+FPPDEFS     = -fpp
 CPPDEFS     = -cpp
 FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK
 
 CFLAGS      = -O3
 CXXFLAGS    = -O3 -std=c++14
-# FFLAGS      = -O3
-# F77FLAGS    = -O3
-# the following option "-w -fallow-argument-mismatch" is needed for gcc.10.1.0
-FFLAGS      = -O3 -w -fallow-argument-mismatch
-F77FLAGS    = -O3 -w -fallow-argument-mismatch
-# FFLAGS      = -O3 -fcheck=all -w -fallow-argument-mismatch
-# F77FLAGS    = -O3 -fcheck=all -w -fallow-argument-mismatch
-OPT_OPENMP  = -fopenmp
+FFLAGS      = -O3
+OPT_OPENMP  = -qopenmp
 
 LD_FLAGS    =
 LD          = $(FC) $(LD_FLAGS)
@@ -73,5 +60,5 @@ LD          = $(FC) $(LD_FLAGS)
 #=====================================================================
 HDF5_CONFIG_FLAGS   = --enable-fortran --enable-static-exec CC=$(CC) CXX=$(CXX) FC=$(FC)
 LIBXC_CONFIG_FLAGS  = CC=$(CC) CFLAGS="$(CFLAGS)" FC=$(FC) FFLAGS="$(FFLAGS)"
-P3DFFT_CONFIG_FLAGS = FC=$(FC) CC=$(CC) --enable-openmpi FCFLAGS="$(FFLAGS)"
-FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS)" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)"
+P3DFFT_CONFIG_FLAGS = --enable-intel FC=$(FC) CC=$(CC)
+FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS) -Qoption,cpp,--gnu_version=40805 -D_Float128=__float128" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)"
