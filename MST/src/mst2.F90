@@ -196,8 +196,7 @@ program mst2
 !
    use ChargeDistributionModule, only : initChargeDistribution,     &
                                         endChargeDistribution,      &
-                                        updateChargeDistribution,   &
-                                        getGlobalVPCellMomentTable
+                                        updateChargeDistribution
 !
    use PotentialGenerationModule, only : initPotentialGeneration,  &
                                          endPotentialGeneration,   &

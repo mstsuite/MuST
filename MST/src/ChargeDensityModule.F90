@@ -2167,6 +2167,7 @@ contains
                                 getSemiCoreDensityDerivative
    use CoreStatesModule, only : isFullPotentialSemiCore
    use CoreStatesModule, only : getFPSemiCoreDensity, getFPSemiCoreDensityDeriv
+   use CoreStatesModule, only : getCoreVPCharge, getCoreVPMoment
 !
    use Atom2ProcModule, only : getGlobalIndex
 !
@@ -2378,7 +2379,9 @@ contains
 !        do ir = jend+1,nr
 !           rho0(ir) = ZERO
 !        enddo
-         rho0(nr+1) = getValenceVPCharge(id,ia)
+!        rho0(nr+1) = getValenceVPCharge(id,ia) ! 1/18/21: This line is replaced by the
+                                                ! following line to add core charge
+         rho0(nr+1) = getValenceVPCharge(id,ia) + getCoreVPCharge(id,ia)
 !
          do ir = 1,nr
             p_CDL%rhoL_Total(ir,1,ia) = cmplx(rho0(ir)/Y0,ZERO,kind=CmplxKind)
@@ -2405,7 +2408,9 @@ contains
             mvec = getValenceVPMoment(id,ia)
             if ( n_spin_cant==1 ) then
                mom0(1:nr) = mom0(1:nr) + mom2_r(1:nr,1)
-               mom0(nr+1) = mvec(3)
+!              mom0(nr+1) = mvec(3) ! 1/18/21: This line is replaced by the
+                                    ! following line to add core moment
+               mom0(nr+1) = mvec(3) + getCoreVPMoment(id,ia)
             else
                do is = 1,3
                   mom0(1:nr) = mom0(1:nr) + evec(is)*mom2_r(1:nr,is)
@@ -2883,7 +2888,9 @@ contains
                write(6,'(a,2i5,f20.14)') "id, ia, Total Charge in VP = ", &
                                                  id, ia, q_tmp
             endif
-            rho0(nr+1) = q_tmp_mt
+!           rho0(nr+1) = q_tmp_mt ! 1/18/21: Replace this line by the following line
+                                  ! so that the data stores total charge in atomic cell
+            rho0(nr+1) = q_tmp
          enddo
       enddo
 !     ========================================
@@ -3465,6 +3472,8 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine updateTotalDensity(setValenceVPCharge, setValenceVPMomentSize)
 !  ===================================================================
+   use CoreStatesModule, only : getCoreVPCharge, getCoreVPMoment
+!
    implicit none
 !
    integer (kind=IntKind) :: id, ia, ir, nr, jl
@@ -3549,7 +3558,8 @@ contains
                new_SphRho(ir) = real(p_CDL%rhoL_Total(ir,1,ia),kind=RealKind)*Y0
                old_SphRho(ir) = new_SphRho(ir)
             enddo
-            call setValenceVPCharge(id,ia,new_SphRho(nr+1))
+!           call setValenceVPCharge(id,ia,new_SphRho(nr+1)) ! Modified on 1/18/21
+            call setValenceVPCharge(id,ia,new_SphRho(nr+1)-getCoreVPCharge(id,ia))
 !
             if (n_spin_pola == 2) then
                old_SphMom => p_CDL%momSph_TotalOld(1:nr+1,ia)
@@ -3558,7 +3568,8 @@ contains
                   new_SphMom(ir) = real(p_CDL%momL_Total(ir,1,ia),kind=RealKind)*Y0
                   old_SphMom(ir) = new_SphMom(ir)
                enddo
-               call setValenceVPMomentSize(id,ia,new_SphMom(nr+1))
+!              call setValenceVPMomentSize(id,ia,new_SphMom(nr+1)) ! Modified on 1/18/21
+               call setValenceVPMomentSize(id,ia,new_SphMom(nr+1)-getCoreVPMoment(id,ia))
             endif
          enddo
 !
