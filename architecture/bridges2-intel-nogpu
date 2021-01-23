@@ -45,9 +45,9 @@ FPPDEFS     = -fpp
 CPPDEFS     = -cpp
 FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK
 
-CFLAGS      = -O3
+CFLAGS      = -O3 -march=core-avx2
 CXXFLAGS    = -O3 -std=c++14
-FFLAGS      = -O3
+FFLAGS      = -O3 -march=core-avx2
 OPT_OPENMP  = -qopenmp
 
 LD_FLAGS    =
@@ -60,5 +60,5 @@ LD          = $(FC) $(LD_FLAGS)
 #=====================================================================
 HDF5_CONFIG_FLAGS   = --enable-fortran --enable-static-exec CC=$(CC) CXX=$(CXX) FC=$(FC)
 LIBXC_CONFIG_FLAGS  = CC=$(CC) CFLAGS="$(CFLAGS)" FC=$(FC) FFLAGS="$(FFLAGS)"
-P3DFFT_CONFIG_FLAGS = --enable-intel FC=$(FC) CC=$(CC)
+P3DFFT_CONFIG_FLAGS = --enable-intel FC=$(FC) CC=$(CC) FCFLAGS="$(FFLAGS)"
 FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS) -Qoption,cpp,--gnu_version=40805 -D_Float128=__float128" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)"
