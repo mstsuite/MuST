@@ -82,7 +82,8 @@ program mst2
    use ScfDataModule, only : isReadKmesh, getKmeshFileName
    use ScfDataModule, only : NumKMeshs, kGenScheme, Kdiv, Symmetrize
    use ScfDataModule, only : isScreenKKR, isKKRCPA, isKKRCPASRO, isLSMS, isScreenKKR_LSMS, &
-                             isKKR, isEmbeddedCluster, isSingleSite, setScfMethod
+                             isKKR, isEmbeddedCluster, isSingleSite, setScfMethod, &
+                             isConductivity
    use ScfDataModule, only : isExchangeParamNeeded
    use ScfDataModule, only : getPotentialTypeParam
    use ScfDataModule, only : isChargeMixing, isPotentialMixing
@@ -756,6 +757,9 @@ program mst2
      else if ( isSingleSite() ) then
         write(6,'(/,14x,a,/)')'::::  Single Site Electronic Structure Calculation ::::'
      endif
+     if ( isConductivity() ) then
+        write(6,'(/,14x,a,/)')'::::            Conductivity Calculation           ::::'
+     endif
    endif
 !
 !  ===================================================================
@@ -846,7 +850,8 @@ program mst2
       call setupLizNeighbor(atom_print_level)
 !   endif
 !  -------------------------------------------------------------------
-   if ( (isKKR() .or. isKKRCPA() .or. isKKRCPASRO()) .and. node_print_level >= 0) then
+   if ( (isKKR() .or. isKKRCPA() .or. isKKRCPASRO()) &
+          .and. node_print_level >= 0) then
 !     ----------------------------------------------------------------
       call printBZone(Klimit=100)
 !     ----------------------------------------------------------------
@@ -1864,7 +1869,7 @@ program mst2
    endif
 !
    if ( isExchangeParamNeeded() .and. (isKKR() .or. isScreenKKR_LSMS() &
-                                       .or. isKKRCPA() .or. isKKRCPASRO()) ) then
+          .or. isKKRCPA() .or. isKKRCPASRO()) ) then
       if ( isScreenKKR_LSMS() ) then
          call setScfMethod("ScreenKKR")
       endif
@@ -1934,7 +1939,7 @@ stop 'Under construction...'
       write(6,'(80(''-''))')
    endif
 !
-   if (isKKR() .or. isScreenKKR_LSMS() .or. isKKRCPA() .or. isKKRCPASRO()) then
+   if (isKKR() .or. isScreenKKR_LSMS() .or. isKKRCPA()  .or. isKKRCPASRO()) then
 !     ----------------------------------------------------------------
       call endBZone()
       call endIBZRotation()

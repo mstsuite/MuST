@@ -145,7 +145,10 @@ private
       complex (kind=CmplxKind), pointer :: green(:,:,:,:)      ! Stores the multiple scattering component of the Green fucntion, and
                                                                ! the single site scattering term may be included.
       complex (kind=CmplxKind), pointer :: der_green(:,:,:,:)  ! Stores the multiple scattering component of the Green fucntion derivative,
-   end type MSTStruct                                          ! and the single site scattering term may be included.
+                                                               ! and the single site scattering term may be included.
+      complex (kind=CmplxKind), pointer :: green_kg(:,:,:,:,:)
+      complex (kind=CmplxKind), pointer :: der_green_kg(:,:,:,:,:)
+   end type MSTStruct
 !
    type (MSTStruct), allocatable :: mst(:)
    complex (kind=CmplxKind), allocatable, target :: wspace(:), wspacep(:), gspace(:)
@@ -193,7 +196,8 @@ contains
    use GauntFactorsModule, only : initGauntFactors, endGauntFactors
    use GauntFactorsModule, only : getK3, getNumK3, getGauntFactor
 !
-   use ScfDataModule, only : isKKR, isScreenKKR, isLSMS, isKKRCPA, isKKRCPASRO, isEmbeddedCluster
+   use ScfDataModule, only : isKKR, isScreenKKR, isLSMS, isKKRCPA, & 
+                       isKKRCPASRO, isEmbeddedCluster
    use ScfDataModule, only : isChargeSymm
    use ScfDataModule, only : retrieveEffectiveMediumParams, retrieveSROParams
 !
@@ -478,8 +482,10 @@ contains
       NumSpecies = getLocalNumSpecies(i)
       allocate( mst(i)%dos(n_spin_cant*n_spin_cant,NumSpecies) )
       allocate( mst(i)%green(iend,kmax,n_spin_cant*n_spin_cant,NumSpecies) )
+      allocate( mst(i)%green_kg(iend,iend,kmax,n_spin_cant*n_spin_cant,NumSpecies))
       if (rad_deriv) then
          allocate( mst(i)%der_green(iend,kmax,n_spin_cant*n_spin_cant,NumSpecies) )
+         allocate( mst(i)%der_green_kg(iend,iend,kmax,n_spin_cant*n_spin_cant,NumSpecies) )
       endif
    enddo
    iend_max = getMaxNumRmesh()
@@ -711,7 +717,7 @@ contains
    subroutine computeMSTMatrix(is,e)
 !  ===================================================================
    use ScfDataModule, only : isLSMS, isScreenKKR, isKKRCPA,  &
-                isKKRCPASRO, isKKR, isEmbeddedCluster, isSROSCF
+         isKKRCPASRO, isKKR, isEmbeddedCluster, isSROSCF
 !
    use SSSolverModule, only : getScatteringMatrix
 !
@@ -836,14 +842,16 @@ contains
    complex (kind=CmplxKind), intent(in) :: e
 !
    integer (kind=IntKind) :: n, info, id, js1, js2, ns, kmaxk, kmaxp, kmaxg, irmax
-   integer (kind=IntKind) :: klg, kl1, kl2, klp1, klp2, ir, kl2c, m2, np, ia
+   integer (kind=IntKind) :: klg, kl1, kl2, klp1, klp2, ir, ir1, kl2c, m2, np, ia
    integer (kind=IntKind), pointer :: green_flags(:)
 !
    complex (kind=CmplxKind), pointer :: tfac(:,:), gfs(:,:)
    complex (kind=CmplxKind), pointer :: PhiLr_right(:,:,:), PhiLr_left(:,:,:), kau00(:,:,:)
    complex (kind=CmplxKind), pointer :: der_PhiLr_right(:,:,:), der_PhiLr_left(:,:,:)
    complex (kind=CmplxKind), pointer :: gf(:,:), pp(:,:), ppr(:,:), ppg(:,:,:)
+   complex (kind=CmplxKind), pointer :: gf_kg(:,:,:)
    complex (kind=CmplxKind), pointer :: dgf(:,:), dpp(:,:), dppr(:,:), dppg(:,:,:)
+   complex (kind=CmplxKind), pointer :: dgf_kg(:,:,:)
    complex (kind=CmplxKind), pointer :: pau00(:,:), OmegaHat(:,:), p_kau00(:,:)
    complex (kind=CmplxKind) :: cfac, kappa
 !
@@ -1006,9 +1014,17 @@ contains
                ns = ns + 1
                gf => mst(id)%green(:,:,ns,ia)
                gf = CZERO
+!              ------------------------------------------------------
+               gf_kg => mst(id)%green_kg(:,:,:,ns,ia)
+               gf_kg = CZERO
+!              ------------------------------------------------------
                if (rad_deriv) then
                   dgf => mst(id)%der_green(:,:,ns,ia)
                   dgf = CZERO
+!                 ---------------------------------------------------
+                  dgf_kg => mst(id)%der_green_kg(:,:,:,ns,ia)
+                  dgf_kg = CZERO
+!                 ---------------------------------------------------
                endif
                p_kau00 => kau00(:,:,ns)
 !              =======================================================
@@ -1070,11 +1086,17 @@ contains
                         do klg = 1, kmaxg
                            do ir = 1, mst(id)%iend
                               gf(ir,klg) =  gf(ir,klg) + ppg(ir,klg,klp2)*PhiLr_right(ir,klp2,kl2)
+!                             --------------------------------------------------------------------
+                              do ir1 = 1, mst(id)%iend
+                                 gf_kg(ir,ir1,klg) = gf_kg(ir,ir1,klg) + ppg(ir,klg,klp2)*PhiLr_right(ir1,klp2,kl2)
+                              enddo
+!                             --------------------------------------------------------------------
                            enddo
                            if (rad_deriv) then
                               do ir = 1, mst(id)%iend
                                  dgf(ir,klg) =  dgf(ir,klg) + dppg(ir,klg,klp2)*PhiLr_right(ir,klp2,kl2)  &
                                                             + ppg(ir,klg,klp2)*der_PhiLr_right(ir,klp2,kl2)
+                              
                               enddo
                            endif
                         enddo
