@@ -34,6 +34,7 @@ public :: initScfData,                 &
           isEmbeddedCluster,           &
           isKKRCPASRO,                 &
           isSROSCF,                    &
+          isConductivity,              &
           isScreenKKR_LSMS,            &
           isSingleSite,                &
           isFrozenCore,                &
@@ -145,6 +146,7 @@ public
    integer (kind=IntKind), parameter, private :: KKRCPA = 3
    integer (kind=IntKind), parameter, private :: EmbeddedCluster = 4
    integer (kind=IntKind), parameter, private :: KKRCPASRO = 5
+   integer (kind=IntKind), parameter, private :: CPAConductivity = 6
 !
    integer (kind=IntKind), private :: read_emesh = 0
    integer (kind=IntKind), private :: read_kmesh = 0
@@ -190,6 +192,11 @@ public
    real (kind=RealKind), private, allocatable :: sro_params(:)
    real (kind=RealKind), private, allocatable :: sro_params_nn(:)
    integer (kind=IntKind), private :: charge_corr = 0
+
+!  Conductivity Parameters
+   integer (kind=IntKind), private :: do_sigma = 0
+   integer (kind=IntKind), private :: use_sf = 1
+   real (kind=RealKind), private :: imag_part = 0.001
 !
 contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -462,6 +469,10 @@ contains
       call ErrorHandler('initScfData','Invalid efermi_mix_switch value',efermi_mix_switch)
    endif
 !
+   rstatus = getKeyValue(tbl_id,'Conductivity Calculation',do_sigma)
+   rstatus = getKeyValue(tbl_id,'Fermi Energy Imaginary Part',imag_part)
+   rstatus = getKeyValue(tbl_id,'Integrate Upto Muffin Tin', use_sf)
+
    end subroutine initScfData
 !  ===================================================================
 !
@@ -687,6 +698,10 @@ contains
       write(fu,'(a)')'# MST Method        : KKR'
    else if ( scf_method == 3) then
       write(fu,'(a)')'# MST Method        : KKRCPA'
+   else if ( scf_method == 5) then
+      write(fu,'(a)')'# MST Method        : KKRCPASRO'
+   else if ( scf_method == 6) then
+      write(fu,'(a)')'# MST Method        : CPA Conductivity'
    endif
    if ( nspin==1 ) then
       write(fu,'(a,i3)')'# Spin Parameter    : Non-magnetic -',nspin
@@ -804,11 +819,40 @@ contains
    function isSROSCF() result(md)
 !  ===================================================================
    implicit none
-   integer (kind=Intkind) :: md
+   integer (kind=IntKind) :: md
 
    md = sro_scf
 
    end function isSROSCF
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isConductivity() result(md)
+!  ===================================================================
+   implicit none 
+   logical :: md
+!
+   if (do_sigma == 1) then
+      md = .true.
+   else
+      md = .false.
+   endif
+   end function isConductivity
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function useStepFunctionForSigma() result(md)
+!  ===================================================================
+   implicit none
+   integer (kind=IntKind) :: md
+
+   md = use_sf
+   
+   end function useStepFunctionForSigma
 !  ===================================================================
 !
 !  *******************************************************************
@@ -1541,5 +1585,23 @@ contains
    mixing_switch = efermi_mix_switch
 !
    end function getMixingParamForFermiEnergy
+!  ===================================================================
+!
+!  *******************************************************************
+!  
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
+   function getFermiEnergyImagPart() result(del)
+!  ===================================================================
+   implicit none
+
+   real (kind=RealKind) :: del
+
+   if (.not. isConductivity()) then
+     call ErrorHandler('getFermiEnergyImagPart', 'Choose SCF type option &
+                 6 for conductivity calculation')
+   endif
+   del = imag_part
+
+   end function getFermiEnergyImagPart
 !  ===================================================================
 end module ScfDataModule
