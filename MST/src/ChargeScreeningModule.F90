@@ -44,7 +44,8 @@ contains
 !
    use NeighborModule, only : getShellRadius
 !
-   use ScfDataModule, only : retrieveSROParams, isKKRCPASRO
+   use ScfDataModule, only : retrieveSROParams, isKKRCPASRO,  &
+                   getSpeciesSlope, getSpeciesIntercept
 
    integer (kind=IntKind), intent(in) :: nlocal, num_atoms
    integer (kind=IntKind) :: i, j, sro_param_num, temp
@@ -67,7 +68,7 @@ contains
    enddo
    allocate(w_ab(NumSpecies, NumSpecies))
 
-   if (isKKRCPASRO()) then
+   if (.false.) then
      !  --------------------------------------------------------
         call retrieveSROParams(sro_param_list=sro_params, param_num=sro_param_num)
      !  --------------------------------------------------------
@@ -95,24 +96,32 @@ contains
 
    use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies,   &
             getLocalSpeciesContent
+   use ScfDataModule, only : isLinRel, getSpeciesSlope, getSpeciesIntercept
    use Atom2ProcModule, only : getGlobalIndex
    use ChargeDistributionModule, only : getGlobalOnSiteElectronTableOld, &
                                      getGlobalTableLine
                                         
    integer (kind=IntKind) :: i, j, ia, na, lig
-   real (kind=RealKind) :: qtemp
+   real (kind=RealKind) :: qtemp, slope, intercept
    real (kind=RealKind), pointer :: Q_Table(:)
    integer (kind=IntKind), pointer :: global_table_line(:)
 
    Q_Table => getGlobalOnSiteElectronTableOld()
    global_table_line => getGlobalTableLine()
 
+
    do na = 1, LocalNumSites
       j = getGlobalIndex(na)
       do ia = 1, getLocalNumSpecies(na)
         lig = global_table_line(j) + ia
         qtemp = getLocalAtomicNumber(j, ia) - Q_Table(lig)
-        scr(na)%vmt1_corr(ia) = TWO*(qtemp/scr(na)%fs_radius)
+        if (isLinRel()) then
+           slope = getSpeciesSlope(ia)
+           intercept = getSpeciesIntercept(ia)
+           scr(na)%vmt1_corr(ia) = slope*qtemp + intercept
+        else
+           scr(na)%vmt1_corr(ia) = TWO*(qtemp/scr(na)%fs_radius)
+        endif
      enddo
    enddo
 
@@ -195,18 +204,24 @@ contains
    subroutine calChargeCorrection()
 !  ===================================================================
 
-   use ScfDataModule, only : isKKRCPASRO, isKKRCPA
+   use ScfDataModule, only : isKKRCPASRO, isKKRCPA, isLinRel
 
-   if (isKKRCPA()) then
+   if (isLinRel() .and. isKKRCPA()) then
      ! -----------------------------
        call calPotentialCorrection()
-       call calCPAEnergyShift()
      ! -----------------------------
-   else if (isKKRCPASRO()) then
-     ! -----------------------------
-       call calPotentialCorrection()
-       call calSROEnergyShift()
-     ! -----------------------------
+   else
+     if (isKKRCPA()) then
+       ! -----------------------------
+         call calPotentialCorrection()
+         call calCPAEnergyShift()
+       ! -----------------------------
+     else if (isKKRCPASRO()) then
+       ! -----------------------------
+         call calPotentialCorrection()
+         call calSROEnergyShift()
+       ! -----------------------------
+     endif
    endif
 
    end subroutine calChargeCorrection
