@@ -90,7 +90,8 @@ contains
    
    use MediumHostModule, only  : getNumSites, getLocalNumSites, &
                      getGlobalSiteIndex, getNumSpecies, getSpeciesContent
-   use ScfDataModule, only : retrieveSROParams, isNextNearestSRO, isSROSCF
+   use ScfDataModule, only : retrieveSROParams, isNextNearestSRO, &
+                              isSROSCF, isSROCVM, retrieveCVMParams
    use NeighborModule, only : getNeighbor
    use SSSolverModule, only : getScatteringMatrix
    use SystemModule, only : getAtomPosition
@@ -103,6 +104,8 @@ contains
    integer(kind=IntKind) :: type
    real (kind=RealKind) :: spec_i, spec_j
    real(kind=RealKind), allocatable :: sro_params(:), sro_params_nn(:)
+   real(kind=RealKind) :: cvm_sitei(2)
+   real(kind=RealKind), allocatable :: cvm_params(:)
 
 !  --------------------------------------------------------
    next_near_option = isNextNearestSRO()
@@ -117,6 +120,12 @@ contains
       call retrieveSROParams(sro_param_list=sro_params,   &
               param_num=sro_param_nums, sro_param_list_nn=sro_params_nn)
    !  --------------------------------------------------------
+   endif
+
+   if (isSROCVM()) then
+      call retrieveCVMParams(cvm_params)
+      cvm_sitei(1) = cvm_params(1)
+      cvm_sitei(2) = 1 - cvm_params(1)
    endif
 
    GlobalNumSites = getNumSites()
@@ -138,7 +147,7 @@ contains
       SROMedium(il)%neigh_size = SROMedium(il)%Neighbor%NumAtoms+1
 
       allocate(SROMedium(il)%tau_c((SROMedium(il)%neigh_size)**2))
-      
+
       if (num > 1) then
         SROMedium(il)%isCPA = .true.
       else
@@ -157,9 +166,17 @@ contains
             if (next_near_option == 1) then
               allocate(SROMedium(il)%SROTMatrix(i)%sro_param_a_nn(num))
             endif
-            spec_i = getSpeciesContent(i, ig)
+            if (isSROCVM()) then
+               spec_i = cvm_sitei(i)
+            else
+               spec_i = getSpeciesContent(i, ig)
+            endif
             do j = 1, num
-              spec_j = getSpeciesContent(j, ig)
+              if (isSROCVM()) then
+                 spec_j = cvm_sitei(j)
+              else
+                 spec_j = getSpeciesContent(j, ig)
+              endif
               if (j < i) then
                  SROMedium(il)%SROTMatrix(i)%sro_param_a(j) = (spec_j/spec_i)*SROMedium(il)%SROTMatrix(j)%sro_param_a(i)
                  if (next_near_option == 1) then
