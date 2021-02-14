@@ -1421,7 +1421,7 @@ contains
    call writeMatrix('sigmatilde3', sigmatilde3, 3, 3, n_spin_cant)
    call writeMatrix('sigmatilde4', sigmatilde4, 3, 3, n_spin_cant)
 
-   call StopHandler('calConductivity', 'Conductivity Successfully Calculated', &
+   call StopHandler('calCPAConductivity', 'Conductivity Successfully Calculated', &
                            force_to_print=.true.)
 
    end subroutine calCPAConductivity
