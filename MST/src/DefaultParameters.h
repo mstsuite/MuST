@@ -271,6 +271,9 @@
 !              Krein formula.
 !                     = 0: Do NOT renormalize the Green function
 !                     = 1: Renormalize the Green function
+   n = n + 1; Keys(n) = 'Full-potential Semi-core';              Values(n) = '0'
+!                     = 0: Do NOT treat semi-core states with full-potential;
+!                     = 1: Treat semi-core states with full-potential.
 !  =============================================================================
 !  Additional input parameters can be added to this table using the 
 !  following format:

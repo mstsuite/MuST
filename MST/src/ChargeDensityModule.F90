@@ -30,8 +30,6 @@ module ChargeDensityModule
 !
    use PotentialTypeModule, only : isASAPotential
 !
-   use CoreStatesModule, only : getDeepCoreDensity, getSemiCoreDensity
-!
 public:: initChargeDensity,         &
          endChargeDensity,          &
          getSphChargeDensity,       &
@@ -125,10 +123,13 @@ private
       complex (kind=CmplxKind), pointer :: rhoL_Tilda(:,:,:)
       complex (kind=CmplxKind), pointer :: momL_Tilda(:,:,:)
 !
-      real (kind=RealKind), pointer :: rho_Core(:,:,:)
+      real (kind=RealKind), pointer :: rho_DeepCore(:,:,:)
       real (kind=RealKind), pointer :: rho_SemiCore(:,:,:)
-      real (kind=RealKind), pointer :: der_rho_Core(:,:,:)
+      real (kind=RealKind), pointer :: der_rho_DeepCore(:,:,:)
       real (kind=RealKind), pointer :: der_rho_SemiCore(:,:,:)
+!
+      complex (kind=CmplxKind), pointer :: rhoL_SemiCore(:,:,:,:)
+      complex (kind=CmplxKind), pointer :: der_rhoL_SemiCore(:,:,:,:)
 !
       complex (kind=CmplxKind), pointer :: rhoL_Valence(:,:,:)
       complex (kind=CmplxKind), pointer :: momL_Valence(:,:,:,:)
@@ -987,10 +988,12 @@ contains
       nullify( p_CDL%rhoL_Valence, p_CDL%momL_Valence )
 !
       nullify( p_CDL%rhoL_ValPseudo )
+      nullify( p_CDL%rho_DeepCore, p_CDL%rho_SemiCore, p_CDL%rhoL_SemiCore )
 !
       if (rad_derivative) then
          nullify( p_CDL%der_rhoSph_Total, p_CDL%der_momSph_Total )
          nullify( p_CDL%der_rhoL_Total, p_CDL%der_momL_Total )
+         nullify( p_CDL%der_rho_DeepCore, p_CDL%der_rho_SemiCore, p_CDL%der_rhoL_SemiCore )
       endif
 !
       if ( associated(p_CDL%multipole_mom) ) then
@@ -1194,6 +1197,8 @@ contains
 !
    use PolyhedraModule, only: getPointLocationFlag
 !
+   use CoreStatesModule, only : isFullPotentialSemiCore
+!
    implicit none
 !
    character(len=*), intent(in) :: densityType
@@ -1372,10 +1377,18 @@ contains
             do is = 1,n_spin_pola
                do ir = 1, n_inter
                   den_l(ir,1) = den_l(ir,1) +                                 &
-                                cmplx(fact*(p_CDL%rho_Core(irp+ir-1,is,ia) +  &
+                                cmplx(fact*(p_CDL%rho_DeepCore(irp+ir-1,is,ia) +  &
                                      p_CDL%rho_SemiCore(irp+ir-1,is,ia)),ZERO,&
                                      kind=CmplxKind)
                enddo
+               if (isFullPotentialSemiCore()) then
+                  do jl = 2, p_CDL%jmax
+                     do ir = 1, n_inter
+                        den_l(ir,jl) = den_l(ir,jl) +                         &
+                                       fact*p_CDL%rhoL_SemiCore(irp+ir-1,jl,is,ia)
+                     enddo
+                  enddo
+               endif
             enddo
          endif
          if (VP_point == 0) then ! For points on the cell bounday, since den_l contains
@@ -1384,10 +1397,18 @@ contains
             do is = 1,n_spin_pola
                do ir = 1, n_inter
                   den_l(ir,1) = den_l(ir,1) +                                 &
-                                cmplx(fact*(p_CDL%rho_Core(irp+ir-1,is,ia) +  &
+                                cmplx(fact*(p_CDL%rho_DeepCore(irp+ir-1,is,ia) +  &
                                      p_CDL%rho_SemiCore(irp+ir-1,is,ia)),ZERO,&
                                      kind=CmplxKind)
                enddo
+               if (isFullPotentialSemiCore()) then
+                  do jl = 2, p_CDL%jmax
+                     do ir = 1, n_inter
+                        den_l(ir,jl) = den_l(ir,jl) +                         &
+                                       fact*p_CDL%rhoL_SemiCore(irp+ir-1,jl,is,ia)
+                     enddo
+                  enddo
+               endif
             enddo
          endif
          if ( takeGradient ) then
@@ -1400,10 +1421,18 @@ contains
                do is = 1,n_spin_pola
                   do ir = 1, n_inter
                      der_den_l(ir,1) = der_den_l(ir,1) +                                   &
-                                       cmplx(fact*(p_CDL%der_rho_Core(irp+ir-1,is,ia) +    &
+                                       cmplx(fact*(p_CDL%der_rho_DeepCore(irp+ir-1,is,ia) +    &
                                              p_CDL%der_rho_SemiCore(irp+ir-1,is,ia)),ZERO, &
                                              kind=CmplxKind)
                   enddo
+                  if (isFullPotentialSemiCore()) then
+                     do jl = 2, p_CDL%jmax
+                        do ir = 1, n_inter
+                           der_den_l(ir,jl) = der_den_l(ir,jl) +                                   &
+                                              fact*p_CDL%der_rhoL_SemiCore(irp+ir-1,jl,is,ia)
+                        enddo
+                     enddo
+                  endif
                enddo
             endif
             if (VP_point == 0) then ! For points on the cell bounday, since den_l contains
@@ -1412,10 +1441,18 @@ contains
                do is = 1,n_spin_pola
                   do ir = 1, n_inter
                      der_den_l(ir,1) = der_den_l(ir,1) +                                   &
-                                       cmplx(fact*(p_CDL%der_rho_Core(irp+ir-1,is,ia) +    &
+                                       cmplx(fact*(p_CDL%der_rho_DeepCore(irp+ir-1,is,ia) +    &
                                              p_CDL%der_rho_SemiCore(irp+ir-1,is,ia)),ZERO, &
                                              kind=CmplxKind)
                   enddo
+                  if (isFullPotentialSemiCore()) then
+                     do jl = 2, p_CDL%jmax
+                        do ir = 1, n_inter
+                           der_den_l(ir,jl) = der_den_l(ir,jl) +                                   &
+                                              fact*p_CDL%der_rhoL_SemiCore(irp+ir-1,jl,is,ia)
+                        enddo
+                     enddo
+                  endif
                enddo
             endif
          endif
@@ -1426,14 +1463,24 @@ contains
             enddo
          else ! include core density outside the atomic cell
             fact = real(n_mult,kind=RealKind)/Y0
-            jmax=1
+            if (.not.isFullPotentialSemiCore()) then
+               jmax=1
+            endif
             do is = 1,n_spin_pola
                do ir = 1, n_inter
                   den_l(ir,1) = den_l(ir,1) +                                 &
-                                cmplx(fact*(p_CDL%rho_Core(irp+ir-1,is,ia) +  &
+                                cmplx(fact*(p_CDL%rho_DeepCore(irp+ir-1,is,ia) +  &
                                      p_CDL%rho_SemiCore(irp+ir-1,is,ia)),ZERO,&
                                      kind=CmplxKind)
                enddo
+               if (isFullPotentialSemiCore()) then
+                  do jl = 2, p_CDL%jmax
+                     do ir = 1, n_inter
+                        den_l(ir,jl) = den_l(ir,jl) +                         &
+                                       fact*p_CDL%rhoL_SemiCore(irp+ir-1,jl,is,ia)
+                     enddo
+                  enddo
+               endif
             enddo
          endif
          if (VP_point == 0) then ! For points on the cell bounday, since den_l contains
@@ -1442,10 +1489,18 @@ contains
             do is = 1,n_spin_pola
                do ir = 1, n_inter
                   den_l(ir,1) = den_l(ir,1) +                                 &
-                                cmplx(fact*(p_CDL%rho_Core(irp+ir-1,is,ia) +  &
+                                cmplx(fact*(p_CDL%rho_DeepCore(irp+ir-1,is,ia) +  &
                                      p_CDL%rho_SemiCore(irp+ir-1,is,ia)),ZERO,&
                                      kind=CmplxKind)
                enddo
+               if (isFullPotentialSemiCore()) then
+                  do jl = 2, p_CDL%jmax
+                     do ir = 1, n_inter
+                        den_l(ir,jl) = den_l(ir,jl) +                         &
+                                       fact*p_CDL%rhoL_SemiCore(irp+ir-1,jl,is,ia)
+                     enddo
+                  enddo
+               endif
             enddo
          endif
       else
@@ -1699,6 +1754,8 @@ contains
 !
    use PolyhedraModule, only: getPointLocationFlag
 !
+   use CoreStatesModule, only : isFullPotentialSemiCore
+!
    implicit none
 !
    character(len=*), intent(in) :: momentType
@@ -1841,17 +1898,33 @@ contains
                   isig = 3-2*is
                   do ir = 1, n_inter
                      mom_l(ir,1) = mom_l(ir,1) +                                       &
-                                   isig*cmplx(fact*(p_CDL%rho_Core(irp+ir-1,is,ia) +   &
+                                   isig*cmplx(fact*(p_CDL%rho_DeepCore(irp+ir-1,is,ia) +   &
                                               p_CDL%rho_SemiCore(irp+ir-1,is,ia)),ZERO,&
                                               kind=CmplxKind)
                   enddo
+                  if (isFullPotentialSemiCore()) then
+                     do jl = 2,jmax
+                        do ir = 1, n_inter
+                           mom_l(ir,jl) = mom_l(ir,jl) +                               &
+                                          isig*fact*p_CDL%rhoL_SemiCore(irp+ir-1,jl,is,ia)
+                        enddo
+                     enddo
+                  endif
                   if (takeGradient) then
                      do ir = 1, n_inter
                         der_mom_l(ir,1) = der_mom_l(ir,1) +                            &
-                                          isig*cmplx(fact*(p_CDL%der_rho_Core(irp+ir-1,is,ia) +    &
+                                          isig*cmplx(fact*(p_CDL%der_rho_DeepCore(irp+ir-1,is,ia) +    &
                                                            p_CDL%der_rho_SemiCore(irp+ir-1,is,ia)),&
                                                      ZERO, kind=CmplxKind)
                      enddo
+                     if (isFullPotentialSemiCore()) then
+                        do jl = 2,jmax
+                           do ir = 1, n_inter
+                              der_mom_l(ir,jl) = der_mom_l(ir,jl) +                    &
+                                                 isig*fact*p_CDL%der_rhoL_SemiCore(irp+ir-1,jl,is,ia)
+                           enddo
+                        enddo
+                     endif
                   endif
                enddo
             endif
@@ -1860,14 +1933,29 @@ contains
             do is = 1,n_spin_pola
                isig = 3-2*is
                do ir = 1, n_inter
-                  mom_l(ir,1) = mom_l(ir,1) + isig*fact*(p_CDL%rho_Core(irp+ir-1,is,ia) +  &
+                  mom_l(ir,1) = mom_l(ir,1) + isig*fact*(p_CDL%rho_DeepCore(irp+ir-1,is,ia) +  &
                                                          p_CDL%rho_SemiCore(irp+ir-1,is,ia))
                enddo
+               if (isFullPotentialSemiCore()) then
+                  do jl = 2,jmax
+                     do ir = 1, n_inter
+                        mom_l(ir,jl) = mom_l(ir,jl) + isig*fact*p_CDL%rhoL_SemiCore(irp+ir-1,jl,is,ia)
+                     enddo
+                  enddo
+               endif
                if (takeGradient) then
                   do ir = 1, n_inter
-                     der_mom_l(ir,1) = der_mom_l(ir,1) + isig*fact*(p_CDL%der_rho_Core(irp+ir-1,is,ia) +  &
+                     der_mom_l(ir,1) = der_mom_l(ir,1) + isig*fact*(p_CDL%der_rho_DeepCore(irp+ir-1,is,ia) +  &
                                                                     p_CDL%der_rho_SemiCore(irp+ir-1,is,ia))
                   enddo
+                  if (isFullPotentialSemiCore()) then
+                     do jl = 2,jmax
+                        do ir = 1, n_inter
+                           der_mom_l(ir,jl) = der_mom_l(ir,jl) + &
+                                              isig*fact*p_CDL%der_rhoL_SemiCore(irp+ir-1,jl,is,ia)
+                        enddo
+                     enddo
+                  endif
                endif
             enddo
          endif
@@ -2074,8 +2162,11 @@ contains
 !  use DataServiceCenterModule, only : getDataStorage, RealMark,      &
 !                                      ComplexMark
    use CoreStatesModule, only : getDeepCoreDensity, getSemiCoreDensity
+   use CoreStatesModule, only : getCoreDensityRmeshSize
    use CoreStatesModule, only : getDeepCoreDensityDerivative,         &
                                 getSemiCoreDensityDerivative
+   use CoreStatesModule, only : isFullPotentialSemiCore
+   use CoreStatesModule, only : getFPSemiCoreDensity, getFPSemiCoreDensityDeriv
 !
    use Atom2ProcModule, only : getGlobalIndex
 !
@@ -2148,22 +2239,24 @@ contains
       nr = p_CDL%NumRPts
       nr_ps = p_CDL%NumRPts_Pseudo
       ns = 2*n_spin_cant-1
-      jmax = p_CDL%jmax
-      kmax = (p_CDL%lmax+1)**2
       r_mesh => ChargeDensityList(id)%r_mesh(1:nr)
       sqrt_r(0) = ZERO
       do ir = 1,nr
          sqrt_r(ir) = sqrt(r_mesh(ir))
       enddo
 !
+      if (nr > getCoreDensityRmeshSize(id)) then
+         call ErrorHandler('constructChargeDensity','nr > Core density size', &
+                           nr, getCoreDensityRmeshSize(id))
+      endif
+!
 !     =============================
 !     Total Spherical Densities
 !     =============================
-!
-      p_CDL%rho_Core => getDeepCoreDensity(id)
+      p_CDL%rho_DeepCore => getDeepCoreDensity(id)
       p_CDL%rho_SemiCore => getSemiCoreDensity(id)
       if (rad_derivative) then
-         p_CDL%der_rho_Core => getDeepCoreDensityDerivative(id)
+         p_CDL%der_rho_DeepCore => getDeepCoreDensityDerivative(id)
          p_CDL%der_rho_SemiCore => getSemiCoreDensityDerivative(id)
       endif
       p_CDL%ChargeCompFlag(1) = 1
@@ -2185,14 +2278,13 @@ contains
                        q_tmp
          endif
 !
-         rho2_r => p_CDL%rho_Core(:,:,ia)
+         rho2_r => p_CDL%rho_DeepCore(:,:,ia)
          rho0(1:nr) = rho0(1:nr) + rho2_r(1:nr,1)
          if ( n_spin_pola == 2 ) then
             rho0(1:nr) = rho0(1:nr) + rho2_r(1:nr,2)
          endif
 !
          if ( print_level(id) >= 0 ) then
-!
             den_r(0) = ZERO
             do ir = 1,nr
                den_r(ir) = rho2_r(ir,1)
@@ -2218,14 +2310,14 @@ contains
 !
             call calIntegration(nr+1,sqrt_r(0:nr),den_r(0:nr),den_r1(0:nr),3)
 !
-            write(6,'(a,f20.14)') "Charge Density :: DeepCore Charge in MT-Sphere = ", &
+            write(6,'(a,f20.14)') "Charge Density :: Sph. DeepCore Charge in MT-Sphere = ", &
                                           den_r1(jmt)*PI8
-            write(6,'(a,f20.14)') "Charge Density :: DeepCore Charge in WS-Sphere = ", &
+            write(6,'(a,f20.14)') "Charge Density :: Sph. DeepCore Charge in WS-Sphere = ", &
                                           den_r1(jend)*PI8
-            write(6,'(a,f20.14)') "Charge Density :: DeepCore Charge in EX-Sphere = ", &
+            write(6,'(a,f20.14)') "Charge Density :: Sph. DeepCore Charge in EX-Sphere = ", &
                                           den_r1(nr)*PI8
-            write(6,'(a,f20.14)') "Charge Density :: DeepCore Charge in Insc. Sph.= ",  q_tmp_mt
-            write(6,'(a,f20.14)') "Charge Density :: DeepCore Charge in VP        = ",  q_tmp
+            write(6,'(a,f20.14)') "Charge Density :: Sph. DeepCore Charge in Insc. Sph.= ",  q_tmp_mt
+            write(6,'(a,f20.14)') "Charge Density :: Sph. DeepCore Charge in VP        = ",  q_tmp
          endif
 !
          rho2_r => p_CDL%rho_SemiCore(1:nr,1:n_spin_pola,ia)
@@ -2235,7 +2327,6 @@ contains
          endif
 !
          if ( print_level(id) >= 0 ) then
-!
             den_r(0)    = ZERO
             den_r(1:nr) = rho2_r(1:nr,1)
             if ( n_spin_pola == 2 ) then
@@ -2257,11 +2348,11 @@ contains
 !
             call calIntegration(nr+1,sqrt_r(0:nr),den_r(0:nr),den_r1(0:nr),3)
 !
-            write(6,'(a,f20.14)') "Charge Density :: SemiCore Charge in MT-Sphere = ", den_r1(jmt)*PI8
-            write(6,'(a,f20.14)') "Charge Density :: SemiCore Charge in WS-Sphere = ", den_r1(jend)*PI8
-            write(6,'(a,f20.14)') "Charge Density :: SemiCore Charge in EX-Sphere = ", den_r1(nr)*PI8
-            write(6,'(a,f20.14)') "Charge Density :: SemiCore Charge in Insc. Sph.= ", q_tmp_mt
-            write(6,'(a,f20.14)') "Charge Density :: SemiCore Charge in VP        = ", q_tmp
+            write(6,'(a,f20.14)') "Charge Density :: Sph. SemiCore Charge in MT-Sphere = ", den_r1(jmt)*PI8
+            write(6,'(a,f20.14)') "Charge Density :: Sph. SemiCore Charge in WS-Sphere = ", den_r1(jend)*PI8
+            write(6,'(a,f20.14)') "Charge Density :: Sph. SemiCore Charge in EX-Sphere = ", den_r1(nr)*PI8
+            write(6,'(a,f20.14)') "Charge Density :: Sph. SemiCore Charge in Insc. Sph.= ", q_tmp_mt
+            write(6,'(a,f20.14)') "Charge Density :: Sph. SemiCore Charge in VP        = ", q_tmp
 !
          endif
 !
@@ -2304,10 +2395,9 @@ contains
          endif
 !
          if ( n_spin_pola == 2 ) then
-!
             mom0 => p_CDL%momSph_Total(1:nr+1,ia)
             mom0 = ZERO
-            rho2_r => p_CDL%rho_Core(:,:,ia)
+            rho2_r => p_CDL%rho_DeepCore(:,:,ia)
             mom0(1:nr) = mom0(1:nr) + rho2_r(1:nr,1) - rho2_r(1:nr,2)
             rho2_r => p_CDL%rho_SemiCore(:,:,ia)
             mom0(1:nr) = mom0(1:nr) + rho2_r(1:nr,1) - rho2_r(1:nr,2)
@@ -2351,7 +2441,6 @@ contains
          endif
 !
          if ( print_level(id) >= 0 ) then
-!
             den_r(0) = CZERO
             do ir = 1,nr
                den_r(ir) = rho0(ir)*r_mesh(ir)
@@ -2371,7 +2460,93 @@ contains
             write(6,'(a,f20.14)') "Charge Density :: Total Spherical Charge in VP = ", q_tmp
          endif
 !
-         if ( .not.isSphericalCharge ) then
+         if (rad_derivative) then
+            rho2p_r => getValenceSphericalElectronDensity(id,ia,isDerivative=.true.)
+            rho0 => p_CDL%der_rhoSph_Total(:,ia)
+            rho0 = ZERO
+            rho0(1:nr) = rho2p_r(1:nr)
+!
+            rho2_r => p_CDL%der_rho_DeepCore(:,:,ia)
+            rho0(1:nr) = rho0(1:nr) + rho2_r(1:nr,1)
+            if ( n_spin_pola == 2 ) then
+               rho0(1:nr) = rho0(1:nr) + rho2_r(1:nr,2)
+            endif
+!
+            rho2_r => p_CDL%der_rho_SemiCore(:,:,ia)
+            rho0(1:nr) = rho0(1:nr) + rho2_r(1:nr,1)
+            if ( n_spin_pola == 2 ) then
+               rho0(1:nr) = rho0(1:nr) + rho2_r(1:nr,2)
+            endif
+!
+            do ir = 1,nr
+               p_CDL%der_rhoL_Total(ir,1,ia) = cmplx(rho0(ir)/Y0,ZERO,kind=CmplxKind)
+            enddo
+!
+            if ( n_spin_pola == 2 ) then
+               mom0 => p_CDL%der_momSph_Total(:,ia)
+               mom0 = ZERO
+               rho2_r => p_CDL%der_rho_DeepCore(:,:,ia)
+               mom0(1:nr) = mom0(1:nr) + rho2_r(1:nr,1) - rho2_r(1:nr,2)
+               rho2_r => p_CDL%der_rho_SemiCore(:,:,ia)
+               mom0(1:nr) = mom0(1:nr) + rho2_r(1:nr,1) - rho2_r(1:nr,2)
+!
+               mom2_r => getValenceSphericalMomentDensity(id,ia,isDerivative=.true.)
+               mvec = getValenceVPMoment(id,ia)
+               if ( n_spin_cant==1 ) then
+                  mom0(1:nr) = mom0(1:nr) + mom2_r(1:nr,1)
+               else
+                  do is = 1,3
+                     mom0(1:nr) = mom0(1:nr) + evec(is)*mom2_r(1:nr,is)
+                  enddo
+               endif
+!
+               do ir = 1,nr
+                  p_CDL%der_momL_Total(ir,1,ia) = cmplx(mom0(ir)/Y0,ZERO,kind=CmplxKind)
+               enddo
+            endif
+!
+            if (maxval(print_level) >= 1) then
+               write(denFlag,'(i6)')100000+getGlobalIndex(id)
+               denFlag(1:1) = 'n'
+               write(specFlag,'(i2)')10+ia
+               specFlag(1:1) = 'c'
+               file_den = 'SphDensity'//'_'//denFlag//specFlag
+!              -------------------------------------------------------
+               call derv5(p_CDL%rhoSph_Total(:,ia),den_r(1:),r_mesh,nr)
+!              -------------------------------------------------------
+               call writeFunction(file_den,nr,r_mesh,                 &
+                                  p_CDL%rhoSph_Total(:,ia),           &
+                                  p_CDL%der_rhoSph_Total(:,ia),       &
+                                  den_r(1:))
+!              -------------------------------------------------------
+               if (n_spin_pola == 2) then
+                  file_den = 'SphMomDensity'//'_'//denFlag//specFlag
+!                 ----------------------------------------------------
+                  call derv5(p_CDL%momSph_Total(:,ia),den_r(1:),r_mesh,nr)
+!                 ----------------------------------------------------
+                  call writeFunction(file_den,nr,r_mesh,                 &
+                                     p_CDL%momSph_Total(:,ia),           &
+                                     p_CDL%der_momSph_Total(:,ia),       &
+                                     den_r(1:))
+!                 ----------------------------------------------------
+               endif
+            endif
+         endif
+      enddo
+!
+!     =============================
+!     Total Non-Spherical Densities
+!     =============================
+      if ( .not.isSphericalCharge ) then
+         jmax = p_CDL%jmax
+         kmax = (p_CDL%lmax+1)**2
+         if (isFullPotentialSemiCore()) then
+            p_CDL%rhoL_SemiCore => getFPSemiCoreDensity(id)
+            if (rad_derivative) then
+               p_CDL%der_rhoL_SemiCore => getFPSemiCoreDensityDeriv(id)
+            endif
+         endif
+         do ia = 1, p_CDL%NumSpecies
 !           =========================================================
 !           L Density components - should have been already computed in
 !                                  ValenceStatesModule for l>1 and for l=0
@@ -2461,6 +2636,19 @@ contains
                p_CDL%rhoL_Total(1:nr,jl,ia) =  p_CDL%rhoL_Valence(1:nr,jl,ia)
                p_CDL%rhoL_Total(jend+1:nr,jl,ia) = CZERO
             enddo
+!           ==========================================================
+!           Add non-spherical semi-core moment density
+!           ==========================================================
+            if (isFullPotentialSemiCore()) then
+               do is = 1, n_spin_pola
+                  do jl = 2,jmax
+                     do ir = 1, nr
+                        p_CDL%rhoL_Total(ir,jl,ia) =  p_CDL%rhoL_Total(ir,jl,ia) + &
+                                                      p_CDL%rhoL_SemiCore(ir,jl,is,ia)
+                     enddo
+                  enddo
+               enddo
+            endif
             rho0 => p_CDL%rhoSph_Total(1:nr+1,ia)
             do ir = 1,nr
                p_CDL%rhoL_Total(ir,1,ia) = cmplx(rho0(ir)/Y0,ZERO,kind=CmplxKind)
@@ -2472,20 +2660,30 @@ contains
 !           directions because it is stored in ValenceStatesModule by the 
 !           evec directions
 !           =========================================================
-!
             if ( n_spin_pola == 2 ) then
                momL => p_CDL%momL_Total(1:nr,1:jmax,ia)
                momL = CZERO
                mom4_c => getValenceMomentDensity(id)
                if ( n_spin_cant==1 ) then
-                  do jl = 1,jmax
+                  do jl = 2, jmax
                      momL(1:nr,jl) = momL(1:nr,jl) + mom4_c(1:nr,jl,1,ia)
                   enddo
                else
-                  do is = 1,3
-                     do jl = 1,jmax
+                  do is = 1, 3
+                     do jl = 2, jmax
                         momL(1:nr,jl) = momL(1:nr,jl) + &
                                         mom4_c(1:nr,jl,is,ia)*evec(is)
+                     enddo
+                  enddo
+               endif
+!              =======================================================
+!              Add non-spherical semi-core moment density
+!              =======================================================
+               if (isFullPotentialSemiCore()) then
+                  do jl = 2, jmax
+                     do ir = 1, nr
+                        momL(ir,jl) = momL(ir,jl) + (p_CDL%rhoL_SemiCore(ir,jl,1,ia) - &
+                                                     p_CDL%rhoL_SemiCore(ir,jl,2,ia) )
                      enddo
                   enddo
                endif
@@ -2518,58 +2716,23 @@ contains
                write(6,'(a,f20.14,a,i4)')'Checking -- Missing charge in atomic cell      = ', &
                     getLocalAtomicNumber(id,ia)-q_tmp,', of species',ia
             endif
-         endif
 !
-         if (rad_derivative) then
-            rho2p_r => getValenceSphericalElectronDensity(id,ia,isDerivative=.true.)
-            rho0 => p_CDL%der_rhoSph_Total(:,ia)
-            rho0 = ZERO
-            rho0(1:nr) = rho2p_r(1:nr)
-!
-            rho2_r => p_CDL%der_rho_Core(:,:,ia)
-            rho0(1:nr) = rho0(1:nr) + rho2_r(1:nr,1)
-            if ( n_spin_pola == 2 ) then
-               rho0(1:nr) = rho0(1:nr) + rho2_r(1:nr,2)
-            endif
-!
-            rho2_r => p_CDL%der_rho_SemiCore(:,:,ia)
-            rho0(1:nr) = rho0(1:nr) + rho2_r(1:nr,1)
-            if ( n_spin_pola == 2 ) then
-               rho0(1:nr) = rho0(1:nr) + rho2_r(1:nr,2)
-            endif
-!
-            do ir = 1,nr
-               p_CDL%der_rhoL_Total(ir,1,ia) = cmplx(rho0(ir)/Y0,ZERO,kind=CmplxKind)
-            enddo
-!
-            if ( n_spin_pola == 2 ) then
-               mom0 => p_CDL%der_momSph_Total(:,ia)
-               mom0 = ZERO
-               rho2_r => p_CDL%der_rho_Core(:,:,ia)
-               mom0(1:nr) = mom0(1:nr) + rho2_r(1:nr,1) - rho2_r(1:nr,2)
-               rho2_r => p_CDL%der_rho_SemiCore(:,:,ia)
-               mom0(1:nr) = mom0(1:nr) + rho2_r(1:nr,1) - rho2_r(1:nr,2)
-!
-               mom2_r => getValenceSphericalMomentDensity(id,ia,isDerivative=.true.)
-               mvec = getValenceVPMoment(id,ia)
-               if ( n_spin_cant==1 ) then
-                  mom0(1:nr) = mom0(1:nr) + mom2_r(1:nr,1)
-               else
-                  do is = 1,3
-                     mom0(1:nr) = mom0(1:nr) + evec(is)*mom2_r(1:nr,is)
-                  enddo
-               endif
-!
-               do ir = 1,nr
-                  p_CDL%der_momL_Total(ir,1,ia) = cmplx(mom0(ir)/Y0,ZERO,kind=CmplxKind)
-               enddo
-            endif
-!
-            if ( .not.isSphericalCharge ) then
+!           ==========================================================
+            if (rad_derivative) then
                do jl = 2,jmax
                   rhol => getValenceElectronDensity(id,ia,jl,isDerivative=.true.)
                   p_CDL%der_rhoL_Total(1:nr,jl,ia) =  rhol(1:nr)
                enddo
+               if (isFullPotentialSemiCore()) then
+                  do is = 1, n_spin_pola
+                     do jl = 2,jmax
+                        do ir = 1, nr
+                           p_CDL%der_rhoL_Total(ir,jl,ia) = p_CDL%der_rhoL_Total(ir,jl,ia) + &
+                                                            p_CDL%der_rhoL_SemiCore(ir,jl,is,ia)
+                        enddo
+                     enddo
+                  enddo
+               endif
                rho0 => p_CDL%der_rhoSph_Total(:,ia)
                do ir = 1,nr
                   p_CDL%der_rhoL_Total(ir,1,ia) = cmplx(rho0(ir)/Y0,ZERO,kind=CmplxKind)
@@ -2579,13 +2742,21 @@ contains
                   momL = CZERO
                   mom4_c => getValenceMomentDensity(id,isDerivative=.true.)
                   if ( n_spin_cant==1 ) then
-                     do jl = 1,jmax
+                     do jl = 2, jmax
                         momL(1:nr,jl) = momL(1:nr,jl) + mom4_c(1:nr,jl,1,ia)
                      enddo
                   else
                      do is = 1, 3
-                        do jl = 1, jmax
+                        do jl = 2, jmax
                            momL(1:nr,jl) = momL(1:nr,jl) + mom4_c(1:nr,jl,is,ia)*evec(is)
+                        enddo
+                     enddo
+                  endif
+                  if (isFullPotentialSemiCore()) then
+                     do jl = 2, jmax
+                        do ir = 1, nr
+                           momL(ir,jl) = momL(ir,jl) + (p_CDL%der_rhoL_SemiCore(ir,jl,1,ia) - &
+                                                        p_CDL%der_rhoL_SemiCore(ir,jl,2,ia) )
                         enddo
                      enddo
                   endif
@@ -2593,38 +2764,11 @@ contains
                      momL(ir,1) = cmplx(p_CDL%der_momSph_Total(ir,ia)/Y0,ZERO,kind=CmplxKind)
                   enddo
                endif
-            endif
 !
-!           ==========================================================
-!           Checking the radial derivatives...
-!           ==========================================================
-            if (maxval(print_level) >= 1) then
-               write(denFlag,'(i6)')100000+getGlobalIndex(id)
-               denFlag(1:1) = 'n'
-               write(specFlag,'(i2)')10+ia
-               specFlag(1:1) = 'c'
-               file_den = 'SphDensity'//'_'//denFlag//specFlag
-!              -------------------------------------------------------
-               call derv5(p_CDL%rhoSph_Total(:,ia),den_r(1:),r_mesh,nr)
-!              -------------------------------------------------------
-               call writeFunction(file_den,nr,r_mesh,                 &
-                                  p_CDL%rhoSph_Total(:,ia),           &
-                                  p_CDL%der_rhoSph_Total(:,ia),       &
-                                  den_r(1:))
-!              -------------------------------------------------------
-               if (n_spin_pola == 2) then
-                  file_den = 'SphMomDensity'//'_'//denFlag//specFlag
-!                 ----------------------------------------------------
-                  call derv5(p_CDL%momSph_Total(:,ia),den_r(1:),r_mesh,nr)
-!                 ----------------------------------------------------
-                  call writeFunction(file_den,nr,r_mesh,                 &
-                                     p_CDL%momSph_Total(:,ia),           &
-                                     p_CDL%der_momSph_Total(:,ia),       &
-                                     den_r(1:))
-!                 ----------------------------------------------------
-               endif
-!
-               if ( .not.isSphericalCharge ) then
+!              =======================================================
+!              Checking the radial derivatives...
+!              =======================================================
+               if (maxval(print_level) >= 1) then
                   do jl = 1,jmax
                      if (p_CDL%ChargeCompFlag(jl) > 0) then
                         write(jlFlag,'(i4)')1000+jl
@@ -2656,9 +2800,8 @@ contains
                endif
             endif
 !           ==========================================================
-         endif
-!
-      enddo
+         enddo
+      endif
 !
       if ( .not.isSphericalCharge ) then
 !        =============================================================

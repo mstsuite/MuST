@@ -211,6 +211,7 @@ program testSineMatrixPole
    allocate(atom_print_level(1:LocalNumAtoms))
    do i=1,LocalNumAtoms
       atom_print_level(i) = getStandardOutputLevel(i)
+      GlobalIndex(i)=getGlobalIndex(i)
    enddo
 !  ===================================================================
 !
@@ -270,7 +271,7 @@ program testSineMatrixPole
 !  -------------------------------------------------------------------
 !   call initPolyhedra(NumAtoms,bravais,'main',0)
 !  -------------------------------------------------------------------
-   call setupRadGridAndCell(NumAtoms,lmax_max)
+   call setupRadGridAndCell(LocalNumAtoms,lmax_max)
 !  -------------------------------------------------------------------
    call initSystemSymmetry( NumAtoms, LocalNumAtoms, lmax_pot, lmax_step, atom_print_level )
 !  -------------------------------------------------------------------

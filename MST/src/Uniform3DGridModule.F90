@@ -358,11 +358,12 @@ contains
 !        associated with any local atoms, since atoms and uniform grids 
 !        have independent parallel distribution.
 !  ===================================================================
-   use MathParamModule, only : TEN2m12, TEN2m6, TEN2m8, TWO, PI, TEN2m10
+   use MathParamModule, only : TEN2m12, TEN2m6, TEN2m8, TWO, FOUR, PI, TEN2m10
    use VectorModule, only : getVecLength, getDotProduct, getCrossProduct
    use GroupCommModule, only : getGroupID, getNumPEsInGroup, getMyPEinGroup
    use GroupCommModule, only : GlobalCollectInGroup, GlobalMaxInGroup
    use GroupCommModule, only : GlobalSumInGroup
+   use SystemModule, only : getBravaisLattice
 !
    implicit none
 !
@@ -376,10 +377,10 @@ contains
    integer (kind=IntKind) :: gCounter, ic, jc, kc, GroupID
    integer (kind=IntKind) :: ia, lp, mp, np, nshift, ig, max_incell_pts
    integer (kind=IntKind) :: icp, jcp, kcp, i, j, k, n, m, ip, nc
-   integer (kind=IntKind), allocatable :: gtmp(:), ntmp(:)
-   integer (kind=IntKind), allocatable :: data_collect(:,:,:)
-   integer (kind=IntKind), allocatable :: size_collect(:)
+   integer (kind=IntKind), allocatable :: gtmp(:,:), ntmp(:,:)
+   integer (kind=IntKind), allocatable :: redundancy(:), rflag(:)
    integer (kind=IntKind) :: aGID, NumPEsInAGroup, MyPEinAGroup
+   integer (kind=IntKind) :: NumLocalCBGPs, NumUniqueCBGPs, NumRedundantCBGPs
 !
    real (kind=RealKind) :: AtomPosition(3,NumAtoms)
    real (kind=RealKind) :: r(3), rg(3), rv(3)
@@ -507,7 +508,7 @@ contains
 !            [c-R*(a0xb0)**2/[a0*(b0xc0)], c+R*(a0xb0)**2/[a0*(b0xc0)]]
 !     ================================================================
       rv = getCrossProduct(b0,c0)
-      a = getDotProduct(3,AtomPosition(:,ia),rv,absolute=.true.)/fac
+      a = getDotProduct(3,AtomPosition(:,ia),rv,absolute=.false.)/fac
       bxc = getVecLength(3,rv)
       max_rc = radius(ia)*bxc**2/fac
 !     write(6,'(a,3d18.8)')'a,max_rc,step_a_len = ',a,max_rc,step_a_len
@@ -516,7 +517,7 @@ contains
 !     write(6,'(a,2f15.8,2x,2i8)')'AtomBox(1:2,1) = ',a-max_rc,a+max_rc,pAOG%AtomBox(1:2,1,ia)
 !
       rv = getCrossProduct(c0,a0)
-      b = getDotProduct(3,AtomPosition(:,ia),rv,absolute=.true.)/fac
+      b = getDotProduct(3,AtomPosition(:,ia),rv,absolute=.false.)/fac
       cxa = getVecLength(3,rv)
       max_rc = radius(ia)*cxa**2/fac
 !     write(6,'(a,3d18.8)')'b,max_rc,step_b_len = ',b,max_rc,step_b_len
@@ -525,7 +526,7 @@ contains
 !     write(6,'(a,2f15.8,2x,2i8)')'AtomBox(1:2,2) = ',b-max_rc,b+max_rc,pAOG%AtomBox(1:2,2,ia)
 !
       rv = getCrossProduct(a0,b0)
-      c = getDotProduct(3,AtomPosition(:,ia),rv,absolute=.true.)/fac
+      c = getDotProduct(3,AtomPosition(:,ia),rv,absolute=.false.)/fac
       axb = getVecLength(3,rv)
       max_rc = radius(ia)*axb**2/fac
 !     write(6,'(a,3d18.8)')'c,max_rc,step_c_len = ',c,max_rc,step_c_len
@@ -538,9 +539,17 @@ contains
       kc = pAOG%AtomBox(2,3,ia)-pAOG%AtomBox(1,3,ia)+1
       pAOG%NumGridPointsInAtomBox(ia) = ic*jc*kc
 !
+!     ================================================================
+!     Given the volume of the AtomBox = vol, the density of the uniform
+!     grid points = pAOG%NumGridPointsInAtomBox(ia)/vol, and the number
+!     of uniform grid points inside the sphere of radius(ia), which 
+!     circumscribes the atomic cell, is given approximately by 
+!           frac = density * 4*PI*radius(ia)**3/3.
+!     To be safe, we set the value to density * 4*PI*radius(ia)**3
+!     ================================================================
       rv = getCrossProduct(pUG%grid_step_a,pUG%grid_step_b)
       vol = getDotProduct(3,pUG%grid_step_c,rv,absolute=.true.)*(ic-1)*(jc-1)*(kc-1)
-      frac = pAOG%NumGridPointsInAtomBox(ia)*PI*radius(ia)**3/vol
+      frac = pAOG%NumGridPointsInAtomBox(ia)*FOUR*PI*radius(ia)**3/vol
 !     write(6,'(a,2i8)')'Number of grid points in AtomBox and cell = ', &
 !                       pAOG%NumGridPointsInAtomBox(ia),ceiling(frac)
       max_incell_pts = max(max_incell_pts,ceiling(frac)) ! A rough estimate of the number of grid points in atomic cell
@@ -562,7 +571,7 @@ contains
                                             ! return the grid position relative to 
                                             ! the system origin.
          rv = rg - AtomPosition(1:3,ia)
-         if ( radius(ia) > sqrt(rv(1)**2 + rv(2)**2 + rv(3)**2) + Ten2m6 ) then
+         if (radius(ia) > sqrt(rv(1)**2 + rv(2)**2 + rv(3)**2) - Ten2m6) then
 !           ==========================================================
 !           The grid point is inside the "region", but it may be
 !           outside of the atomic cell, if for example the radius of
@@ -586,9 +595,10 @@ contains
             n = getPointLocationFlag(ia, rv(1), rv(2), rv(3), tol=tol_param)
 !           write(6,'(a,3i8,2x,3f12.8,2x,3f12.8,2x,i5)')'ia,ig,gCounter,rg,rv,n = ', &
 !                    ia,ig,gCounter,rg,rv,n
-            if (n >= 0) then
+            if (n >= 0) then ! including points inside the cell and on the boundary
                pAOG%NumGridPointsInCell(ia) = pAOG%NumGridPointsInCell(ia) + 1
                if (pAOG%NumGridPointsInCell(ia) > max_incell_pts) then
+                  write(6,'(a,i5)')'For atom ID = ',ia
 !                 ----------------------------------------------------
                   call ErrorHandler('insertAtomsInGrid',              &
                                     'Number of grid points > max estimated value', &
@@ -613,45 +623,60 @@ contains
          endif
       enddo
    enddo
+!  ===================================================================
+!  NumLocalCBGPs: The number of grid points on cell boundaries of the
+!                 atomic cells mapped onto the local process
+!  ===================================================================
+   NumLocalCBGPs = pAOG%NumGridPointsOnCellBound
+!
+   aGID = getGroupID('Unit Cell')
+   NumPEsInAGroup = getNumPEsInGroup(aGID)
+   MyPEinAGroup = getMyPEinGroup(aGID)
 !
 !  ===================================================================
 !  Copy the index data from the linked list to pAOG%CBGridPointIndex
 !  ===================================================================
    n = pAOG%NumGridPointsOnCellBound
+!  -------------------------------------------------------------------
+   call GlobalMaxInGroup(aGID,n)
+!  -------------------------------------------------------------------
    if (n > 0) then
 !     ================================================================
 !     Eliminate the redundant grid points on cell boundaries that are 
-!     equivalent, corresponding to the same global grid index.
+!     equivalent, corresponding to the same global grid index, on the
+!     local process
 !     ================================================================
-      allocate(gtmp(n), ntmp(n))
+      allocate(gtmp(n+1,NumPEsInAGroup), ntmp(n,NumPEsInAGroup))
       linked_list => p_head
       m = 0
-      do i = 1, n
+      np = pAOG%NumGridPointsOnCellBound
+      do i = 1, np
          redundant = .false.
          LOOP_j: do j = 1, m
             k = j
-            if (gtmp(j) == linked_list%grid_index) then
+            if (gtmp(j,MyPEinAGroup+1) == linked_list%grid_index) then
                redundant = .true.
                exit LOOP_j
             endif
          enddo LOOP_j
          if (.not.redundant) then
             m = m + 1
-            gtmp(m) = linked_list%grid_index
-            ntmp(m) = 1
+            gtmp(m,MyPEinAGroup+1) = linked_list%grid_index
+            ntmp(m,MyPEinAGroup+1) = 1
          else ! For redundant grid points, increment ntmp by 1
             pAOG%NumGridPointsOnCellBound = pAOG%NumGridPointsOnCellBound - 1
-            ntmp(k) = ntmp(k) + 1
+            ntmp(k,MyPEinAGroup+1) = ntmp(k,MyPEinAGroup+1) + 1
          endif
          linked_list => linked_list%next
          nullify(p_head%next)
          deallocate(p_head)
          p_head => linked_list
       enddo
+      gtmp(n+1,MyPEinAGroup+1) = m
 !
 !     ================================================================
-!     At this point, m = the number of non-redundant grid points on the
-!                        cell boundaries
+!     At this point, m = the number of unique grid points on the cell
+!                        boundaries assocaited with the current process
 !                    gtmp = the global index of each grid point on the
 !                           cell boundaries
 !                    ntmp = the redundancy of each grid point on the
@@ -661,77 +686,83 @@ contains
          call ErrorHandler('insertAtomsInGrid','m <> NumGridPointOnCellBound', &
                            m, pAOG%NumGridPointsOnCellBound)
       endif
+      allocate( redundancy(pAOG%NumGridPointsOnCellBound) )
+      allocate( rflag(pAOG%NumGridPointsOnCellBound) )
+!
+!     ================================================================
+!     Collect gtmp and ntmp from other processes and check the redundancy 
+!     again for the grid points on the cell bounday assicuated with my process
+!     The number of unique local cell boundary grid points is stored in
+!     NumUniqueCBGPs.
+!     ================================================================
+      call GlobalCollectInGroup(aGID,gtmp,n+1)
+      call GlobalCollectInGroup(aGID,ntmp,n)
+      NumUniqueCBGPs = pAOG%NumGridPointsOnCellBound
+      do i = 1, pAOG%NumGridPointsOnCellBound
+         redundancy(i) = 1
+         rflag(i) = 0
+         do ip = 1, NumPEsInAGroup
+            if (ip /= MyPEinAGroup+1) then
+               LOOP_j1: do j = 1, gtmp(n+1,ip) ! Number of grid points on the cell 
+                                               ! boundaries associated with process ip
+                  if (gtmp(i,MyPEinAGroup+1) == gtmp(j,ip)) then
+                     ntmp(i,MyPEinAGroup+1) = ntmp(i,MyPEinAGroup+1) + ntmp(j,ip)
+                     redundancy(i) = redundancy(i) + 1
+                     if (ip < MyPEinAGroup+1 .and. rflag(i) == 0) then
+                        NumUniqueCBGPs = NumUniqueCBGPs - 1
+                        rflag(i) = 1
+                     endif
+                     exit LOOP_j1
+                  endif
+               enddo LOOP_j1
+            endif
+         enddo
+      enddo
+!
       allocate(pAOG%CBGridPointIndex(m), pAOG%NumNeighboringAtoms(m))
-      pAOG%CBGridPointIndex(1:m) = gtmp(1:m)
-      pAOG%NumNeighboringAtoms(1:m) = ntmp(1:m)
-      deallocate(gtmp, ntmp)
+      do i = 1, m
+         pAOG%CBGridPointIndex(i) = gtmp(i,MyPEinAGroup+1)
+         pAOG%NumNeighboringAtoms(i) = ntmp(i,MyPEinAGroup+1)
+      enddo
+      deallocate(gtmp, ntmp, redundancy, rflag)
+   else
+      NumUniqueCBGPs = 0
    endif
+!  ===================================================================
+!  NumRedundantCBGPs: the number of redundant local grid points on the
+!                     cell boundaries. Note: 
+!                     1. The cell boundaries are for the cells allocated 
+!                        on the local process; 
+!                     2. The redundancy has been determined for the grid
+!                        points distributed on cell boundaries for both 
+!                        local and remote atomic cells.
+!  ===================================================================
+   NumRedundantCBGPs = NumLocalCBGPs - NumUniqueCBGPs
 !
    nullify(p_head, linked_list)
 !
 !  ===================================================================
-!  Collecting pAOG%CBGridPointIndex from other processors and update
-!  pAOG%NumNeighboringAtoms
+!  Consistency check: if the number of unique uniform grid points in 
+!  all atomic cells equals to the number of uniform grid points in unit 
+!  cell.
 !  ===================================================================
-   aGID = getGroupID('Unit Cell')
-   NumPEsInAGroup = getNumPEsInGroup(aGID)
-   if (NumPEsInAGroup > 1) then
-      MyPEinAGroup = getMyPEinGroup(aGID)
-      n = pAOG%NumGridPointsOnCellBound
-!     ----------------------------------------------------------------
-      call GlobalMaxInGroup(aGID,n)
-!     ----------------------------------------------------------------
-      if (n > 0) then
-         allocate(size_collect(NumPEsInAGroup), data_collect(2,n,NumPEsInAGroup))
-         size_collect = 0
-         data_collect = 0
-         m = pAOG%NumGridPointsOnCellBound
-         size_collect(MyPEinAGroup+1) = m
-         do i = 1, m
-            data_collect(1,i,MyPEinAGroup+1)= pAOG%CBGridPointIndex(i)
-            data_collect(2,i,MyPEinAGroup+1)= pAOG%NumNeighboringAtoms(i)
-         enddo
-!        -------------------------------------------------------------
-         call GlobalCollectInGroup(aGID,size_collect)
-         call GlobalCollectInGroup(aGID,data_collect,2,n)
-!        -------------------------------------------------------------
-         do ip = 1, NumPEsInAGroup
-            if (ip /= MyPEinAGroup+1) then
-               do j = 1, size_collect(ip)
-                  ig = data_collect(1,j,ip)
-                  k = data_collect(2,j,ip)
-                  do i = 1, m
-                     if (pAOG%CBGridPointIndex(i) == ig) then
-                        pAOG%NumNeighboringAtoms(i) =                 &
-                                       pAOG%NumNeighboringAtoms(i) + k
-                     endif
-                  enddo
-               enddo
-            endif
-         enddo
-         deallocate(size_collect,data_collect)
-      endif
-   endif
+   n = 0
+   do ia = 1, NumAtoms
+      n = n + pAOG%NumGridPointsInCell(ia)
+   enddo
+   n = n - NumRedundantCBGPs
+!  -------------------------------------------------------------------
+   call GlobalSumInGroup(aGID,n)
+!  -------------------------------------------------------------------
 !
 !  ===================================================================
-!  Check if the number of uniform grid points in all atomic cells equals
-!  to the number of uniform grid points in unit cell.
-!  The following method for checking the consistency fails in multiple 
-!  atoms case. It needs to be redesigned.
+!  If the following test fails, it is likely that the tolerence parameter
+!  for determining whether a grid point is on the cell boundary, inside
+!  the cell, or outside the cell needs to be adjusted.
 !  ===================================================================
-!! n = 0
-!! do ia = 1, NumAtoms
-!!    n = n + pAOG%NumGridPointsInCell(ia)
-!! enddo
-!! do i = 1, pAOG%NumGridPointsOnCellBound
-!!    n = n - pAOG%NumNeighboringAtoms(i) + 1
-!! enddo
-!  -------------------------------------------------------------------
-!! call GlobalSumInGroup(aGID,n)
-!  -------------------------------------------------------------------
-!! if (n /= pUG%ng) then
-!!    call ErrorHandler('insertAtomsInGrid','Failed integraty test: n <> ng',n,pUG%ng)
-!! endif
+   if (n /= pUG%ng) then
+      call WarningHandler('insertAtomsInGrid','Failed integraty test: n <> ng',n,pUG%ng)
+   endif
 !
 !  ===================================================================
 !  Determine the relation of each atom box with the MPI tasks, which the
@@ -1111,7 +1142,7 @@ contains
 !
    integer (kind=IntKind), intent(in) :: ia, ig_in_box
 !
-   integer (kind=IntKind) :: ic, jc, kc, nk, nj, ni
+   integer (kind=IntKind) :: ic, jc, kc, nk, nj, ni, i, j
 !
    real (kind=RealKind) :: pos(3)
 !
@@ -1119,12 +1150,43 @@ contains
 !
    pAOG => pUG%AtomOnGrid
 !
+!  ===================================================================
+!  ni = the number of grid points along the axis 1
+!  nj = the number of grid points along the axis 2
+!  nk = the number of grid points along the axis 3
+!  ===================================================================
    ni = pAOG%AtomBox(2,1,ia)-pAOG%AtomBox(1,1,ia)+1
    nj = pAOG%AtomBox(2,2,ia)-pAOG%AtomBox(1,2,ia)+1
    nk = pAOG%AtomBox(2,3,ia)-pAOG%AtomBox(1,3,ia)+1
-   ic = mod(ig_in_box-1,ni)+pAOG%AtomBox(1,1,ia)
-   jc = mod((ig_in_box-ic+pAOG%AtomBox(1,1,ia)-1)/ni,nj)+pAOG%AtomBox(1,2,ia)
-   kc = ((ig_in_box-ic+pAOG%AtomBox(1,1,ia)-1)/ni-(jc-pAOG%AtomBox(1,2,ia)))/nj+pAOG%AtomBox(1,3,ia)
+!  ===================================================================
+!  Given ig_in_box = 1, 2, ..., the grid index in AtomBox, determine
+!  the corresponding global grid index (relative to the system origin,
+!  at which the global index = 1): 
+!     ic = the coordinate on axis 1
+!     jc = the coordinate on axis 2
+!     kc = the coordinate on axis 3
+!  What is known: for ig_in_box = 1, the grid point coordinates are
+!     (AtomBox(1,1,ia),AtomMox(1,2,ia), AtomBox(1,3,ia))
+!  ===================================================================
+!! ic = mod(ig_in_box-1,ni)+pAOG%AtomBox(1,1,ia)
+!! jc = mod((ig_in_box-ic+pAOG%AtomBox(1,1,ia)-1)/ni,nj)+pAOG%AtomBox(1,2,ia)
+!! kc = ((ig_in_box-ic+pAOG%AtomBox(1,1,ia)-1)/ni-(jc-pAOG%AtomBox(1,2,ia)))/nj+pAOG%AtomBox(1,3,ia)
+   if (ig_in_box <= ni) then
+      ic = ig_in_box - 1 + pAOG%AtomBox(1,1,ia)
+      jc = pAOG%AtomBox(1,2,ia)
+      kc = pAOG%AtomBox(1,3,ia)
+   else
+      i  = mod(ig_in_box-1,ni) + 1
+      ic = i - 1 + pAOG%AtomBox(1,1,ia)
+      j  = mod((ig_in_box - i)/ni,nj) + 1
+      jc = j - 1 + pAOG%AtomBox(1,2,ia)
+      if (ig_in_box <= ni*nj) then
+         kc = pAOG%AtomBox(1,3,ia)
+      else
+         kc = ((ig_in_box - i)/ni - (j - 1))/nj + pAOG%AtomBox(1,3,ia)
+      endif
+   endif
+!
    pos = pUG%grid_step_a*(ic-1) + pUG%grid_step_b*(jc-1) + pUG%grid_step_c*(kc-1) &
          + pUG%vec_origin
 !
@@ -1220,6 +1282,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine printUniform3DGrid(gname)
 !  ===================================================================
+   use Atom2ProcModule, only : getGlobalIndex
    implicit none
 !
    character (len=*), intent(in) :: gname
@@ -1267,7 +1330,7 @@ contains
    write(6,'(/,a,t40,a,i8,a)')'Number of Grid Points on Cell Bound','=',pAOG%NumGridPointsOnCellBound, &
                               ' on the current process'
    do id = 1, pAOG%NumLocalAtoms
-      write(6,'(a,i5,a)')'For local atom index = ',id,'  --------------'
+      write(6,'(a,i3,a,i5,a)')'For local atom index = ',id,', global atom index = ',getGlobalIndex(id),' -----'
       write(6,'(a,t40,a,i8)')'Number of Grid Points in Cell','=',pAOG%NumGridPointsInCell(id)
       write(6,'(a,t40,a,i8)')'Number of Grid Points in Atom Box','=',pAOG%NumGridPointsInAtomBox(id)
    enddo
@@ -1444,7 +1507,11 @@ contains
    enddo LOOP_ig
 !
    if (present(num_neighbor)) then
-      num_neighbor = pUG%AtomOnGrid%NumNeighboringAtoms(n)
+      if (p) then
+         num_neighbor = pUG%AtomOnGrid%NumNeighboringAtoms(n)
+      else
+         num_neighbor = 1
+      endif
    endif
 !
    end function isOnAtomicCellBoundary_s
@@ -1499,7 +1566,11 @@ contains
    enddo LOOP_ig
 !
    if (present(num_neighbor)) then
-      num_neighbor = pUG%AtomOnGrid%NumNeighboringAtoms(n)
+      if (p) then
+         num_neighbor = pUG%AtomOnGrid%NumNeighboringAtoms(n)
+      else
+         num_neighbor = 1
+      endif
    endif
 !
    end function isOnAtomicCellBoundary_g

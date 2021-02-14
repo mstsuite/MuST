@@ -34,13 +34,15 @@ program testFEGreen
 !
    use StepFunctionModule, only : getVolumeIntegration
 !
+   use Atom2ProcModule, only : getGlobalIndex, getLocalNumAtoms, getLocalIndex
+!
    implicit   none
 !
    character (len=4) :: istop = 'none'
 !
    integer (kind=IntKind) :: iprint = 0
    integer (kind=IntKind) :: def_id, info_id
-   integer (kind=IntKind) :: NumAtoms
+   integer (kind=IntKind) :: NumAtoms, LocalNumAtoms
    integer (kind=IntKind) :: lmax_phi_max
    integer (kind=IntKind) :: kmax_phi_max
    integer (kind=IntKind) :: lmax_max
@@ -76,6 +78,11 @@ program testFEGreen
    ne = getNumEs()
    e_mesh => getEPoint()
    NumAtoms = getNumAtoms()
+   LocalNumAtoms = getLocalNumAtoms()
+   if (NumAtoms /= LocalNumAtoms) then
+      write(6,'(a)')'This test code only run on 1 MPI process.'
+      stop 'exit with error'
+   endif
 !  -------------------------------------------------------------------
 !
    allocate(AtomPosition(1:3,1:NumAtoms), lmax_phi(NumAtoms), jmax_phi(NumAtoms), kmax_phi(NumAtoms))
@@ -101,7 +108,7 @@ program testFEGreen
 !  ===================================================================
    call initGauntFactors(lmax_max,istop,iprint)
 !  -------------------------------------------------------------------
-   call setupRadGridAndCell(NumAtoms,lmax_max)
+   call setupRadGridAndCell(LocalNumAtoms,lmax_max)
 !  -------------------------------------------------------------------
 !
 !  ===================================================================

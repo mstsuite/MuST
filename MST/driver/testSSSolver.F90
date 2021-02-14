@@ -211,6 +211,7 @@ program testSSSolver
    allocate(atom_print_level(1:LocalNumAtoms))
    do i=1,LocalNumAtoms
       atom_print_level(i) = getStandardOutputLevel(i)
+      GlobalIndex(i)=getGlobalIndex(i)
    enddo
 !
 !  ===================================================================
@@ -291,13 +292,16 @@ program testSSSolver
 !  -------------------------------------------------------------------
 !   call initPolyhedra(NumAtoms,bravais,'main',0)
 !  -------------------------------------------------------------------
-   call setupRadGridAndCell(NumAtoms,lmax_max)
+   call setupRadGridAndCell(LocalNumAtoms,lmax_max)
 !  -------------------------------------------------------------------
    if (MyPE == 0) then
       if (getKeyValue(1,'Large sphere radius (a.u.)',Rb) > 0) then
          Rb = 500.0d0
          call WarningHandler('testSSSolver','No input for Rb. It is set to default',Rb)
       endif
+!     Rb = 100.0d0 ! If Rb is too large ( > 100), the spherical bessel and neumann
+!     function will give garbage. The algorithms for calculating the spherical 
+!     bessel and neumann function needs to be carefully checked.
       write(6,'(a,f12.5)')'You entered Rb = ',Rb
       write(string_rb,'(f10.1)')10000000.0+Rb
       string_rb(1:3)='_Rb'
@@ -1243,7 +1247,7 @@ contains
    subroutine calIntSphHankelSq0(lmax,rc,energy,fint)
 !  ===================================================================
       use KindParamModule, only : IntKind, RealKind, CmplxKind
-      use MathParamModule, only : Half, SQRTm1
+      use MathParamModule, only : Half, SQRTm1, ONE
       use BesselModule, only : SphericalBessel, SphericalNeumann
 !
       implicit none
@@ -1265,7 +1269,6 @@ contains
 !     ----------------------------------------------------------------
       bhl = bjl(0)+SQRTm1*bnl(0)
       bhlp1 = bjl(1)+SQRTm1*bnl(1)
-      fint(0) = (bhl*bhlp1/x-bhl**2-bhlp1**2)*HALF
       do l = 1, lmax
          bhlm1 = bhl
          bhl = bhlp1

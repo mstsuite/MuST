@@ -2695,7 +2695,7 @@ contains
       endif
    enddo
 !
-   allocate( tnode(nbnd+2*getNumEdges(poly)+2) )
+   allocate( tnode(2*nbnd+2*getNumEdges(poly)+2) )
 !  -------------------------------------------------------------------
    call caltnode(poly,r,begth,endth,tnode,node)
 !  -------------------------------------------------------------------

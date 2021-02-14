@@ -1,9 +1,10 @@
 export INC_PATH += -I $(TOP_DIR)/lua/include -I $(TOP_DIR)/include -I $(TOP_DIR)/src
-export LIBS += -L$(TOP_DIR)/lib -lLSMSLua -lCommunication \
+export LIBS := -L$(TOP_DIR)/lib -lLSMSLua -lCommunication \
                -lMultipleScattering -lSingleSite -lCore -lVORPOL -lAccelerator \
-               -lMadelung -lPotential -lTotalEnergy -lMisc
+               -lMadelung -lPotential -lTotalEnergy -lMisc $(LIBS)
 
-all: lsms wl-lsms
+all: lsms
+# all: lsms wl-lsms
 # all: lsms wl-lsms rewl-lsms (rewl-lsms has problems with the seed generation)
 
 clean:

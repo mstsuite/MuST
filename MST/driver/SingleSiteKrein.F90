@@ -187,6 +187,7 @@ program SingleSiteKrein
    do i=1,LocalNumAtoms
       AtomicNumber(i) = getLocalAtomicNumber(i)
       atom_print_level(i) = getStandardOutputLevel(i)
+      GlobalIndex(i)=getGlobalIndex(i)
    enddo
 !
 !  ===================================================================
