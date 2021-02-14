@@ -190,6 +190,12 @@ public
    real (kind=RealKind), private, allocatable :: sro_params(:)
    real (kind=RealKind), private, allocatable :: sro_params_nn(:)
    integer (kind=IntKind), private :: charge_corr = 0
+   integer (kind=IntKind), private :: use_linear_relation = 0
+   integer (kind=IntKind), private :: num_elements = 0
+   real (kind=RealKind), private, allocatable :: slopes(:)
+   real (kind=RealKind), private, allocatable :: intercepts(:)
+   real (kind=RealKind), private :: cvm_params(2)
+   integer (kind=IntKind), private :: is_cvm = 0
 !
 contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -453,6 +459,26 @@ contains
 !
    rstatus = getKeyValue(tbl_id,'Include CPA/SRO Charge Correction', charge_corr)
 !
+   rstatus = getKeyValue(tbl_id,'Use Linear Relation', use_linear_relation)
+   if (use_linear_relation == 1) then
+      rstatus = getKeyValue(tbl_id, 'Number of Slopes/Intercepts', num_elements)
+      allocate(slopes(num_elements), intercepts(num_elements))
+      rstatus = getKeyValue(tbl_id,'Slopes for Linear Relation', svalue)
+      if (rstatus == 0) then
+         read(svalue,*) slopes(1:num_elements)
+      endif
+      rstatus = getKeyValue(tbl_id, 'Intercepts for Linear Relation', svalue)
+      if (rstatus == 0) then
+         read(svalue,*) intercepts(1:num_elements)
+      endif
+   endif
+
+   rstatus = getKeyValue(tbl_id,'CVM SRO Parameters',svalue)
+   if (rstatus == 0) then
+      read(svalue,*) cvm_params(1:2)
+      is_cvm = 1
+   endif
+
    rstatus = getKeyValue(tbl_id,'Mixing Parameter for Finding Ef',efermi_mix)
    if (efermi_mix < ZERO .or. efermi_mix > ONE) then
       call ErrorHandler('initScfData','Invalid efermi_mix value',efermi_mix)
@@ -475,6 +501,24 @@ contains
       deallocate(Kdiv)
    endif
    end subroutine endScfData
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isSROCVM() result(sro_cvm)
+!  ===================================================================
+   implicit none
+!
+   logical :: sro_cvm
+!
+   if (is_cvm == 1) then
+      sro_cvm = .true.
+   else
+      sro_cvm = .false.
+   endif
+!
+   end function isSROCVM
 !  ===================================================================
 !
 !  *******************************************************************
@@ -986,6 +1030,62 @@ contains
    endif
 !
    end function isChargeCorr
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isLinRel() result (isLinearRelationUsed)
+!  ===================================================================
+   implicit none
+!
+   logical :: isLinearRelationUsed
+!
+   if (use_linear_relation == 0) then
+      isLinearRelationUsed = .false.
+   else if (use_linear_relation == 1) then
+      isLinearRelationUsed = .true.
+   endif
+!
+   end function isLinRel
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getSpeciesSlope(ia) result (slope)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: ia
+   real (kind=RealKind) :: slope
+!
+   if (ia < 1 .or. ia > num_elements) then
+      call ErrorHandler('getSpeciesSlope', 'Invalid Species Index', ia)
+   else
+      slope = slopes(ia)
+   endif
+!
+   end function getSpeciesSlope
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getSpeciesIntercept(ia) result (intercept)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: ia
+   real (kind=RealKind) :: intercept
+!
+   if (ia < 1 .or. ia > num_elements) then
+      call ErrorHandler('getSpeciesSlope', 'Invalid Species Index', ia)
+   else
+      intercept = intercepts(ia)
+   endif
+!
+   end function getSpeciesIntercept
 !  ===================================================================
 !
 !  *******************************************************************
@@ -1507,6 +1607,21 @@ contains
 !  *******************************************************************
 !  
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
+   subroutine retrieveCVMParams(cvm_param_list)
+!  ===================================================================
+   implicit none
+!
+   real (kind=RealKind), allocatable, intent(out) :: cvm_param_list(:)
+
+   allocate(cvm_param_list(2))
+   cvm_param_list = cvm_params
+!
+   end subroutine retrieveCVMParams
+!  ==================================================================
+!
+!  *******************************************************************
+!  
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
    subroutine retrieveSROParams(sro_param_list, param_num, sro_param_list_nn)
 !  ===================================================================
    implicit none
@@ -1520,8 +1635,8 @@ contains
    allocate(sro_param_list(param_num))
    sro_param_list = sro_params
    if (present(sro_param_list_nn)) then
-     allocate(sro_param_list_nn(param_num))
-     sro_param_list_nn = sro_params_nn
+      allocate(sro_param_list_nn(param_num))
+      sro_param_list_nn = sro_params_nn
    endif
 !
    end subroutine retrieveSROParams
