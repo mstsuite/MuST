@@ -1,13 +1,13 @@
 module WriteMatrixModule
-   use KindParamModule, only : IntKind, RealKind, CmplxKind
+   use KindParamModule, only : IntKind, RealKind, CmplxKind, QuadCmplxKind
    use MathParamModule, only : ten2m8, ten2m12
 !
 public :: writeMatrix
    interface writeMatrix
       module procedure WriteMatrixr1, WriteMatrixr2, WriteMatrixr2p
-      module procedure WriteMatrixc1, WriteMatrixc2, WriteMatrixc2p
+      module procedure WriteMatrixc1, WriteMatrixc2, WriteMatrixc2q, WriteMatrixc2p
       module procedure WriteMatrixr3, WriteMatrixr3p
-      module procedure WriteMatrixc3, WriteMatrixc3p
+      module procedure WriteMatrixc3, WriteMatrixc3p, WriteMatrixc3q
    end interface
 !
 private
@@ -366,6 +366,63 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine writeMatrixc2q(a,x,n1,n2,tol_in,diag)
+!  ===================================================================
+   implicit   none
+!
+   character (len=*), intent(in) :: a
+!
+   integer (kind=IntKind), intent(in) :: n1, n2
+   integer (kind=IntKind) :: i, j
+! 
+   complex (kind=QuadCmplxKind), intent(in) :: x(n1, n2)
+   real (kind=RealKind), intent(in), optional :: tol_in
+   real (kind=RealKind) :: tol
+!
+   logical, optional, intent(in) :: diag
+   logical :: not_d
+! 
+!  *******************************************************************
+!  * writes out the non-zero elements (> 10**-8) of a N1*N2 complex 
+!  * matrix or the diagonal elements
+!  *******************************************************************
+   if (present(diag)) then
+      not_d = .not.diag
+   else
+      not_d = .true.
+   endif
+! 
+   if (present(tol_in)) then
+      tol = tol_in
+   else if (.not.not_d) then
+      tol = 1.0d-30
+   else
+      tol = tol0
+   endif
+! 
+   write(6,'(/,80(''-''))')
+   write(6,'(/,27x,a)') '***************************'
+   write(6,'(  27x,a )')'* Output from writeMatrix *'
+   write(6,'( 27x,a,/)')'***************************'
+!
+   write(6,'('' TITLE: '',a)') a
+   write(6,'('' Matrix(1:n1, 1:n2). n1, n2 = '',2i5)') n1, n2
+   write(6,'(a)')'   i   j                 Matrix(i,j)'
+   do j=1,n2
+      do i=1,n1
+         if ((not_d .or. i == j) .and. abs(x(i,j)) > tol) then
+            write(6,'(2i4,2x,2d18.8)')i,j,x(i,j)
+         endif
+      enddo
+   enddo
+   write(6,'(80(''=''))')
+   end subroutine writeMatrixc2q
+!  ===================================================================
+
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine writeMatrixc2p(a,x,n1,n2,tol_in,diag)
 !  ===================================================================
    implicit   none
@@ -465,6 +522,53 @@ contains
    enddo
    write(6,'(80(''=''))')
    end subroutine writeMatrixc3
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine writeMatrixc3q(a,x,n1,n2,n3,tol_in)
+!  ===================================================================
+   implicit   none
+!
+   character (len=*), intent(in) :: a
+!
+   integer (kind=IntKind), intent(in) :: n1, n2, n3
+   integer (kind=IntKind) :: i, j, k
+! 
+   complex (kind=QuadCmplxKind), intent(in) :: x(n1, n2, n3)
+   real (kind=RealKind), intent(in), optional :: tol_in
+   real (kind=RealKind) :: tol
+! 
+!  *******************************************************************
+!  * writes out the non-zero elements (> 10**-8) of a N1*N2 complex 
+!  * matrix
+!  *******************************************************************
+   if (present(tol_in)) then
+      tol = tol_in
+   else
+      tol = tol0
+   endif
+! 
+   write(6,'(/,80(''-''))')
+   write(6,'(/,27x,a)') '***************************'
+   write(6,'(  27x,a )')'* Output from writeMatrix *'
+   write(6,'( 27x,a,/)')'***************************'
+!
+   write(6,'('' TITLE: '',a)') a
+   write(6,'('' Matrix(1:n1, 1:n2, 1:n3). n1, n2, n3 = '',3i5)') n1, n2, n3
+   write(6,'(a)')'   i   j   k             Matrix(i,j,k)'
+   do k=1,n3
+      do j=1,n2
+         do i=1,n1
+            if (abs(x(i,j,k)) > tol) then
+               write(6,'(3i4,2x,2d18.8)')i,j,k,x(i,j,k)
+            endif
+         enddo
+      enddo
+   enddo
+   write(6,'(80(''=''))')
+   end subroutine writeMatrixc3q
 !  ===================================================================
 !
 !  *******************************************************************
