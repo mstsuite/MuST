@@ -1088,12 +1088,6 @@ contains
    allocate(temp(dsize, dsize), temp2(dsize, dsize), &
         temp3(dsize, dsize), temp4(dsize, dsize))
 
-!  call zgemm('C', 'n', dsize, dsize, dsize, CONE, tau_c, &
-!    dsize, iden, dsize, CZERO, tau_cc, dsize)
-
-!  call zgemm('C', 'n', dsize, dsize, dsize, CONE, t_c, &
-!    dsize, iden, dsize, CZERO, t_cc, dsize)
-
 
    D = CZERO
    Dt = CZERO
@@ -1108,13 +1102,6 @@ contains
    enddo
 
    temp = CZERO; temp2 = CZERO; temp3 = CZERO; temp4 = CZERO
-   if (dir == 1) then
-     call writeMatrix('tau_c', tau_c, dsize, dsize)
-     call writeMatrix('t_c', t_c, dsize, dsize)
-     call writeMatrix('t_a', t_a, dsize, dsize)
-     call writeMatrix('tau_cc', tau_cc, dsize, dsize)
-     call writeMatrix('t_ac', t_ac, dsize, dsize)
-   endif
 
    temp = t_a - t_c
    temp2 = t_ac - t_cc
@@ -1127,14 +1114,6 @@ contains
    call computeAprojB('N', dsize, temp2, tau_cc, Dt1)
    call computeAprojB('N', dsize, tau_cc, temp2, D1)
 !  -----------------------------------------------------------------
-
-   if (dir == 1) then
-      call writeMatrix('D', D, dsize, dsize)
-      call writeMatrix('D1', D1, dsize, dsize)
-      call writeMatrix('Dt', Dt, dsize, dsize)
-      call writeMatrix('Dt1', Dt1, dsize, dsize)
-      call writeMatrix('j',jspace(:,:,n,ic,is,dir), dsize, dsize)
-   endif
 
 
    temp = CZERO; temp2 = CZERO
@@ -1225,12 +1204,6 @@ contains
    Omega = (4.0/3.0)*PI*rmt**3   !getVolume(1)
    tau_c = tau_ctemp(1:dsize, 1:dsize)
    tau_cc = conjg(tau_c)
-
-
-   if (dir1 == 1 .and. dir2 == 1) then
-!     call writeMatrix('tau_c', tau_c, dsize, dsize)
-!     call writeMatrix('tau_cc', tau_cc, dsize, dsize)
-   endif
 
    num_species = getLocalNumSpecies(n)
    do ic = 1, num_species
@@ -1332,12 +1305,13 @@ contains
    integer (kind=IntKind) :: iend, num_species, ic, ic1, ic2,  dir, dir1
    real(kind=RealKind) :: efermi, rmt, Omega, c_a, c_b, coeff, a
    real(kind=RealKind), pointer :: radial_grid(:)
+   real(kind=RealKind) :: start, finish
    complex (kind=CmplxKind) :: jterm, temp, global_energy 
    complex(kind=CmplxKind), pointer :: phi(:,:,:)
    complex(kind=CmplxKind), allocatable :: sf_term(:,:,:), sf_single(:,:), sfqsum(:)
    complex(kind=CmplxKind) :: int_val1, int_val2, int_val3, int_val4
-
  
+   call cpu_time(start)
    efermi = getFermiEnergy()
    global_energy = efermi + SQRTm1*delta
    
@@ -1346,8 +1320,8 @@ contains
 !  ---------------------------------------------------------------
    
    a = getLatticeConstant()
-   rmt = getRadialGridRadius(1, MT=.true., nr=iend)
-   radial_grid => getRmesh(1)
+   rmt = getRadialGridRadius(n, MT=.true., nr=iend)
+   radial_grid => getRmesh(n)
    Omega = (4.0/3.0)*PI*(rmt**3)
    
    allocate(sf_term(iend, kmax_sigma_2, kmax_sigma_2), sfqsum(iend), &
@@ -1383,29 +1357,27 @@ contains
            c_b = getLocalSpeciesContent(n, ic2)              
            coeff = -(c_a*c_b)/(PI*Omega)
            
-           int_val1 = int_val1 + coeff*calSigmaIntegralCPA(global_energy, &
+           int_val1 = int_val1 + coeff*calSigmaIntegralCPA(n, global_energy, &
            jtspace(:,:,n,ic1,is,dir), jtspace(:,:,n,ic2,is,dir1), &
            getSingleSiteTmat,tau_needed=.true.,use_tmat=.true.,caltype=1)
            
-           int_val2 = int_val2 + coeff*calSigmaIntegralCPA(global_energy, &
+           int_val2 = int_val2 + coeff*calSigmaIntegralCPA(n, global_energy, &
            jtspace3(:,:,n,ic1,is,dir), jtspace2(:,:,n,ic2,is,dir1), &
            getSingleSiteTmat, tau_needed=.true.,use_tmat=.true.,caltype=2)
            
-           int_val3 = int_val3 + coeff*calSigmaIntegralCPA(global_energy, &
+           int_val3 = int_val3 + coeff*calSigmaIntegralCPA(n, global_energy, &
            jtspace2(:,:,n,ic1,is,dir), jtspace3(:,:,n,ic2,is,dir1), &
            getSingleSiteTmat, tau_needed=.true.,use_tmat=.true.,caltype=3)
            
-           int_val4 = int_val4 + coeff*calSigmaIntegralCPA(global_energy, &
+           int_val4 = int_val4 + coeff*calSigmaIntegralCPA(n, global_energy, &
            jtspace4(:,:,n,ic1,is,dir), jtspace4(:,:,n,ic2,is,dir1), &
            getSingleSiteTmat, tau_needed=.true.,use_tmat=.true.,caltype=4)
-!          call ErrorHandler('calConductivity', 'stop')
          enddo
        enddo
        sigmatilde(dir,dir1,is) = int_val1
        sigmatilde2(dir,dir1,is) = int_val2
        sigmatilde3(dir,dir1,is) = int_val3
        sigmatilde4(dir,dir1,is) = int_val4
-!      Print *, int_val1, int_val2, int_val3, int_val4
 !      ----------------------------------------------------
        call calSigmaTildeCPA0(n, dir, dir1, is, rmt)
 !      -----------------------------------------------------
@@ -1421,6 +1393,8 @@ contains
    call writeMatrix('sigmatilde3', sigmatilde3, 3, 3, n_spin_cant)
    call writeMatrix('sigmatilde4', sigmatilde4, 3, 3, n_spin_cant)
 
+   call cpu_time(finish)
+   Print *, "Time:", finish-start
    call StopHandler('calCPAConductivity', 'Conductivity Successfully Calculated', &
                            force_to_print=.true.)
 
