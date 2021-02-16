@@ -843,10 +843,10 @@ contains
       endif
       do ia = 1, p_DL%NumSpecies
          p_DL%EMD(ia)%rho0 => rho0(:,ia)
-         p_DL%EMD(ia)%VPCharge = p_DL%EMD(ia)%rho0(nr+1) !+ getCoreVPCharge(id)
+         p_DL%EMD(ia)%VPCharge = p_DL%EMD(ia)%rho0(nr+1) ! + getCoreVPCharge(id,ia)
          if (n_spin_pola == 2) then
             p_DL%EMD(ia)%mom0 => mom0(:,ia)
-            p_DL%EMD(ia)%VPMoment = p_DL%EMD(ia)%mom0(nr+1) !+ getCoreVPMoment(id)
+            p_DL%EMD(ia)%VPMoment = p_DL%EMD(ia)%mom0(nr+1) ! + getCoreVPMoment(id,ia)
          else
             p_DL%EMD(ia)%VPMoment = ZERO
             nullify( p_DL%EMD(ia)%mom0 )
