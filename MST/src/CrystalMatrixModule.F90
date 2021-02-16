@@ -1318,7 +1318,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function calSigmaIntegralCPA(e,Ja,Jb,getSingleScatteringMatrix,&
+   function calSigmaIntegralCPA(n,e,Ja,Jb,getSingleScatteringMatrix,&
        tau_needed,use_tmat,configuration,caltype) result(sint)
 !  ===================================================================
    use MPPModule, only : MyPE
@@ -1342,7 +1342,7 @@ contains
 ! 
    character (len=20) :: sname = "calSigmaIntegral"
 ! 
-   integer (kind=IntKind), intent(in) :: caltype
+   integer (kind=IntKind), intent(in) :: n, caltype
    integer (kind=IntKind), intent(in), optional :: configuration(:)
    integer (kind=IntKind) :: k_loc, k, row, col, MyPEinKGroup, method
    integer (kind=IntKind) :: NumKs, kGID, aGID, NumKsOnMyProc, NumRedunKs
@@ -1433,7 +1433,7 @@ contains
    w0 => aliasArray2_c(wtmp, kkrsz, kkrsz)
    w1 => aliasArray2_c(wtmpsym,kkrsz,kkrsz)
    res => aliasArray2_c(wint,kkrsz,kkrsz)
-   tmat => getSingleScatteringMatrix('T-Matrix',site=1,atom=0)
+   tmat => getSingleScatteringMatrix('T-Matrix',site=n,atom=0)
 
    i = 0
    sint = CZERO
@@ -1631,14 +1631,12 @@ contains
    enddo
 !  pres => aliasArray_c(wint,kkrsz,kkrsz)
 !  -------------------------------------------------------------------
-!  call GlobalSumInGroup(kGID,pres,KKRMatrixSizeCant*BandSizeCant)
+   call GlobalSumInGroup(kGID,res,kmax_kkr_max,kmax_kkr_max)
 !  -------------------------------------------------------------------
 
    do i = 1, kkrsz
      sint = sint + res(i, i)
    enddo
-
-!  Print *, sint
 
    end function calSigmaIntegralCPA
 !  ===================================================================
