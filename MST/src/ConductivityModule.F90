@@ -1296,13 +1296,13 @@ contains
    use SSSolverModule, only : solveSingleScattering, getRegSolution, getSolutionRmeshSize
    use StepFunctionModule, only : interpolateStepFunction, getRadialStepFunction
    use CrystalMatrixModule, only : calSigmaIntegralCPA
-   use AtomModule, only : getLocalSpeciesContent
-   use SystemModule, only : getLatticeConstant
+   use AtomModule, only : getLocalNumSpecies, getLocalSpeciesContent
+   use SystemVolumeModule, only : getAtomicVPVolume
 
    integer (kind=IntKind), intent(in) :: n, is, pot_type
    real (kind=RealKind), intent(in) :: delta
 
-   integer (kind=IntKind) :: iend, num_species, ic, ic1, ic2,  dir, dir1
+   integer (kind=IntKind) :: iend, nspecies, ic, ic1, ic2,  dir, dir1
    real(kind=RealKind) :: efermi, rmt, Omega, c_a, c_b, coeff, a
    real(kind=RealKind), pointer :: radial_grid(:)
    real(kind=RealKind) :: start, finish
@@ -1319,10 +1319,10 @@ contains
    call solveSingleScattering(spin=is,site=n,e=global_energy,vshift=CZERO)
 !  ---------------------------------------------------------------
    
-   a = getLatticeConstant()
    rmt = getRadialGridRadius(n, MT=.true., nr=iend)
    radial_grid => getRmesh(n)
-   Omega = (4.0/3.0)*PI*(rmt**3)
+   Omega = getAtomicVPVolume(n)
+   nspecies = getLocalNumSpecies(n)
    
    allocate(sf_term(iend, kmax_sigma_2, kmax_sigma_2), sfqsum(iend), &
      sf_single(iend, jofk(kmax_sigma)))
@@ -1339,7 +1339,7 @@ contains
    call computeCPAMedium(global_energy)
 !  ----------------------------------------------------------------
    
-   do ic = 1, 2
+   do ic = 1, nspecies
      do dir = 1, 3
 !      ------------------------------------------------------    
        call calJtilde(n, ic, is, dir)
@@ -1351,8 +1351,8 @@ contains
      do dir1 = 1, 1
        int_val1 = CZERO; int_val2 = CZERO 
        int_val3 = CZERO; int_val4 = CZERO
-       do ic1 = 1, 2
-         do ic2 = 1, 2
+       do ic1 = 1, nspecies
+         do ic2 = 1, nspecies
            c_a = getLocalSpeciesContent(n, ic1)
            c_b = getLocalSpeciesContent(n, ic2)              
            coeff = -(c_a*c_b)/(PI*Omega)
