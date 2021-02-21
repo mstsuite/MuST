@@ -337,7 +337,7 @@ contains
  
    integer (kind=IntKind), intent(in) :: l_1, l_2, m_1, m_2
    integer (kind=IntKind) :: i, temp, lsize
-   real (kind=QuadRealKind) :: coeff, log_coeff, first_term, &
+   real (kind=RealKind) :: coeff, log_coeff, first_term, &
                              second_term, third_term
    real (kind=RealKind) :: A_ml, A_pl, A_ol
    real (kind=RealKind) :: numerator, denominator
