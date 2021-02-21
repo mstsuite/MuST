@@ -168,16 +168,16 @@ contains
       NumSpecies = max(NumSpecies, num_species(i))
    enddo
    
-   lmax_sigma = lmax_max
-   lmax_sigma_2 = lmax_max
+   lmax_sigma = lmax_max + 8
+   lmax_sigma_2 = lmax_max + 8
    kmax_sigma = (lmax_sigma + 1)**2
    kmax_sigma_2 = (lmax_sigma_2 + 1)**2
 
-   lmax_cg = lmax_max + 1
+   lmax_cg = lmax_sigma
    kmax_cg = (lmax_cg + 1)**2
    master_size = kmax_kkr_max
    
-   allocate(gspacep(kmax_max*kmax_max*kmax_max))
+   allocate(gspacep(kmax_cg*kmax_cg*kmax_cg))
 
 !  -------------------------------------------------------------------
    call initGauntFactors(lmax_max,istop,-1)
@@ -259,12 +259,12 @@ contains
    nj3 => getNumK3()
    kj3 => getK3()
    cgnt => getGauntFactor()
-   gaunt => aliasArray3_c(gspacep,kmax_max,kmax_max,kmax_max)
+   gaunt => aliasArray3_c(gspacep,kmax_cg,kmax_cg,kmax_cg)
    gaunt = CZERO
 
-   do klp2 = 1, kmax_max
-     do klg = 1, kmax_max
-       do klp1 = 1, kmax_max
+   do klp2 = 1, kmax_cg
+     do klg = 1, kmax_cg
+       do klp1 = 1, kmax_cg
           do i3 = 1, nj3(klp1,klg)
             if (kj3(i3,klp1,klg) == klp2) then
                gaunt(klp1,klg,klp2) = cgnt(i3,klp1,klg)
@@ -1338,7 +1338,6 @@ contains
 !  ----------------------------------------------------------------
    call computeCPAMedium(global_energy)
 !  ----------------------------------------------------------------
-   
    do ic = 1, nspecies
      do dir = 1, 3
 !      ------------------------------------------------------    
@@ -1347,8 +1346,8 @@ contains
      enddo
    enddo
  
-   do dir = 1, 1
-     do dir1 = 1, 1
+   do dir = 1, 3
+     do dir1 = 1, 3
        int_val1 = CZERO; int_val2 = CZERO 
        int_val3 = CZERO; int_val4 = CZERO
        do ic1 = 1, nspecies
