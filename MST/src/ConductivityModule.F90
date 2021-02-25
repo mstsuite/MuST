@@ -929,11 +929,9 @@ contains
 !       -------------------------------------------------------
         call MtxInv_LU(sine_mat, calsize)
 !       -------------------------------------------------------
-!       call writeMatrix('sine_mat_inv',sine_mat,calsize, calsize)
         call zgemm('T', 'n', calsize, calsize, calsize, CONE, sine_mat, &
           calsize, iden, calsize, CZERO, sine_transpose, calsize)
 !       -------------------------------------------------------
-!       call writeMatrix('sine_transpose',sine_transpose, calsize, calsize)
         do dir = 1, 1
           Dplus = CZERO
           Dminus = CZERO
@@ -953,10 +951,6 @@ contains
                         surf = surf + calSurfaceTerm(iend,n,ic,is,gL1,gL2,gL,gL6,gK1,&
                          gK2,1,qterm2,qterm1)
                       enddo
-                      if (surf /= 0) then
-                        Print *, "NZ Surf Contribution: ", gL1, gL2, &
-                          gK1, gK2, gL, "given by ", surf
-                      endif
                       Dplus(gL1, gL2) = Dplus(gL1, gL2) + surf
                     enddo
                   enddo
@@ -976,7 +970,7 @@ contains
               enddo
             enddo
           endif
-!         call writeMatrix('Dplus', Dplus, calsize, calsize)
+!         ------------------------------------------------------------------
           call zgemm('n', 'n', calsize, calsize, calsize, -2.0*sqrt(2.0)*SQRTm1, &
                Dplus, calsize, sine_mat, calsize, CZERO, &
                temp, calsize)
@@ -985,7 +979,6 @@ contains
               sine_transpose, calsize, temp, calsize, CZERO, &
               jspace(1:calsize,1:calsize,n,ic,is,dir), calsize)
 !         ------------------------------------------------------------------
-!         call writeMatrix('S^-1^T(Dp - Dm)S^-1',jspace(1:calsize,1:calsize,n,ic,is,1),calsize,calsize)
         enddo
 !       ---------------------------------------------------------------------
         call calJyzFromJx(n, ic, is, calsize)
@@ -1037,11 +1030,6 @@ contains
        enddo
      enddo
    enddo
-
-!  call writeMatrix('Jz', jspace(:,:,n,ic,is,3), calsize, calsize)
-!  call writeMatrix('Jx_2', jspace2(:,:,n,ic,is,1), calsize, calsize)
-!  call writeMatrix('Jx_3', jspace3(:,:,n,ic,is,1), calsize, calsize)
-!  call writeMatrix('Jx_4', jspace4(:,:,n,ic,is,1), calsize, calsize)
 
    end subroutine calJyzFromJx
 !  ===================================================================
@@ -1126,8 +1114,6 @@ contains
       temp, dsize, CZERO, jtspace(:,:,n,ic,is,dir), dsize)
 !  -----------------------------------------------------------------
 
-!  Print *, "Jt1 is ok"
-
 !  Calculating Jtilde(E_F + id, E_F - id)
 !  -----------------------------------------------------------------
    call zgemm('n', 'n', dsize, dsize, dsize, CONE, jspace2(:,:,n,ic,is,dir), &
@@ -1136,8 +1122,6 @@ contains
    call zgemm('n', 'n', dsize, dsize, dsize, CONE, Dt, dsize, &
       temp2, dsize, CZERO, jtspace2(:,:,n,ic,is,dir), dsize)
 !  -----------------------------------------------------------------
-
-!  Print *, "Jt2 is ok"
 
 !  Calculating Jtilde(E_F - id, E_F + id)
 !  -----------------------------------------------------------------
@@ -1148,8 +1132,6 @@ contains
       temp3, dsize, CZERO, jtspace3(:,:,n,ic,is,dir), dsize)
 !  -----------------------------------------------------------------
 
-!  Print *, "Jt3 is ok"
-
 !  Calculating Jtilde(E_F - id, E_F - id)
 !  -----------------------------------------------------------------
    call zgemm('n', 'n', dsize, dsize, dsize, CONE, jspace4(:,:,n,ic,is,dir), &
@@ -1158,8 +1140,6 @@ contains
    call zgemm('n', 'n', dsize, dsize, dsize, CONE, Dt1, dsize, &
       temp4, dsize, CZERO, jtspace4(:,:,n,ic,is,dir), dsize)
 !  -----------------------------------------------------------------
-
-!  Print *, "Jt4 is ok"
 
    if (dir == 1) then
 !    call writeMatrix('Jtx', jtspace(:,:,n,ic,is,1), dsize, dsize)
@@ -1286,7 +1266,7 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calCPAConductivity(n, is, delta, pot_type)
+   subroutine calCPAConductivity(n, is, delta, pot_type, n_spin_pola)
 !  ===================================================================
 
    use CPAMediumModule, only : computeCPAMedium, getSingleSiteTmat
@@ -1299,7 +1279,7 @@ contains
    use AtomModule, only : getLocalNumSpecies, getLocalSpeciesContent
    use SystemVolumeModule, only : getAtomicVPVolume
 
-   integer (kind=IntKind), intent(in) :: n, is, pot_type
+   integer (kind=IntKind), intent(in) :: n, is, pot_type, n_spin_pola
    real (kind=RealKind), intent(in) :: delta
 
    integer (kind=IntKind) :: iend, nspecies, ic, ic1, ic2,  dir, dir1
@@ -1373,10 +1353,13 @@ contains
            getSingleSiteTmat, tau_needed=.true.,use_tmat=.true.,caltype=4)
          enddo
        enddo
-       sigmatilde(dir,dir1,is) = int_val1
-       sigmatilde2(dir,dir1,is) = int_val2
-       sigmatilde3(dir,dir1,is) = int_val3
-       sigmatilde4(dir,dir1,is) = int_val4
+       if (n_spin_pola == 2) then
+         sigmatilde(dir,dir1,is) = int_val1; sigmatilde2(dir,dir1,is) = int_val2
+         sigmatilde3(dir,dir1,is) = int_val3; sigmatilde4(dir,dir1,is) = int_val4
+       else if (n_spin_pola == 1) then
+         sigmatilde(dir,dir1,is) = 2*int_val1; sigmatilde2(dir,dir1,is) = 2*int_val2
+         sigmatilde3(dir,dir1,is) = 2*int_val3; sigmatilde4(dir,dir1,is) = 2*int_val4
+       endif
 !      ----------------------------------------------------
        call calSigmaTildeCPA0(n, dir, dir1, is, rmt)
 !      -----------------------------------------------------
