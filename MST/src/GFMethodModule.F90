@@ -900,8 +900,8 @@ contains
      delta = getFermiEnergyImagPart()
      pot_type = useStepFunctionForSigma()
      do id = 1, LocalNumAtoms
-       do is = 1, n_spin_cant
-         call calCPAConductivity(id, is, delta, pot_type)
+       do is = 1, n_spin_pola
+         call calCPAConductivity(id, is, delta, pot_type, n_spin_pola)
        enddo
      enddo
    endif
