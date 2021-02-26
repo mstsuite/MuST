@@ -1278,11 +1278,12 @@ contains
    use CrystalMatrixModule, only : calSigmaIntegralCPA
    use AtomModule, only : getLocalNumSpecies, getLocalSpeciesContent
    use SystemVolumeModule, only : getAtomicVPVolume
+   use ScfDataModule, only : useCubicSymmetryForSigma
 
    integer (kind=IntKind), intent(in) :: n, is, pot_type, n_spin_pola
    real (kind=RealKind), intent(in) :: delta
 
-   integer (kind=IntKind) :: iend, nspecies, ic, ic1, ic2,  dir, dir1
+   integer (kind=IntKind) :: iend, nspecies, ic, ic1, ic2,  dir, dir1, dirnum
    real(kind=RealKind) :: efermi, rmt, Omega, c_a, c_b, coeff, a
    real(kind=RealKind), pointer :: radial_grid(:)
    real(kind=RealKind) :: start, finish
@@ -1292,6 +1293,12 @@ contains
    complex(kind=CmplxKind) :: int_val1, int_val2, int_val3, int_val4
  
    call cpu_time(start)
+   if (useCubicSymmetryForSigma()) then
+     dirnum = 1
+   else
+     dirnum = 3
+   endif
+
    efermi = getFermiEnergy()
    global_energy = efermi + SQRTm1*delta
    
@@ -1319,15 +1326,15 @@ contains
    call computeCPAMedium(global_energy)
 !  ----------------------------------------------------------------
    do ic = 1, nspecies
-     do dir = 1, 3
+     do dir = 1, dirnum
 !      ------------------------------------------------------    
        call calJtilde(n, ic, is, dir)
 !      ------------------------------------------------------
      enddo
    enddo
  
-   do dir = 1, 3
-     do dir1 = 1, 3
+   do dir = 1, dirnum
+     do dir1 = 1, dirnum
        int_val1 = CZERO; int_val2 = CZERO 
        int_val3 = CZERO; int_val4 = CZERO
        do ic1 = 1, nspecies
@@ -1369,11 +1376,11 @@ contains
      enddo
    enddo
 
-   call writeMatrix('sigma', sigma, 3, 3, n_spin_cant)
-   call writeMatrix('sigmatilde', sigmatilde, 3, 3, n_spin_cant)
-   call writeMatrix('sigmatilde2', sigmatilde2, 3, 3, n_spin_cant)
-   call writeMatrix('sigmatilde3', sigmatilde3, 3, 3, n_spin_cant)
-   call writeMatrix('sigmatilde4', sigmatilde4, 3, 3, n_spin_cant)
+   call writeMatrix('sigma', sigma, dirnum, dirnum, n_spin_cant)
+   call writeMatrix('sigmatilde', sigmatilde, dirnum, dirnum, n_spin_cant)
+   call writeMatrix('sigmatilde2', sigmatilde2, dirnum, dirnum, n_spin_cant)
+   call writeMatrix('sigmatilde3', sigmatilde3, dirnum, dirnum, n_spin_cant)
+   call writeMatrix('sigmatilde4', sigmatilde4, dirnum, dirnum, n_spin_cant)
 
    call cpu_time(finish)
    Print *, "Time:", finish-start
