@@ -35,6 +35,8 @@ public :: initScfData,                 &
           isKKRCPASRO,                 &
           isSROSCF,                    &
           isConductivity,              &
+          useStepFunctionForSigma,     &
+          useCubicSymmetryForSigma,    &
           isScreenKKR_LSMS,            &
           isSingleSite,                &
           isFrozenCore,                &
@@ -202,6 +204,7 @@ public
 !  Conductivity Parameters
    integer (kind=IntKind), private :: do_sigma = 0
    integer (kind=IntKind), private :: use_sf = 1
+   integer (kind=IntKind), private :: use_csymm = 1
    real (kind=RealKind), private :: imag_part = 0.001
 !
 contains
@@ -498,6 +501,7 @@ contains
    rstatus = getKeyValue(tbl_id,'Conductivity Calculation',do_sigma)
    rstatus = getKeyValue(tbl_id,'Fermi Energy Imaginary Part',imag_part)
    rstatus = getKeyValue(tbl_id,'Integrate Upto Muffin Tin', use_sf)
+   rstatus = getKeyValue(tbl_id,'Use Cubic Symmetry', use_csymm)
 
    end subroutine initScfData
 !  ===================================================================
@@ -897,6 +901,23 @@ contains
    md = use_sf
    
    end function useStepFunctionForSigma
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function useCubicSymmetryForSigma() result(md)
+!  ===================================================================
+   implicit none
+   logical :: md
+
+   if (use_csymm == 0) then
+     md = .false.
+   else
+     md = .true.
+   endif
+   
+   end function useCubicSymmetryForSigma
 !  ===================================================================
 !
 !  *******************************************************************
