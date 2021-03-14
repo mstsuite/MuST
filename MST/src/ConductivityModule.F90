@@ -1159,6 +1159,7 @@ contains
    use PolyhedraModule, only : getVolume
    use CPAMediumModule, only : getCPAMatrix
    use AtomModule, only : getLocalSpeciesContent, getLocalNumSpecies
+   use SystemVolumeModule, only : getAtomicVPVolume
    use WriteMatrixModule, only : writeMatrix
 
    integer (kind=IntKind), intent(in) :: n, dir1, dir2, is
@@ -1179,7 +1180,7 @@ contains
     tau_cc(dsize, dsize), tau_c(dsize, dsize))
    temp1 = CZERO; temp2 = CZERO; temp3 = CZERO; temp4 = CZERO
 
-   Omega = (4.0/3.0)*PI*rmt**3   !getVolume(1)
+   Omega = getAtomicVPVolume(n)
    tau_c = tau_ctemp(1:dsize, 1:dsize)
    tau_cc = conjg(tau_c)
 

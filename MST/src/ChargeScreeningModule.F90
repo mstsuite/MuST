@@ -48,7 +48,7 @@ contains
                    getSpeciesSlope, getSpeciesIntercept
 
    integer (kind=IntKind), intent(in) :: nlocal, num_atoms
-   integer (kind=IntKind) :: i, j, sro_param_num, temp
+   integer (kind=IntKind) :: i, j, sro_param_num, temp, na
    real (kind=RealKind) :: spec_i, spec_j
    real (kind=RealKind), allocatable :: sro_params(:)
 
@@ -68,12 +68,13 @@ contains
    enddo
    allocate(w_ab(NumSpecies, NumSpecies))
 
-   if (.false.) then
-     !  --------------------------------------------------------
-        call retrieveSROParams(sro_param_list=sro_params, param_num=sro_param_num)
-     !  --------------------------------------------------------
-        w_ab = ZERO
-        do i = 1, LocalNumSites
+   if (isKKRCPASRO() == .true.) then
+   !  --------------------------------------------------------
+      call retrieveSROParams(sro_param_list=sro_params, param_num=sro_param_num)
+   !  --------------------------------------------------------
+      w_ab = ZERO
+      do na = 1, LocalNumSites
+        do i = 1, getLocalNumSpecies(na)
           spec_i = getLocalSpeciesContent(na, i)
           do j = 1, getLocalNumSpecies(na)
             spec_j = getLocalSpeciesContent(na, j)
@@ -85,6 +86,7 @@ contains
             endif
           enddo
         enddo
+      enddo
    endif
 
    end subroutine initChargeScreeningModule
