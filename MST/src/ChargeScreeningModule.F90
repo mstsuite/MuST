@@ -68,7 +68,7 @@ contains
    enddo
    allocate(w_ab(NumSpecies, NumSpecies))
 
-   if (isKKRCPASRO() == .true.) then
+   if (isKKRCPASRO() .eqv. .true.) then
    !  --------------------------------------------------------
       call retrieveSROParams(sro_param_list=sro_params, param_num=sro_param_num)
    !  --------------------------------------------------------
