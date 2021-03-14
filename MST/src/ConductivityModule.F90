@@ -168,8 +168,8 @@ contains
       NumSpecies = max(NumSpecies, num_species(i))
    enddo
    
-   lmax_sigma = lmax_max + 8
-   lmax_sigma_2 = lmax_max + 8
+   lmax_sigma = lmax_max + 4
+   lmax_sigma_2 = lmax_max + 4
    kmax_sigma = (lmax_sigma + 1)**2
    kmax_sigma_2 = (lmax_sigma_2 + 1)**2
 
@@ -196,23 +196,23 @@ contains
    allocate(cgspace(kmax_cg, kmax_cg, 2*lmax_cg + 2))
    allocate(l3space(kmax_cg, kmax_cg, 2*lmax_cg + 2))
    allocate(jspace(jsize, jsize, &
-             LocalNumAtoms, NumSpecies, n_spin_cant, 3), &
-   jspace2(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_cant, 3), &
-   jspace3(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_cant, 3), &
-   jspace4(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_cant, 3)) 
+             LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+   jspace2(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+   jspace3(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+   jspace4(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3)) 
    
    if (mode == 3 .or. mode == 4) then
      allocate(jtspace(jsize, jsize, &
-             LocalNumAtoms, NumSpecies, n_spin_cant, 3), &
-     jtspace2(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_cant, 3), &
-     jtspace3(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_cant, 3), &
-     jtspace4(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_cant, 3))
+             LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+     jtspace2(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+     jtspace3(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+     jtspace4(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3))
      jtspace = CZERO; jtspace2 = CZERO; jtspace3 = CZERO; jtspace4 = CZERO
    endif 
 
    allocate(iden(jsize, jsize))
-   allocate(sigmatilde(3, 3, n_spin_cant), sigmatilde2(3, 3, n_spin_cant), sigmatilde3(3, 3, n_spin_cant),  &
-    sigmatilde4(3, 3, n_spin_cant), sigma(3, 3, n_spin_cant))
+   allocate(sigmatilde(3, 3, n_spin_pola), sigmatilde2(3, 3, n_spin_pola), sigmatilde3(3, 3, n_spin_pola),  &
+    sigmatilde4(3, 3, n_spin_pola), sigma(3, 3, n_spin_pola))
 
    cgspace = ZERO
    l3space = 0
@@ -894,18 +894,18 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calJxFromPhiLrIntegral(global_energy, iend, qterm1, qterm2, mt)
+   subroutine calJxFromPhiLrIntegral(global_energy, iend, is, qterm1, qterm2, mt)
 !  ===================================================================
    use MatrixInverseModule, only : MtxInv_LU
    use WriteMatrixModule, only : writeMatrix
    use SSSolverModule, only : getSineMatrix
 
-   integer (kind=IntKind), intent(in) :: iend, mt
+   integer (kind=IntKind), intent(in) :: iend, is, mt
    complex (kind=CmplxKind), intent(in) :: global_energy
    complex (kind=CmplxKind), intent(in) :: qterm1(iend,jofk(kmax_sigma)), &
                             qterm2(iend,kmax_sigma_2,kmax_sigma_2)
 
-   integer (kind=IntKind) :: n, ic, is, dir, calsize
+   integer (kind=IntKind) :: n, ic, dir, calsize
    integer (kind=IntKind) :: ir, gK1, gK2, gL, gL1, gL2, gL6
    complex (kind=CmplxKind) :: kappa, surf
    complex (kind=CmplxKind), pointer :: sine_tmp(:,:), sine_transpose(:,:)
@@ -922,7 +922,6 @@ contains
 
     
    do n = 1, LocalNumAtoms
-    do is = 1, n_spin_cant
       do ic = 1, num_species(n)
         sine_tmp => getSineMatrix(spin=is,site=n,atom=ic)
         sine_mat = sine_tmp(1:calsize, 1:calsize)
@@ -984,7 +983,6 @@ contains
         call calJyzFromJx(n, ic, is, calsize)
 !       --------------------------------------------------------------------
       enddo
-    enddo
    enddo
 
    end subroutine calJxFromPhiLrIntegral
@@ -1315,13 +1313,13 @@ contains
      sf_single(iend, jofk(kmax_sigma)))
    
 !  ---------------------------------------------------------------- 
-   call interpolateStepFunction(1, iend, radial_grid(1:iend), &
+   call interpolateStepFunction(n, iend, radial_grid(1:iend), &
          kmax_sigma_2, kmax_sigma_2, sf_term)
 !  ----------------------------------------------------------------
-   call getRadialStepFunction(1, 1, iend, radial_grid, &
+   call getRadialStepFunction(n, 1, iend, radial_grid, &
         lmax_sigma, sf_single)
 !  ----------------------------------------------------------------
-   call calJxFromPhiLrIntegral(global_energy,iend,sf_single,sf_term,mt=pot_type)
+   call calJxFromPhiLrIntegral(global_energy,iend,is,sf_single,sf_term,mt=pot_type)
 !  ----------------------------------------------------------------
    call computeCPAMedium(global_energy)
 !  ----------------------------------------------------------------
@@ -1376,16 +1374,14 @@ contains
      enddo
    enddo
 
-   call writeMatrix('sigma', sigma, dirnum, dirnum, n_spin_cant)
-   call writeMatrix('sigmatilde', sigmatilde, dirnum, dirnum, n_spin_cant)
-   call writeMatrix('sigmatilde2', sigmatilde2, dirnum, dirnum, n_spin_cant)
-   call writeMatrix('sigmatilde3', sigmatilde3, dirnum, dirnum, n_spin_cant)
-   call writeMatrix('sigmatilde4', sigmatilde4, dirnum, dirnum, n_spin_cant)
+   call writeMatrix('sigma', sigma, dirnum, dirnum, n_spin_pola)
+   call writeMatrix('sigmatilde', sigmatilde, dirnum, dirnum, n_spin_pola)
+   call writeMatrix('sigmatilde2', sigmatilde2, dirnum, dirnum, n_spin_pola)
+   call writeMatrix('sigmatilde3', sigmatilde3, dirnum, dirnum, n_spin_pola)
+   call writeMatrix('sigmatilde4', sigmatilde4, dirnum, dirnum, n_spin_pola)
 
    call cpu_time(finish)
    Print *, "Time:", finish-start
-   call StopHandler('calCPAConductivity', 'Conductivity Successfully Calculated', &
-                           force_to_print=.true.)
 
    end subroutine calCPAConductivity
 !  ===================================================================
