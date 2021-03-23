@@ -168,8 +168,8 @@ contains
       NumSpecies = max(NumSpecies, num_species(i))
    enddo
    
-   lmax_sigma = lmax_max + 4
-   lmax_sigma_2 = lmax_max + 4
+   lmax_sigma = lmax_max + 2
+   lmax_sigma_2 = lmax_max + 2
    kmax_sigma = (lmax_sigma + 1)**2
    kmax_sigma_2 = (lmax_sigma_2 + 1)**2
 
@@ -353,10 +353,10 @@ contains
    enddo
    
    cg(lsize) = ZERO
-
+   
    coeff = (calProductSeries(2*l_1, l_1))/calProductSeries(2*l_1 + 2*l_2, 2*l_2)
    coeff = coeff*gamma(l_1 + 1.0)
-
+   
    if (mod(l_1 - m_1, 2) == 0) then
       coeff = coeff*(calProductSeries(l_1 + l_2 + m_1 + m_2, l_1 + m_1)/&
                  calProductSeries(l_1 - m_1, (l_1 - m_1)/2))
@@ -777,7 +777,7 @@ contains
 !  ---------------------------------------------------------------------
 
    if (mt == 1) then
-     rad_val = rad_val - 0.5*mt_coeff*phi_k1l(iend)*phi_k2lp(iend)
+     rad_val = rad_val - 0.5*mt_coeff*conjg(phi_k1l(iend))*phi_k2lp(iend)
    endif
    
    end function RadialIntegral
@@ -1080,18 +1080,18 @@ contains
    D1 = CZERO
    Dt1 = CZERO
 
-   do i = 1, dsize
-     D(i, i) = CONE
-     Dt(i, i) = CONE
-     D1(i, i) = CONE
-     Dt1(i, i) = CONE
-   enddo
+!  do i = 1, dsize
+!    D(i, i) = CONE
+!    Dt(i, i) = CONE
+!    D1(i, i) = CONE
+!    Dt1(i, i) = CONE
+!  enddo
 
    temp = CZERO; temp2 = CZERO; temp3 = CZERO; temp4 = CZERO
 
    temp = t_a - t_c
-   temp2 = t_ac - t_cc
-  
+   temp2 = t_ac - t_cc 
+ 
 !  -----------------------------------------------------------------
    call computeAprojB('N', dsize, temp, tau_c, Dt)
 !  ----------------------------------------------------------------
@@ -1101,6 +1101,10 @@ contains
    call computeAprojB('N', dsize, tau_cc, temp2, D1)
 !  -----------------------------------------------------------------
 
+!  call writeMatrix('D', D, dsize, dsize)
+!  call writeMatrix('D1', D1, dsize, dsize)
+!  call writeMatrix('Dt', Dt, dsize, dsize)
+!  call writeMatrix('Dt1', Dt1, dsize, dsize)
 
    temp = CZERO; temp2 = CZERO
 !  Calculating Jtilde(E_F + id, E_F + id)
@@ -1112,7 +1116,7 @@ contains
       temp, dsize, CZERO, jtspace(:,:,n,ic,is,dir), dsize)
 !  -----------------------------------------------------------------
 
-!  Calculating Jtilde(E_F + id, E_F - id)
+!  Calculating Jtilde(E_F + id, E_F - id) 
 !  -----------------------------------------------------------------
    call zgemm('n', 'n', dsize, dsize, dsize, CONE, jspace2(:,:,n,ic,is,dir), &
       dsize, D1, dsize, CZERO, temp2, dsize)
@@ -1150,7 +1154,7 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calSigmaTildeCPA0(n, dir1, dir2, is, rmt)
+   function calSigmaTildeCPA0(n, dir1, dir2, is, rmt, caltype) result(sigma0)
 !  =================================================================== 
 !
 !  Calculates sigma_tilde0(z_1, z_2) at z_1 = z_2 = e_F + i*delta
@@ -1162,7 +1166,7 @@ contains
    use SystemVolumeModule, only : getAtomicVPVolume
    use WriteMatrixModule, only : writeMatrix
 
-   integer (kind=IntKind), intent(in) :: n, dir1, dir2, is
+   integer (kind=IntKind), intent(in) :: n, dir1, dir2, is, caltype
    real (kind=RealKind), intent(in) :: rmt
    integer (kind=IntKind) :: ic, ic1, dsize, L, num_species
    real (kind=RealKind) :: Omega, c_a, c_b, coeff
@@ -1171,9 +1175,10 @@ contains
    complex (kind=CmplxKind), allocatable :: temp1(:,:), temp2(:,:), & 
                                   temp3(:,:), temp4(:,:)
 
+   complex (kind=CmplxKind) :: sigma0
+
    tau_ctemp => getCPAMatrix('Tau',site=n,atom=0)
    dsize = master_size
-
 
    allocate(temp1(dsize, dsize), temp2(dsize, dsize), &
     temp3(dsize, dsize), temp4(dsize, dsize), &
@@ -1183,92 +1188,99 @@ contains
    Omega = getAtomicVPVolume(n)
    tau_c = tau_ctemp(1:dsize, 1:dsize)
    tau_cc = conjg(tau_c)
-
    num_species = getLocalNumSpecies(n)
+   sigma0 = CZERO
+
    do ic = 1, num_species
     do ic1 = 1, num_species
      c_a = getLocalSpeciesContent(n, ic)
      c_b = getLocalSpeciesContent(n, ic1)
      coeff = -(c_a*c_b)/(PI*Omega)
+     if (caltype == 1) then
+       temp4 = jspace(:,:,n,ic,is,dir2) - jtspace(:,:,n,ic1,is,dir2)
+!      ---------------------------------------------------------------------
+!      call zaxpy(dsize*dsize, -CONE, jtspace(:,:,1,ic1,is,dir2),1,temp4,1)
+!      ---------------------------------------------------------------------
+       call zgemm('N', 'n', dsize, dsize, dsize, CONE, temp4, &
+         dsize, tau_c, dsize, CZERO, temp1, dsize)
+!      ---------------------------------------------------------------------
+       call zgemm('N', 'n', dsize, dsize, dsize, CONE, tau_c, dsize,  &
+         temp1, dsize, CZERO, temp2, dsize)
+!      ---------------------------------------------------------------------
+       call zgemm('N', 'n', dsize, dsize, dsize, CONE, jtspace(:,:,n,ic,is,dir1), &
+         dsize, temp2, dsize, CZERO, temp3, dsize)
+!      ----------------------------------------------------------------------
+       do L = 1, dsize
+         sigma0 = sigma0 + coeff*temp3(L,L)
+       enddo
+
+     else if (caltype == 2) then
+       temp4 = jspace2(:,:,n,ic,is,dir2) - jtspace2(:,:,n,ic1,is,dir2)
+!      ---------------------------------------------------------------------
+!      call zaxpy(dsize*dsize, -CONE, jtspace2(:,:,1,ic1,is,dir2),1,temp4,1)
+!      ---------------------------------------------------------------------
+       call zgemm('N', 'n', dsize, dsize, dsize, CONE, temp4, &
+         dsize, tau_cc, dsize, CZERO, temp1, dsize)
+!      ---------------------------------------------------------------------
+       call zgemm('N', 'n', dsize, dsize, dsize, CONE, tau_c, dsize,  &
+         temp1, dsize, CZERO, temp2, dsize)
+!      ---------------------------------------------------------------------
+       call zgemm('N', 'n', dsize, dsize, dsize, CONE, jtspace3(:,:,n,ic,is,dir1), &
+         dsize, temp2, dsize, CZERO, temp3, dsize)
+!      ----------------------------------------------------------------------
+       do L = 1, dsize
+         sigma0 = sigma0 + coeff*temp3(L,L)
+       enddo
      
-     temp4 = jspace(:,:,n,ic,is,dir2) - jtspace(:,:,n,ic1,is,dir2)
-!    ---------------------------------------------------------------------
-!    call zaxpy(dsize*dsize, -CONE, jtspace(:,:,1,ic1,is,dir2),1,temp4,1)
-!    ---------------------------------------------------------------------
-     call zgemm('N', 'n', dsize, dsize, dsize, CONE, temp4, &
-       dsize, tau_c, dsize, CZERO, temp1, dsize)
-!    ---------------------------------------------------------------------
-     call zgemm('N', 'n', dsize, dsize, dsize, CONE, tau_c, dsize,  &
-      temp1, dsize, CZERO, temp2, dsize)
-!    ---------------------------------------------------------------------
-     call zgemm('N', 'n', dsize, dsize, dsize, CONE, jtspace(:,:,n,ic,is,dir1), &
-      dsize, temp2, dsize, CZERO, temp3, dsize)
-!    ----------------------------------------------------------------------
-     do L = 1, dsize
-       sigmatilde(dir1,dir2,is) = sigmatilde(dir1,dir2,is) + coeff*temp3(L,L)
-     enddo
-
-     temp4 = jspace2(:,:,n,ic,is,dir2) - jtspace2(:,:,n,ic1,is,dir2)
-!    ---------------------------------------------------------------------
-!    call zaxpy(dsize*dsize, -CONE, jtspace2(:,:,1,ic1,is,dir2),1,temp4,1)
-!    ---------------------------------------------------------------------
-     call zgemm('N', 'n', dsize, dsize, dsize, CONE, temp4, &
-       dsize, tau_cc, dsize, CZERO, temp1, dsize)
-!    ---------------------------------------------------------------------
-     call zgemm('N', 'n', dsize, dsize, dsize, CONE, tau_c, dsize,  &
-      temp1, dsize, CZERO, temp2, dsize)
-!    ---------------------------------------------------------------------
-     call zgemm('N', 'n', dsize, dsize, dsize, CONE, jtspace3(:,:,n,ic,is,dir1), &
-      dsize, temp2, dsize, CZERO, temp3, dsize)
-!    ----------------------------------------------------------------------
-     do L = 1, dsize
-       sigmatilde2(dir1,dir2,is) = sigmatilde2(dir1,dir2,is) + coeff*temp3(L,L)
-     enddo
-
-     temp4 = jspace3(:,:,n,ic,is,dir2) - jtspace3(:,:,n,ic1,is,dir2)
-!    ---------------------------------------------------------------------
-!    call zaxpy(dsize*dsize, -CONE, jtspace3(:,:,1,ic1,is,dir2),1,temp4,1)
-!    ---------------------------------------------------------------------
-     call zgemm('N', 'n', dsize, dsize, dsize, CONE, temp4, &
-       dsize, tau_c, dsize, CZERO, temp1, dsize)
-!    ---------------------------------------------------------------------
-     call zgemm('N', 'n', dsize, dsize, dsize, CONE, tau_cc, dsize,  &
-      temp1, dsize, CZERO, temp2, dsize)
-!    ---------------------------------------------------------------------
-     call zgemm('N', 'n', dsize, dsize, dsize, CONE, jtspace2(:,:,n,ic,is,dir1), &
-      dsize, temp2, dsize, CZERO, temp3, dsize)
-!    ----------------------------------------------------------------------
-     do L = 1, dsize
-       sigmatilde3(dir1,dir2,is) = sigmatilde3(dir1,dir2,is) + coeff*temp3(L,L)
-     enddo
-
-     temp4 = jspace4(:,:,n,ic,is,dir2) - jtspace4(:,:,n,ic1,is,dir2)
-!    ---------------------------------------------------------------------
-!    call zaxpy(dsize*dsize, -CONE, jtspace4(:,:,1,ic1,is,dir2),1,temp4,1)
-!    ---------------------------------------------------------------------
-     call zgemm('N', 'n', dsize, dsize, dsize, CONE, temp4, &
-       dsize, tau_cc, dsize, CZERO, temp1, dsize)
-!    ---------------------------------------------------------------------
-     call zgemm('N', 'n', dsize, dsize, dsize, CONE, tau_cc, dsize,  &
-      temp1, dsize, CZERO, temp2, dsize)
-!    ---------------------------------------------------------------------
-     call zgemm('N', 'n', dsize, dsize, dsize, CONE, jtspace4(:,:,n,ic,is,dir1), &
-      dsize, temp2, dsize, CZERO, temp3, dsize)
-!    ----------------------------------------------------------------------
-     do L = 1, dsize
-       sigmatilde4(dir1,dir2,is) = sigmatilde4(dir1,dir2,is) + coeff*temp3(L,L)
-     enddo
+     else if (caltype == 3) then
+       temp4 = jspace3(:,:,n,ic,is,dir2) - jtspace3(:,:,n,ic1,is,dir2)
+!      ---------------------------------------------------------------------
+!      call zaxpy(dsize*dsize, -CONE, jtspace3(:,:,1,ic1,is,dir2),1,temp4,1)
+!      ---------------------------------------------------------------------
+       call zgemm('N', 'n', dsize, dsize, dsize, CONE, temp4, &
+         dsize, tau_c, dsize, CZERO, temp1, dsize)
+!      ---------------------------------------------------------------------
+       call zgemm('N', 'n', dsize, dsize, dsize, CONE, tau_cc, dsize,  &
+         temp1, dsize, CZERO, temp2, dsize)
+!      ---------------------------------------------------------------------
+       call zgemm('N', 'n', dsize, dsize, dsize, CONE, jtspace2(:,:,n,ic,is,dir1), &
+         dsize, temp2, dsize, CZERO, temp3, dsize)
+!      ----------------------------------------------------------------------
+       do L = 1, dsize
+         sigma0 = sigma0 + coeff*temp3(L,L)
+       enddo
+    
+     else if (caltype == 4) then
+       temp4 = jspace4(:,:,n,ic,is,dir2) - jtspace4(:,:,n,ic1,is,dir2)
+!      ---------------------------------------------------------------------
+!      call zaxpy(dsize*dsize, -CONE, jtspace4(:,:,1,ic1,is,dir2),1,temp4,1)
+!      ---------------------------------------------------------------------
+       call zgemm('N', 'n', dsize, dsize, dsize, CONE, temp4, &
+         dsize, tau_cc, dsize, CZERO, temp1, dsize)
+!      ---------------------------------------------------------------------
+       call zgemm('N', 'n', dsize, dsize, dsize, CONE, tau_cc, dsize,  &
+         temp1, dsize, CZERO, temp2, dsize)
+!      ---------------------------------------------------------------------
+       call zgemm('N', 'n', dsize, dsize, dsize, CONE, jtspace4(:,:,n,ic,is,dir1), &
+         dsize, temp2, dsize, CZERO, temp3, dsize)
+!      ----------------------------------------------------------------------
+       do L = 1, dsize
+         sigma0 = sigma0 + coeff*temp3(L,L)
+       enddo
+     else
+       call ErrorHandler('calSigmaTildeCPA0', 'Incorrect caltype (choose from 1-4)', caltype)
+     endif
     enddo
    enddo
 
-   end subroutine calSigmaTildeCPA0
+   end function calSigmaTildeCPA0
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine calCPAConductivity(n, is, delta, pot_type, n_spin_pola)
 !  ===================================================================
 
-   use CPAMediumModule, only : computeCPAMedium, getSingleSiteTmat
+   use CPAMediumModule, only : computeCPAMedium, getCPAMatrix, getSingleSiteTmat
    use RadialGridModule, only : getRmesh, getRadialGridRadius
    use WriteMatrixModule, only : writeMatrix
    use ValenceDensityModule, only : getFermiEnergy
@@ -1282,12 +1294,13 @@ contains
    integer (kind=IntKind), intent(in) :: n, is, pot_type, n_spin_pola
    real (kind=RealKind), intent(in) :: delta
 
+   integer (kind=IntKind) :: cg 
    integer (kind=IntKind) :: iend, nspecies, ic, ic1, ic2,  dir, dir1, dirnum
    real(kind=RealKind) :: efermi, rmt, Omega, c_a, c_b, coeff, a
    real(kind=RealKind), pointer :: radial_grid(:)
    real(kind=RealKind) :: start, finish
    complex (kind=CmplxKind) :: jterm, temp, global_energy 
-   complex(kind=CmplxKind), pointer :: phi(:,:,:)
+   complex(kind=CmplxKind), pointer :: phi(:,:,:), tau_test(:,:)
    complex(kind=CmplxKind), allocatable :: sf_term(:,:,:), sf_single(:,:), sfqsum(:)
    complex(kind=CmplxKind) :: int_val1, int_val2, int_val3, int_val4
  
@@ -1324,6 +1337,8 @@ contains
 !  ----------------------------------------------------------------
    call computeCPAMedium(global_energy)
 !  ----------------------------------------------------------------
+
+ 
    do ic = 1, nspecies
      do dir = 1, dirnum
 !      ------------------------------------------------------    
@@ -1331,16 +1346,17 @@ contains
 !      ------------------------------------------------------
      enddo
    enddo
- 
+   
    do dir = 1, dirnum
      do dir1 = 1, dirnum
-       int_val1 = CZERO; int_val2 = CZERO 
+       int_val1 = CZERO; int_val2 = CZERO
        int_val3 = CZERO; int_val4 = CZERO
        do ic1 = 1, nspecies
          do ic2 = 1, nspecies
            c_a = getLocalSpeciesContent(n, ic1)
            c_b = getLocalSpeciesContent(n, ic2)              
            coeff = -(c_a*c_b)/(PI*Omega)
+           Print *, c_a, c_b 
            
            int_val1 = int_val1 + coeff*calSigmaIntegralCPA(n, global_energy, &
            jtspace(:,:,n,ic1,is,dir), jtspace(:,:,n,ic2,is,dir1), &
@@ -1359,16 +1375,20 @@ contains
            getSingleSiteTmat, tau_needed=.true.,use_tmat=.true.,caltype=4)
          enddo
        enddo
-       if (n_spin_pola == 2) then
-         sigmatilde(dir,dir1,is) = int_val1; sigmatilde2(dir,dir1,is) = int_val2
-         sigmatilde3(dir,dir1,is) = int_val3; sigmatilde4(dir,dir1,is) = int_val4
-       else if (n_spin_pola == 1) then
-         sigmatilde(dir,dir1,is) = 2*int_val1; sigmatilde2(dir,dir1,is) = 2*int_val2
-         sigmatilde3(dir,dir1,is) = 2*int_val3; sigmatilde4(dir,dir1,is) = 2*int_val4
+       sigmatilde(dir,dir1,is) = int_val1 +  &
+              calSigmaTildeCPA0(n, dir, dir1, is, rmt, caltype=1)
+       sigmatilde2(dir,dir1,is) = int_val2 + &
+              calSigmaTildeCPA0(n, dir, dir1, is, rmt, caltype=2)
+       sigmatilde3(dir,dir1,is) = int_val3 + &
+              calSigmaTildeCPA0(n, dir, dir1, is, rmt, caltype=3)
+       sigmatilde4(dir,dir1,is) = int_val4 + &
+              calSigmaTildeCPA0(n, dir, dir1, is, rmt, caltype=4)
+       if (n_spin_pola == 1) then
+         sigmatilde(dir,dir1,is) = 2*sigmatilde(dir,dir1,is)
+         sigmatilde2(dir,dir1,is) = 2*sigmatilde2(dir,dir1,is)
+         sigmatilde3(dir,dir1,is) = 2*sigmatilde3(dir,dir1,is) 
+         sigmatilde4(dir,dir1,is) = 2*sigmatilde4(dir,dir1,is)
        endif
-!      ----------------------------------------------------
-       call calSigmaTildeCPA0(n, dir, dir1, is, rmt)
-!      -----------------------------------------------------
        sigma(dir,dir1,is) = 0.25*(sigmatilde(dir,dir1,is) - &
        sigmatilde2(dir,dir1,is) - sigmatilde3(dir,dir1,is) + &
        sigmatilde4(dir,dir1,is))
