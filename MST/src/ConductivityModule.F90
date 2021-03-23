@@ -1289,7 +1289,8 @@ contains
    use CrystalMatrixModule, only : calSigmaIntegralCPA
    use AtomModule, only : getLocalNumSpecies, getLocalSpeciesContent
    use SystemVolumeModule, only : getAtomicVPVolume
-   use ScfDataModule, only : useCubicSymmetryForSigma
+   use ScfDataModule, only : isFermiEnergyRealPart, getFermiEnergyRealPart, &
+                            useCubicSymmetryForSigma
 
    integer (kind=IntKind), intent(in) :: n, is, pot_type, n_spin_pola
    real (kind=RealKind), intent(in) :: delta
@@ -1312,7 +1313,11 @@ contains
    endif
 
    efermi = getFermiEnergy()
-   global_energy = efermi + SQRTm1*delta
+   if (isFermiEnergyRealPart()) then
+     global_energy = getFermiEnergyRealPart() + SQRTm1*delta
+   else
+     global_energy = efermi + SQRTm1*delta
+   endif
    
 !  ---------------------------------------------------------------
    call solveSingleScattering(spin=is,site=n,e=global_energy,vshift=CZERO)
