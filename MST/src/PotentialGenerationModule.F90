@@ -2584,7 +2584,7 @@ contains
       do is = 1,n_spin_pola
          sums(is) = sums(is) + getExchCorrPot(is)
       enddo
-      sums(3) = sums(3) + rhoint_tmp*getLocalSpeciesContent(na,ia)
+      sums(3) = sums(3) + rhoint_tmp
    enddo
 !
    sums(1:3) = sums(1:3)/real(GlobalNumAtoms,kind=RealKind)

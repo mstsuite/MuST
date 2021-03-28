@@ -1,6 +1,6 @@
 module PolyhedraModule
    use KindParamModule, only : IntKind, RealKind
-   use ErrorHandlerModule, only : ErrorHandler, StopHandler
+   use ErrorHandlerModule, only : ErrorHandler, StopHandler, WarningHandler
    use MathParamModule, only : ZERO, THIRD, HALF, ONE, TEN2m6, TEN2m8, TEN2m10, TEN2m12
    use Matrix3dModule, only : invm3
 !
@@ -2342,22 +2342,75 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getNeighborDistance(poly,plane) result(d)
+   function getNeighborDistance(poly,plane,dmin,dmax) result(d)
 !  ===================================================================
    implicit none
 !
    integer (kind=IntKind), intent(in) :: poly
-   integer (kind=IntKind), intent(in) :: plane
+   integer (kind=IntKind), intent(in), optional :: plane
+   logical, intent(in), optional :: dmin, dmax
+   logical :: minimum, maximum
+   integer (kind=IntKind) :: ip
 !
    real (kind=RealKind) :: d
 !
    if (poly < 1 .or. poly > NumLocalPolyhedra) then
       call ErrorHandler('getNeighborDistance','Invalid polyhedron index',poly)
-   else if (plane < 1 .or. plane > Polyhedron(poly)%NumPlanes) then
-      call ErrorHandler('getNeighborDistance','Invalid plane index',plane)
    endif
 !
-   d = Polyhedron(poly)%NeighborDist(plane)
+   if (Polyhedron(poly)%NumPlanes < 1) then
+      call WarningHandler('getNeighborDistance','The number of neighboring atoms = 0')
+      d = ZERO
+      return
+   endif
+!
+   minimum = .false.; maximum = .false.
+!
+   if (present(dmin)) then
+      if (dmin) then
+         minimum = .true.
+      endif
+   endif
+!
+   if (present(dmax)) then
+      if (dmax) then
+         maximum = .true.
+      endif
+   endif
+!
+   if ( present(plane) .and. minimum) then
+      call ErrorHandler('getNeighborDistance',                        &
+                        'Both plane index and dmin=.true. are present')
+   else if (present(plane) .and. maximum) then
+      call ErrorHandler('getNeighborDistance',                        &
+                        'Both plane index and dmax=.true. are present')
+   else if (minimum .and. maximum) then
+      call ErrorHandler('getNeighborDistance',                        &
+                        'Both dmin=.true. and dmax=.true. are present')
+   endif
+!
+   if (present(plane)) then
+      if (plane < 1 .or. plane > Polyhedron(poly)%NumPlanes) then
+         call ErrorHandler('getNeighborDistance','Invalid plane index',plane)
+      endif
+      d = Polyhedron(poly)%NeighborDist(plane)
+   else if (minimum) then
+      d = Polyhedron(poly)%NeighborDist(1)
+      do ip = 2, Polyhedron(poly)%NumPlanes
+         d = min(d,Polyhedron(poly)%NeighborDist(ip))
+      enddo
+   else if (maximum) then
+      d = Polyhedron(poly)%NeighborDist(1)
+      do ip = 2, Polyhedron(poly)%NumPlanes
+         d = max(d,Polyhedron(poly)%NeighborDist(ip))
+      enddo
+   else ! return the averaged neighbor distance
+      d = ZERO
+      do ip = 1, Polyhedron(poly)%NumPlanes
+         d = d + Polyhedron(poly)%NeighborDist(ip)
+      enddo
+      d = d/real(Polyhedron(poly)%NumPlanes,kind=RealKind)
+   endif
 !
    end function getNeighborDistance
 !  ===================================================================

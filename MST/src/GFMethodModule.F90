@@ -2753,7 +2753,7 @@ contains
 !  ===================================================================
    use PotentialTypeModule, only : isASAPotential
 !
-   use RadialGridModule, only : getGrid
+   use RadialGridModule, only : getGrid, getRadialIntegration
 !
    use StepFunctionModule, only : getVolumeIntegration
 !
@@ -2820,18 +2820,19 @@ contains
          green=>getGreenFunction(spin=is,site=id,atom=ia)
 !        -------------------------------------------------------------
          iend = size(green,1); kmax = size(green,2)
-!        -------------------------------------------------------------
-         greenint = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,    &
-                                               kmax, 2, green, greenint_mt )
-!        -------------------------------------------------------------
-         greenint_mt = sfac*greenint_mt
+         if (isASAPotential()) then
+            greenint_mt = sfac*getRadialIntegration(id, Grid%jmt, green(:,1))/Y0
+            greenint = greenint_mt
+         else
+!           ----------------------------------------------------------
+            greenint = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,    &
+                                                  kmax, 2, green, greenint_mt )
+!           ----------------------------------------------------------
+            greenint_mt = sfac*greenint_mt
+         endif
 !
          if (atom > 0 .or. ia == 1) then
             dos = real(SQRTm1*greenint/PI,kind=RealKind)
-         endif
-!
-         if (isASAPotential()) then
-            greenint = greenint_mt
          endif
 !
          if (iharris <= 1) then
@@ -4074,22 +4075,24 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function returnMultipleSiteDOS(info,e,dos_array,cfac) result(dos)
 !  ===================================================================
-   use MathParamModule, only : CONE, ZERO, PI
+   use MathParamModule, only : CONE, ZERO, PI, Y0
 !
    use MSSolverModule, only : getMSGreenFunction, getMSGreenMatrix
    use MSSolverModule, only : getMSGreenFunctionDerivative
 !
-   use SSSolverModule, only : getFreeElectronDOS
+   use SSSolverModule, only : getFreeElectronDOS, getTMatrix
 !
    use PotentialTypeModule, only : isASAPotential
 !
-   use RadialGridModule, only : getGrid
+   use RadialGridModule, only : getGrid, getRadialIntegration
 !
    use AtomModule, only : getLocalEvec, getLocalNumSpecies
 !
    use StepFunctionModule, only : getVolumeIntegration
 !
    use SpinRotationModule, only : transformDensityMatrix
+!
+   use WriteMatrixModule,  only : writeMatrix
 !
    implicit none
 !
@@ -4178,11 +4181,16 @@ contains
    do ia = 1, getLocalNumSpecies(id)
       if (atom < 0 .or. ia == atom) then
          do ks = 1, ns_sqr
-!           --------------------------------------------------------
-            greenint(ks) = cmul*sfac*getVolumeIntegration( id, iend, Grid%r_mesh, &
-                                                        kmax, 2, green(:,:,ks,ia), greenint_mt(ks) )
-!           --------------------------------------------------------
-            greenint_mt(ks) = cmul*sfac*greenint_mt(ks)
+            if (isASAPotential()) then
+               greenint_mt(ks) = cmul*sfac*getRadialIntegration(id, Grid%jmt, green(:,1,ks,ia))/Y0
+               greenint(ks) = greenint_mt(ks)
+            else
+!              -----------------------------------------------------
+               greenint(ks) = cmul*sfac*getVolumeIntegration( id, iend, Grid%r_mesh, &
+                                                              kmax, 2, green(:,:,ks,ia), greenint_mt(ks) )
+!              -----------------------------------------------------
+               greenint_mt(ks) = cmul*sfac*greenint_mt(ks)
+            endif
          enddo
 !
          if (isASAPotential()) then
@@ -4192,7 +4200,6 @@ contains
                call transformDensityMatrix(id,gm_mt)
 !              ------------------------------------------------------
             endif
-            greenint = greenint_mt
             gm = gm_mt
          else
             gm = greenint
@@ -6774,7 +6781,7 @@ contains
 !  ===================================================================
    use PotentialTypeModule, only : isASAPotential
 !
-   use RadialGridModule, only : getGrid
+   use RadialGridModule, only : getGrid, getRadialIntegration
 !
    use StepFunctionModule, only : getVolumeIntegration
 !
@@ -6827,18 +6834,18 @@ contains
 !
    iend = size(green,1); kmax = size(green,2); jmax = jofk(kmax)
    Grid => getGrid(id)
-!  -------------------------------------------------------------------
-   greenint = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,            &
-                                         kmax, 2, green, greenint_mt )
-!  -------------------------------------------------------------------
-   greenint_mt = sfac*greenint_mt
-!
-   dos = real(SQRTm1*greenint/PI,kind=RealKind)
-!
    if (isASAPotential()) then
+      greenint_mt = sfac*getRadialIntegration(id, Grid%jmt, green(:,1))/Y0
       greenint = greenint_mt
+   else
+!     ----------------------------------------------------------------
+      greenint = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,            &
+                                            kmax, 2, green, greenint_mt )
+!     ----------------------------------------------------------------
+      greenint_mt = sfac*greenint_mt
    endif
 !
+   dos = real(SQRTm1*greenint/PI,kind=RealKind)
 !
    if (iharris <= 1) then
       ede = energy
@@ -6889,7 +6896,7 @@ contains
 !
    use PotentialTypeModule, only : isASAPotential
 !
-   use RadialGridModule, only : getGrid
+   use RadialGridModule, only : getGrid, getRadialIntegration
 !
    use AtomModule, only : getLocalEvec
 !
@@ -6970,11 +6977,16 @@ contains
    Grid => getGrid(id)
 !
    do ks = 1, ns_sqr
-!     --------------------------------------------------------------
-      greenint(ks) = cmul*sfac*getVolumeIntegration( id, iend, Grid%r_mesh, &
-                                                     kmax, 2, green(:,:,ks), greenint_mt(ks) )
-!     --------------------------------------------------------------
-      greenint_mt(ks) = cmul*sfac*greenint_mt(ks)
+      if (isASAPotential()) then
+         greenint_mt(ks) = cmul*sfac*getRadialIntegration(id, Grid%jmt, green(:,1,ks))/Y0
+         greenint(ks) = greenint_mt(ks)
+      else
+!        -----------------------------------------------------------
+         greenint(ks) = cmul*sfac*getVolumeIntegration( id, iend, Grid%r_mesh, &
+                                                        kmax, 2, green(:,:,ks), greenint_mt(ks) )
+!        -----------------------------------------------------------
+         greenint_mt(ks) = cmul*sfac*greenint_mt(ks)
+      endif
    enddo
 !
 !   if (isASAPotential()) then

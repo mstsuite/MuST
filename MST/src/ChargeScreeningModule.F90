@@ -42,7 +42,7 @@ contains
    use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies,   &
            getLocalSpeciesContent
 !
-   use NeighborModule, only : getShellRadius
+   use PolyhedraModule, only : getNeighborDistance
 !
    use ScfDataModule, only : retrieveSROParams, isKKRCPASRO
 
@@ -58,7 +58,7 @@ contains
    do i = 1, LocalNumSites
       NumSpecies = getLocalNumSpecies(i)
       allocate(scr(i)%vmt1_corr(getLocalNumSpecies(i)))
-      scr(i)%fs_radius = getShellRadius(i, 1)
+      scr(i)%fs_radius = getNeighborDistance(i, dmin=.true.)
       scr(i)%ss_radius = getLatticeConstant()
       scr(i)%echarge = ZERO
       do j = 1, getLocalNumSpecies(i)

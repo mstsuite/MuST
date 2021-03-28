@@ -925,13 +925,14 @@ program mst2
 !011820  call genRadialGrid( i, xstart, rmt, rinsc, rws, rend, ndivin)
 !        -------------------------------------------------------------
       else if (isASAPotential() ) then
-!        rend =  getWignerSeitzRadius(i)
+         rend =  getWignerSeitzRadius(i)
          rinsc = getWignerSeitzRadius(i)
          rmt = rinsc
 !        if ( rmt < 0.010d0 ) then
 !           rmt = rinsc
 !        endif
-         ndivin = ndivin+11
+!        ndivin = ndivin+11
+         ndivin = ndivin+29
 !        -------------------------------------------------------------
 !        call genRadialGrid( i, rmt, rinsc, rend, ndivin = ndivin )
 !        -------------------------------------------------------------
@@ -979,6 +980,11 @@ program mst2
 !        -------------------------------------------------------------
          call genRadialGrid(id=i, rmt=rmt, rinsc=rinsc, rend=rend,    &
                             ndivin=ndivin, xstep=hin)
+!        -------------------------------------------------------------
+      else if (isASAPotential()) then
+!        -------------------------------------------------------------
+         call genRadialGrid(id=i, rmt=rmt, rinsc=rinsc, rend=rend,    &
+                            ndivin=ndivin)
 !        -------------------------------------------------------------
       else
 !        -------------------------------------------------------------

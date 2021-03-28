@@ -223,7 +223,9 @@ contains
    use Atom2ProcModule, only : getLocalIndex, getAtom2ProcInGroup
    use Atom2ProcModule, only : getMaxLocalNumAtoms, getGlobalIndex
 !
-   use PotentialTypeModule, only : isFullPotential
+   use PotentialTypeModule, only : isFullPotential, isASAPotential
+!
+   use PolyhedraModule, only : getWignerSeitzRadius
 !
    use InputModule, only : getKeyValue
 !
@@ -331,7 +333,11 @@ contains
 !     otherwise, the value is chosen to be either the inscribed sphere radius 
 !     or the circumscribed sphere radius of the atomic cell.
 !     ================================================================
-      rc = getAtomCoreRad(id)
+      if (isASAPotential()) then
+         rc = getWignerSeitzRadius(id)
+      else
+         rc = getAtomCoreRad(id)
+      endif
       if ( rc < ZERO .and. isFullPotential()) then
          jcore = getRadialGridPoint(id, getOutscrSphRadius(id))
       else if ( rc < TEN2m6 ) then
