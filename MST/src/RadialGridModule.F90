@@ -1012,7 +1012,7 @@ contains
 !  ===================================================================
    Grid(id)%xend = Grid(id)%xmt+nout*Grid(id)%hout
    Grid(id)%rend = exp(Grid(id)%xend)
-   if (Grid(id)%rend < rend) then
+   if (rend - Grid(id)%rend > TEN2m6) then
       call ErrorHandler(sname,'Grid(id)%rend < rend',Grid(id)%rend,rend)
    endif
 !
