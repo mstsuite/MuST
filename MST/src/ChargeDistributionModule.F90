@@ -233,7 +233,11 @@ contains
       jmt = p_DL%jmt
       NumRs = p_DL%NumRs
       rmt = p_DL%rmt
-      Vint(id) = getVolume(id) - PI4*rmt*rmt*rmt*THIRD
+      if (isASAPotential()) then
+         Vint(id) = ZERO
+      else
+         Vint(id) = getVolume(id) - PI4*rmt*rmt*rmt*THIRD
+      endif
       GVint = GVint + Vint(id)
       r_mesh => p_DL%r_mesh(1:NumRs)
       ig = getGlobalIndex(id)
@@ -242,9 +246,14 @@ contains
 !        -------------------------------------------------------------
          call dcopy(jmt,p_DL%EMD(ia)%rho0,1,rho0,1)
 !        -------------------------------------------------------------
-         corr = rho0(1)*r_mesh(1)*r_mesh(1)*r_mesh(1)*PI2
-         Qmt_old(lid) = getVolumeIntegration(id,jmt,r_mesh,0,rho0,truncated=.false.) + corr
-         Qvp_old(lid) = p_DL%EMD(ia)%VPCharge
+         if (isASAPotential()) then
+            Qmt_old(lid) = p_DL%EMD(ia)%VPCharge
+            Qvp_old(lid) = p_DL%EMD(ia)%VPCharge
+         else
+            corr = rho0(1)*r_mesh(1)*r_mesh(1)*r_mesh(1)*PI2
+            Qmt_old(lid) = getVolumeIntegration(id,jmt,r_mesh,0,rho0,truncated=.false.) + corr
+            Qvp_old(lid) = p_DL%EMD(ia)%VPCharge
+         endif
          qint_old = qint_old + getLocalSpeciesContent(id,ia)*(getAtomicNumber(ig,ia)-Qmt_old(lid))
       enddo
       p_DL => p_DL%next
@@ -384,9 +393,14 @@ contains
 !        -------------------------------------------------------------
          call dcopy(jmt,p_DL%EMD(ia)%rho0,1,rho0,1)
 !        -------------------------------------------------------------
-         corr = rho0(1)*r_mesh(1)*r_mesh(1)*r_mesh(1)*PI2
-         Qmt(lid) = getVolumeIntegration(id,jmt,r_mesh,0,rho0,truncated=.false.) + corr
-         Qvp(lid) = p_DL%EMD(ia)%VPCharge
+         if (isASAPotential()) then
+            Qmt(lid) = p_DL%EMD(ia)%VPCharge
+            Qvp(lid) = p_DL%EMD(ia)%VPCharge
+         else
+            corr = rho0(1)*r_mesh(1)*r_mesh(1)*r_mesh(1)*PI2
+            Qmt(lid) = getVolumeIntegration(id,jmt,r_mesh,0,rho0,truncated=.false.) + corr
+            Qvp(lid) = p_DL%EMD(ia)%VPCharge
+         endif
          qint = qint + getLocalSpeciesContent(id,ia)*(getLocalAtomicNumber(id,ia)-Qmt(lid))
 !        =============================================================
 !        Mixing the new Qmt, Qvp with the old ones.
@@ -400,9 +414,14 @@ contains
 !           ----------------------------------------------------------
             call dcopy(jmt,p_DL%EMD(ia)%mom0,1,rho0,1)
 !           ----------------------------------------------------------
-            corr = rho0(1)*r_mesh(1)*r_mesh(1)*r_mesh(1)*PI2
-            Mmt(lid) = getVolumeIntegration(id,jmt,r_mesh,0,rho0) + corr
-            Mvp(lid) = p_DL%EMD(ia)%VPMoment
+            if (isASAPotential()) then
+               Mmt(lid) = p_DL%EMD(ia)%VPMoment
+               Mvp(lid) = p_DL%EMD(ia)%VPMoment
+            else
+               corr = rho0(1)*r_mesh(1)*r_mesh(1)*r_mesh(1)*PI2
+               Mmt(lid) = getVolumeIntegration(id,jmt,r_mesh,0,rho0) + corr
+               Mvp(lid) = p_DL%EMD(ia)%VPMoment
+            endif
             mint = mint + getLocalSpeciesContent(id,ia)*(Mvp(lid) - Mmt(lid))
             ExEn(lid) = getExchangeEnergy(id,ia) ! This is the exchange field that
                                                  ! causes spin-up and spin-down DOS peak to split

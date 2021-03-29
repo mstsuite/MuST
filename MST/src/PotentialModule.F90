@@ -1844,7 +1844,7 @@ contains
 !
    use PublicParamDefinitionsModule, only : MaxLenFileName
 !
-   use InterpolationModule, only : PolyInterp, getInterpolation
+   use InterpolationModule, only : PolyInterp, getInterpolation, FitInterp
 !
    use MPPModule, only : MyPE
 !
@@ -1888,7 +1888,7 @@ contains
    integer (kind=IntKind), parameter :: funit=91
 !
    integer (kind=IntKind) :: is, ig, js, n, ia, nef
-   integer (kind=IntKind) :: j_inter, irp
+   integer (kind=IntKind) :: j_inter, irp, iex
    integer (kind=IntKind) :: ns,j,jmt,nrrho,nrcor,jmax
    integer (kind=IntKind) :: numc,jz,jc,ios,lmax,jend,jl,nr,ir,jm,jlr
    integer (kind=IntKind) :: nc, lc, kc
@@ -1918,6 +1918,17 @@ contains
          real (kind=RealKind), intent(in) :: xx(n)
          real (kind=RealKind), intent(in) :: x
       end subroutine hunt
+   end interface
+!
+   interface
+      function ylag(xi,x,y,ind1,n1,imax,iex) result(lag)
+         use KindParamModule, only : IntKind, RealKind
+         implicit none
+         integer (kind=IntKind), intent(in) :: ind1, n1, imax
+         integer (kind=IntKind), intent(out) :: iex
+         real (kind=RealKind), intent(in) :: xi, x(:), y(:)
+         real (kind=RealKind) :: lag
+      end function ylag
    end interface
 !
    ThisP=>Potential(id)
@@ -2110,9 +2121,20 @@ contains
    !!                       ThisP%Grid%x_mesh(j),ThisP%potr_sph(j,is,ia),err)
    !!       call interp(r_mesh(1:jmt),vr(1:jmt,is),jmt,ThisP%Grid%r_mesh(j), &
    !!                   ThisP%potr_sph(j,is,ia),err)
-            ThisP%potr_sph(j,is,ia) =                                    &
-                        getInterpolation(jmt,x_mesh(1:jmt),vr(1:jmt,is), &
-                                         ThisP%Grid%x_mesh(j),err)
+!           ==========================================================
+!           The following lines of code are modified on 3/27/2021, so
+!           to match what is implemented in LSMS_1.9
+!           ----------------------------------------------------------
+!           ThisP%potr_sph(j,is,ia) =                                    &
+!                       getInterpolation(jmt,x_mesh(1:jmt),vr(1:jmt,is), &
+!                                        ThisP%Grid%x_mesh(j),err)
+            if (ThisP%Grid%r_mesh(j) < r_mesh(jmt)) then
+               call FitInterp(jmt,r_mesh(1:jmt),vr(1:jmt,is),ThisP%Grid%r_mesh(j), &
+                           ThisP%potr_sph(j,is,ia),err)
+            else
+               ThisP%potr_sph(j,is,ia) = vr(jmt,is)*ThisP%Grid%r_mesh(j)/r_mesh(jmt)
+            endif
+!           ==========================================================
             ThisP%pot_l(j,1,is,ia)=ThisP%potr_sph(j,is,ia)/(Y0*ThisP%Grid%r_mesh(j))
 !           ----------------------------------------------------------
          enddo
@@ -2133,9 +2155,13 @@ contains
   !!                        rhoin(irp:irp+n_inter-1,is),              &
   !!                        ThisP%Grid%x_mesh(j),rhotot(j),err)
 !           ----------------------------------------------------------
-            rhotot(j) =                                               &
-                  getInterpolation(nrrho,x_mesh(1:nrrho),             &
-                                   rhoin(1:nrrho,is),ThisP%Grid%x_mesh(j),err)
+            if (ThisP%Grid%r_mesh(j) < r_mesh(jmt)) then
+               rhotot(j) =                                            &
+                     getInterpolation(nrrho,x_mesh(1:nrrho),          &
+                                      rhoin(1:nrrho,is),ThisP%Grid%x_mesh(j),err)
+            else
+               rhotot(j) = rhoin(jmt,is)
+            endif
          enddo
          if (is == 1) then
             do ir = 1,nr

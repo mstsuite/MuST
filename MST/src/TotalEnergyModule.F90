@@ -1029,7 +1029,7 @@ contains
          endif
          do is = 1,n_spin_pola
             if ( Print_Level(na) >= 0 ) then
-               write(6,'(a,i2,1x,39(''-''))')'     Spin Index :',is
+               write(6,'(4x,a,i2,'','',4x,a,i2,2x,38(''-''))')'Spin Index :',is,'Species Index :',ia
             endif
             vrold => getOldSphPotr(na,ia,is)
             vrnew => getNewSphPotr(na,ia,is)
@@ -1925,7 +1925,7 @@ contains
          qsub_i = qsub_i + rhoint*getAtomicVPVolume(ig)
          u0=u0+madmat(ig)*qsub_j*qsub_i
          u0i(id) = u0i(id) + madmat(ig)*qsub_j*qsub_i
-         if (maxval(print_level) >= 0) then
+         if (maxval(print_level) >= 1) then
             write(6,'(a,i4,a,2f18.14)')'Atom =',ig,',  madmat, qsub = ',madmat(ig),qsub_i
          endif
       enddo

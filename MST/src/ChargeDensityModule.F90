@@ -2157,7 +2157,7 @@ contains
 !
    use DerivativeModule, only : derv5
 !
-   use RadialGridModule, only : getNumRmesh, getRmesh, getGrid
+   use RadialGridModule, only : getNumRmesh, getRmesh, getGrid, getRadialIntegration
 !
 !  use DataServiceCenterModule, only : getDataStorage, RealMark,      &
 !                                      ComplexMark
@@ -2200,7 +2200,7 @@ contains
    integer (kind=IntKind), pointer :: flag_jl(:)
 !
    real (kind=RealKind) :: evec(3), mvec(3), msgbuf(3)
-   real (kind=RealKind) :: corr, qint(2), volume, rho_r,rho_i, q_tmp, q_tmp_mt, qlost, omega_vp, omega_mt
+   real (kind=RealKind) :: corr, qint, volume, rho_r,rho_i, q_tmp, q_tmp_mt, qlost, omega_vp, omega_mt
    real (kind=RealKind), pointer :: r_mesh(:)
    real (kind=RealKind), pointer :: rho0(:), mom0(:)
    real (kind=RealKind), pointer :: rho2p_r(:), rho2_r(:,:), rho3_r(:,:,:)
@@ -2392,9 +2392,10 @@ contains
             Grid => getGrid(id)
             jend = Grid%jend
             corr = rho0(1)*r_mesh(1)*r_mesh(1)*r_mesh(1)*PI2
-            qint = qint + getLocalAtomicNumber(id,ia) -                  &
+            q_tmp = getLocalAtomicNumber(id,ia) -                        &
                    getVolumeIntegration(id,jend,r_mesh(1:jend),0,        &
                                         rho0(1:jend),truncated=.false.) + corr
+            qint = qint + getLocalSpeciesContent(id,ia)*q_tmp
          endif
 !
          if ( n_spin_pola == 2 ) then
@@ -2714,8 +2715,12 @@ contains
 !              =======================================================
             endif
 !
-            q_tmp = getVolumeIntegration( id, nr, r_mesh, kmax, jmax,   &
+            if (isASAPotential()) then
+               q_tmp = getRadialIntegration(id, jmt, p_CDL%rhoL_Total(1:jmt,1,ia))/Y0
+            else
+               q_tmp = getVolumeIntegration( id, nr, r_mesh, kmax, jmax,   &
                                             0, p_CDL%rhoL_Total(1:nr,1:jmax,ia), q_tmp_mt )
+            endif
             qlost = qlost+(getLocalAtomicNumber(id,ia) - q_tmp)*getLocalSpeciesContent(id,ia)
             if (print_level(id) >= 0) then
                write(6,'(a,f20.14,a,i4)')'Checking -- Missing charge in atomic cell      = ', &
@@ -2842,7 +2847,7 @@ contains
 !! qlost = ZERO
 !
    if (isASAPotential()) then
-      rhoint = qint(1)/getSystemVolume()
+      rhoint = qint/getSystemVolume()
 !     ----------------------------------------------------------------
       call GlobalSumInGroup(GroupID,rhoint)
 !     ----------------------------------------------------------------

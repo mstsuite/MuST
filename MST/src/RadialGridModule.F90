@@ -17,12 +17,18 @@ public ::           &
    getRadialGridRadius, &
    getRadialGridPoint,  &
    pushRadialGridToAccel, &
-   deleteRadialGridOnAccel
+   deleteRadialGridOnAccel, &
+   getRadialIntegration ! return radial integration of f(r) from r=0 to r=r(nr)
 !
 !  interface genRadialGrid
 !     module procedure genRadialGrid0, genRadialGrid1
 !     module procedure genRadialGrid2, genRadialGrid3
 !  end interface
+!
+   interface getRadialIntegration
+      module procedure getRadialIntegration_r
+      module procedure getRadialIntegration_c
+   end interface
 !
 private
    type (GridStruct), allocatable, target :: Grid(:)
@@ -37,7 +43,7 @@ private
 !
    integer (kind=IntKind) :: MaxNumRmesh
 !
-   integer (kind=IntKind), parameter :: n_extra=10
+   integer (kind=IntKind), parameter :: n_extra=11
    integer (kind=IntKind), parameter :: ndivin_default=1001
 !
 !  ===================================================================
@@ -1463,5 +1469,104 @@ contains
 #endif
 !
    end subroutine deleteRadialGridOnAccel
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getRadialIntegration_r(id,nr,f,rpow,r) result(fint)
+!  ===================================================================
+   use MathParamModule, only : ZERO, TWO
+   use InterpolationModule, only : FitInterp
+   use IntegrationModule, only : calIntegration
+!
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: id, nr
+   integer (kind=IntKind), intent(in), optional :: rpow
+   integer (kind=IntKind) :: ir
+!
+   real (kind=RealKind), intent(in) :: f(nr)
+   real (kind=RealKind), intent(in), optional :: r
+   real (kind=RealKind) :: sqrt_r(0:nr), fs(0:nr), fsint(0:nr), dummy
+   real (kind=RealKind) :: fint
+!
+   sqrt_r(0) = ZERO
+   do ir = 1, nr
+      sqrt_r(ir)=sqrt(Grid(id)%r_mesh(ir))
+   enddo
+!
+   if (present(rpow)) then
+      do ir = 1, nr
+         fs(ir) = TWO*f(ir)*sqrt_r(ir)**(2*rpow+1)
+      enddo
+   else
+      do ir = 1, nr
+         fs(ir) = TWO*f(ir)*sqrt_r(ir)
+      enddo
+   endif
+!
+!  ------------------------------------------------------------------
+   call FitInterp(4,sqrt_r(1:4),fs(1:4),ZERO,fs(0),dummy)
+   call calIntegration(nr+1,sqrt_r(0:nr),fs(0:nr),fsint(0:nr),0)
+!  ------------------------------------------------------------------
+   if (present(r)) then
+      call FitInterp(nr+1,sqrt_r(0:nr),fsint(0:nr),sqrt(r),fint,dummy)
+   else
+      fint = fsint(nr)
+   endif
+!
+   end function getRadialIntegration_r
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getRadialIntegration_c(id,nr,f,rpow,r) result(fint)
+!  ===================================================================
+   use KindParamModule, only : CmplxKind
+   use MathParamModule, only : ZERO, TWO
+   use InterpolationModule, only : FitInterp
+   use IntegrationModule, only : calIntegration
+!
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: id, nr
+   integer (kind=IntKind), intent(in), optional :: rpow
+   integer (kind=IntKind) :: ir
+!
+   real (kind=RealKind), intent(in), optional :: r
+   real (kind=RealKind) :: sqrt_r(0:nr)
+!
+   complex (kind=CmplxKind), intent(in) :: f(nr)
+   complex (kind=CmplxKind) :: fs(0:nr), fsint(0:nr), dummy
+   complex (kind=CmplxKind) :: fint
+!
+   sqrt_r(0) = ZERO
+   do ir = 1, nr
+      sqrt_r(ir)=sqrt(Grid(id)%r_mesh(ir))
+   enddo
+!
+   if (present(rpow)) then
+      do ir = 1, nr
+         fs(ir) = TWO*f(ir)*sqrt_r(ir)**(2*rpow+1)
+      enddo
+   else
+      do ir = 1, nr
+         fs(ir) = TWO*f(ir)*sqrt_r(ir)
+      enddo
+   endif
+!
+!  ------------------------------------------------------------------
+   call FitInterp(4,sqrt_r(1:4),fs(1:4),ZERO,fs(0),dummy)
+   call calIntegration(nr+1,sqrt_r(0:nr),fs(0:nr),fsint(0:nr),0)
+!  ------------------------------------------------------------------
+   if (present(r)) then
+      call FitInterp(nr+1,sqrt_r(0:nr),fsint(0:nr),sqrt(r),fint,dummy)
+   else
+      fint = fsint(nr)
+   endif
+!
+   end function getRadialIntegration_c
 !  ===================================================================
 end module RadialGridModule
