@@ -1828,11 +1828,6 @@ contains
 !     ----------------------------------------------------------------
       call ErrorHandler('getVolumeIntegration','invalid number of r mesh',nr)
 !     ----------------------------------------------------------------
-   else if ( r(nr)<StepFunction(n)%rmax-Ten2m10 ) then
-!     ----------------------------------------------------------------
-      call ErrorHandler('getVolumeIntegration','r(nr) <  bounding sphere radius', &
-                        r(nr),StepFunction(n)%rmax)
-!     ----------------------------------------------------------------
    else if (jmax < 1) then
 !     ----------------------------------------------------------------
       call ErrorHandler('getVolumeIntegration','invalid jmax',jmax)
@@ -1884,6 +1879,13 @@ contains
          endif
          isTruncated = .false.
       endif
+   endif
+!
+   if ( r(nr)<StepFunction(n)%rmax-Ten2m10 .and. isTruncated ) then
+!     ----------------------------------------------------------------
+      call ErrorHandler('getVolumeIntegration','r(nr) <  bounding sphere radius', &
+                        r(nr),StepFunction(n)%rmax)
+!     ----------------------------------------------------------------
    endif
 !
    mr = nr

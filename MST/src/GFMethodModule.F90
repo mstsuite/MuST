@@ -2528,7 +2528,9 @@ contains
 !
    use ScfDataModule, only : Temperature
 !
-   use RadialGridModule, only : getGrid
+   use PotentialTypeModule, only : isASAPotential
+!
+   use RadialGridModule, only : getGrid, getRadialIntegration
 !
    use StepFunctionModule, only : getVolumeIntegration
 !
@@ -2624,14 +2626,26 @@ contains
          if (rad_derivative) then
             der_dos_r_jl => getDOSDerivative(spin=is,site=id,atom=ia)
          endif
-!        -------------------------------------------------------------
          iend = size(dos_r_jl,1); jmax_dos = size(dos_r_jl,2)
-!        -------------------------------------------------------------
-         dos(ia) = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
-                                             jmax_dos, 2, dos_r_jl, dos_mt(ia) )
-         dos_mt(ia) = sfac*dos_mt(ia)
-         dos_out(ia) = sfac*getOutsideDOS(spin=is,site=id,atom=ia)
-!        -------------------------------------------------------------
+         if (isASAPotential()) then
+            dos(ia) = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
+                                                jmax_dos, 2, dos_r_jl, dos_mt(ia), truncated=.false. )
+            dos_mt(ia) = dos(ia)
+!           ==========================================================
+!           Another way to calculate the ASA DOS is using getRadialIntegration
+!           ----------------------------------------------------------
+!           dos_mt(ia) = sfac*getRadialIntegration(id, Grid%jmt, dos_r_jl(:,1))/Y0
+!           dos(ia) = dos_mt(ia)
+!           ==========================================================
+            dos_out(ia) = ZERO
+         else
+!           ----------------------------------------------------------
+            dos(ia) = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
+                                                jmax_dos, 2, dos_r_jl, dos_mt(ia) )
+            dos_mt(ia) = sfac*dos_mt(ia)
+            dos_out(ia) = sfac*getOutsideDOS(spin=is,site=id,atom=ia)
+!           ----------------------------------------------------------
+         endif
 !
          do jl = 1, jmax_dos
             do ir = 1, LastValue(id)%NumRs
@@ -2823,6 +2837,8 @@ contains
          if (isASAPotential()) then
             greenint_mt = sfac*getRadialIntegration(id, Grid%jmt, green(:,1))/Y0
             greenint = greenint_mt
+!           Alternatively, you can call getVolumeIntegration with truncated=.false.
+!           to run the integration in ASA volume.
          else
 !           ----------------------------------------------------------
             greenint = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,    &
@@ -4184,6 +4200,8 @@ contains
             if (isASAPotential()) then
                greenint_mt(ks) = cmul*sfac*getRadialIntegration(id, Grid%jmt, green(:,1,ks,ia))/Y0
                greenint(ks) = greenint_mt(ks)
+!              Alternatively, you can call getVolumeIntegration with truncated=.false.
+!              to run the integration in ASA volume.
             else
 !              -----------------------------------------------------
                greenint(ks) = cmul*sfac*getVolumeIntegration( id, iend, Grid%r_mesh, &
@@ -5301,6 +5319,8 @@ contains
 !  ===================================================================
    use IntegrationModule, only : calIntegration
 !
+   use PotentialTypeModule, only : isASAPotential
+!
    use StepFunctionModule, only : getVolumeIntegration
 !
    use RadialGridModule, only : getGrid
@@ -5343,10 +5363,19 @@ contains
    call calIntegration(Grid%jmt,Grid%r_mesh,rho_0,intr,0)
 !  call calIntegration(Grid%jmt,Grid%r_mesh,rho_0,intr,2)
    do js=1,n_spin_pola*n_spin_cant
-!     ----------------------------------------------------------------
-      q_VP=getVolumeIntegration( id, CurrentValue%NumRs, Grid%r_mesh,    &
-                                 CurrentValue%kmax, CurrentValue%jmax, 2, CurrentValue%dos_r_jl(:,:,js,ia), q_MT )
-!     ----------------------------------------------------------------
+      if (isASAPotential()) then
+!        -------------------------------------------------------------
+         q_VP=getVolumeIntegration( id, CurrentValue%NumRs, Grid%r_mesh,    &
+                                    CurrentValue%kmax, CurrentValue%jmax, 2,&
+                                    CurrentValue%dos_r_jl(:,:,js,ia), q_MT, truncated = .false. )
+!        -------------------------------------------------------------
+         q_MT = q_VP
+      else
+!        -------------------------------------------------------------
+         q_VP=getVolumeIntegration( id, CurrentValue%NumRs, Grid%r_mesh,    &
+                                    CurrentValue%kmax, CurrentValue%jmax, 2, CurrentValue%dos_r_jl(:,:,js,ia), q_MT )
+!        -------------------------------------------------------------
+      endif
       if ( node_print_level >= 0) then
          write(6,'(4x,a,t40,a,f18.11)')'Integrated spherical Density in MT','=', intr(Grid%jmt)*PI4
          write(6,'(4x,a,t40,a,2f18.11)')'Integrated Electron Density in VP, MT','=',q_VP, q_MT
@@ -6472,6 +6501,7 @@ contains
 !  ===================================================================
    use PhysParamModule, only : Boltzmann
    use ScfDataModule, only : Temperature
+   use PotentialTypeModule, only : isASAPotential
    use GroupCommModule, only : GlobalSumInGroup
    use RadialGridModule, only : getGrid
    use StepFunctionModule, only : getVolumeIntegration
@@ -6579,8 +6609,13 @@ contains
 !        ----------------------------------------------------------------
       enddo
       n = LastValue(id)%NumRs*jmax_dos
-      dos = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
-                                     jmax_dos, 2, dos_r_jl, dos_mt )
+      if (isASAPotential()) then
+         dos = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
+                                          jmax_dos, 2, dos_r_jl, dos_mt, truncated=.false. )
+      else
+         dos = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
+                                          jmax_dos, 2, dos_r_jl, dos_mt )
+      endif
       dos_mt = sfac*dos_mt
 !      print*,"single-site dos at real axis", "  is=", is
 !      print*,"energy=",real(energy), "dos=", dos, "dos_mt=", dos_mt
@@ -6611,6 +6646,7 @@ contains
 !  In the no-spin-polarized case, a factor of 2 is included in dos.
 !  ===================================================================
    use GroupCommModule, only : GlobalSumInGroup
+   use PotentialTypeModule, only : isASAPotential
    use RadialGridModule, only : getGrid
    use StepFunctionModule, only : getVolumeIntegration
 !   use SSSolverModule, only : computeDOS, getDOS
@@ -6728,8 +6764,13 @@ contains
 !     ----------------------------------------------------------------
       enddo
       n = LastValue(id)%NumRs*jmax_dos
-      dos = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
-                                     jmax_dos, 2, dos_r_jl, dos_mt )
+      if (isASAPotential()) then
+         dos = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
+                                          jmax_dos, 2, dos_r_jl, dos_mt, truncated = .false. )
+      else
+         dos = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
+                                          jmax_dos, 2, dos_r_jl, dos_mt )
+      endif
       dos_mt = sfac*dos_mt
       aux(n0+n+1) = rmul*dos
       aux(n0+n+2) = rmul*dos_mt
@@ -6980,6 +7021,8 @@ contains
       if (isASAPotential()) then
          greenint_mt(ks) = cmul*sfac*getRadialIntegration(id, Grid%jmt, green(:,1,ks))/Y0
          greenint(ks) = greenint_mt(ks)
+!        Alternatively, you can call getVolumeIntegration with truncated=.false.
+!        to run the integration in ASA volume.
       else
 !        -----------------------------------------------------------
          greenint(ks) = cmul*sfac*getVolumeIntegration( id, iend, Grid%r_mesh, &
