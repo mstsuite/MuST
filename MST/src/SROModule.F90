@@ -811,4 +811,36 @@ contains
    
    end function getKauFromTau
 !  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getSROMatrix(sm_type,n,is)   result(sro_mat)
+!  ===================================================================
+   implicit none
+
+   character (len=*), intent(in) :: sm_type
+   integer (kind=IntKind), intent(in) :: n, is
+   integer (kind=IntKind) :: dsize
+
+   complex (kind=CmplxKind), pointer :: sro_mat(:,:)
+
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+
+   dsize = SROMedium(n)%blk_size
+
+   if (nocaseCompare(sm_type,'tau11')) then
+     sro_mat => SROMedium(n)%tau_cpa(1:dsize, 1:dsize, is)
+   else if (nocaseCompare(sm_type,'tcpa-inv')) then
+     sro_mat => SROMedium(n)%Tcpa_inv 
+   else
+     call ErrorHandler('getSROMatrix', 'incorrect control string')
+   endif
+   
+   end function getSROMatrix
+!  ===================================================================
 end module SROModule
