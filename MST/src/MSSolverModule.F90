@@ -145,7 +145,8 @@ private
       complex (kind=CmplxKind), pointer :: green(:,:,:,:)      ! Stores the multiple scattering component of the Green fucntion, and
                                                                ! the single site scattering term may be included.
       complex (kind=CmplxKind), pointer :: der_green(:,:,:,:)  ! Stores the multiple scattering component of the Green fucntion derivative,
-   end type MSTStruct                                          ! and the single site scattering term may be included.
+                                                               ! and the single site scattering term may be included.
+   end type MSTStruct
 !
    type (MSTStruct), allocatable :: mst(:)
    complex (kind=CmplxKind), allocatable, target :: wspace(:), wspacep(:), gspace(:)
@@ -193,7 +194,8 @@ contains
    use GauntFactorsModule, only : initGauntFactors, endGauntFactors
    use GauntFactorsModule, only : getK3, getNumK3, getGauntFactor
 !
-   use ScfDataModule, only : isKKR, isScreenKKR, isLSMS, isKKRCPA, isKKRCPASRO, isEmbeddedCluster
+   use ScfDataModule, only : isKKR, isScreenKKR, isLSMS, isKKRCPA, & 
+                       isKKRCPASRO, isEmbeddedCluster
    use ScfDataModule, only : isChargeSymm
    use ScfDataModule, only : retrieveEffectiveMediumParams, retrieveSROParams
 !
@@ -711,7 +713,7 @@ contains
    subroutine computeMSTMatrix(is,e)
 !  ===================================================================
    use ScfDataModule, only : isLSMS, isScreenKKR, isKKRCPA,  &
-                isKKRCPASRO, isKKR, isEmbeddedCluster, isSROSCF
+         isKKRCPASRO, isKKR, isEmbeddedCluster, isSROSCF
 !
    use SSSolverModule, only : getScatteringMatrix
 !
@@ -836,7 +838,7 @@ contains
    complex (kind=CmplxKind), intent(in) :: e
 !
    integer (kind=IntKind) :: n, info, id, js1, js2, ns, kmaxk, kmaxp, kmaxg, irmax
-   integer (kind=IntKind) :: klg, kl1, kl2, klp1, klp2, ir, kl2c, m2, np, ia
+   integer (kind=IntKind) :: klg, kl1, kl2, klp1, klp2, ir, ir1, kl2c, m2, np, ia
    integer (kind=IntKind), pointer :: green_flags(:)
 !
    complex (kind=CmplxKind), pointer :: tfac(:,:), gfs(:,:)
@@ -1075,6 +1077,7 @@ contains
                               do ir = 1, mst(id)%iend
                                  dgf(ir,klg) =  dgf(ir,klg) + dppg(ir,klg,klp2)*PhiLr_right(ir,klp2,kl2)  &
                                                             + ppg(ir,klg,klp2)*der_PhiLr_right(ir,klp2,kl2)
+                              
                               enddo
                            endif
                         enddo

@@ -777,9 +777,10 @@ contains
    use RelSSSolverModule, only : SingleDiracScattering, computeRelSingleSiteDOS !xianglin
 !
    use MSSolverModule, only : initMSSolver, endMSSolver
+   use ConductivityModule, only : initConductivity, calCPAConductivity
    use RelMSSolverModule, only : initRelMSSolver, endRelMSSolver, computeRelMST, getRelMSDOS !xianglin
 !
-!   use RelScattererModule, only : initRelScatterer, endRelScatterer !xianglin
+!  use RelScattererModule, only : initRelScatterer, endRelScatterer !xianglin
 !
 !  use RelGreenFunctionModule, only : initRelGreenFunction, &
 !                                     endRelGreenFunction
@@ -792,18 +793,20 @@ contains
 !
    use ValenceDensityModule, only : getFermiEnergy
 !
-   use ScfDataModule, only : ErBottom, ErTop !xianglin
+   use ScfDataModule, only : ErBottom, ErTop, isConductivity, & !xianglin 
+                 useStepFunctionForSigma, getFermiEnergyImagPart
 !
    implicit none
 !
-   integer (kind=IntKind) :: id, ia, kmax, num_species
+   integer (kind=IntKind) :: id, is, ia, pot_type, kmax, num_species
 !
-   real (kind=RealKind) :: t1, t2, NLloyd, efermi
+   real (kind=RealKind) :: t1, t2, NLloyd, efermi, delta
    real (kind=RealKind), allocatable :: local_density_matrix(:,:,:)
 !
    logical, optional, intent(in) :: PartialDensity_Ef
    logical :: isBxyz(LocalNumAtoms) !xianglin
    complex (kind=CmplxKind) :: energy !xianglin
+   complex (kind=CmplxKind) :: temp_en
    real (kind=RealKind) :: etop, ebot !for findResonance
 !
    interface
@@ -858,6 +861,7 @@ contains
 !
    NumCalls_SS = 0
    Timing_SS = ZERO
+   temp_en = 0.01
 !
 !  ===================================================================
 !  initialize Single Site Scatterer
@@ -885,7 +889,23 @@ contains
                         lmax_kkr, lmax_phi, lmax_green, posi,            &
                         n_spin_pola, n_spin_cant, RelativisticFlag,      &
                         stop_routine, print_level, derivative=rad_derivative)
+      if (isConductivity()) then
+        call initConductivity(temp_en, LocalNumAtoms, lmax_kkr, lmax_phi, lmax_green, &
+               n_spin_pola, n_spin_cant, RelativisticFlag,stop_routine, print_level)
+      endif
 !  -------------------------------------------------------------------
+   endif
+
+   if (isConductivity()) then
+     delta = getFermiEnergyImagPart()
+     pot_type = useStepFunctionForSigma()
+     do id = 1, LocalNumAtoms
+       do is = 1, n_spin_pola
+         call calCPAConductivity(id, is, delta, pot_type, n_spin_pola)
+       enddo
+     enddo
+     call StopHandler('calValenceStates', 'Conductivity Successfully Calculated', &
+                           force_to_print=.true.)
    endif
 !
    chempot = getFermiEnergy()
@@ -985,6 +1005,7 @@ contains
    else
      call calIntegratedDOS(efermi)
    endif
+
 !
 !  -------------------------------------------------------------------
 !  call averageElectroStruct(IntegrValue)
@@ -1396,6 +1417,7 @@ contains
 !                    -------------------------------------------------
                      call computeMSGreenFunction(is, adjustEnergy(is,energy), &
                                                  add_Gs=.true., isSphSolver=.true.)
+                     
 !                    -------------------------------------------------
                   endif
                   do id =  1,LocalNumAtoms

@@ -47,7 +47,8 @@ contains
    use InputModule, only : getKeyValue, getTableIndex, getKeyIndexValue
    use InputModule, only : isKeyExisting
 !
-   use ScfDataModule, only : isKKRCPA, isKKRCPASRO, isEmbeddedCluster
+   use ScfDataModule, only : isKKRCPA,  isKKRCPASRO,  &
+                            isEmbeddedCluster
 !
    use SystemModule, only : getNumAtoms, getLmaxKKR, getLmaxPhi,      &
                             getBravaisLattice,                        &
