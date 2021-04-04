@@ -1037,6 +1037,7 @@ contains
 !  ===================================================================
    use SSSolverModule, only : getScatteringMatrix
    use CPAMediumModule, only : getSingleSiteTmat, getCPAMatrix
+   use SROModule, only : getSROMatrix
    use MatrixInverseModule, only : MtxInv_LU
    use MatrixModule, only : computeAprojB
    use WriteMatrixModule, only : writeMatrix
@@ -1053,7 +1054,11 @@ contains
 
    t_atemp => getScatteringMatrix('TInv-Matrix', spin=is, site=n, atom=ic)
    t_ctemp => getSingleSiteTmat('TInv-Matrix', spin=is, site=n, atom=0)
-   tau_ctemp => getCPAMatrix('Tau',site=n,atom=0)
+   if (mode == 3) then
+     tau_ctemp => getCPAMatrix('Tau',site=n,atom=0)
+   else if (mode == 4) then
+     tau_ctemp => getSROMatrix('tau11',n,1)
+   endif
 
    dsize = master_size
 
@@ -1162,6 +1167,7 @@ contains
 !
    use PolyhedraModule, only : getVolume
    use CPAMediumModule, only : getCPAMatrix
+   use SROModule, only : getSROMatrix
    use AtomModule, only : getLocalSpeciesContent, getLocalNumSpecies
    use SystemVolumeModule, only : getAtomicVPVolume
    use WriteMatrixModule, only : writeMatrix
@@ -1177,7 +1183,12 @@ contains
 
    complex (kind=CmplxKind) :: sigma0
 
-   tau_ctemp => getCPAMatrix('Tau',site=n,atom=0)
+   if (mode == 3) then
+     tau_ctemp => getCPAMatrix('Tau',site=n,atom=0)
+   else if (mode == 4) then
+     tau_ctemp => getSROMatrix('tau11',n,1)
+   endif
+
    dsize = master_size
 
    allocate(temp1(dsize, dsize), temp2(dsize, dsize), &
@@ -1339,11 +1350,17 @@ contains
         lmax_sigma, sf_single)
 !  ----------------------------------------------------------------
    call calJxFromPhiLrIntegral(global_energy,iend,is,sf_single,sf_term,mt=pot_type)
-!  ----------------------------------------------------------------
-   call computeCPAMedium(global_energy)
-!  ----------------------------------------------------------------
+!  ----------------------------------------------------------------   
+   if (mode == 3) then
+!    --------------------------------------------------------------
+     call computeCPAMedium(global_energy)
+!    --------------------------------------------------------------
+   else if (mode == 4) then
+!    -------------------------------------------------------------- 
+     call computeCPAMedium(global_energy, do_sro=.true.)
+!    --------------------------------------------------------------
+   endif
 
- 
    do ic = 1, nspecies
      do dir = 1, dirnum
 !      ------------------------------------------------------    
@@ -1361,7 +1378,6 @@ contains
            c_a = getLocalSpeciesContent(n, ic1)
            c_b = getLocalSpeciesContent(n, ic2)              
            coeff = -(c_a*c_b)/(PI*Omega)
-           Print *, c_a, c_b 
            
            int_val1 = int_val1 + coeff*calSigmaIntegralCPA(n, global_energy, &
            jtspace(:,:,n,ic1,is,dir), jtspace(:,:,n,ic2,is,dir1), &
