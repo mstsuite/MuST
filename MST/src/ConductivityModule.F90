@@ -1167,7 +1167,7 @@ contains
 !
    use PolyhedraModule, only : getVolume
    use CPAMediumModule, only : getCPAMatrix
-   use SROModule, only : getSROMatrix
+   use SROModule, only : getSROMatrix, getSROParam
    use AtomModule, only : getLocalSpeciesContent, getLocalNumSpecies
    use SystemVolumeModule, only : getAtomicVPVolume
    use WriteMatrixModule, only : writeMatrix
@@ -1175,7 +1175,7 @@ contains
    integer (kind=IntKind), intent(in) :: n, dir1, dir2, is, caltype
    real (kind=RealKind), intent(in) :: rmt
    integer (kind=IntKind) :: ic, ic1, dsize, L, num_species
-   real (kind=RealKind) :: Omega, c_a, c_b, coeff
+   real (kind=RealKind) :: Omega, c_a, c_b, wab, coeff
    complex (kind=CmplxKind), pointer :: tau_ctemp(:,:)
    complex (kind=CmplxKind), allocatable :: tau_c(:,:), tau_cc(:,:)
    complex (kind=CmplxKind), allocatable :: temp1(:,:), temp2(:,:), & 
@@ -1206,7 +1206,12 @@ contains
     do ic1 = 1, num_species
      c_a = getLocalSpeciesContent(n, ic)
      c_b = getLocalSpeciesContent(n, ic1)
-     coeff = -(c_a*c_b)/(PI*Omega)
+     if (mode == 4) then
+       wab = getSROParam(n, ic, ic1)
+       coeff = -(c_a*c_b*wab)/(PI*Omega)
+     else if (mode == 3) then
+       coeff = -(c_a*c_b)/(PI*Omega)
+     endif
      if (caltype == 1) then
        temp4 = jspace(:,:,n,ic,is,dir2) - jtspace(:,:,n,ic1,is,dir2)
 !      ---------------------------------------------------------------------
@@ -1302,13 +1307,14 @@ contains
    use SystemVolumeModule, only : getAtomicVPVolume
    use ScfDataModule, only : isFermiEnergyRealPart, getFermiEnergyRealPart, &
                             useCubicSymmetryForSigma
+   use SROModule, only : getSROParam
 
    integer (kind=IntKind), intent(in) :: n, is, pot_type, n_spin_pola
    real (kind=RealKind), intent(in) :: delta
 
    integer (kind=IntKind) :: cg 
    integer (kind=IntKind) :: iend, nspecies, ic, ic1, ic2,  dir, dir1, dirnum
-   real(kind=RealKind) :: efermi, rmt, Omega, c_a, c_b, coeff, a
+   real(kind=RealKind) :: efermi, rmt, Omega, c_a, c_b, w_ab, coeff, a
    real(kind=RealKind), pointer :: radial_grid(:)
    real(kind=RealKind) :: start, finish
    complex (kind=CmplxKind) :: jterm, temp, global_energy 
@@ -1376,8 +1382,13 @@ contains
        do ic1 = 1, nspecies
          do ic2 = 1, nspecies
            c_a = getLocalSpeciesContent(n, ic1)
-           c_b = getLocalSpeciesContent(n, ic2)              
-           coeff = -(c_a*c_b)/(PI*Omega)
+           c_b = getLocalSpeciesContent(n, ic2)             
+           if (mode == 4) then 
+             w_ab = getSROParam(n, ic1, ic2)
+             coeff = -(c_a*c_b*w_ab)/(PI*Omega)
+           else if (mode == 3) then
+             coeff = -(c_a*c_b)/(PI*Omega) 
+           endif
            
            int_val1 = int_val1 + coeff*calSigmaIntegralCPA(n, global_energy, &
            jtspace(:,:,n,ic1,is,dir), jtspace(:,:,n,ic2,is,dir1), &
