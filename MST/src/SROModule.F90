@@ -843,4 +843,16 @@ contains
    
    end function getSROMatrix
 !  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getSROParam(n, ic1, ic2) result(w12)
+!  ===================================================================
+
+   integer (kind=IntKind), intent(in) :: n, ic1, ic2
+   real (kind=RealKind) :: w12
+
+   w12 = SROMedium(n)%SROTMatrix(ic1)%sro_param_a(ic2)
+
+   end function getSROParam
+!  =================================================================== 
 end module SROModule
