@@ -1208,7 +1208,7 @@ contains
      c_b = getLocalSpeciesContent(n, ic1)
      if (mode == 4) then
        wab = getSROParam(n, ic, ic1)
-       coeff = -(c_a*c_b*wab)/(PI*Omega)
+       coeff = -(c_a*wab)/(PI*Omega)
      else if (mode == 3) then
        coeff = -(c_a*c_b)/(PI*Omega)
      endif
@@ -1385,7 +1385,7 @@ contains
            c_b = getLocalSpeciesContent(n, ic2)             
            if (mode == 4) then 
              w_ab = getSROParam(n, ic1, ic2)
-             coeff = -(c_a*c_b*w_ab)/(PI*Omega)
+             coeff = -(c_a*w_ab)/(PI*Omega)
            else if (mode == 3) then
              coeff = -(c_a*c_b)/(PI*Omega) 
            endif
