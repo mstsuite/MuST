@@ -274,6 +274,12 @@
    n = n + 1; Keys(n) = 'Full-potential Semi-core';              Values(n) = '0'
 !                     = 0: Do NOT treat semi-core states with full-potential;
 !                     = 1: Treat semi-core states with full-potential.
+   n = n + 1; Keys(n) = 'Include CPA/SRO Charge Correction';     Values(n) = '0'
+!                     = 0: Do NOT include charge correction term in potential for the CPA calculation;
+!                     = 1: Include the charge correction term in potential/energy for the CPA calculation;
+   n = n + 1; Keys(n) = 'Use Linear Relation';                   Values(n) = '0'
+!                     = 0: DO NOT use the linear q-V relation to determine the charge correction term;
+!                     = 1: Use the linear q-V relation to determine the charge correction term;
 !  =============================================================================
 !  Additional input parameters can be added to this table using the 
 !  following format:

@@ -256,6 +256,10 @@ contains
    use Uniform3DGridModule, only : createProcessorMesh, getUniform3DGrid
    use Uniform3DGridModule, only : distributeUniformGrid, insertAtomsInGrid
 !
+   use ChargeDistributionModule, only : getGlobalTableLine
+!
+   use ChargeDensityModule, only : getSphChargeDensity, getSphMomentDensity
+!
    use ChargeScreeningModule, only : initChargeScreeningModule
 !
    implicit none
@@ -273,9 +277,11 @@ contains
    integer (kind=IntKind), allocatable :: DataSize(:), DataSizeL(:)
    integer (kind=IntKind), allocatable :: SpeciesDataSize(:), SpeciesDataSizeL(:)
 !
+   integer (kind=IntKind), pointer :: global_table_line(:)
+!
    type (GridStruct), pointer :: Grid
 !
-   integer (kind=IntKind) :: jl, kl, l, m, ig, id, nr, ir, ugo
+   integer (kind=IntKind) :: jl, kl, l, m, ig, id, nr, ir, ugo, gsize
    integer (kind=IntKind) :: kmax_max, lmax_pot, jmax_pot
    integer (kind=IntKind) :: jmt, jend, num_species
    integer (kind=IntKind) :: grid_start(3), grid_end(3), gir(3,3), ng_uniform(3)
@@ -583,9 +589,11 @@ contains
       p_Pot%n_Rpts = jend
    enddo
 !
+   global_table_line => getGlobalTableLine(nsize=gsize)
+!
    allocate( alpha_mad(LocalNumAtoms), GlobalIndex(LocalNumAtoms) )
    allocate( LocalAtomPosi(3,LocalNumAtoms) )
-   allocate( MadelungShiftTable(GlobalNumAtoms) )
+   allocate( MadelungShiftTable(gsize) )
    allocate( radius(LocalNumAtoms) )
 !
    alpha_min =  1.0d+20
@@ -712,6 +720,7 @@ contains
 !  --------------------------------------------------
    call initChargeScreeningModule(nlocal, num_atoms)
 !  --------------------------------------------------
+   nullify(global_table_line)
 
    end subroutine initPotentialGeneration
 !  ===================================================================
@@ -1203,8 +1212,11 @@ contains
                                    isMuffintinPotential, isASAPotential
 !
    use ChargeDistributionModule, only : getInterstitialElectronDensity
+   use ChargeDistributionModule, only : getGlobalTableLine
 !
    use StepFunctionModule, only : getVolumeIntegration
+!
+   use SystemModule, only : getNumAlloyElements
 !
    use SystemVolumeModule, only : getSystemVolume, getTotalInterstitialVolume
 !
@@ -1212,15 +1224,18 @@ contains
 !
    use PolyhedraModule, only : getVolume, getInscrSphVolume
 !
+   use ChargeScreeningModule, only : getSpeciesPotentialCorrection
+!
    implicit   none
 !
    logical, optional :: isMT
    logical :: isMTon = .false.
 !
-   integer (kind=IntKind) :: id, ia, ig, ip, is, jl, jmt, ir, nRpts, jend, l
-   integer (kind=IntKind) :: jmax, lmax, kmax
+   integer (kind=IntKind) :: id, ia, ig, ip, is, jl, jmt, ir, nRpts, jend, l, lig
+   integer (kind=IntKind) :: jmax, lmax, kmax, gsize
    integer (kind=IntKind) :: MaxLocalAtoms
    integer (kind=IntKind), pointer :: flag_jl(:), p_flags(:)
+   integer (kind=IntKind), pointer :: global_table_line(:)
 !
    real (kind=RealKind) :: pot_r, pot_i, vol_ints, vtmp, vs, vs_mt, rfac
 #ifdef POT_DEBUG
@@ -1244,6 +1259,9 @@ contains
    else
       isMTon = .false.
    endif
+!
+   global_table_line => getGlobalTableLine(nsize=gsize)
+!
    if ( .not.isFullPot .or. isMTon ) then
 !
       rhoint_sav = getInterstitialElectronDensity()
@@ -1291,10 +1309,14 @@ contains
       MadelungShiftTable = ZERO
       do id = 1,LocalNumAtoms
          ig = GlobalIndex(id)
-         MadelungShiftTable(ig) = Potential(id)%Madelung_Shift
+         do ia = 1, getNumAlloyElements(ig)
+            lig = global_table_line(ig) + ia
+            MadelungShiftTable(lig) = Potential(id)%Madelung_Shift +  &
+                                      getSpeciesPotentialCorrection(id,ia)
+         enddo
       enddo
 !     ----------------------------------------------------------------
-      call GlobalSumInGroup(GroupID,MadelungShiftTable,GlobalNumAtoms)
+      call GlobalSumInGroup(GroupID,MadelungShiftTable,gsize)
 !     ----------------------------------------------------------------
       EmptyTable = .false.
 #ifdef TIMING
@@ -1975,6 +1997,7 @@ contains
    integer (kind=IntKind) :: is
    integer (kind=IntKind) :: jmt, jmt_max
    integer (kind=IntKind) :: n_Rpts
+!
    integer (kind=IntKind), pointer :: global_table_line(:)
 !
    real (kind=RealKind) :: dps
@@ -1997,9 +2020,9 @@ contains
 !  real (kind=RealKind), allocatable :: vmt1(:)
 !
    rhoint = getInterstitialElectronDensityOld()
-   global_table_line => getGlobalTableLine()
    Q_Table => getGlobalOnSiteElectronTableOld()
    Qmt_Table => getGlobalMTSphereElectronTableOld()
+   global_table_line => getGlobalTableLine()
 
 !  ===================================================================
 !  vmt1_i = pi4*rho_0*Rmt_i^2 + 2*sum_j[madmat(j,i)*qsub_j], where:
@@ -2905,7 +2928,7 @@ contains
             write(fu,'(2x,a3,2x,i6,2x,i2,4(2x,f9.5),6x,f12.5)')getAtomName(ig,ia), ig, ia,  &
                                                  Q_Table(lig),Qmt_Table(lig),         &
                                                  Q_Table(lig)-getAtomicNumber(ig,ia), &
-                                                 MadelungShiftTable(ig),atom_en(1,ig)
+                                                 MadelungShiftTable(lig),atom_en(1,ig)
          endif
       enddo
    enddo

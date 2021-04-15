@@ -508,13 +508,18 @@ contains
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getGlobalTableLine() result(p)
+   function getGlobalTableLine(nsize) result(p)
 !  ===================================================================
    implicit none
 !
    integer (kind=IntKind), pointer :: p(:)
+   integer (kind=IntKind), optional, intent(out) :: nsize
 !
    p => global_table_line(1:GlobalNumAtoms)
+!
+   if (present(nsize)) then
+      nsize = global_table_size
+   endif
 !
    end function getGlobalTableLine
 !  ===================================================================
