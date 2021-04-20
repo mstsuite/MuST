@@ -777,7 +777,7 @@ contains
    use RelSSSolverModule, only : SingleDiracScattering, computeRelSingleSiteDOS !xianglin
 !
    use MSSolverModule, only : initMSSolver, endMSSolver
-   use ConductivityModule, only : initConductivity, calCPAConductivity
+   use ConductivityModule, only : initConductivity, calCPAConductivity, endConductivity
    use RelMSSolverModule, only : initRelMSSolver, endRelMSSolver, computeRelMST, getRelMSDOS !xianglin
 !
 !  use RelScattererModule, only : initRelScatterer, endRelScatterer !xianglin
@@ -904,6 +904,7 @@ contains
          call calCPAConductivity(id, is, delta, pot_type, n_spin_pola)
        enddo
      enddo
+     call endConductivity()
      call StopHandler('calValenceStates', 'Conductivity Successfully Calculated', &
                            force_to_print=.true.)
    endif
