@@ -813,14 +813,15 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getSROMatrix(sm_type,n,is)   result(sro_mat)
+   function getSROMatrix(sm_type,n,ic,is,matsize)   result(sro_mat)
 !  ===================================================================
    implicit none
 
    character (len=*), intent(in) :: sm_type
-   integer (kind=IntKind), intent(in) :: n, is
-   integer (kind=IntKind) :: dsize
-
+   integer (kind=IntKind), intent(in) :: n, ic, is
+   integer (kind=IntKind), intent(out), optional :: matsize
+   integer (kind=IntKind) :: dsize, nsize
+   logical :: is_size = .false.
    complex (kind=CmplxKind), pointer :: sro_mat(:,:)
 
    interface
@@ -832,11 +833,46 @@ contains
    end interface
 
    dsize = SROMedium(n)%blk_size
+   nsize = SROMedium(n)%neigh_size
+
+   if (present(matsize)) then
+     is_size = .true.
+   else
+     is_size = .false.
+   endif
 
    if (nocaseCompare(sm_type,'tau11')) then
-     sro_mat => SROMedium(n)%tau_cpa(1:dsize, 1:dsize, is)
+     if (ic == 0) then
+       sro_mat => SROMedium(n)%tau_cpa(1:dsize, 1:dsize, is)
+     else 
+       sro_mat => SROMedium(n)%SROTMatrix(ic)%tau_ab(1:dsize, 1:dsize, is)
+     endif
+     if (is_size) then
+       matsize = dsize
+     endif
+   else if (nocaseCompare(sm_type,'blk-tau')) then
+     if (ic == 0) then
+       sro_mat => SROMedium(n)%tau_cpa(:,:,is)
+     else
+       sro_mat => SROMedium(n)%SROTMatrix(ic)%tau_ab(:,:,is)
+     endif
+     if (is_size) then
+       matsize = dsize*nsize
+     endif
    else if (nocaseCompare(sm_type,'tcpa-inv')) then
-     sro_mat => SROMedium(n)%Tcpa_inv 
+     sro_mat => SROMedium(n)%Tcpa_inv
+     if (is_size) then
+       matsize = dsize
+     endif
+   else if (nocaseCompare(sm_type,'blk-tinv')) then
+     if (ic == 0) then
+       sro_mat => SROMedium(n)%T_CPA_inv
+     else
+       sro_mat => SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%T_inv
+     endif
+     if (is_size) then
+       matsize = dsize*nsize
+     endif
    else
      call ErrorHandler('getSROMatrix', 'incorrect control string')
    endif
