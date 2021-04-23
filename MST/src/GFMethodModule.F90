@@ -777,7 +777,7 @@ contains
    use RelSSSolverModule, only : SingleDiracScattering, computeRelSingleSiteDOS !xianglin
 !
    use MSSolverModule, only : initMSSolver, endMSSolver
-   use ConductivityModule, only : initConductivity, calCPAConductivity, endConductivity
+   use ConductivityModule, only : initConductivity, calConductivity, endConductivity
    use RelMSSolverModule, only : initRelMSSolver, endRelMSSolver, computeRelMST, getRelMSDOS !xianglin
 !
 !  use RelScattererModule, only : initRelScatterer, endRelScatterer !xianglin
@@ -793,8 +793,7 @@ contains
 !
    use ValenceDensityModule, only : getFermiEnergy
 !
-   use ScfDataModule, only : ErBottom, ErTop, isConductivity, & !xianglin 
-                 useStepFunctionForSigma, getFermiEnergyImagPart
+   use ScfDataModule, only : ErBottom, ErTop, isConductivity !xianglin 
 !
    implicit none
 !
@@ -897,13 +896,7 @@ contains
    endif
 
    if (isConductivity()) then
-     delta = getFermiEnergyImagPart()
-     pot_type = useStepFunctionForSigma()
-     do id = 1, LocalNumAtoms
-       do is = 1, n_spin_pola
-         call calCPAConductivity(id, is, delta, pot_type, n_spin_pola)
-       enddo
-     enddo
+     call calConductivity(LocalNumAtoms, n_spin_pola)
      call endConductivity()
      call StopHandler('calValenceStates', 'Conductivity Successfully Calculated', &
                            force_to_print=.true.)
