@@ -182,7 +182,7 @@ contains
    jspace3(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
    jspace4(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3)) 
    
-   if (mode == 3) then
+   if (mode == 3 .or. mode == 4) then
      allocate(jtspace(jsize, jsize, &
              LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
      jtspace2(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
@@ -1047,10 +1047,117 @@ contains
 !      ------------------------------------------------------
      enddo
    else if (mode == 4) then
-!    Need to calculate CA-CPA Jtilde matrices
+     do ic = 1, num_species(n)
+!      ------------------------------------------------------
+       call calJtildeSRO(n, ic, is)
+!      ------------------------------------------------------
+     enddo
    endif
 
    end subroutine calCurrentMatrix
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine calJtildeSRO(n, ic, is)
+!  ===================================================================
+   
+   use SROModule, only : getSROMatrix
+   use MatrixModule, only : computeAprojB
+   use WriteMatrixModule, only : writeMatrix
+
+   integer (kind=IntKind), intent(in) :: n, ic, is
+   integer (kind=IntKind) :: nsize, dir
+   complex (kind=CmplxKind), pointer :: Ta(:,:), Tc(:,:), tauc(:,:)
+   complex (kind=CmplxKind), allocatable :: taucc(:,:), Tcc(:,:), Tac(:,:)
+   complex (kind=CmplxKind), allocatable :: D(:,:), Dt(:,:), D1(:,:), Dt1(:,:)
+   complex (kind=CmplxKind), allocatable :: D00(:,:), Dt00(:,:), D100(:,:), Dt100(:,:)
+   complex (kind=CmplxKind), allocatable :: tmp1(:,:), tmp2(:,:)
+   complex (kind=CmplxKind), allocatable :: buf1(:,:), buf2(:,:), &
+                                                 buf3(:,:), buf4(:,:)
+
+   Ta => getSROMatrix('blk-tinv', n, ic, is, nsize)
+   Tc => getSROMatrix('blk-tinv', n, 0, is)
+   tauc => getSROMatrix('blk-tau', n, 0, is)
+  
+   call writeMatrix('Ta', Ta, nsize, nsize)
+   call writeMatrix('Tc', Tc, nsize, nsize)
+   call writeMatrix('tauc', tauc, nsize, nsize)
+
+   allocate(Tac(nsize, nsize), Tcc(nsize, nsize), taucc(nsize, nsize))
+   allocate(D(nsize, nsize), Dt(nsize, nsize), D1(nsize, nsize), &
+            Dt1(nsize, nsize), tmp1(nsize, nsize), tmp2(nsize, nsize))
+   allocate(buf1(kmax_kkr_max, kmax_kkr_max), buf2(kmax_kkr_max, kmax_kkr_max), &
+     buf3(kmax_kkr_max, kmax_kkr_max), buf4(kmax_kkr_max, kmax_kkr_max), &
+     D00(kmax_kkr_max, kmax_kkr_max), Dt00(kmax_kkr_max, kmax_kkr_max), &
+     D100(kmax_kkr_max, kmax_kkr_max), Dt100(kmax_kkr_max, kmax_kkr_max))
+
+   Tac = conjg(Ta)
+   Tcc = conjg(Tc)
+   taucc = conjg(tauc)
+
+   D = CZERO; Dt = CZERO; D1 = CZERO; Dt1 = CZERO;
+   D00 = CZERO; Dt00 = CZERO; D100 = CZERO; Dt100 = CZERO   
+
+   tmp1 = Ta - Tc
+   tmp2 = Tac - Tcc
+   call computeAprojB('N', nsize, tauc, tmp1, D)
+   call computeAprojB('N', nsize, tmp1, tauc, Dt)
+   call computeAprojB('N', nsize, taucc, tmp2, D1)
+   call computeAprojB('N', nsize, tmp2, taucc, Dt1)
+
+   D00 = D(1:kmax_kkr_max, 1:kmax_kkr_max)
+   D100 = D1(1:kmax_kkr_max, 1:kmax_kkr_max)
+   Dt00 = Dt(1:kmax_kkr_max, 1:kmax_kkr_max)
+   Dt100 = Dt1(1:kmax_kkr_max, 1:kmax_kkr_max)
+!  call writeMatrix('D', D, nsize, nsize)
+!  call writeMatrix('D1', D1, nsize, nsize)
+!  call writeMatrix('Dt', Dt, nsize, nsize)
+!  call writeMatrix('Dt1', Dt1, nsize, nsize)
+
+   do dir = 1, 3
+     buf1 = CZERO; buf2 = CZERO; buf3 = CZERO; buf4 = CZERO
+!    -----------------------------------------------------------------
+     call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, CONE, &
+     jspace(:,:,n,ic,is,dir), kmax_kkr_max, D00, &
+     kmax_kkr_max, CZERO, buf1, kmax_kkr_max)
+!    -----------------------------------------------------------------
+     call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, CONE, &
+     Dt00, kmax_kkr_max, buf1, kmax_kkr_max, &
+     CZERO, jtspace(:,:,n,ic,is,dir), kmax_kkr_max)
+!    -----------------------------------------------------------------
+
+!    -----------------------------------------------------------------
+     call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, CONE, &
+     jspace2(:,:,n,ic,is,dir), kmax_kkr_max, D100, &
+     kmax_kkr_max, CZERO,buf2, kmax_kkr_max)
+!    -----------------------------------------------------------------
+     call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, CONE, &
+     Dt00, kmax_kkr_max, buf2, kmax_kkr_max, &
+     CZERO, jtspace2(:,:,n,ic,is,dir), kmax_kkr_max)
+!    -----------------------------------------------------------------
+
+!    -----------------------------------------------------------------
+     call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, CONE, &
+     jspace3(:,:,n,ic,is,dir), kmax_kkr_max, D00, &
+     kmax_kkr_max, CZERO, buf3, kmax_kkr_max)
+!    -----------------------------------------------------------------
+     call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, CONE, &
+     Dt100, kmax_kkr_max, buf3, kmax_kkr_max, &
+     CZERO, jtspace3(:,:,n,ic,is,dir), kmax_kkr_max)
+!    -----------------------------------------------------------------
+    
+!    -----------------------------------------------------------------
+     call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, CONE, &
+     jspace4(:,:,n,ic,is,dir), kmax_kkr_max, D100, &
+     kmax_kkr_max, CZERO, buf4, kmax_kkr_max)
+!    -----------------------------------------------------------------
+     call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, CONE, &
+     Dt100, kmax_kkr_max, buf4, kmax_kkr_max, &
+     CZERO, jtspace4(:,:,n,ic,is,dir), kmax_kkr_max)
+!    -----------------------------------------------------------------
+   enddo
+
+   end subroutine calJtildeSRO
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -1128,7 +1235,7 @@ contains
 !  call writeMatrix('Dt', Dt, dsize, dsize)
 !  call writeMatrix('Dt1', Dt1, dsize, dsize)
    do dir = 1, 3
-     temp = CZERO; temp2 = CZERO
+     temp = CZERO; temp2 = CZERO; temp3 = CZERO; temp4 = CZERO
 !    Calculating Jtilde(E_F + id, E_F + id)
 !    -----------------------------------------------------------------
      call zgemm('n', 'n', dsize, dsize, dsize, CONE, jspace(:,:,n,ic,is,dir), &
