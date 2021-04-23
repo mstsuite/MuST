@@ -6,16 +6,20 @@ module ConductivityModule
    use NeighborModule, only : getNeighbor, sortNeighbors
 
 public :: initConductivity,        &
+          endConductivity,   &
           calSigmaTildeCPA0, &
           calSigmaTildeCPA1, &
-          calCPAConductivity, & 
+          calSigmaTildeSRO00, &
+          computeSROConductivity, &
+          computeCPAConductivity, &
+          calConductivity
 !
 
 private
    integer (kind=IntKind) :: LocalNumAtoms
    integer (kind=IntKind) :: n_spin_pola
    integer (kind=IntKind) :: n_spin_cant
-   integer (kind=IntKind) :: mode, master_size
+   integer (kind=IntKind) :: scf, mode, master_size
 
    integer (kind=IntKind), allocatable :: print_instruction(:)
    integer (kind=IntKind), allocatable :: lmax_kkr(:)
@@ -58,7 +62,7 @@ contains
    use AtomModule, only : getLocalNumSpecies
    use PolyhedraModule, only : getNumPolyhedra
    use WriteMatrixModule, only : writeMatrix
-   use ScfDataModule, only : isKKR, isLSMS, isKKRCPA, isKKRCPASRO
+   use ScfDataModule, only : isKKR, isLSMS, isKKRCPA, isKKRCPASRO, isSROSCF
    use CurrentMatrixModule, only : initCurrentMatrixModule
 
    integer (kind=IntKind), intent(in) :: num_atoms
@@ -91,6 +95,11 @@ contains
       mode = 3
    else if (isKKRCPASRO()) then
       mode = 4
+      if (isSROSCF() == 1) then
+        scf = 1
+      else
+        scf = 0
+      endif
    endif
 
    if (mode == 1 .or. mode == 2) then
@@ -290,7 +299,6 @@ contains
    complex (kind=CmplxKind) :: sigma1
    complex (kind=CmplxKind), pointer :: J1(:,:), J2(:,:)
 
-
    Omega = getAtomicVPVolume(n)
    num_species = getLocalNumSpecies(n)
    sigma1 = CZERO
@@ -322,59 +330,132 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calCPAConductivity(n, is, delta, pot_type, n_spin_pola)
+   function calSigmaTildeSRO00(n, dir1, dir2, is, caltype) result(sigma00)
 !  ===================================================================
 
-   use CPAMediumModule, only : computeCPAMedium, getCPAMatrix, getSingleSiteTmat
-   use RadialGridModule, only : getRmesh, getRadialGridRadius
-   use WriteMatrixModule, only : writeMatrix
-   use ValenceDensityModule, only : getFermiEnergy
-   use SSSolverModule, only : solveSingleScattering, getRegSolution, getSolutionRmeshSize
-   use StepFunctionModule, only : interpolateStepFunction, getRadialStepFunction
+   use SROModule, only : getSROMatrix
+   use CurrentMatrixModule, only : getJMatrix
    use AtomModule, only : getLocalNumSpecies, getLocalSpeciesContent
-   use ScfDataModule, only : isFermiEnergyRealPart, getFermiEnergyRealPart, &
-                            useCubicSymmetryForSigma
-   use CurrentMatrixModule, only : getJMatrix, calCurrentMatrix
-
-   integer (kind=IntKind), intent(in) :: n, is, pot_type, n_spin_pola
-   real (kind=RealKind), intent(in) :: delta
-
-   integer (kind=IntKind) :: cg, etype
-   integer (kind=IntKind) :: nspecies, ic, ic1, ic2,  dir, dir1, dirnum
-   real(kind=RealKind) :: efermi, rmt, Omega, c_a, c_b, w_ab, coeff, a
-   complex (kind=CmplxKind) :: jterm, temp, global_energy 
-   complex(kind=CmplxKind), pointer :: phi(:,:,:), tau_test(:,:)
-   complex(kind=CmplxKind), pointer :: J1(:,:), J2(:,:)
-   complex(kind=CmplxKind) :: int_val(4)
+   use SystemVolumeModule, only : getAtomicVPVolume
  
-   if (useCubicSymmetryForSigma()) then
-     dirnum = 1
-   else
-     dirnum = 3
-   endif
+   integer (kind=IntKind), intent(in) :: n, dir1, dir2, is, caltype
+   integer (kind=IntKind) :: ic1, ic2, L
+   real (kind=RealKind) :: Omega, c_a, c_b, coeff
+   complex (kind=CmplxKind) :: sigma00
+   complex (kind=CmplxKind), pointer :: taua(:,:), J1(:,:), J2(:,:), J3(:,:)
+   complex (kind=CmplxKind), allocatable :: tauac(:,:), Jdiff(:,:), tau1(:,:), tau2(:,:)
+   complex (kind=CmplxKind), allocatable :: tmp1(:,:), tmp2(:,:), tmp3(:,:)
 
-   efermi = getFermiEnergy()
-   if (isFermiEnergyRealPart()) then
-     global_energy = getFermiEnergyRealPart() + SQRTm1*delta
-   else
-     global_energy = efermi + SQRTm1*delta
-   endif
+   allocate(tauac(kmax_kkr_max, kmax_kkr_max), Jdiff(kmax_kkr_max, kmax_kkr_max), &
+      tau1(kmax_kkr_max, kmax_kkr_max), tau2(kmax_kkr_max, kmax_kkr_max), &
+      tmp1(kmax_kkr_max, kmax_kkr_max), tmp2(kmax_kkr_max, kmax_kkr_max), &
+      tmp3(kmax_kkr_max, kmax_kkr_max))
+   tauac = CZERO
+   sigma00 = CZERO
    
-!  ---------------------------------------------------------------
-   call solveSingleScattering(spin=is,site=n,e=global_energy,vshift=CZERO)
-!  ----------------------------------------------------------------   
-   call computeCPAMedium(global_energy)
-!  --------------------------------------------------------------
-   call calCurrentMatrix(n,is,global_energy,pot_type,mode)
-!  ----------------------------------------------------------------    
+   Omega = getAtomicVPVolume(n)
+
+   do ic1 = 1, getLocalNumSpecies(n)
+     do ic2 = 1, getLocalNumSpecies(n)
+       c_a = getLocalSpeciesContent(n, ic1)
+       c_b = getLocalSpeciesContent(n, ic2)
+       coeff = -(c_a*c_b)/(PI*Omega)
+       tauac = CZERO; Jdiff = CZERO; tau1 = CZERO; tau2 = CZERO;
+       taua => getSROMatrix('tau11', n, ic1, is)
+       tauac = conjg(taua)
+       if (caltype == 1) then
+         J1 => getJMatrix(n, ic1, is, dir1, caltype ,0)
+         tau1 = taua; tau2 = taua;
+       else if (caltype == 2) then
+         J1 => getJMatrix(n, ic1, is, dir1, 3, 0)
+         tau1 = taua; tau2 = tauac;
+       else if (caltype == 3) then
+         J1 => getJMatrix(n, ic1, is, dir1, 2, 0)
+         tau1 = tauac; tau2 = taua;
+       else if (caltype == 4) then
+         J1 => getJMatrix(n, ic1, is, dir1, caltype, 0)
+         tau1 = tauac; tau2 = tauac;
+       else
+         call ErrorHandler('calSigmaTildeSRO00', 'Incorrect caltype (1-4)', caltype)
+       endif
+       J2 => getJMatrix(n, ic1, is, dir2, caltype, 0)
+       J3 => getJMatrix(n, ic2, is, dir2, caltype, 1)
+       Jdiff = J2 - J3
+!      ---------------------------------------------------------------
+       call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, &
+       CONE, Jdiff, kmax_kkr_max, tau2, kmax_kkr_max, CZERO, tmp1, kmax_kkr_max)
+!      ---------------------------------------------------------------
+       call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, &
+       CONE, tau1, kmax_kkr_max, tmp1, kmax_kkr_max, CZERO, tmp2, kmax_kkr_max)
+!      ---------------------------------------------------------------
+       call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, &
+       CONE, J1, kmax_kkr_max, tmp2, kmax_kkr_max, CZERO, tmp3, kmax_kkr_max)
+!      ---------------------------------------------------------------
+       do L = 1, kmax_kkr_max
+         sigma00 = sigma00 + coeff*tmp3(L,L)
+       enddo
+     enddo
+   enddo
+
+   end function calSigmaTildeSRO00
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine computeSROConductivity(n, is, delta, pot_type, dirnum, e)
+!  ===================================================================   
+
+   integer (kind=IntKind), intent(in) :: n, is, pot_type, dirnum
+   real (kind=RealKind), intent(in) :: delta
+   complex (kind=CmplxKind), intent(in) :: e
+
+   integer (kind=IntKind) :: etype
+   integer (kind=IntKind) :: dir, dir1
+   complex(kind=CmplxKind) :: int_val(4)
+
+   do dir = 1, dirnum
+     do dir1 = 1, dirnum
+       int_val = CZERO
+       do etype = 1, 4
+         int_val(etype) = calSigmaTildeSRO00(n, dir, dir1, is, etype)
+       enddo
+       sigmatilde(dir,dir1,is) = int_val(1)
+       sigmatilde2(dir,dir1,is) = int_val(2)
+       sigmatilde3(dir,dir1,is) = int_val(3)
+       sigmatilde4(dir,dir1,is) = int_val(4)
+       if (n_spin_pola == 1) then
+         sigmatilde(dir,dir1,is) = 2*sigmatilde(dir,dir1,is)
+         sigmatilde2(dir,dir1,is) = 2*sigmatilde2(dir,dir1,is)
+         sigmatilde3(dir,dir1,is) = 2*sigmatilde3(dir,dir1,is)
+         sigmatilde4(dir,dir1,is) = 2*sigmatilde4(dir,dir1,is)
+       endif
+       sigma(dir,dir1,is) = 0.25*(sigmatilde(dir,dir1,is) - &
+       sigmatilde2(dir,dir1,is) - sigmatilde3(dir,dir1,is) + &
+       sigmatilde4(dir,dir1,is))
+     enddo
+   enddo   
+
+   end subroutine computeSROConductivity
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine computeCPAConductivity(n, is, delta, pot_type, dirnum, e)
+!  ===================================================================
+
+   integer (kind=IntKind), intent(in) :: n, is, pot_type, dirnum
+   real (kind=RealKind), intent(in) :: delta
+   complex (kind=CmplxKind), intent(in) :: e
+
+   integer (kind=IntKind) :: etype
+   integer (kind=IntKind) :: dir, dir1
+   complex(kind=CmplxKind) :: int_val(4)
 
    do dir = 1, dirnum
      do dir1 = 1, dirnum
        int_val = CZERO
        do etype = 1, 4
          int_val(etype) = &
-          calSigmaTildeCPA1(n, dir, dir1, is, global_energy, caltype=etype) + &
-          calSigmaTildeCPA0(n, dir, dir1, is, caltype=etype)
+!         calSigmaTildeCPA1(n, dir, dir1, is, e, etype) + &
+          calSigmaTildeCPA0(n, dir, dir1, is, etype)
        enddo
        sigmatilde(dir,dir1,is) = int_val(1)
        sigmatilde2(dir,dir1,is) = int_val(2)
@@ -392,12 +473,94 @@ contains
      enddo
    enddo
 
+   end subroutine computeCPAConductivity
+!  ===================================================================
+   
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine calConductivity(LocalNumAtoms, n_spin_pola)
+!  ===================================================================
+
+
+   use SSSolverModule, only : solveSingleScattering
+   use ScfDataModule, only : getFermiEnergyImagPart, isFermiEnergyRealPart, &
+     useStepFunctionForSigma, useCubicSymmetryForSigma, getFermiEnergyRealPart
+   use ValenceDensityModule, only : getFermiEnergy
+   use WriteMatrixModule, only : writeMatrix
+   use CrystalMatrixModule, only : calCrystalMatrix, retrieveTauSRO
+   use CPAMediumModule, only : computeCPAMedium, populateBigTCPA, getSingleSiteMatrix
+   use SROModule, only : calSpeciesTauMatrix
+   use CurrentMatrixModule, only : calCurrentMatrix
+
+   integer (kind=IntKind), intent(in) :: LocalNumAtoms, n_spin_pola
+   integer (kind=IntKind) :: id, is, pot_type, dirnum
+   real (kind=RealKind) :: delta, efermi
+   complex (kind=CmplxKind) :: eval
+
+   delta = getFermiEnergyImagPart()
+   pot_type = useStepFunctionForSigma()
+
+   if (useCubicSymmetryForSigma()) then
+     dirnum = 1
+   else
+     dirnum = 3
+   endif
+
+   efermi = getFermiEnergy()
+   if (isFermiEnergyRealPart()) then
+     eval = getFermiEnergyRealPart() + SQRTm1*delta
+   else
+     eval = efermi + SQRTm1*delta
+   endif
+
+   do id = 1, LocalNumAtoms
+     do is = 1, n_spin_pola
+       if (mode == 3) then
+      !  ---------------------------------------------------------------
+         call solveSingleScattering(spin=is,site=id,e=eval,vshift=CZERO)
+      !  ----------------------------------------------------------------   
+         call computeCPAMedium(eval)
+      !  --------------------------------------------------------------
+         call calCurrentMatrix(id,is,eval,pot_type,mode)
+      !  ---------------------------------------------------------------- 
+         call computeCPAConductivity(id, is, delta, pot_type, dirnum, eval)
+      !  --------------------------------------------------------------
+       else if (mode == 4) then
+      !  ---------------------------------------------------------------
+         call solveSingleScattering(spin=is,site=id,e=eval,vshift=CZERO)
+      !  ----------------------------------------------------------------   
+      !  Need to investigate properly for multiple sublattices   
+         if (scf == 0) then
+!          --------------------------------------------------------------
+           call computeCPAMedium(eval, do_sro=.true.)
+           call populateBigTCPA()
+           call calCrystalMatrix(eval, getSingleSiteMatrix ,use_tmat=.true., &
+                tau_needed=.true., use_sro=.true.)
+           call retrieveTauSRO()
+           call calSpeciesTauMatrix()
+!          --------------------------------------------------------------
+         else if (scf == 1) then
+!          --------------------------------------------------------------
+           call computeCPAMedium(eval, do_sro = .true.)
+!          --------------------------------------------------------------
+         endif
+      !  ----------------------------------------------------------------
+         call calCurrentMatrix(id,is,eval,pot_type,mode)
+      !  ---------------------------------------------------------------- 
+         call computeSROConductivity(id, is, delta, pot_type, dirnum, eval)
+!        -------------------------------------------------------------- 
+       endif
+     enddo
+   enddo
+
+!  Print calculated results to output file
+!  --------------------------------------------------------------------
    call writeMatrix('sigma', sigma, dirnum, dirnum, n_spin_pola)
    call writeMatrix('sigmatilde', sigmatilde, dirnum, dirnum, n_spin_pola)
    call writeMatrix('sigmatilde2', sigmatilde2, dirnum, dirnum, n_spin_pola)
    call writeMatrix('sigmatilde3', sigmatilde3, dirnum, dirnum, n_spin_pola)
    call writeMatrix('sigmatilde4', sigmatilde4, dirnum, dirnum, n_spin_pola)
+!  --------------------------------------------------------------------
 
-   end subroutine calCPAConductivity
+   end subroutine calConductivity
 !  ===================================================================
 end module ConductivityModule
