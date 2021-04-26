@@ -2847,6 +2847,10 @@ contains
 !
    use SystemModule, only : getAtomicNumber, getAtomName, getAtomEnergy
    use SystemModule, only : getNumAlloyElements
+   use SystemModule, only : getNumAtomTypes, getAtomType, getNumAtomsOfType, &
+                            getAtomTypeName
+!
+   use ScfDataModule, only : isLSMS
 !
    implicit none
 !
@@ -2854,12 +2858,16 @@ contains
 !
    integer (kind=IntKind), intent(in) :: iter
    integer (kind=IntKind), intent(in) :: fu
-   integer (kind=IntKind) :: ig, ia, na, lig
+   integer (kind=IntKind) :: ig, ia, na, lig, nt
    integer (kind=IntKind), pointer :: global_table_line(:)
+   integer (kind=IntKind), pointer :: p_type(:)
 !
    real (kind=RealKind), pointer :: Qmt_Table(:)
    real (kind=RealKind), pointer :: Q_Table(:)
    real (kind=RealKind), pointer :: atom_en(:,:)
+   real (kind=RealKind), allocatable :: dq_aver(:)
+   real (kind=RealKind), allocatable :: vmad_aver(:), dqv_aver(:), dq2_aver(:)
+   real (kind=RealKind) :: a, b, dq
 !
    if (.not.Initialized) then
       call ErrorHandler('printMadelungShiftTable',                    &
@@ -2937,6 +2945,49 @@ contains
    else
       close(unit=fu)
    endif
+!
+   if (isLSMS()) then
+      nt = getNumAtomTypes()
+      p_type => getAtomType()
+      allocate(dq_aver(nt), vmad_aver(nt), dqv_aver(nt), dq2_aver(nt))
+      dq_aver = ZERO
+      vmad_aver = ZERO
+      dqv_aver = ZERO
+      dq2_aver = ZERO
+      do ig = 1, GlobalNumAtoms
+         ia = p_type(ig)
+         dq = Q_Table(ig)-getAtomicNumber(ig)
+         dq_aver(ia) = dq_aver(ia) + dq
+         vmad_aver(ia) = vmad_aver(ia) + MadelungShiftTable(ig)
+         dqv_aver(ia) = dqv_aver(ia) + dq*MadelungShiftTable(ig)
+         dq2_aver(ia) = dq2_aver(ia) + dq*dq
+      enddo
+      do ia = 1, nt
+         dq_aver(ia) = dq_aver(ia)/real(getNumAtomsOfType(ia),kind=RealKind)
+         vmad_aver(ia) = vmad_aver(ia)/real(getNumAtomsOfType(ia),kind=RealKind)
+         dqv_aver(ia) = dqv_aver(ia)/real(getNumAtomsOfType(ia),kind=RealKind)
+         dq2_aver(ia) = dq2_aver(ia)/real(getNumAtomsOfType(ia),kind=RealKind)
+      enddo
+!
+      write(6,'(/,a)')'  Fitting the qV relation: Vmad = A*dQ + B'
+      write(6,'(  a)')'  with the Least Squares Regression.'
+      write(6,'(/,80(''=''))')
+      write(6,'(a)')                                                  &
+         'Atom Type   Number of Atoms     Average dQ     Average Vmad       A         B'
+      write(6,'(80(''-''))')
+      do ia = 1, nt
+         a = (dqv_aver(ia) - dq_aver(ia)*vmad_aver(ia))/(dq2_aver(ia)-dq_aver(ia)*dq_aver(ia))
+         b = vmad_aver(ia) - a*dq_aver(ia)
+         write(6,'(2x,a3,10x,i6,4x,2(6x,f10.5),3x,2f10.5)')              &
+             getAtomTypeName(ia), getNumAtomsOfType(ia), dq_aver(ia), &
+             vmad_aver(ia), a, b
+      enddo
+      write(6,'(80(''=''),/)')
+!
+      nullify(p_type)
+      deallocate(dq_aver, vmad_aver, dqv_aver, dq2_aver)
+   endif
+!
    nullify(global_table_line)
 !
    end subroutine printMadelungShiftTable
