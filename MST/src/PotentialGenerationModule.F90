@@ -240,8 +240,6 @@ contains
    use SystemModule, only : getUniformGridParam, getBravaisLattice
    use SystemModule, only : getSystemCenter, getAtomPosition
 !
-   use NeighborModule, only : getShellRadius
-!
    use Atom2ProcModule, only : getGlobalIndex
 !
    use AtomModule, only : getLocalNumSpecies
@@ -2843,31 +2841,34 @@ contains
 !  ===================================================================
    use ChargeDistributionModule, only : getGlobalMTSphereElectronTableOld, &
                                         getGlobalOnSiteElectronTableOld, &
-                                        getGlobalTableLine
+                                        getGlobalTableLine, getNeighborChargeTable
 !
    use SystemModule, only : getAtomicNumber, getAtomName, getAtomEnergy
    use SystemModule, only : getNumAlloyElements
    use SystemModule, only : getNumAtomTypes, getAtomType, getNumAtomsOfType, &
                             getAtomTypeName
 !
-   use ScfDataModule, only : isLSMS
+   use ScfDataModule, only : isLSMS, isKKR
 !
    implicit none
 !
    logical :: FileExist
+   logical :: printNeighbor = .false.
 !
    integer (kind=IntKind), intent(in) :: iter
    integer (kind=IntKind), intent(in) :: fu
-   integer (kind=IntKind) :: ig, ia, na, lig, nt
+   integer (kind=IntKind) :: ig, ia, na, lig, nt, id, max_shells, j
    integer (kind=IntKind), pointer :: global_table_line(:)
    integer (kind=IntKind), pointer :: p_type(:)
 !
    real (kind=RealKind), pointer :: Qmt_Table(:)
    real (kind=RealKind), pointer :: Q_Table(:)
    real (kind=RealKind), pointer :: atom_en(:,:)
-   real (kind=RealKind), allocatable :: dq_aver(:)
-   real (kind=RealKind), allocatable :: vmad_aver(:), dqv_aver(:), dq2_aver(:)
-   real (kind=RealKind) :: a, b, dq
+   real (kind=RealKind), pointer :: NeighborChargeTable(:,:)
+   real (kind=RealKind), allocatable :: dq_aver(:), dqnn_aver(:,:)
+   real (kind=RealKind), allocatable :: vmad_aver(:), dqv_aver(:),    &
+                                        a(:), b(:), dq2_aver(:), std_dev(:)
+   real (kind=RealKind) :: dq, v, dv2
 !
    if (.not.Initialized) then
       call ErrorHandler('printMadelungShiftTable',                    &
@@ -2899,11 +2900,6 @@ contains
    endif
 !
    write(fu,'(/,a,i5)')'# ITERATION :',iter
-   if (fu == 6) then
-      write(fu,'(80(''=''))')
-   else
-      write(fu,'(60(''=''))')
-   endif
 !
    na = 1
    LOOP_ig: do ig = 1, GlobalNumAtoms
@@ -2912,36 +2908,83 @@ contains
          exit LOOP_ig
       endif
    enddo LOOP_ig
-!
-   if (na == 1) then
-      write(fu,'(a)')' Atom   Index      Q          Qmt        dQ        Vmad        Local Energy'
-   else
-      write(fu,'(a)')' Atom  Site  Species    Q          Qmt        dQ        Vmad        Local Energy'
+   if ((isLSMS().or.isKKR()) .and. na > 1) then
+      call ErrorHandler('printMadelungShiftTable','In LSMS or KKR case, na > 1',na)
    endif
-   write(fu,'(80(''-''))')
+!
+   NeighborChargeTable => getNeighborChargeTable(max_shells)
+!
+   if ((isLSMS().or.isKKR()) .and. max_shells > 0) then
+      if (max_shells == 1) then
+         write(fu,'(87(''=''))')
+         write(fu,'(a)')' Atom   Index      Q          Qmt        dQ        Vmad        Local Energy     dQ(1nn)'
+!        write(fu,'(87(''-''))')
+      else
+         write(fu,'(99(''=''))')
+         write(fu,'(a)')' Atom   Index      Q          Qmt        dQ        Vmad        Local Energy     dQ(1nn)     dQ(2nn)'
+!        write(fu,'(99(''-''))')
+      endif
+   else if (na == 1) then
+      write(fu,'(75(''=''))')
+      write(fu,'(a)')' Atom   Index      Q          Qmt        dQ        Vmad        Local Energy'
+!     write(fu,'(75(''-''))')
+   else
+      write(fu,'(80(''=''))')
+      write(fu,'(a)')' Atom  Site  Species    Q          Qmt        dQ        Vmad        Local Energy'
+!     write(fu,'(80(''-''))')
+   endif
    global_table_line => getGlobalTableLine()
    Q_Table => getGlobalOnSiteElectronTableOld()
    Qmt_Table => getGlobalMTSphereElectronTableOld()
    atom_en => getAtomEnergy()
-   do ig = 1, GlobalNumAtoms
-      do ia = 1, getNumAlloyElements(ig)
-!        write(fu,'(2x,a3,2x,i6,4(2x,f20.16))')getAtomName(ig,ia), ig, ia,     &
-         if (na == 1) then
-            write(fu,'(2x,a3,2x,i6,4(2x,f9.5),6x,f12.5)')getAtomName(ig), ig,  &
-                                                 Q_Table(ig),Qmt_Table(ig),    &
-                                                 Q_Table(ig)-getAtomicNumber(ig), &
+   if ((isLSMS().or.isKKR()) .and. max_shells > 0 .and. printNeighbor) then
+      if (max_shells == 1) then
+         do ig = 1, GlobalNumAtoms
+            write(fu,'(2x,a3,2x,i6,4(2x,f9.5),6x,f12.5,2x,f10.5)')                     &
+                                                 getAtomName(ig), ig,                  &
+                                                 Q_Table(ig),Qmt_Table(ig),            &
+                                                 Q_Table(ig)-getAtomicNumber(ig),      &
+                                                 MadelungShiftTable(ig),atom_en(1,ig), &
+                                                 NeighborChargeTable(1,ig)
+         enddo
+         write(fu,'(87(''=''))')
+      else
+         do ig = 1, GlobalNumAtoms
+            write(fu,'(2x,a3,2x,i6,4(2x,f9.5),6x,f12.5,2(2x,f10.5))')                  &
+                                                 getAtomName(ig), ig,                  &
+                                                 Q_Table(ig),Qmt_Table(ig),            &
+                                                 Q_Table(ig)-getAtomicNumber(ig),      &
+                                                 MadelungShiftTable(ig),atom_en(1,ig), &
+                                                 NeighborChargeTable(1,ig),            &
+                                                 NeighborChargeTable(2,ig)
+         enddo
+         write(fu,'(99(''=''))')
+      endif
+   else if (na == 1) then
+      do ig = 1, GlobalNumAtoms
+         write(fu,'(2x,a3,2x,i6,4(2x,f9.5),6x,f12.5)')                                 &
+                                                 getAtomName(ig), ig,                  &
+                                                 Q_Table(ig),Qmt_Table(ig),            &
+                                                 Q_Table(ig)-getAtomicNumber(ig),      &
                                                  MadelungShiftTable(ig),atom_en(1,ig)
-         else
-            lig = global_table_line(ig) + ia
-            write(fu,'(2x,a3,2x,i6,2x,i2,4(2x,f9.5),6x,f12.5)')getAtomName(ig,ia), ig, ia,  &
-                                                 Q_Table(lig),Qmt_Table(lig),         &
-                                                 Q_Table(lig)-getAtomicNumber(ig,ia), &
-                                                 MadelungShiftTable(lig),atom_en(1,ig)
-         endif
       enddo
-   enddo
+      write(fu,'(75(''=''))')
+   else
+      do ig = 1, GlobalNumAtoms
+         do ia = 1, getNumAlloyElements(ig)
+!           write(fu,'(2x,a3,2x,i6,4(2x,f20.16))')getAtomName(ig,ia), ig, ia,     &
+            lig = global_table_line(ig) + ia
+            write(fu,'(2x,a3,2x,i6,2x,i2,4(2x,f9.5),6x,f12.5)')                        &
+                                                 getAtomName(ig,ia), ig, ia,           &
+                                                 Q_Table(lig),Qmt_Table(lig),          &
+                                                 Q_Table(lig)-getAtomicNumber(ig,ia),  &
+                                                 MadelungShiftTable(lig),atom_en(1,ig)
+         enddo
+      enddo
+      write(fu,'(80(''=''))')
+   endif
    if (fu == 6) then
-      write(fu,'(80(''=''),/)')
+      write(6,'(/)')
    else
       close(unit=fu)
    endif
@@ -2950,6 +2993,7 @@ contains
       nt = getNumAtomTypes()
       p_type => getAtomType()
       allocate(dq_aver(nt), vmad_aver(nt), dqv_aver(nt), dq2_aver(nt))
+      allocate(a(nt), b(nt), std_dev(nt))
       dq_aver = ZERO
       vmad_aver = ZERO
       dqv_aver = ZERO
@@ -2967,28 +3011,74 @@ contains
          vmad_aver(ia) = vmad_aver(ia)/real(getNumAtomsOfType(ia),kind=RealKind)
          dqv_aver(ia) = dqv_aver(ia)/real(getNumAtomsOfType(ia),kind=RealKind)
          dq2_aver(ia) = dq2_aver(ia)/real(getNumAtomsOfType(ia),kind=RealKind)
+         a(ia) = (dqv_aver(ia) - dq_aver(ia)*vmad_aver(ia))/(dq2_aver(ia)-dq_aver(ia)*dq_aver(ia))
+         b(ia) = vmad_aver(ia) - a(ia)*dq_aver(ia)
+      enddo
+      if (max_shells > 0) then
+         allocate(dqnn_aver(max_shells,nt))
+         dqnn_aver = ZERO
+         do ig = 1, GlobalNumAtoms
+            ia = p_type(ig)
+            do j = 1, max_shells
+               dqnn_aver(j,ia) = dqnn_aver(j,ia) + NeighborChargeTable(j,ig)
+            enddo
+         enddo
+         do ia = 1, nt
+            do j = 1, max_shells
+               dqnn_aver(j,ia) = dqnn_aver(j,ia)/real(getNumAtomsOfType(ia),kind=RealKind)
+            enddo
+         enddo
+      endif
+!
+      std_dev = ZERO
+      do ig = 1, GlobalNumAtoms
+         ia = p_type(ig)
+         dq = Q_Table(ig)-getAtomicNumber(ig)
+          v = a(ia)*dq+b(ia)
+         dv2 = (MadelungShiftTable(ig) - v)**2
+         std_dev(ia) = std_dev(ia) + dv2
+      enddo
+      do ia = 1, nt
+         if (getNumAtomsOfType(ia) > 2) then
+            std_dev(ia) = sqrt(std_dev(ia)/real(getNumAtomsOfType(ia)-2,kind=RealKind))
+         else
+            std_dev(ia) = ZERO
+         endif
       enddo
 !
       write(6,'(/,a)')'  Fitting the qV relation: Vmad = A*dQ + B'
       write(6,'(  a)')'  with the Least Squares Regression.'
-      write(6,'(/,80(''=''))')
-      write(6,'(a)')                                                  &
-         'Atom Type   Number of Atoms     Average dQ     Average Vmad       A         B'
-      write(6,'(80(''-''))')
-      do ia = 1, nt
-         a = (dqv_aver(ia) - dq_aver(ia)*vmad_aver(ia))/(dq2_aver(ia)-dq_aver(ia)*dq_aver(ia))
-         b = vmad_aver(ia) - a*dq_aver(ia)
-         write(6,'(2x,a3,10x,i6,4x,2(6x,f10.5),3x,2f10.5)')              &
-             getAtomTypeName(ia), getNumAtomsOfType(ia), dq_aver(ia), &
-             vmad_aver(ia), a, b
-      enddo
-      write(6,'(80(''=''),/)')
+      if (max_shells > 0) then
+         write(6,'(  a)')'  In the following table, dQ_nn1 = the averaged total charge on the 1st nearest neighbor'
+         write(6,'(  a)')'                          dQ_nn2 = the averaged total charge on the 2nd nearest neighbor'
+         write(6,'(/,112(''=''))')
+         write(6,'(a)')                                                  &
+            'Atom Type   Number of Atoms     Average dQ     Average Vmad       A         B       StdDev     dQ_nn1     dQ_nn2'
+         write(6,'(112(''-''))')
+         do ia = 1, nt
+            write(6,'(2x,a3,10x,i6,4x,2(6x,f10.5),3x,3f10.5,2(1x,f10.5))')  &
+                getAtomTypeName(ia), getNumAtomsOfType(ia), dq_aver(ia),    &
+                vmad_aver(ia), a(ia), b(ia), std_dev(ia), dqnn_aver(1,ia), dqnn_aver(2,ia)
+         enddo
+         write(6,'(112(''=''),/)')
+      else
+         write(6,'(/,90(''=''))')
+         write(6,'(a)')                                                  &
+            'Atom Type   Number of Atoms     Average dQ     Average Vmad       A         B       StdDev'
+         write(6,'(90(''-''))')
+         do ia = 1, nt
+            write(6,'(2x,a3,10x,i6,4x,2(6x,f10.5),3x,3f10.5)')              &
+                getAtomTypeName(ia), getNumAtomsOfType(ia), dq_aver(ia),    &
+                vmad_aver(ia), a(ia), b(ia), std_dev(ia)
+         enddo
+         write(6,'(90(''=''),/)')
+      endif
 !
       nullify(p_type)
-      deallocate(dq_aver, vmad_aver, dqv_aver, dq2_aver)
+      deallocate(dq_aver, vmad_aver, dqv_aver, dq2_aver, a, b, std_dev)
    endif
 !
-   nullify(global_table_line)
+   nullify(global_table_line, NeighborChargeTable)
 !
    end subroutine printMadelungShiftTable
 !  ===================================================================

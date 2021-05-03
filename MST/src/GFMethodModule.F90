@@ -6004,11 +6004,13 @@ contains
    use Atom2ProcModule, only : getAtom2ProcInGroup, getLocalIndex
 !
    use SystemModule, only : getNumAtomTypes, getAtomType, getNumAtomsOfType, &
-                            getAtomTypeName
+                            getAtomTypeName, getAtomName
 !
    use NeighborModule, only : getNeighbor
 !
    use AtomModule, only : getLocalSpeciesContent
+!
+   use ScfDataModule, only : isLSMS
 !
    implicit none
 !
@@ -6068,10 +6070,16 @@ contains
             fname = trim(cpath)//'SS_DOS_'//trim(systemid)//anm
             open(unit=fu, file=fname, form='formatted', status='unknown')
             p_dos => SS_dosdata(id)%rarray3(:,:,ia)
-            write(fu,'(a,i4)')'SS_DOS Data: Atom #',ig
-            write(dos_title(1),'(a,f12.8)')'Fermi energy:',chempot
-            write(dos_title(2),'(a,f12.8)')'LIZ Radius:',Neighbor%ShellRad(s)
-            write(dos_title(3),'(a,i6)')'Num Energy Points:', nume_dos
+            write(fu,'(a)')'This file contains single site DOS for a stand-alone atom, i.e., in vacuum'
+            write(fu,'(a,i4)')'Atomic index in the system   :',ig
+            write(fu,'(2a)')  'Name of the atom at the site : ',getAtomName(ig,ia)
+            write(dos_title(1),'(a,f12.8)')   'Fermi energy     :',chempot
+            if (isLSMS()) then
+               write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
+            else
+               write(dos_title(2),'(a,i3)')   'Species index    :',ia
+            endif
+            write(dos_title(3),'(a,i6)')      'Num Energy Points:', nume_dos
 !           ----------------------------------------------------------
             call printDOSDATA(fu,nvals,nume_dos,3,p_dos,dos_title)
 !           ----------------------------------------------------------
@@ -6101,10 +6109,15 @@ contains
                fname = trim(cpath)//'SS_DOS_'//trim(systemid)//anm
                open(unit=fu+gid, file=fname, form='formatted', status='unknown')
                p_dos => SS_dosdata(id)%rarray3(:,:,ia)
-               write(fu+gid,'(a,i4)')'SS_DOS Data: Atom #',gid
-               write(dos_title(1),'(a,f12.8)')'Fermi energy:',chempot
-               write(dos_title(2),'(a,f12.8)')'LIZ Radius:',Neighbor%ShellRad(s)
-               write(dos_title(3),'(a,i6)')'Num Energy Points:', nume_dos
+               write(fu+gid,'(a)')'This file contains single site DOS for a stand-alone atom, i.e., in vacuum'
+               write(fu+gid,'(a,i4)')'Atomic index in the system :',gid
+               write(dos_title(1),'(a,f12.8)')   'Fermi energy     :',chempot
+               if (isLSMS()) then
+                  write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
+               else
+                  write(dos_title(2),'(a,i3)')   'Species index    :',ia
+               endif
+               write(dos_title(3),'(a,i6)')      'Num Energy Points:', nume_dos
 !              -------------------------------------------------------
                call printDOSDATA(fu+gid,nvals,nume_dos,3,p_dos,dos_title)
 !              -------------------------------------------------------
@@ -6168,10 +6181,15 @@ contains
       if (getMyPE() == 0) then
          fname = trim(cpath)//'SS_DOS_'//trim(systemid)//'_average_'//trim(anm)
          open(unit=fu-it, file=fname, form='formatted', status='unknown')
-         write(fu-it,'(a,i6,a,a)')'SS_DOS Data: Averaged over ',n,trim(anm),' atoms'
-         write(dos_title(1),'(a,f12.8)')'Fermi energy:',chempot
-         write(dos_title(2),'(a,f12.8)')'LIZ Radius:',Neighbor%ShellRad(s)
-         write(dos_title(3),'(a,i6)')'Num Energy Points:', nume_dos
+         write(fu-it,'(a)')'This file contains single site DOS for a stand-alone atom, i.e., in vacuum'
+         write(fu-it,'(a,i6,3a)')'The DOS data averaged over ',n,' ',trim(getAtomTypeName(it)),' atoms'
+         write(dos_title(1),'(a,f12.8)')   'Fermi energy     :',chempot
+         if (isLSMS()) then
+            write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
+         else
+            write(dos_title(2),'(a,i3)')   'Species index    :',it
+         endif
+         write(dos_title(3),'(a,i6)')      'Num Energy Points:', nume_dos
 !        -------------------------------------------------------------
          call printDOSDATA(fu-it,nvals,nume_dos,3,p_dos,dos_title)
 !        -------------------------------------------------------------
@@ -6199,10 +6217,15 @@ contains
       enddo
       fname = trim(cpath)//'SS_DOS_'//trim(systemid)//'_average'
       open(unit=fu-ntypes-1, file=fname, form='formatted', status='unknown')
-      write(fu-ntypes-1,'(a,i6,a)')'SS_DOS Data: Averaged over ',GlobalNumAtoms,' atoms'
-      write(dos_title(1),'(a,f12.8)')'Fermi energy:',chempot
-      write(dos_title(2),'(a,f12.8)')'LIZ Radius:',Neighbor%ShellRad(s)
-      write(dos_title(3),'(a,i6)')'Num Energy Points:', nume_dos
+      write(fu-ntypes-1,'(a)')'This file contains single site DOS for a stand-alone atom, i.e., in vacuum'
+      write(fu-ntypes-1,'(a,i6,a)')'The DOS data averaged over ',GlobalNumAtoms,' atoms'
+      write(dos_title(1),'(a,f12.8)')   'Fermi energy     :',chempot
+      if (isLSMS()) then
+         write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
+      else
+         write(dos_title(2),'(a,i3)')   'Number of species:',ntypes
+      endif
+      write(dos_title(3),'(a,i6)')      'Num Energy Points:', nume_dos
 !     ----------------------------------------------------------------
       call printDOSDATA(fu-ntypes-1,nvals,nume_dos,3,p_tdos,dos_title)
 !     ----------------------------------------------------------------
@@ -6233,11 +6256,13 @@ contains
    use Atom2ProcModule, only : getAtom2ProcInGroup, getLocalIndex
 !
    use SystemModule, only : getNumAtomTypes, getAtomType, getNumAtomsOfType, &
-                            getAtomTypeName
+                            getAtomTypeName, getAtomName
 !
    use NeighborModule, only : getNeighbor
 !
    use AtomModule, only : getLocalSpeciesContent
+!
+   use ScfDataModule, only : isLSMS, isKKRCPA
 !
    implicit none
 !
@@ -6296,10 +6321,15 @@ contains
             fname = trim(cpath)//'DOS_'//trim(systemid)//anm
             open(unit=fu, file=fname, form='formatted', status='unknown')
             p_dos => dosdata(id)%rarray3(:,:,ia)
-            write(fu,'(a,i4)')'DOS Data: Atom #',ig
-            write(dos_title(1),'(a,f12.8)')'Fermi energy:',chempot
-            write(dos_title(2),'(a,f12.8)')'LIZ Radius:',Neighbor%ShellRad(s)
-            write(dos_title(3),'(a,i6)')'Num Energy Points:', nume_dos
+            write(fu,'(a,i4)')'Atomic site index   : ',ig
+            write(fu,'(2a)')  'Atomic species name : ',getAtomName(ig,ia)
+            write(dos_title(1),'(a,f12.8)')   'Fermi energy      :',chempot
+            if (isLSMS()) then
+               write(dos_title(2),'(a,f12.8)')'LIZ Radius        :',Neighbor%ShellRad(s)
+            else
+               write(dos_title(2),'(a,i3)')   'Species index     :',ia
+            endif
+            write(dos_title(3),'(a,i6)')      'Num Energy Points :', nume_dos
 !           ----------------------------------------------------------
             call printDOSDATA(fu,nvals,nume_dos,3,p_dos,dos_title)
 !           ----------------------------------------------------------
@@ -6329,10 +6359,15 @@ contains
                fname = trim(cpath)//'DOS_'//trim(systemid)//anm
                open(unit=fu+gid, file=fname, form='formatted', status='unknown')
                p_dos => dosdata(id)%rarray3(:,:,ia)
-               write(fu+gid,'(a,i4)')'DOS Data: Atom #',gid
-               write(dos_title(1),'(a,f12.8)')'Fermi energy:',chempot
-               write(dos_title(2),'(a,f12.8)')'LIZ Radius:',Neighbor%ShellRad(s)
-               write(dos_title(3),'(a,i6)')'Num Energy Points:', nume_dos
+               write(fu+gid,'(a,i4)')'Atomic site index   : ',gid
+               write(fu+gid,'(2a)')  'Atomic species name : ',getAtomName(gid,ia)
+               write(dos_title(1),'(a,f12.8)')   'Fermi energy      :',chempot
+               if (isLSMS()) then
+                  write(dos_title(2),'(a,f12.8)')'LIZ Radius        :',Neighbor%ShellRad(s)
+               else
+                  write(dos_title(2),'(a,i3)')   'Species index     :',ia
+               endif
+               write(dos_title(3),'(a,i6)')      'Num Energy Points :', nume_dos
 !              -------------------------------------------------------
                call printDOSDATA(fu+gid,nvals,nume_dos,3,p_dos,dos_title)
 !              -------------------------------------------------------
@@ -6395,10 +6430,14 @@ contains
       if (getMyPE() == 0) then
          fname = trim(cpath)//'DOS_'//trim(systemid)//'_average_'//trim(anm)
          open(unit=fu-it, file=fname, form='formatted', status='unknown')
-         write(fu-it,'(a,i6,a,a)')'DOS Data: Averaged over ',n,trim(anm),' atoms'
-         write(dos_title(1),'(a,f12.8)')'Fermi energy:',chempot
-         write(dos_title(2),'(a,f12.8)')'LIZ Radius:',Neighbor%ShellRad(s)
-         write(dos_title(3),'(a,i6)')'Num Energy Points:', nume_dos
+         write(fu-it,'(a,i6,3a)')'Averaged DOS over ',n,' ',trim(getAtomTypeName(it)),' atoms'
+         write(dos_title(1),'(a,f12.8)')   'Fermi energy     :',chempot
+         if (isLSMS()) then
+            write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
+         else
+            write(dos_title(2),'(a,i3)')   'Species index    :',it
+         endif
+         write(dos_title(3),'(a,i6)')      'Num Energy Points:', nume_dos
 !        -------------------------------------------------------------
          call printDOSDATA(fu-it,nvals,nume_dos,3,p_dos,dos_title)
 !        -------------------------------------------------------------
@@ -6426,10 +6465,14 @@ contains
       enddo
       fname = trim(cpath)//'DOS_'//trim(systemid)//'_average'
       open(unit=fu-ntypes-1, file=fname, form='formatted', status='unknown')
-      write(fu-ntypes-1,'(a,i6,a)')'DOS Data: Averaged over ',GlobalNumAtoms,' atoms'
-      write(dos_title(1),'(a,f12.8)')'Fermi energy:',chempot
-      write(dos_title(2),'(a,f12.8)')'LIZ Radius:',Neighbor%ShellRad(s)
-      write(dos_title(3),'(a,i6)')'Num Energy Points:', nume_dos
+      write(fu-ntypes-1,'(a,i6,a)')'Averaged DOS over ',GlobalNumAtoms,' atoms'
+      write(dos_title(1),'(a,f12.8)')   'Fermi energy      :',chempot
+      if (isLSMS()) then
+         write(dos_title(2),'(a,f12.8)')'LIZ Radius        :',Neighbor%ShellRad(s)
+      else
+         write(dos_title(2),'(a,i3)')   'Number of species :',ntypes
+      endif
+      write(dos_title(3),'(a,i6)')      'Num Energy Points :', nume_dos
 !     ----------------------------------------------------------------
       call printDOSDATA(fu-ntypes-1,nvals,nume_dos,3,p_tdos,dos_title)
 !     ----------------------------------------------------------------
