@@ -6075,7 +6075,8 @@ contains
             write(fu,'(2a)')  'Name of the atom at the site : ',getAtomName(ig,ia)
             write(dos_title(1),'(a,f12.8)')   'Fermi energy     :',chempot
             if (isLSMS()) then
-               write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
+!              write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
+               write(dos_title(2),'(a,f12.8)')'No. Atoms in LIZ :',Neighbor%NumAtoms+1
             else
                write(dos_title(2),'(a,i3)')   'Species index    :',ia
             endif
@@ -6113,7 +6114,8 @@ contains
                write(fu+gid,'(a,i4)')'Atomic index in the system :',gid
                write(dos_title(1),'(a,f12.8)')   'Fermi energy     :',chempot
                if (isLSMS()) then
-                  write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
+!                 write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
+                  write(dos_title(2),'(a,f12.8)')'No. Atoms in LIZ :',Neighbor%NumAtoms+1
                else
                   write(dos_title(2),'(a,i3)')   'Species index    :',ia
                endif
@@ -6185,7 +6187,8 @@ contains
          write(fu-it,'(a,i6,3a)')'The DOS data averaged over ',n,' ',trim(getAtomTypeName(it)),' atoms'
          write(dos_title(1),'(a,f12.8)')   'Fermi energy     :',chempot
          if (isLSMS()) then
-            write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
+!           write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
+            write(dos_title(2),'(a,f12.8)')'No. Atoms in LIZ :',Neighbor%NumAtoms+1
          else
             write(dos_title(2),'(a,i3)')   'Species index    :',it
          endif
@@ -6221,7 +6224,8 @@ contains
       write(fu-ntypes-1,'(a,i6,a)')'The DOS data averaged over ',GlobalNumAtoms,' atoms'
       write(dos_title(1),'(a,f12.8)')   'Fermi energy     :',chempot
       if (isLSMS()) then
-         write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
+!        write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
+         write(dos_title(2),'(a,f12.8)')'No. Atoms in LIZ :',Neighbor%NumAtoms+1
       else
          write(dos_title(2),'(a,i3)')   'Number of species:',ntypes
       endif
@@ -6325,7 +6329,8 @@ contains
             write(fu,'(2a)')  'Atomic species name : ',getAtomName(ig,ia)
             write(dos_title(1),'(a,f12.8)')   'Fermi energy      :',chempot
             if (isLSMS()) then
-               write(dos_title(2),'(a,f12.8)')'LIZ Radius        :',Neighbor%ShellRad(s)
+!              write(dos_title(2),'(a,f12.8)')'LIZ Radius        :',Neighbor%ShellRad(s)
+               write(dos_title(2),'(a,f12.8)')'No. Atoms in LIZ  :',Neighbor%NumAtoms+1
             else
                write(dos_title(2),'(a,i3)')   'Species index     :',ia
             endif
@@ -6363,7 +6368,8 @@ contains
                write(fu+gid,'(2a)')  'Atomic species name : ',getAtomName(gid,ia)
                write(dos_title(1),'(a,f12.8)')   'Fermi energy      :',chempot
                if (isLSMS()) then
-                  write(dos_title(2),'(a,f12.8)')'LIZ Radius        :',Neighbor%ShellRad(s)
+!                 write(dos_title(2),'(a,f12.8)')'LIZ Radius        :',Neighbor%ShellRad(s)
+                  write(dos_title(2),'(a,f12.8)')'No. Atoms in LIZ  :',Neighbor%NumAtoms+1
                else
                   write(dos_title(2),'(a,i3)')   'Species index     :',ia
                endif
@@ -6433,7 +6439,8 @@ contains
          write(fu-it,'(a,i6,3a)')'Averaged DOS over ',n,' ',trim(getAtomTypeName(it)),' atoms'
          write(dos_title(1),'(a,f12.8)')   'Fermi energy     :',chempot
          if (isLSMS()) then
-            write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
+!           write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
+            write(dos_title(2),'(a,f12.8)')'No. Atoms in LIZ  :',Neighbor%NumAtoms+1
          else
             write(dos_title(2),'(a,i3)')   'Species index    :',it
          endif
@@ -6468,7 +6475,8 @@ contains
       write(fu-ntypes-1,'(a,i6,a)')'Averaged DOS over ',GlobalNumAtoms,' atoms'
       write(dos_title(1),'(a,f12.8)')   'Fermi energy      :',chempot
       if (isLSMS()) then
-         write(dos_title(2),'(a,f12.8)')'LIZ Radius        :',Neighbor%ShellRad(s)
+!        write(dos_title(2),'(a,f12.8)')'LIZ Radius        :',Neighbor%ShellRad(s)
+         write(dos_title(2),'(a,f12.8)')'No. Atoms in LIZ  :',Neighbor%NumAtoms+1
       else
          write(dos_title(2),'(a,i3)')   'Number of species :',ntypes
       endif

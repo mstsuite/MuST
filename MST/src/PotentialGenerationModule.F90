@@ -2914,7 +2914,7 @@ contains
 !
    NeighborChargeTable => getNeighborChargeTable(max_shells)
 !
-   if ((isLSMS().or.isKKR()) .and. max_shells > 0) then
+   if ((isLSMS().or.isKKR()) .and. max_shells > 0 .and. printNeighbor) then
       if (max_shells == 1) then
          write(fu,'(87(''=''))')
          write(fu,'(a)')' Atom   Index      Q          Qmt        dQ        Vmad        Local Energy     dQ(1nn)'
@@ -3011,7 +3011,11 @@ contains
          vmad_aver(ia) = vmad_aver(ia)/real(getNumAtomsOfType(ia),kind=RealKind)
          dqv_aver(ia) = dqv_aver(ia)/real(getNumAtomsOfType(ia),kind=RealKind)
          dq2_aver(ia) = dq2_aver(ia)/real(getNumAtomsOfType(ia),kind=RealKind)
-         a(ia) = (dqv_aver(ia) - dq_aver(ia)*vmad_aver(ia))/(dq2_aver(ia)-dq_aver(ia)*dq_aver(ia))
+         if (getNumAtomsOfType(ia) > 1) then
+            a(ia) = (dqv_aver(ia) - dq_aver(ia)*vmad_aver(ia))/(dq2_aver(ia)-dq_aver(ia)*dq_aver(ia))
+         else
+            a(ia) = ZERO
+         endif
          b(ia) = vmad_aver(ia) - a(ia)*dq_aver(ia)
       enddo
       if (max_shells > 0) then
@@ -3023,11 +3027,18 @@ contains
                dqnn_aver(j,ia) = dqnn_aver(j,ia) + NeighborChargeTable(j,ig)
             enddo
          enddo
+         write(6,'(/,a)') '=============================='
+         write(6,'(  a)') 'Species   Shell    Averaged dQ'
          do ia = 1, nt
+            write(6,'(a)')'------------------------------'
+            j = 0
+            write(6,'(3x,a,5x,i3,6x,f10.5)')trim(getAtomTypeName(ia)),j,dq_aver(ia)
             do j = 1, max_shells
                dqnn_aver(j,ia) = dqnn_aver(j,ia)/real(getNumAtomsOfType(ia),kind=RealKind)
+               write(6,'(10x,i3,6x,f10.5)')j,dqnn_aver(j,ia)
             enddo
          enddo
+         write(6,'(a)')   '=============================='
       endif
 !
       std_dev = ZERO
