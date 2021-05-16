@@ -1497,51 +1497,45 @@ contains
             if (caltype == 1) then
               D1 = clusterDtilde(n, ic1, is, kvec, 0, 1)
               Dt1 = clusterDtilde(n, ic1, is, kvec, 1, 1)
-              D2 = clusterDtilde(n, ic2, is, kvec, 0, 1)
-              Dt2 = clusterDtilde(n, ic2, is, kvec, 1, 1)
+          !   D2 = clusterDtilde(n, ic2, is, kvec, 0, 1)
+          !   Dt2 = clusterDtilde(n, ic2, is, kvec, 1, 1)
               tau1 = tmb; tau2 = tmb
           !   call writeMatrix('D1', D1, kmax_kkr_max, kmax_kkr_max)
           !   call ErrorHandler('calSigmaIntegralSRO', 'stop')
             else if (caltype == 2) then
               D1 = clusterDtilde(n, ic1, is, kvec, 0, 1)
               Dt1 = clusterDtilde(n, ic1, is, kvec, 1, 2)
-              D2 = clusterDtilde(n, ic2, is, kvec, 0, 2)
-              Dt2 = clusterDtilde(n, ic2, is, kvec, 1, 1)
+          !   D2 = clusterDtilde(n, ic2, is, kvec, 0, 2)
+          !   Dt2 = clusterDtilde(n, ic2, is, kvec, 1, 1)
               tau1 = tmb; tau2 = tmbsym
             else if (caltype == 3) then
               D1 = clusterDtilde(n, ic1, is, kvec, 0, 2)
               Dt1 = clusterDtilde(n, ic1, is, kvec, 1, 1)
-              D2 = clusterDtilde(n, ic2, is, kvec, 0, 1)
-              Dt2 = clusterDtilde(n, ic2, is, kvec, 1, 2)
+          !   D2 = clusterDtilde(n, ic2, is, kvec, 0, 1)
+          !   Dt2 = clusterDtilde(n, ic2, is, kvec, 1, 2)
               tau1 = tmbsym; tau2 = tmb
             else if (caltype == 4) then
               D1 = clusterDtilde(n, ic1, is, kvec, 0, 2)
               Dt1 = clusterDtilde(n, ic1, is, kvec, 1, 2)
-              D2 = clusterDtilde(n, ic2, is, kvec, 0, 2)
-              Dt2 = clusterDtilde(n, ic2, is, kvec, 1, 2)
+          !   D2 = clusterDtilde(n, ic2, is, kvec, 0, 2)
+          !   Dt2 = clusterDtilde(n, ic2, is, kvec, 1, 2)
               tau1 = tmbsym; tau2 = tmbsym
             endif
 !           --------------------------------------------------------
-            call zgemm('n', 'n', kkrsz, kkrsz, kkrsz, CONE, D2, kkrsz, &
+            call zgemm('n', 'n', kkrsz, kkrsz, kkrsz, CONE, Jb, kkrsz, &
               tau2, kkrsz, CZERO, prod1, kkrsz)
 !           --------------------------------------------------------
-            call zgemm('n', 'n', kkrsz, kkrsz, kkrsz, CONE, Jb, kkrsz, &
+            call zgemm('n', 'n', kkrsz, kkrsz, kkrsz, CONE, tau1, kkrsz, &
               prod1, kkrsz, CZERO, prod2, kkrsz)
 !           --------------------------------------------------------
-            call zgemm('n', 'n', kkrsz, kkrsz, kkrsz, CONE, Dt2, kkrsz, &
+            call zgemm('n', 'n', kkrsz, kkrsz, kkrsz, CONE, D1, kkrsz, &
               prod2, kkrsz, CZERO, prod3, kkrsz)
 !           --------------------------------------------------------
-            call zgemm('n', 'n', kkrsz, kkrsz, kkrsz, CONE, tau1, kkrsz, &
+            call zgemm('n', 'n', kkrsz, kkrsz, kkrsz, CONE, Ja, kkrsz, &
               prod3, kkrsz, CZERO, prod4, kkrsz)
 !           --------------------------------------------------------
-            call zgemm('n', 'n', kkrsz, kkrsz, kkrsz, CONE, D1, kkrsz, &
-              prod4, kkrsz, CZERO, prod5, kkrsz)
-!           --------------------------------------------------------
-            call zgemm('n', 'n', kkrsz, kkrsz, kkrsz, CONE, Ja, kkrsz, &
-              prod5, kkrsz, CZERO, prod6, kkrsz)
-!           --------------------------------------------------------
             call zgemm('n', 'n', kkrsz, kkrsz, kkrsz, CONE, Dt1, kkrsz, &
-              prod6, kkrsz, CZERO, tilde, kkrsz)  
+              prod4, kkrsz, CZERO, tilde, kkrsz)  
 !           --------------------------------------------------------
           endif
         enddo
@@ -1563,7 +1557,7 @@ contains
 !      sint = sint + wfac*integrand
 !    endif
 !    -------------------------------------------------------------
-     deallocate(D1, Dt1, D2, Dt2)
+     deallocate(D1, Dt1)
    enddo
 !  call writeMatrix('res', res, kmax_kkr_max, kmax_kkr_max)
 !  pres => aliasArray_c(wint,kkrsz,kkrsz)
