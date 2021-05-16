@@ -2,7 +2,7 @@ module BZoneModule
    use KindParamModule, only : IntKind, RealKind, CmplxKind
    use ErrorHandlerModule, only : ErrorHandler, StopHandler, WarningHandler
    use MathParamModule, only : ZERO, ONE, TEN2m6, HALF, THREE, CZERO, PI2
-   use MPPModule, only : MyPE
+   use MPPModule, only : MyPE, NumPEs, syncAllPEs
 !
 public :: initBZone,         &
           endBZone,          &
@@ -83,7 +83,8 @@ private
    integer (kind=IntKind) :: initlz = 0
 !
    real (kind=RealKind) :: vol_bz, vol_ws
-   real (kind=RealKind) :: Rotation(49,3,3)
+!  real (kind=RealKind) :: Rotation(49,3,3)
+   real (kind=RealKind) :: Rotation(3,3,49)
    real (kind=RealKind) :: kfac = ZERO
    real (kind=RealKind), target :: BZ_latt(3,3)
 !
@@ -143,10 +144,13 @@ contains
    enddo
 !
    NumRotations=1
-   Rotation(1,1:3,1:3)=ZERO
+!  Rotation(1,1:3,1:3)=ZERO
+   Rotation(1:3,1:3,1)=ZERO
    Rotation(1,1,1)=ONE
-   Rotation(1,2,2)=ONE
-   Rotation(1,3,3)=ONE
+!  Rotation(1,2,2)=ONE
+!  Rotation(1,3,3)=ONE
+   Rotation(2,2,1)=ONE
+   Rotation(3,3,1)=ONE
 !
    close(12)
    Initialized = .true.
@@ -161,6 +165,7 @@ contains
    subroutine initBZone1(num_meshs,kgen,Kdiv,isym,bravais,           &
                           num_atoms,avec,AtomType,istop,iprint)
 !  ===================================================================
+   use TimerModule, only : getTime
    implicit none
 !
    character (len=*), intent(in) :: istop
@@ -180,7 +185,7 @@ contains
 !
    real (kind=RealKind), intent(in) :: bravais(3,3)
    real (kind=RealKind), intent(in) :: avec(3,num_atoms)
-   real (kind=RealKind) :: vws, vbz
+   real (kind=RealKind) :: vws, vbz, t0
    real (kind=RealKind), allocatable :: ax(:), ay(:), az(:), qmesh(:,:,:)
 !
    if (num_meshs < 1) then
@@ -189,6 +194,7 @@ contains
       call ErrorHandler(sname,'NumAtoms < 1',num_atoms)
    endif
 !
+   t0 = getTime()
    initlz = 0
    NumMeshs = num_meshs
    allocate(NumKs(NumMeshs))
@@ -240,10 +246,13 @@ contains
          enddo
       enddo
       NumRotations=1
-      Rotation(1,1:3,1:3)=ZERO
+!     Rotation(1,1:3,1:3)=ZERO
+      Rotation(1:3,1:3,1)=ZERO
       Rotation(1,1,1)=ONE
-      Rotation(1,2,2)=ONE
-      Rotation(1,3,3)=ONE
+!     Rotation(1,2,2)=ONE
+!     Rotation(1,3,3)=ONE
+      Rotation(2,2,1)=ONE
+      Rotation(3,3,1)=ONE
    else if (kGenScheme == Tetrahedron) then
       call ErrorHandler(sname,'Not implemented scheme',kGenScheme)
    else if (kGenScheme == Direction) then
@@ -290,6 +299,7 @@ contains
       maxk = maxk*48
       allocate(qmesh(3,maxk,NumMeshs),wght(maxk,NumMeshs))
 !
+      t0 = getTime()
 !     ================================================================
 !     Generate k-point meshs in Brillouin zone........................
 !     ----------------------------------------------------------------
@@ -301,6 +311,11 @@ contains
                    Kdiv,                                               &
                    qmesh, wght)
 !     ----------------------------------------------------------------
+      call syncAllPEs()
+!     ----------------------------------------------------------------
+!     if (MyPE == 0) then
+!        write(6,'(a,i5,2x,f10.5)')'Timing in calling genkpt1: ',MyPE,getTime()-t0
+!     endif
       maxk=0
       do im=1,NumMeshs
          maxk=max(maxk,NumKs(im))
@@ -503,7 +518,8 @@ contains
    else if (ir < 1 .or. ir > NumRotations) then
       call ErrorHandler('getRotMatrix','rotation matrix index out of range',ir)
    endif
-   rm(1:3,1:3)=Rotation(ir,1:3,1:3)
+!  rm(1:3,1:3)=Rotation(ir,1:3,1:3)
+   rm(1:3,1:3)=Rotation(1:3,1:3,ir)
 !
    end function getRotMatrix3D
 !  ===================================================================
@@ -557,6 +573,7 @@ contains
                        Kdiv,                                          &
                        qmesh, wght)
 !  ====================================================================
+   use TimerModule, only : getTime
 !
    implicit none
 !
@@ -590,11 +607,12 @@ contains
 !
    real (kind=RealKind) :: a1(3),a2(3),a3(3),b1(3),b2(3),b3(3)
    real (kind=RealKind) :: v(3,48),v0(3,48)
-   real (kind=RealKind) :: r0(49,3,3), r(49,3,3)
+!  real (kind=RealKind) :: r0(49,3,3), r(49,3,3)
+   real (kind=RealKind) :: r0(3,3,49), r(3,3,49)
 !
    real (kind=RealKind) :: wvk0(3)
    real (kind=RealKind) :: x0(3)
-   real (kind=RealKind) :: proj1, proj2, proj3
+   real (kind=RealKind) :: proj1, proj2, proj3, t0
 !
    real (kind=RealKind), parameter :: eps = TEN2m6
 !
@@ -676,6 +694,7 @@ contains
 !               all 48 or 24 matrices are listed.
 !  ===================================================================
 !
+   t0 = getTime()
 !  ===================================================================
 !  Determine symmetry of Bravais Lattice :.........................
 !  -------------------------------------------------------------------
@@ -695,7 +714,8 @@ contains
    call checksymm(ilog,bravais,kslatt,if0,jf0,ib,r,v,num_atoms,num_atoms,nrot)
 !  -------------------------------------------------------------------
    NumRotations = nrot
-   Rotation(1:nrot,1:3,1:3) = r(1:nrot,1:3,1:3)
+!  Rotation(1:nrot,1:3,1:3) = r(1:nrot,1:3,1:3)
+   Rotation(1:3,1:3,1:nrot) = r(1:3,1:3,1:nrot)
 !
    do n=nrot+1,48
       ib(n) = 0
@@ -743,6 +763,8 @@ contains
       iq2 = Kdiv(2,imesh)
       iq3 = Kdiv(3,imesh)
 !
+!     write(6,'(a,i5,2x,f10.5)')'Timing before calling spkpt: ',MyPE, getTime()-t0
+      t0 = getTime()
 !     ================================================================
 !     Determine Special k-points:.....................................
 !     ----------------------------------------------------------------
@@ -750,6 +772,7 @@ contains
                  invadd,nrot,ib,r,ntot,qmesh(1,1,imesh),wght(1,imesh),&
                  kcheck,nc0,ib0,ikpsym)
 !     ----------------------------------------------------------------
+!     write(6,'(a,i5,2x,f10.5)')'Timing in spkpt: ',MyPE, getTime()-t0
       NumKs(imesh)=ntot
 !
       if(print_level.ge.1) then
@@ -798,12 +821,13 @@ contains
    enddo
 !
    do n=1,NumRotations
+      if ( ib(n).lt.n ) then
+         call ErrorHandler("GENKPT1","IB(N) < N ???",ib(n),n)
+      endif
       do i=1,3
          do j=1,3
-            if ( ib(n).lt.n ) then
-               call ErrorHandler("GENKPT1","IB(N) < N ???",ib(n),n)
-            endif
-            Rotation(n,j,i) = Rotation(ib(n),j,i)
+!           Rotation(n,j,i) = Rotation(ib(n),j,i)
+            Rotation(j,i,n) = Rotation(j,i,ib(n))
          enddo
       enddo
    enddo
@@ -840,7 +864,8 @@ contains
    real (kind=RealKind), intent(in) :: ax(num_atoms)
    real (kind=RealKind), intent(in) :: ay(num_atoms)
    real (kind=RealKind), intent(in) :: az(num_atoms)
-   real (kind=RealKind), intent(out) :: r(49,3,3)
+!  real (kind=RealKind), intent(out) :: r(49,3,3)
+   real (kind=RealKind), intent(out) :: r(3,3,49)
    real (kind=RealKind), intent(out) :: v(3,48)
    real (kind=RealKind), intent(out) :: rx(3,num_atoms)
 !
@@ -889,7 +914,8 @@ contains
    integer (kind=IntKind) :: i, j, k, n, nr, lx
 !
    real (kind=RealKind), intent(in) :: a(3,3), ai(3,3)
-   real (kind=RealKind), intent(out) :: r(49,3,3)
+!  real (kind=RealKind), intent(out) :: r(49,3,3)
+   real (kind=RealKind), intent(out) :: r(3,3,49)
    real (kind=RealKind) :: vr(3), xa(3)
    real (kind=RealKind) :: tr
 !
@@ -913,7 +939,8 @@ contains
             do i = 1,3
                xa(i) = ZERO
                do j = 1,3
-                  xa(i) = xa(i) + r(n,i,j)*a(j,k)
+!                 xa(i) = xa(i) + r(n,i,j)*a(j,k)
+                  xa(i) = xa(i) + r(i,j,n)*a(j,k)
                enddo
             enddo
 !           ----------------------------------------------------------
@@ -995,57 +1022,73 @@ contains
    integer (kind=IntKind), intent(in) :: ihc
    integer (kind=IntKind) :: i, j, k, n, nv
 !
-   real (kind=RealKind), intent(out) :: r(49,3,3)
+!  real (kind=RealKind), intent(out) :: r(49,3,3)
+   real (kind=RealKind), intent(out) :: r(3,3,49)
    real (kind=RealKind) :: f
 !
-   do j=1,3
-      do i=1,3
-         do n=1,49
-            r(n,i,j)=ZERO
-         enddo
-      enddo
-   enddo
+   r = ZERO
    if (ihc <= 0) then
 !     ================================================================
 !     define the generators for the rotation matrices--hexagonal group
 !     ================================================================
       f = HALF*sqrt(THREE)
-      r(2,1,1) = HALF
-      r(2,1,2) = - f
-      r(2,2,1) = f
+!     r(2,1,1) = HALF
+!     r(2,1,2) = - f
+!     r(2,2,1) = f
+      r(1,1,2) = HALF
+      r(1,2,2) = - f
+      r(2,1,2) = f
       r(2,2,2) = HALF
-      r(7,1,1) = -HALF
-      r(7,1,2) = -f
-      r(7,2,1) = -f
-      r(7,2,2) = HALF
+!     r(7,1,1) = -HALF
+!     r(7,1,2) = -f
+!     r(7,2,1) = -f
+!     r(7,2,2) = HALF
+      r(1,1,7) = -HALF
+      r(1,2,7) = -f
+      r(2,1,7) = -f
+      r(2,2,7) = HALF
       do n = 1,6
-         r(n,3,3)    = ONE
-         r(n+18,3,3) = ONE
-         r(n+6,3,3)  = - ONE
-         r(n+12,3,3) = - ONE
+!        r(n,3,3)    = ONE
+!        r(n+18,3,3) = ONE
+!        r(n+6,3,3)  = - ONE
+!        r(n+12,3,3) = - ONE
+         r(3,3,n)    = ONE
+         r(3,3,n+18) = ONE
+         r(3,3,n+6)  = - ONE
+         r(3,3,n+12) = - ONE
       enddo
 !     ================================================================
 !     generate the rest of the rotation matrices
 !     ================================================================
       do i = 1,2
-         r(1,i,i) = ONE
+!        r(1,i,i) = ONE
+         r(i,i,1) = ONE
          do j = 1,2
-            r(6,i,j) = r(2,j,i)
+!           r(6,i,j) = r(2,j,i)
+            r(i,j,6) = r(j,i,2)
             do k = 1,2
-               r(3,i,j)  = r(3,i,j) +  r(2,i,k)*r(2,k,j)
-               r(8,i,j)  = r(8,i,j) +  r(2,i,k)*r(7,k,j)
-               r(12,i,j) = r(12,i,j) + r(7,i,k)*r(2,k,j)
+!              r(3,i,j)  = r(3,i,j) +  r(2,i,k)*r(2,k,j)
+!              r(8,i,j)  = r(8,i,j) +  r(2,i,k)*r(7,k,j)
+!              r(12,i,j) = r(12,i,j) + r(7,i,k)*r(2,k,j)
+               r(i,j,3)  = r(i,j,3) +  r(i,k,2)*r(k,j,2)
+               r(i,j,8)  = r(i,j,8) +  r(i,k,2)*r(k,j,7)
+               r(i,j,12) = r(i,j,12) + r(i,k,7)*r(k,j,2)
             enddo
          enddo
       enddo
       do i = 1,2
          do j = 1,2
-            r(5,i,j) = r(3,j,i)
+!           r(5,i,j) = r(3,j,i)
+            r(i,j,5) = r(j,i,3)
             do k = 1,2
-               r(4,i,j)  = r(4,i,j)  + r(2,i,k)*r(3,k,j)
-               r(9,i,j)  = r(9,i,j)  + r(2,i,k)*r(8,k,j)
-               r(10,i,j) = r(10,i,j) + r(12,i,k)*r(3,k,j)
-               r(11,i,j) = r(11,i,j) + r(12,i,k)*r(2,k,j)
+!              r(4,i,j)  = r(4,i,j)  + r(2,i,k)*r(3,k,j)
+!              r(9,i,j)  = r(9,i,j)  + r(2,i,k)*r(8,k,j)
+!              r(10,i,j) = r(10,i,j) + r(12,i,k)*r(3,k,j)
+!              r(11,i,j) = r(11,i,j) + r(12,i,k)*r(2,k,j)
+               r(i,j,4)  = r(i,j,4)  + r(i,k,2)*r(k,j,3)
+               r(i,j,9)  = r(i,j,9)  + r(i,k,2)*r(k,j,8)
+               r(i,j,10) = r(i,j,10) + r(i,k,12)*r(k,j,3)
+               r(i,j,11) = r(i,j,11) + r(i,k,12)*r(k,j,2)
             enddo
          enddo
       enddo
@@ -1053,7 +1096,8 @@ contains
          nv = n + 12
          do i = 1,2
             do j = 1,2
-               r(nv,i,j) = - r(n,i,j)
+!              r(nv,i,j) = - r(n,i,j)
+               r(i,j,nv) = - r(i,j,n)
             enddo
          enddo
       enddo
@@ -1061,49 +1105,77 @@ contains
 !     ================================================================
 !     define the generators for the rotation matrices--cubic group
 !     ================================================================
-      r(9,1,3)  = ONE
-      r(9,2,1)  = ONE
-      r(9,3,2)  = ONE
-      r(19,1,1) = ONE
-      r(19,2,3) = - ONE
-      r(19,3,2) = ONE
+!     r(9,1,3)  = ONE
+!     r(9,2,1)  = ONE
+!     r(9,3,2)  = ONE
+!     r(19,1,1) = ONE
+!     r(19,2,3) = - ONE
+!     r(19,3,2) = ONE
+      r(1,3,9)  = ONE
+      r(2,1,9)  = ONE
+      r(3,2,9)  = ONE
+      r(1,1,19) = ONE
+      r(2,3,19) = - ONE
+      r(3,2,19) = ONE
       do i = 1,3
-         r(1,i,i) = ONE
+!        r(1,i,i) = ONE
+         r(i,i,1) = ONE
          do j = 1,3
-            r(20,i,j) = r(19,j,i)
-            r(5,i,j)  = r(9,j,i)
+!           r(20,i,j) = r(19,j,i)
+!           r(5,i,j)  = r(9,j,i)
+            r(i,j,20) = r(j,i,19)
+            r(i,j,5)  = r(j,i,9)
             do k  = 1,3
-               r(2,i,j)  = r(2,i,j)  + r(19,i,k)*r(19,k,j)
-               r(16,i,j) = r(16,i,j) + r(9,i,k)*r(19,k,j)
-               r(23,i,j) = r(23,i,j) + r(19,i,k)*r(9,k,j)
+!              r(2,i,j)  = r(2,i,j)  + r(19,i,k)*r(19,k,j)
+!              r(16,i,j) = r(16,i,j) + r(9,i,k)*r(19,k,j)
+!              r(23,i,j) = r(23,i,j) + r(19,i,k)*r(9,k,j)
+               r(i,j,2)  = r(i,j,2)  + r(i,k,19)*r(k,j,19)
+               r(i,j,16) = r(i,j,16) + r(i,k,9)*r(k,j,19)
+               r(i,j,23) = r(i,j,23) + r(i,k,19)*r(k,j,9)
             enddo
          enddo
       enddo
       do i = 1,3
          do j = 1,3
             do k = 1,3
-               r(6,i,j)  = r(6,i,j)  + r(2,i,k)*r(5,k,j)
-               r(7,i,j)  = r(7,i,j)  + r(16,i,k)*r(23,k,j)
-               r(8,i,j)  = r(8,i,j)  + r(5,i,k)*r(2,k,j)
-               r(10,i,j) = r(10,i,j) + r(2,i,k)*r(9,k,j)
-               r(11,i,j) = r(11,i,j) + r(9,i,k)*r(2,k,j)
-               r(12,i,j) = r(12,i,j) + r(23,i,k)*r(16,k,j)
-               r(14,i,j) = r(14,i,j) + r(16,i,k)*r(2,k,j)
-               r(15,i,j) = r(15,i,j) + r(2,i,k)*r(16,k,j)
-               r(22,i,j) = r(22,i,j) + r(23,i,k)*r(2,k,j)
-               r(24,i,j) = r(24,i,j) + r(2,i,k)*r(23,k,j)
+!              r(6,i,j)  = r(6,i,j)  + r(2,i,k)*r(5,k,j)
+!              r(7,i,j)  = r(7,i,j)  + r(16,i,k)*r(23,k,j)
+!              r(8,i,j)  = r(8,i,j)  + r(5,i,k)*r(2,k,j)
+!              r(10,i,j) = r(10,i,j) + r(2,i,k)*r(9,k,j)
+!              r(11,i,j) = r(11,i,j) + r(9,i,k)*r(2,k,j)
+!              r(12,i,j) = r(12,i,j) + r(23,i,k)*r(16,k,j)
+!              r(14,i,j) = r(14,i,j) + r(16,i,k)*r(2,k,j)
+!              r(15,i,j) = r(15,i,j) + r(2,i,k)*r(16,k,j)
+!              r(22,i,j) = r(22,i,j) + r(23,i,k)*r(2,k,j)
+!              r(24,i,j) = r(24,i,j) + r(2,i,k)*r(23,k,j)
+               r(i,j,6)  = r(i,j,6)  + r(i,k,2)*r(k,j,5)
+               r(i,j,7)  = r(i,j,7)  + r(i,k,16)*r(k,j,23)
+               r(i,j,8)  = r(i,j,8)  + r(i,k,5)*r(k,j,2)
+               r(i,j,10) = r(i,j,10) + r(i,k,2)*r(k,j,9)
+               r(i,j,11) = r(i,j,11) + r(i,k,9)*r(k,j,2)
+               r(i,j,12) = r(i,j,12) + r(i,k,23)*r(k,j,16)
+               r(i,j,14) = r(i,j,14) + r(i,k,16)*r(k,j,2)
+               r(i,j,15) = r(i,j,15) + r(i,k,2)*r(k,j,16)
+               r(i,j,22) = r(i,j,22) + r(i,k,23)*r(k,j,2)
+               r(i,j,24) = r(i,j,24) + r(i,k,2)*r(k,j,23)
             enddo
          enddo
       enddo
       do i=1,3
          do j=1,3
             do k=1,3
-               r(3,i,j)  = r(3,i,j)  + r(5,i,k)*r(12,k,j)
-               r(4,i,j)  = r(4,i,j)  + r(5,i,k)*r(10,k,j)
-               r(13,i,j) = r(13,i,j) + r(23,i,k)*r(11,k,j)
-               r(17,i,j) = r(17,i,j) + r(16,i,k)*r(12,k,j)
-               r(18,i,j) = r(18,i,j) + r(16,i,k)*r(10,k,j)
-               r(21,i,j) = r(21,i,j) + r(12,i,k)*r(15,k,j)
+!              r(3,i,j)  = r(3,i,j)  + r(5,i,k)*r(12,k,j)
+!              r(4,i,j)  = r(4,i,j)  + r(5,i,k)*r(10,k,j)
+!              r(13,i,j) = r(13,i,j) + r(23,i,k)*r(11,k,j)
+!              r(17,i,j) = r(17,i,j) + r(16,i,k)*r(12,k,j)
+!              r(18,i,j) = r(18,i,j) + r(16,i,k)*r(10,k,j)
+!              r(21,i,j) = r(21,i,j) + r(12,i,k)*r(15,k,j)
+               r(i,j,3)  = r(i,j,3)  + r(i,k,5)*r(k,j,12)
+               r(i,j,4)  = r(i,j,4)  + r(i,k,5)*r(k,j,10)
+               r(i,j,13) = r(i,j,13) + r(i,k,23)*r(k,j,11)
+               r(i,j,17) = r(i,j,17) + r(i,k,16)*r(k,j,12)
+               r(i,j,18) = r(i,j,18) + r(i,k,16)*r(k,j,10)
+               r(i,j,21) = r(i,j,21) + r(i,k,12)*r(k,j,15)
             enddo
          enddo
       enddo
@@ -1111,7 +1183,8 @@ contains
          nv = n + 24
          do i = 1,3
             do j = 1,3
-               r(nv,i,j) = - r(n,i,j)
+!              r(nv,i,j) = - r(n,i,j)
+               r(i,j,nv) = - r(i,j,n)
             enddo
          enddo
       enddo
@@ -1189,8 +1262,10 @@ contains
    integer (kind=IntKind) :: irotn
 !
    real (kind=RealKind), intent(in) :: a(3,3),ai(3,3)
-   real (kind=RealKind), intent(in) :: v(3,48),r(49,3,3)
-   real (kind=RealKind) :: r0(49,3,3)
+!  real (kind=RealKind), intent(in) :: v(3,48),r(49,3,3)
+!  real (kind=RealKind) :: r0(49,3,3)
+   real (kind=RealKind), intent(in) :: v(3,48),r(3,3,49)
+   real (kind=RealKind) :: r0(3,3,49)
    real (kind=RealKind) :: tmp(3,3)
    real (kind=RealKind) :: s, s0
    real (kind=RealKind), parameter :: eps = TEN2m6
@@ -1272,7 +1347,8 @@ contains
          do i=1,3
             s=ZERO
             do k=1,3
-               s=s+r(in,i,k)*a(k,j)
+!              s=s+r(in,i,k)*a(k,j)
+               s=s+r(i,k,in)*a(k,j)
             enddo
             tmp(i,j)=s
          enddo
@@ -1283,7 +1359,8 @@ contains
             do k=1,3
                s=s+ai(i,k)*tmp(k,j)
             enddo
-            r0(in,i,j)=s
+!           r0(in,i,j)=s
+            r0(i,j,in)=s
          enddo
       enddo
    enddo
@@ -1298,7 +1375,8 @@ contains
             do i=1,3
                s=ZERO
                do k=1,3
-                  s=s+r0(in,i,k)*r0(jn,k,j)
+!                 s=s+r0(in,i,k)*r0(jn,k,j)
+                  s=s+r0(i,k,in)*r0(k,j,jn)
                enddo
                tmp(i,j)=s
             enddo
@@ -1309,7 +1387,8 @@ contains
             lcheck=.true.
             do kj=1,3
                do ki=1,3
-                  if(abs(r0(kn,ki,kj)-tmp(ki,kj)).gt.eps) lcheck=.false.
+!                 if(abs(r0(kn,ki,kj)-tmp(ki,kj)).gt.eps) lcheck=.false.
+                  if(abs(r0(ki,kj,kn)-tmp(ki,kj)).gt.eps) lcheck=.false.
                enddo
             enddo
             if(lcheck) then
@@ -1324,7 +1403,8 @@ contains
          LOOP_i: do i=1,3
             s=ZERO
             do j=1,3
-               s=s+r0(in,i,j)*v(j,jopt)
+!              s=s+r0(in,i,j)*v(j,jopt)
+               s=s+r0(i,j,in)*v(j,jopt)
             enddo
             s0=s+v(i,iopt)
             s=abs(s0-v(i,irotn))
@@ -1386,7 +1466,8 @@ contains
                   iopt,in
             do ii=1,3
                write(ilog,'(5x,''( '',3f8.3,'' )         ( '',f8.3,'' )'')')&
-                    (r0(in,ii,jj),jj=1,3),v(ii,iopt)
+!                   (r0(in,ii,jj),jj=1,3),v(ii,iopt)
+                    (r0(ii,jj,in),jj=1,3),v(ii,iopt)
             enddo
          enddo
          write(ilog,'(1x/)')
@@ -1424,7 +1505,8 @@ contains
    real (kind=RealKind), intent(in) :: x_1(natx)
    real (kind=RealKind), intent(in) :: x_2(natx)
    real (kind=RealKind), intent(in) :: x_3(natx)
-   real (kind=RealKind), intent(in) :: r(49,3,3)
+!  real (kind=RealKind), intent(in) :: r(49,3,3)
+   real (kind=RealKind), intent(in) :: r(3,3,49)
    real (kind=RealKind), intent(out) :: v(3,48)
    real (kind=RealKind), intent(out) :: rx(3,natx)
    real (kind=RealKind) :: vr(3),vt(3),xb(3)
@@ -1453,9 +1535,12 @@ contains
       do k=1,nat
          do i=1,3
             rx(i,k)=ZERO
-            rx(i,k)=rx(i,k)+r(l,i,1)*x_1(k)
-            rx(i,k)=rx(i,k)+r(l,i,2)*x_2(k)
-            rx(i,k)=rx(i,k)+r(l,i,3)*x_3(k)
+!           rx(i,k)=rx(i,k)+r(l,i,1)*x_1(k)
+!           rx(i,k)=rx(i,k)+r(l,i,2)*x_2(k)
+!           rx(i,k)=rx(i,k)+r(l,i,3)*x_3(k)
+            rx(i,k)=rx(i,k)+r(i,1,1)*x_1(k)
+            rx(i,k)=rx(i,k)+r(i,2,1)*x_2(k)
+            rx(i,k)=rx(i,k)+r(i,3,1)*x_3(k)
          enddo
       enddo
 !     consider the first rotated atom k1=1
@@ -1641,8 +1726,16 @@ contains
                     inv,nc,ib,r,ntot,wvkl,lwght,                      &
                     kcheck,ncbrav,ibrav,istriz)
 !  ===================================================================
+   use TimerModule, only : getTime
+   use MPPModule, only : AllPEs, MyPE, NumPEs
+   use MPPModule, only : packMessage, unpackMessage
+   use MPPModule, only : nbsendPackage, recvPackage, waitMessage, syncAllPEs
+   use MPPModule, only : GlobalSum, GlobalMin
 !
 !  *******************************************************************
+!  modified by Yang Wang to improve the performance by implementing
+!  parallel processing.
+!
 !  to find the shortest wave-vector.
 !  the rotations of the bravais lattice are applied to the monkhorst/pack 
 !  mesh in order to find all k-points that are related by symmetry
@@ -1750,18 +1843,26 @@ contains
    integer (kind=IntKind) :: iqp1, iqp2, iqp3
    integer (kind=IntKind) :: i1, i2, i3
    integer (kind=IntKind) :: kcount, nplane
-   integer (kind=IntKind) :: i, j, k, iop, iremov, n, ibsign, m
+   integer (kind=IntKind) :: i, j, k, iop, iremov, n, ibsign
    integer (kind=IntKind), parameter ::  nrsdir=100
 !
    real (kind=RealKind), intent(in) :: wvk0(3)
    real (kind=RealKind), intent(in) :: a1(3),a2(3),a3(3),b1(3),b2(3),b3(3)
-   real (kind=RealKind), intent(in) :: r(49,3,3)
-   real (kind=RealKind), intent(out) :: wvkl(3,maxk)
+!  real (kind=RealKind), intent(in) :: r(49,3,3)
+   real (kind=RealKind), intent(in) :: r(3,3,49)
+   real (kind=RealKind), intent(out), target :: wvkl(3,maxk)
+   real (kind=RealKind), pointer :: p_wvkl(:)
    real (kind=RealKind) :: ur1, ur2, ur3
-   real (kind=RealKind) :: sum, diff
+   real (kind=RealKind) :: sum, diff, t0, t1
    real (kind=RealKind) :: wvk(3),wva(3),rsdir(4,nrsdir),proja(3),projb(3)
    real (kind=RealKind), parameter :: eps = TEN2m6
 !
+   integer (kind=IntKind) :: m, ik, nq, mp, pe, ip
+   integer (kind=IntKind) :: kcount_loc, kcount_remote, wait_id
+   integer (kind=IntKind), allocatable :: kcheck_loc(:)
+   real (kind=RealKind), allocatable :: wvk_loc(:,:), wvk_remote(:,:)
+!
+   t0 = getTime()
    iout = ilog
 !  ===================================================================
 !  define the 1st brillouin zone
@@ -1777,9 +1878,7 @@ contains
 !  ===================================================================
 !  zero index array
 !  ===================================================================
-   do k=1,maxk
-      kcheck(k) = 0
-   enddo
+   kcheck = 0
 
 !  ===================================================================
 !  odd iq's should not end up on origin
@@ -1791,112 +1890,207 @@ contains
    if( mod(iq2,2).eq.1 ) iqp2=iq2-1
    if( mod(iq3,2).eq.1 ) iqp3=iq3-1
 !
+!  write(6,'(a,i5,2x,f10.5,i10)')'Timing in before setting up wvkl: ',MyPE,getTime()-t0,iq1*iq2*iq3*ncbrav
+   t0 = getTime()
+   t1 = getTime()
    kcount = 0
-   do i1=1,iq1
-      do i2=1,iq2
-         do i3=1,iq3
+   if (abs(istriz) .eq. 1) then
+      if (iq1*iq2*iq3*ncbrav > maxk) then
+         call ErrorHandler(sname,'iq1*iq2*iq3*ncbrav > maxk',iq1*iq2*iq3*ncbrav,maxk)
+      endif
+      if (NumPEs < 2) then
+         do i1=1,iq1
             ur1=dble(1 + iqp1 - 2*i1)/dble(2*iq1)
-            ur2=dble(1 + iqp2 - 2*i2)/dble(2*iq2)
-            ur3=dble(1 + iqp3 - 2*i3)/dble(2*iq3)
-            do i=1,3
-               wvk(i) = ur1*b1(i) + ur2*b2(i) + ur3*b3(i) + wvk0(i)
+            do i2=1,iq2
+               ur2=dble(1 + iqp2 - 2*i2)/dble(2*iq2)
+               do i3=1,iq3
+                  ur3=dble(1 + iqp3 - 2*i3)/dble(2*iq3)
+                  wvk = ur1*b1 + ur2*b2 + ur3*b3 + wvk0
+!                 reduce wvk to the 1st brillouin zone
+!                 ----------------------------------------------------
+                  call bzrduc(wvk,a1,a2,a3,b1,b2,b3,rsdir,nrsdir,nplane,iout)
+!                 ----------------------------------------------------
+!                 apply all the bravais lattice operations to wvk
+                  LOOP_iop: do iop = 1,ncbrav
+                     do i=1,3
+                        wva(i) = ZERO
+                        do j = 1,3
+!                          wva(i) = wva(i) + r(ibrav(iop),i,j)*wvk(j)
+                           wva(i) = wva(i) + r(i,j,ibrav(iop))*wvk(j)
+                        enddo
+                     enddo
+!                 ====================================================
+!                    check that wva is inside the 1st bz.
+!                 ====================================================
+                     if (inbz(wva,rsdir,nrsdir,nplane) .eq. 0) then
+                        call ErrorHandler(sname,'rotated k point outside 1st bz')
+                     endif
+                     LOOP_kcount: do j = 1, kcount
+                        if (abs(wva(1)-wvkl(1,j)) .lt. eps) then
+                           if (abs(wva(2)-wvkl(2,j)) .lt. eps) then
+                              if (abs(wva(3)-wvkl(3,j)) .lt. eps) then
+                                 cycle LOOP_iop
+                              else
+                                 cycle LOOP_kcount
+                              endif
+                           else
+                              cycle LOOP_kcount
+                           endif
+                        else
+                           cycle LOOP_kcount
+                        endif
+                     enddo LOOP_kcount
+                     kcount = kcount + 1
+                     p_wvkl => wvkl(:,kcount)
+                     p_wvkl = wva
+                     kcheck(kcount) = 1
+                  enddo LOOP_iop
+               enddo
             enddo
+         enddo
+      else ! Parallel processing
+         nq = iq1*iq2*iq3
+         m = mod(nq,NumPEs)
+         n = (nq-m)/NumPEs
+         mp = MyPE*n
+         allocate(wvk_remote(3,(n+m)*ncbrav))
+         if (MyPE == NumPEs-1) then
+            n = n + m
+         endif
+         allocate(wvk_loc(3,n*ncbrav))
+         kcount_loc = 0
+         do k = 1, n
+            ik = k + mp
+            call decompose3Index(ik,iq3,iq2,iq1,i3,i2,i1)
+            ur1=real(1 + iqp1 - 2*i1,kind=RealKind)/real(2*iq1,kind=RealKind)
+            ur2=real(1 + iqp2 - 2*i2,kind=RealKind)/real(2*iq2,kind=RealKind)
+            ur3=real(1 + iqp3 - 2*i3,kind=RealKind)/real(2*iq3,kind=RealKind)
+            wvk = ur1*b1 + ur2*b2 + ur3*b3 + wvk0
 !           reduce wvk to the 1st brillouin zone
 !           ----------------------------------------------------------
             call bzrduc(wvk,a1,a2,a3,b1,b2,b3,rsdir,nrsdir,nplane,iout)
 !           ----------------------------------------------------------
-            if (abs(istriz) .eq. 1) then
-!              apply all the bravais lattice operations to wvk
-               LOOP_iop: do iop = 1,ncbrav
-                  do i=1,3
-                     wva(i) = ZERO
-                     do j = 1,3
-                        wva(i) = wva(i) + r(ibrav(iop),i,j)*wvk(j)
-                     enddo
+!           apply all the bravais lattice operations to wvk
+            LOOP_iop_mpp: do iop = 1,ncbrav
+               do i=1,3
+                  wva(i) = ZERO
+                  do j = 1,3
+                     wva(i) = wva(i) + r(i,j,ibrav(iop))*wvk(j)
                   enddo
-!                 ====================================================
-!                 check that wva is inside the 1st bz.
-!                 ====================================================
-                  if (inbz(wva,rsdir,nrsdir,nplane) .eq. 0) then
-                     call ErrorHandler(sname,'rotated k point outside 1st bz')
+               enddo
+!              =======================================================
+!              check that wva is inside the 1st bz.
+!              =======================================================
+               if (inbz(wva,rsdir,nrsdir,nplane) .eq. 0) then
+                  call ErrorHandler(sname,'rotated k point outside 1st bz')
+               endif
+               do j = 1, kcount_loc
+                  if (abs(wva(1)-wvk_loc(1,j)) .lt. eps) then
+                     if (abs(wva(2)-wvk_loc(2,j)) .lt. eps) then
+                        if (abs(wva(3)-wvk_loc(3,j)) .lt. eps) then
+                           cycle LOOP_iop_mpp
+                        endif
+                     endif
                   endif
-!                 ====================================================
-!                 include the very first point
-!                 ====================================================
-                  if (i1.eq.1.and.i2.eq.1.and.i3.eq.1.and.iop.eq.1) then
-                     kcount = kcount + 1
-                     wvkl(1,kcount) = wva(1)
-                     wvkl(2,kcount) = wva(2)
-                     wvkl(3,kcount) = wva(3)
-                     kcheck(kcount) = 1
-                  else
-!                    =================================================
-!                    has this point been encountered before?
-!                    =================================================
-                     do j=1,kcount
-                        sum = abs(wva(1) - wvkl(1,j)) +               &
-                              abs(wva(2) - wvkl(2,j)) +               &
-                              abs(wva(3) - wvkl(3,j))
-                        if (sum .lt. eps) then
-                           cycle LOOP_iop
+               enddo
+               kcount_loc = kcount_loc + 1
+               do i=1,3
+                  wvk_loc(i,kcount_loc) = wva(i)
+               enddo
+            enddo LOOP_iop_mpp
+         enddo
+         allocate(kcheck_loc(kcount_loc))
+         kcheck_loc = 1
+         kcount = 0
+         do pe = 0, NumPEs-1
+            if (pe == MyPE) then
+               if (NumPEs > 1) then
+!                 ----------------------------------------------------
+                  call packMessage(kcount_loc)
+                  if (kcount_loc > 0) then
+                     call packMessage(wvk_loc,3,kcount_loc)
+                  endif
+                  wait_id = nbsendPackage(20001,AllPEs)
+!                 ----------------------------------------------------
+!                 write(6,'(a,2i5)')      'Snd: MyPE, kcount_loc = ',MyPE,kcount_loc
+               endif
+               if (kcount_loc > 0) then
+!                 ----------------------------------------------------
+                  call dcopy(3*kcount_loc,wvk_loc,1,wvkl(1,kcount+1),1)
+!                 ----------------------------------------------------
+                  kcount = kcount + kcount_loc
+               endif
+            else
+!              write(6,'(a,2i5)')      'Calling recv #1, MyPE = ',MyPE,pe
+!              -------------------------------------------------------
+               call recvPackage(20001,pe)
+               call unpackMessage(kcount_remote)
+!              -------------------------------------------------------
+!              write(6,'(a,2i5,2x,i8)')'After recv   #1, MyPE = ',MyPE,pe,kcount_remote
+               if (kcount_remote > 0) then
+!                 ----------------------------------------------------
+                  call unpackMessage(wvk_remote,3,kcount_remote)
+!                 ----------------------------------------------------
+                  call dcopy(3*kcount_remote,wvk_remote,1,wvkl(1,kcount+1),1)
+!                 ----------------------------------------------------
+                  kcount = kcount + kcount_remote
+               endif
+               if (pe < MyPE) then
+                  do k = 1, kcount_remote
+                     do j = 1, kcount_loc
+                        if (kcheck_loc(j) == 1) then
+                           if (abs(wvk_remote(1,k)-wvk_loc(1,j)) .lt. eps) then
+                              if (abs(wvk_remote(2,k)-wvk_loc(2,j)) .lt. eps) then
+                                 if (abs(wvk_remote(3,k)-wvk_loc(3,j)) .lt. eps) then
+                                    kcheck_loc(j) = 0
+                                 endif
+                              endif
+                           endif
                         endif
                      enddo
-!                    =================================================
-!                    this is a new point
-!                    =================================================
-                     kcount = kcount + 1
-                     if (kcount .gt. maxk) then
-                         call ErrorHandler(sname,'kcount > maxk',kcount,maxk)
+                  enddo
+                  n = kcount_loc
+                  do j = 1, kcount_loc
+                     if (kcheck_loc(j) == 0) then
+                        n = n - 1
+                        LOOP_ck: do k = j + 1, kcount_loc
+                           if (kcheck_loc(k) == 1) then
+                              wvk_loc(1,j) = wvk_loc(1,k)
+                              wvk_loc(2,j) = wvk_loc(2,k)
+                              wvk_loc(3,j) = wvk_loc(3,k)
+                              kcheck_loc(k) = 0
+                              kcheck_loc(j) = 1
+                              n = n + 1
+                              exit LOOP_ck
+                           endif
+                        enddo LOOP_ck
                      endif
-                     wvkl(1,kcount) = wva(1)
-                     wvkl(2,kcount) = wva(2)
-                     wvkl(3,kcount) = wva(3)
-                     kcheck(kcount) = 1
-                  endif            
-               enddo LOOP_iop
-            else
-               kcount = kcount + 1
-               if ( kcount .gt. maxk ) then
-                  write(6,'('' 2nd kcount,maxk '',2i10)') kcount,maxk
-                  call ErrorHandler(sname,'kcount > maxk',kcount,maxk)
+                  enddo
+                  kcount_loc = n
                endif
-               wvkl(1,kcount) = wvk(1)
-               wvkl(2,kcount) = wvk(2)
-               wvkl(3,kcount) = wvk(3)
-               kcheck(kcount) = 1
             endif
          enddo
-      enddo
-   enddo
+         deallocate(wvk_remote)
+         deallocate(wvk_loc, kcheck_loc)
+         kcheck(1:kcount) = 1
+      endif
+!     if (MyPE == 0) then
+!        write(6,'(a,i5,2x,f10.5)')'Timing in abs(istriz)==1, #1: ',MyPE,getTime()-t0
+!     endif
 !
-   if(print_level.ge.0) then
-      write(ilog,'(/,a)')'********************************'
-      write(ilog,'( a )')'* Output from SPKPT            *'
-      write(ilog,'(a,/)')'********************************'
-      write(ilog,'(''Wavevector mesh contains '',i7,'' points'')') kcount
-   endif
-!
-   if (abs(istriz) .eq. 1) then
+      t0 = getTime()
 !     ================================================================
 !     figure out if any special point difference (k - k') is an
 !     integral multiple of a reciprocal-space vector
 !     ================================================================
       iremov = 0
-      do i=1,(kcount-1)
-         do k=1,3
-            wva(k) = wvkl(k,i)
-         enddo
+      do i=MyPE+1,(kcount-1), NumPEs
 !        =============================================================
 !        project wva onto b1,2,3:
 !        =============================================================
-         proja(1) = ZERO
-         proja(2) = ZERO
-         proja(3) = ZERO
-         do k=1,3
-            proja(1) = proja(1) + wva(k)*a1(k)
-            proja(2) = proja(2) + wva(k)*a2(k)
-            proja(3) = proja(3) + wva(k)*a3(k)
-         enddo
+         proja(1) = wvkl(1,i)*a1(1) + wvkl(2,i)*a1(2) + wvkl(3,i)*a1(3)
+         proja(2) = wvkl(1,i)*a2(1) + wvkl(2,i)*a2(2) + wvkl(3,i)*a2(3)
+         proja(3) = wvkl(1,i)*a3(1) + wvkl(2,i)*a3(2) + wvkl(3,i)*a3(3)
 !        =============================================================
 !        loop over the rest of the mesh points
 !        =============================================================
@@ -1904,21 +2098,13 @@ contains
             if (kcheck(j) .eq. 0) then
                cycle LOOP_j
             endif
-            do k=1,3
-               wvk(k) = wvkl(k,j)
-            enddo
 !
 !           ==========================================================
 !           project wvk onto b1,2,3:
 !           ==========================================================
-            projb(1) = ZERO
-            projb(2) = ZERO
-            projb(3) = ZERO
-            do k=1,3
-               projb(1) = projb(1) + wvk(k)*a1(k)
-               projb(2) = projb(2) + wvk(k)*a2(k)
-               projb(3) = projb(3) + wvk(k)*a3(k)
-            enddo
+            projb(1) = wvkl(1,j)*a1(1) + wvkl(2,j)*a1(2) + wvkl(3,j)*a1(3)
+            projb(2) = wvkl(1,j)*a2(1) + wvkl(2,j)*a2(2) + wvkl(3,j)*a2(3)
+            projb(3) = wvkl(1,j)*a3(1) + wvkl(2,j)*a3(2) + wvkl(3,j)*a3(3)
 !
 !           ==========================================================
 !           check whether (proja-projb) is integral?
@@ -1936,25 +2122,74 @@ contains
             iremov = iremov + 1
          enddo LOOP_j
       enddo
+      if (NumPEs > 1) then
+!        -------------------------------------------------------------
+         call GlobalMin(kcheck,kcount)
+         call GlobalSum(iremov)
+!        -------------------------------------------------------------
+      endif
 !
       if (iremov .gt. 0 .and. print_level >= 0) then
          write(iout,'(2x,''some of these mesh points are related by '',&
               &          ''lattice translation vectors''/1x,i6,        &
               &          '' of the mesh points removed.''/)')iremov
       endif
+!
 !     reshuffle
-      j=0
-      LOOP_i: do i=1,kcount
-         if (kcheck(i) .eq. 0) then
-            cycle LOOP_i
-         endif
-         j=j+1
-         do k=1,3
-            wvkl(k,j) = wvkl(k,i)
+      if (iremov > 0) then
+         j=0
+         LOOP_i: do i=1,kcount
+            if (kcheck(i) .eq. 0) then
+               cycle LOOP_i
+            endif
+            j=j+1
+            do k=1,3
+               wvkl(k,j) = wvkl(k,i)
+            enddo
+            kcheck(j) = kcheck(i)
+         enddo LOOP_i
+         kcount = j
+      endif
+!     if (print_level >= 0) then
+!        write(6,'(a,i5,2x,f10.5)')'Timing in abs(istriz)==1, #2: ',MyPE,getTime()-t0
+!     endif
+   else
+      do i1=1,iq1
+         ur1=dble(1 + iqp1 - 2*i1)/dble(2*iq1)
+         do i2=1,iq2
+            ur2=dble(1 + iqp2 - 2*i2)/dble(2*iq2)
+            do i3=1,iq3
+               ur3=dble(1 + iqp3 - 2*i3)/dble(2*iq3)
+!              do i=1,3
+!                 wvk(i) = ur1*b1(i) + ur2*b2(i) + ur3*b3(i) + wvk0(i)
+!              enddo
+               wvk = ur1*b1 + ur2*b2 + ur3*b3 + wvk0
+!              reduce wvk to the 1st brillouin zone
+!              -------------------------------------------------------
+               call bzrduc(wvk,a1,a2,a3,b1,b2,b3,rsdir,nrsdir,nplane,iout)
+!              -------------------------------------------------------
+               kcount = kcount + 1
+               if ( kcount .gt. maxk ) then
+                  write(6,'('' 2nd kcount,maxk '',2i10)') kcount,maxk
+                  call ErrorHandler(sname,'kcount > maxk',kcount,maxk)
+               endif
+               wvkl(1,kcount) = wvk(1)
+               wvkl(2,kcount) = wvk(2)
+               wvkl(3,kcount) = wvk(3)
+               kcheck(kcount) = 1
+            enddo
          enddo
-         kcheck(j) = kcheck(i)
-      enddo LOOP_i
-      kcount = j
+      enddo
+   endif
+!  -------------------------------------------------------------------
+   call syncAllPEs()
+!  -------------------------------------------------------------------
+   if (print_level >= 0) then
+      write(6,'(/,a)')'********************************'
+      write(6,'( a )')'* Output from SPKPT            *'
+      write(6,'(a,/)')'********************************'
+      write(6,'(a,i5,2x,f10.5)')'Timing in setting up wvkl: ',MyPE,getTime()-t1
+      write(6,'(''Wavevector mesh contains '',i7,'' points'')') kcount
    endif
 !
 !  ===================================================================
@@ -1977,7 +2212,8 @@ contains
          do i=1,3
             wva(i) = ZERO
             do j=1,3
-               wva(i) = wva(i) + r(ib(n),i,j)*wvkl(j,k)
+!              wva(i) = wva(i) + r(ib(n),i,j)*wvkl(j,k)
+               wva(i) = wva(i) + r(i,j,ib(n))*wvkl(j,k)
             enddo
          enddo
          ibsign = 1
@@ -2208,8 +2444,8 @@ contains
 !
    integer (kind=IntKind), intent(in) :: nrsdir, nplane, iout
    integer (kind=IntKind) :: nn1, nn2, nn3
-   integer (kind=IntKind) :: n1, n2, n3
-   integer (kind=IntKind) :: i1, i2, i3, i
+   integer (kind=IntKind) :: n1, n2, n3, i
+!  integer (kind=IntKind) :: i1, i2, i3
    integer (kind=IntKind), parameter :: yes = 1
    integer (kind=IntKind), parameter :: no = 0
    integer (kind=IntKind), parameter :: nzones=2
@@ -2219,7 +2455,7 @@ contains
    real (kind=RealKind), intent(in) :: a1(3),a2(3),a3(3),b1(3),b2(3),b3(3)
    real (kind=RealKind), intent(in) :: rsdir(4,nrsdir)
    real (kind=RealKind), intent(inout) :: wvk(3)
-   real (kind=RealKind) :: wva(3),wb(3)
+   real (kind=RealKind) :: wva(3),wb(3), ri1, ri2, ri3
 !
 !  ===================================================================
 !  check if wvk already inside 1bz
@@ -2243,22 +2479,27 @@ contains
 !  look around the estimated vector for the one truly inside the 1bz
 !  ===================================================================
    do n1 = 1,nnn
-      i1 = nn - n1 - nn1
+!     i1 = nn - n1 - nn1
+      ri1 = nn - n1 - nn1
       do n2 = 1,nnn
-         i2 = nn - n2 - nn2
+!        i2 = nn - n2 - nn2
+         ri2 = nn - n2 - nn2
          do n3 = 1,nnn
-            i3 = nn - n3 - nn3
-            do i = 1,3
-               wva(i) = wvk(i) + dble(i1)*b1(i) + dble(i2)*b2(i) +    &
-                        dble(i3)*b3(i)
-            enddo
+!           i3 = nn - n3 - nn3
+            ri3 = nn - n3 - nn3
+!           do i = 1,3
+!              wva(i) = wvk(i) + dble(i1)*b1(i) + dble(i2)*b2(i) +    &
+!                       dble(i3)*b3(i)
+!           enddo
+            wva = wvk + ri1*b1 + ri2*b2 + ri3*b3
             if (inbz(wva,rsdir,nrsdir,nplane) .eq. yes) then
 !              =======================================================
 !              the reduced vector
 !              =======================================================
-               do i = 1,3
-                  wvk(i) = wva(i)
-               enddo
+!              do i = 1,3
+!                 wvk(i) = wva(i)
+!              enddo
+               wvk = wva
                return
             endif
          enddo
@@ -2373,41 +2614,59 @@ contains
          endif
          write(6,'(/,''      ['',f5.2,x,f5.2,x,f5.2,'']        ['',         &
             &      f5.2,x,f5.2,x,f5.2,'']        ['',f5.2,x,f5.2,x,f5.2,'']'')') &
-            Rotation(i,1,1),Rotation(i,1,2),Rotation(i,1,3),              &
-            Rotation(i+1,1,1),Rotation(i+1,1,2),Rotation(i+1,1,3),        &
-            Rotation(i+2,1,1),Rotation(i+2,1,2),Rotation(i+2,1,3)
+!           Rotation(i,1,1),Rotation(i,1,2),Rotation(i,1,3),              &
+!           Rotation(i+1,1,1),Rotation(i+1,1,2),Rotation(i+1,1,3),        &
+!           Rotation(i+2,1,1),Rotation(i+2,1,2),Rotation(i+2,1,3)
+            Rotation(1,1,i),Rotation(1,2,i),Rotation(1,3,i),              &
+            Rotation(1,1,i+1),Rotation(1,2,i+1),Rotation(1,3,i+1),        &
+            Rotation(1,1,i+2),Rotation(1,2,i+2),Rotation(1,3,i+2)
          write(6,'(''r('',i2,'')=['',f5.2,x,f5.2,x,f5.2,''], r('',i2,'')=['',    &
             &      f5.2,x,f5.2,x,f5.2,''], r('',i2,'')=['',f5.2,x,f5.2,x,f5.2,   &
             &      '']'')') &
-            i,Rotation(i,2,1),Rotation(i,2,2),Rotation(i,2,3),            &
-            i+1,Rotation(i+1,2,1),Rotation(i+1,2,2),Rotation(i+1,2,3),    &
-            i+2,Rotation(i+2,2,1),Rotation(i+2,2,2),Rotation(i+2,2,3)
+!           i,Rotation(i,2,1),Rotation(i,2,2),Rotation(i,2,3),            &
+!           i+1,Rotation(i+1,2,1),Rotation(i+1,2,2),Rotation(i+1,2,3),    &
+!           i+2,Rotation(i+2,2,1),Rotation(i+2,2,2),Rotation(i+2,2,3)
+            i,Rotation(2,1,i),Rotation(2,2,i),Rotation(2,3,i),            &
+            i+1,Rotation(2,1,i+1),Rotation(2,2,i+1),Rotation(2,3,i+1),    &
+            i+2,Rotation(2,1,i+2),Rotation(2,2,i+2),Rotation(2,3,i+2)
          write(6,'(''      ['',f5.2,x,f5.2,x,f5.2,'']        ['',         &
             &      f5.2,x,f5.2,x,f5.2,'']        ['',f5.2,x,f5.2,x,f5.2,'']'')') &
-            Rotation(i,3,1),Rotation(i,3,2),Rotation(i,3,3),              &
-            Rotation(i+1,3,1),Rotation(i+1,3,2),Rotation(i+1,3,3),        &
-            Rotation(i+2,3,1),Rotation(i+2,3,2),Rotation(i+2,3,3)
+!           Rotation(i,3,1),Rotation(i,3,2),Rotation(i,3,3),              &
+!           Rotation(i+1,3,1),Rotation(i+1,3,2),Rotation(i+1,3,3),        &
+!           Rotation(i+2,3,1),Rotation(i+2,3,2),Rotation(i+2,3,3)
+            Rotation(3,1,i),Rotation(3,2,i),Rotation(3,3,i),              &
+            Rotation(3,1,i+1),Rotation(3,2,i+1),Rotation(3,3,i+1),        &
+            Rotation(3,1,i+2),Rotation(3,2,i+2),Rotation(3,3,i+2)
       enddo
       if (NumRotations-k == 0) then
          write(6,'(/,''      ['',f5.2,x,f5.2,x,f5.2,'']'')')              &
-            Rotation(k,1,1),Rotation(k,1,2),Rotation(k,1,3)
+!           Rotation(k,1,1),Rotation(k,1,2),Rotation(k,1,3)
+            Rotation(1,1,k),Rotation(1,2,k),Rotation(1,3,k)
          write(6,'(''r('',i2,'')=['',f5.2,x,f5.2,x,f5.2,'']'')')          &
-            k,Rotation(k,2,1),Rotation(k,2,2),Rotation(k,2,3)
+!           k,Rotation(k,2,1),Rotation(k,2,2),Rotation(k,2,3)
+            k,Rotation(2,1,k),Rotation(2,2,k),Rotation(2,3,k)
          write(6,'(''      ['',f5.2,x,f5.2,x,f5.2,'']'')')                &
-            Rotation(k,3,1),Rotation(k,3,2),Rotation(k,3,3)
+!           Rotation(k,3,1),Rotation(k,3,2),Rotation(k,3,3)
+            Rotation(3,1,k),Rotation(3,2,k),Rotation(3,3,k)
       else if (NumRotations-k == 1) then
          write(6,'(/,''      ['',f5.2,x,f5.2,x,f5.2,'']        ['',       &
             &      f5.2,x,f5.2,x,f5.2,'']'')')                            &
-            Rotation(k,1,1),Rotation(k,1,2),Rotation(k,1,3),              &
-            Rotation(k+1,1,1),Rotation(k+1,1,2),Rotation(k+1,1,3)
+!           Rotation(k,1,1),Rotation(k,1,2),Rotation(k,1,3),              &
+!           Rotation(k+1,1,1),Rotation(k+1,1,2),Rotation(k+1,1,3)
+            Rotation(1,1,k),Rotation(1,2,k),Rotation(1,3,k),              &
+            Rotation(1,1,k+1),Rotation(1,2,k+1),Rotation(1,3,k+1)
          write(6,'(''r('',i2,'')=['',f5.2,x,f5.2,x,f5.2,''], r('',i2,'')=['',  &
             &      f5.2,x,f5.2,x,f5.2,'']'')')                            &
-            k,Rotation(k,2,1),Rotation(k,2,2),Rotation(k,2,3),            &
-            k+1,Rotation(k+1,2,1),Rotation(k+1,2,2),Rotation(k+1,2,3)
+!           k,Rotation(k,2,1),Rotation(k,2,2),Rotation(k,2,3),            &
+!           k+1,Rotation(k+1,2,1),Rotation(k+1,2,2),Rotation(k+1,2,3)
+            k,Rotation(2,1,k),Rotation(2,2,k),Rotation(2,3,k),            &
+            k+1,Rotation(2,1,k+1),Rotation(2,2,k+1),Rotation(2,3,k+1)
          write(6,'(''      ['',f5.2,x,f5.2,x,f5.2,'']        ['',         &
             &      f5.2,x,f5.2,x,f5.2,'']'')')                            &
-            Rotation(k,3,1),Rotation(k,3,2),Rotation(k,3,3),              &
-            Rotation(k+1,3,1),Rotation(k+1,3,2),Rotation(k+1,3,3)
+!           Rotation(k,3,1),Rotation(k,3,2),Rotation(k,3,3),              &
+!           Rotation(k+1,3,1),Rotation(k+1,3,2),Rotation(k+1,3,3)
+            Rotation(3,1,k),Rotation(3,2,k),Rotation(3,3,k),              &
+            Rotation(3,1,k+1),Rotation(3,2,k+1),Rotation(3,3,k+1)
       endif
       write(6,'(80(''-''))')
    endif

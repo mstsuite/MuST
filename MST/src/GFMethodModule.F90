@@ -6076,7 +6076,7 @@ contains
             write(dos_title(1),'(a,f12.8)')   'Fermi energy     :',chempot
             if (isLSMS()) then
 !              write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
-               write(dos_title(2),'(a,f12.8)')'No. Atoms in LIZ :',Neighbor%NumAtoms+1
+               write(dos_title(2),'(a,i5)')   'No. Atoms in LIZ :',Neighbor%NumAtoms+1
             else
                write(dos_title(2),'(a,i3)')   'Species index    :',ia
             endif
@@ -6115,7 +6115,7 @@ contains
                write(dos_title(1),'(a,f12.8)')   'Fermi energy     :',chempot
                if (isLSMS()) then
 !                 write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
-                  write(dos_title(2),'(a,f12.8)')'No. Atoms in LIZ :',Neighbor%NumAtoms+1
+                  write(dos_title(2),'(a,i5)')   'No. Atoms in LIZ :',Neighbor%NumAtoms+1
                else
                   write(dos_title(2),'(a,i3)')   'Species index    :',ia
                endif
@@ -6188,7 +6188,7 @@ contains
          write(dos_title(1),'(a,f12.8)')   'Fermi energy     :',chempot
          if (isLSMS()) then
 !           write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
-            write(dos_title(2),'(a,f12.8)')'No. Atoms in LIZ :',Neighbor%NumAtoms+1
+            write(dos_title(2),'(a,i5)')   'No. Atoms in LIZ :',Neighbor%NumAtoms+1
          else
             write(dos_title(2),'(a,i3)')   'Species index    :',it
          endif
@@ -6225,7 +6225,7 @@ contains
       write(dos_title(1),'(a,f12.8)')   'Fermi energy     :',chempot
       if (isLSMS()) then
 !        write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
-         write(dos_title(2),'(a,f12.8)')'No. Atoms in LIZ :',Neighbor%NumAtoms+1
+         write(dos_title(2),'(a,i5)')   'No. Atoms in LIZ :',Neighbor%NumAtoms+1
       else
          write(dos_title(2),'(a,i3)')   'Number of species:',ntypes
       endif
@@ -6330,7 +6330,7 @@ contains
             write(dos_title(1),'(a,f12.8)')   'Fermi energy      :',chempot
             if (isLSMS()) then
 !              write(dos_title(2),'(a,f12.8)')'LIZ Radius        :',Neighbor%ShellRad(s)
-               write(dos_title(2),'(a,f12.8)')'No. Atoms in LIZ  :',Neighbor%NumAtoms+1
+               write(dos_title(2),'(a,i5)')   'No. Atoms in LIZ  :',Neighbor%NumAtoms+1
             else
                write(dos_title(2),'(a,i3)')   'Species index     :',ia
             endif
@@ -6369,7 +6369,7 @@ contains
                write(dos_title(1),'(a,f12.8)')   'Fermi energy      :',chempot
                if (isLSMS()) then
 !                 write(dos_title(2),'(a,f12.8)')'LIZ Radius        :',Neighbor%ShellRad(s)
-                  write(dos_title(2),'(a,f12.8)')'No. Atoms in LIZ  :',Neighbor%NumAtoms+1
+                  write(dos_title(2),'(a,i5)')   'No. Atoms in LIZ  :',Neighbor%NumAtoms+1
                else
                   write(dos_title(2),'(a,i3)')   'Species index     :',ia
                endif
@@ -6440,7 +6440,7 @@ contains
          write(dos_title(1),'(a,f12.8)')   'Fermi energy     :',chempot
          if (isLSMS()) then
 !           write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
-            write(dos_title(2),'(a,f12.8)')'No. Atoms in LIZ  :',Neighbor%NumAtoms+1
+            write(dos_title(2),'(a,i5)')   'No. Atoms in LIZ  :',Neighbor%NumAtoms+1
          else
             write(dos_title(2),'(a,i3)')   'Species index    :',it
          endif
@@ -6476,7 +6476,7 @@ contains
       write(dos_title(1),'(a,f12.8)')   'Fermi energy      :',chempot
       if (isLSMS()) then
 !        write(dos_title(2),'(a,f12.8)')'LIZ Radius        :',Neighbor%ShellRad(s)
-         write(dos_title(2),'(a,f12.8)')'No. Atoms in LIZ  :',Neighbor%NumAtoms+1
+         write(dos_title(2),'(a,i5)')   'No. Atoms in LIZ  :',Neighbor%NumAtoms+1
       else
          write(dos_title(2),'(a,i3)')   'Number of species :',ntypes
       endif
