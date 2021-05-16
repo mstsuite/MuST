@@ -415,19 +415,21 @@ contains
    real (kind=RealKind) :: Omega, c_a, w_ab, coeff
    complex (kind=CmplxKind) :: sigma010
    complex (kind=CmplxKind), pointer :: tauab(:,:), J1(:,:), J2(:,:)
-   complex (kind=CmplxKind), allocatable :: tauabc(:,:), tau1(:,:), tau2(:,:)
-   complex (kind=CmplxKind), allocatable :: tmp1(:,:), tmp2(:,:), tmp3(:,:)
+   complex (kind=CmplxKind), allocatable :: tauc(:,:), tauabc(:,:), tau1(:,:), tau2(:,:)
+   complex (kind=CmplxKind), allocatable :: taucc(:,:), tmp1(:,:), tmp2(:,:), tmp3(:,:)
 
    neigh_size = getNeighSize(n)
    Omega = getAtomicVPVolume(n)
-
+   
    allocate(tauabc(neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max), &
+      tauc(neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max), &
+      taucc(neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max), &
       tau1(kmax_kkr_max, kmax_kkr_max), tau2(kmax_kkr_max, kmax_kkr_max), &
       tmp1(kmax_kkr_max, kmax_kkr_max), tmp2(kmax_kkr_max, kmax_kkr_max), &
       tmp3(kmax_kkr_max, kmax_kkr_max))
    tauabc = CZERO
    sigma010 = CZERO
-
+   
    do ic1 = 1, getLocalNumSpecies(n)
      do ic2 = 1, getLocalNumSpecies(n)
        c_a = getLocalSpeciesContent(n, ic1)
@@ -635,8 +637,8 @@ contains
        int_val = CZERO
        do etype = 1, 4
          int_val(etype) = calSigmaTildeSRO00(n, dir, dir1, is, etype) &
-           !+ calSigmaTildeSRO010(n, dir, dir1, is, etype) &
-           !+ calSigmaTildeSRO011(n, dir, dir1, is, etype) &
+            ! + calSigmaTildeSRO010(n, dir, dir1, is, etype) &
+            !+ calSigmaTildeSRO011(n, dir, dir1, is, etype) !&
             + calSigmaTildeSRO10(n, dir, dir1, is, e, etype)
        enddo
        sigmatilde(dir,dir1,is) = int_val(1)
