@@ -16,7 +16,14 @@ public :: initSROMatrix,             &
           assembleTauFromBlocks,     &
           calculateImpurityMatrix,   &
           calSpeciesTauMatrix,       &
+          clusterDtilde,             &
+          calculateSCFSpeciesTerm,   &
           getKauFromTau,             &
+          calculateNewTCPA,          &
+          getSROMatrix,              &
+          getDoubleSpeciesTauMatrix, &
+          getSROParam,               &
+          getNeighSize
 !
 
 private
@@ -26,6 +33,7 @@ private
    integer (kind=IntKind) :: kmax_kkr_max
    integer (kind=IntKind) :: ndim_Tmat
    integer (kind=IntKind) :: print_instruction
+   integer (kind=IntKind) :: sigma
 !
    complex(kind=CmplxKind), allocatable, target :: WORK0_sro(:), WORK1_sro(:), WORK2_sro(:)
    complex(kind=CmplxKind), pointer :: tm(:,:), tm0(:,:), tm1(:,:), tm2(:,:)
@@ -44,6 +52,7 @@ private
       complex (kind=CmplxKind), pointer :: tmat_tilde_inv(:,:)
       complex (kind=CmplxKind), pointer :: tmat_tilde_inv_nn(:,:)
       complex (kind=CmplxKind), pointer :: T_inv(:,:)
+      complex (kind=CmplxKind), pointer :: T_sigma_inv(:,:,:)
       complex (kind=CmplxKind), pointer :: proj_a(:,:)
       complex (kind=CmplxKind), pointer :: proj_b(:,:)
    end type TmatBlockStruct
@@ -53,6 +62,7 @@ private
       real (kind=RealKind), pointer :: sro_param_a_nn(:)
       type (TmatBlockStruct), allocatable :: tmat_s(:)
       complex (kind=CmplxKind), pointer :: tau_ab(:,:,:)
+      complex (kind=CmplxKind), pointer :: tau_sigma(:,:,:,:)
       complex (kind=CmplxKind), pointer :: kau11(:,:,:) 
    end type SROTMatrixStruct
 !
@@ -91,7 +101,7 @@ contains
    use MediumHostModule, only  : getNumSites, getLocalNumSites, &
                      getGlobalSiteIndex, getNumSpecies, getSpeciesContent
    use ScfDataModule, only : retrieveSROParams, isNextNearestSRO, &
-                              isSROSCF, isSROCVM, retrieveCVMParams
+                    isSROSCF, isSROCVM, retrieveCVMParams, isConductivity
    use NeighborModule, only : getNeighbor
    use SSSolverModule, only : getScatteringMatrix
    use SystemModule, only : getAtomPosition
@@ -106,6 +116,12 @@ contains
    real(kind=RealKind), allocatable :: sro_params(:), sro_params_nn(:)
    real(kind=RealKind) :: cvm_sitei(2)
    real(kind=RealKind), allocatable :: cvm_params(:)
+
+   if (isConductivity()) then
+     sigma = 1
+   else
+     sigma = 0
+   endif
 
 !  --------------------------------------------------------
    next_near_option = isNextNearestSRO()
@@ -205,7 +221,11 @@ contains
             allocate(SROMedium(il)%SROTMatrix(i)%kau11(SROMedium(il)%blk_size, SROMedium(il)%blk_size, nSpinCant**2))
             allocate(SROMedium(il)%SROTMatrix(i)%tau_ab(SROMedium(il)%blk_size*SROMedium(il)%neigh_size,  &
                      SROMedium(il)%blk_size*SROMedium(il)%neigh_size, nSpinCant**2))
- 
+            if (sigma == 1) then
+              allocate(SROMedium(il)%SROTMatrix(i)%tau_sigma(num, SROMedium(il)%blk_size*SROMedium(il)%neigh_size, &
+                 SROMedium(il)%blk_size*SROMedium(il)%neigh_size, nSpinCant**2))
+            endif 
+
             do is = 1,nSpinCant**2
                allocate(SROMedium(il)%SROTMatrix(i)%tmat_s(is)%tmat_tilde_inv(SROMedium(il)%blk_size, &
                        SROMedium(il)%blk_size))
@@ -213,6 +233,10 @@ contains
                        SROMedium(il)%blk_size))
                allocate(SROMedium(il)%SROTMatrix(i)%tmat_s(is)%T_inv(SROMedium(il)%blk_size*SROMedium(il)%neigh_size, &
                        SROMedium(il)%blk_size*SROMedium(il)%neigh_size))
+               if (sigma == 1) then
+                  allocate(SROMedium(il)%SROTMatrix(i)%tmat_s(is)%T_sigma_inv(num, &
+                   SROMedium(il)%blk_size*SROMedium(il)%neigh_size, SROMedium(il)%blk_size*SROMedium(il)%neigh_size))
+               endif
                if (isSROSCF() == 1) then
                   allocate(SROMedium(il)%SROTMatrix(i)%tmat_s(is)%proj_a(SROMedium(il)%blk_size, SROMedium(il)%blk_size))
                   allocate(SROMedium(il)%SROTMatrix(i)%tmat_s(is)%proj_b(SROMedium(il)%blk_size, SROMedium(il)%blk_size))
@@ -347,16 +371,17 @@ contains
    subroutine generateBigTAMatrix (n, ia)
 !  ===================================================================
 
-   use WriteMatrixModule, only : writeMatrix
+   use AtomModule, only : getLocalNumSpecies
 
    integer (kind=IntKind), intent(in) :: n, ia
    integer (kind=IntKind) :: nsize, delta, total_size, i, is,iter1,iter2, tmp
-   integer (kind=IntKind) :: type
+   integer (kind=IntKind) :: ttype, ic, num_species
 
    delta = SROMedium(n)%neigh_size
    nsize = SROMedium(n)%blk_size
    total_size = nsize*delta
-   
+   num_species = getLocalNumSpecies(n)   
+
    do is = 1, nSpinCant
       SROMedium(n)%SROTMatrix(ia)%tmat_s(is)%T_inv = CZERO
    
@@ -364,21 +389,27 @@ contains
          do iter1 = 1, nsize
             SROMedium(n)%SROTMatrix(ia)%tmat_s(is)%T_inv(iter1,iter2) =  &
               SROMedium(n)%SROTMatrix(ia)%tmat_s(is)%tmat_inv(iter1,iter2)
+            if (sigma == 1) then
+              do ic = 1, num_species
+                SROMedium(n)%SROTMatrix(ia)%tmat_s(is)%T_sigma_inv(ic,iter1,iter2) &
+                = SROMedium(n)%SROTMatrix(ia)%tmat_s(is)%tmat_inv(iter1,iter2)
+              enddo
+            endif
          enddo
       enddo
    
       if (next_near_option == 1) then
          do i = 2, delta
             tmp = (i - 1)*nsize
-            call determineNeighborType(n, i - 1, type)
-            if (type == 0) then
+            call determineNeighborType(n, i - 1, ttype)
+            if (ttype == 0) then
                do iter2 = 1, nsize
                   do iter1 = 1, nsize
                      SROMedium(n)%SROTMatrix(ia)%tmat_s(is)%T_inv(iter1+tmp,iter2+tmp) = &
                       SROMedium(n)%SROTMatrix(ia)%tmat_s(is)%tmat_tilde_inv(iter1, iter2)
                   enddo
                enddo
-            else if (type == 1) then
+            else if (ttype == 1) then
                do iter2 = 1, nsize
                   do iter1 = 1, nsize
                      SROMedium(n)%SROTMatrix(ia)%tmat_s(is)%T_inv(iter1+tmp,iter2+tmp) = &
@@ -410,9 +441,17 @@ contains
                    SROMedium(n)%SROTMatrix(ia)%tmat_s(is)%T_inv(iter1+tmp,iter2+tmp) = & 
                      SROMedium(n)%SROTMatrix(ia)%tmat_s(is)%tmat_tilde_inv(iter1, iter2)
                  endif
+
+                 if (sigma == 1) then
+                   do ic = 1, num_species
+                     SROMedium(n)%SROTMatrix(ia)%tmat_s(is)%T_sigma_inv(ic,iter1+tmp,iter2+tmp) &
+                     = SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%tmat_inv(iter1,iter2)
+                   enddo
+                 endif
                enddo
             enddo
          enddo
+    
       endif
    enddo
  
@@ -583,10 +622,11 @@ contains
    use MatrixInverseModule, only : MtxInv_LU
    use WriteMatrixModule, only : writeMatrix
    use MatrixModule, only : computeAprojB
+   use AtomModule, only : getLocalNumSpecies
 !   
    integer(kind=IntKind), intent(in) :: n, ic
 !
-   integer(kind=IntKind) :: dsize, nsize, is
+   integer(kind=IntKind) :: dsize, nsize, is, ic1
 
    SROMedium(n)%SROTMatrix(ic)%tau_ab = CZERO 
 
@@ -604,7 +644,108 @@ contains
 !                 dsize, dsize, TEN2m8) 
 !  enddo
 
+   if (sigma == 1) then
+     do ic1 = 1, getLocalNumSpecies(n)
+       y = CZERO
+       z = SROMedium(n)%SROTMatrix(ic)%tmat_s(1)%T_sigma_inv(ic1,:,:) - &
+           SROMedium(n)%T_CPA_inv
+       call computeAprojB('L', dsize*nsize, SROMedium(n)%tau_cpa(:,:,1), z, y)
+       SROMedium(n)%SROTMatrix(ic)%tau_sigma(ic1,:,:,1) = y
+     enddo
+   endif
+
    end subroutine calculateImpurityMatrix
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function clusterDtilde(n, ic, is, kvec, caltype, etype) result(DtildeK)
+!  ===================================================================
+
+   use MatrixModule, only : computeAprojB
+   use WriteMatrixModule, only : writeMatrix
+
+   integer (kind=IntKind), intent(in) :: n, ic, is, caltype, etype
+   real (kind=RealKind), intent(in) :: kvec(3)
+   integer (kind=IntKind) :: i, iter1, iter2, nsize, dsize, istart, iend
+   real (kind=RealKind) :: Rp(3)
+   complex (kind=CmplxKind) :: kp, exp_term
+   complex (kind=CmplxKind), allocatable :: DtildeK(:,:), iden(:,:)
+   complex (kind=CmplxKind), allocatable :: D(:,:), Dp(:,:), Tdiff(:,:), &
+                              Tdiffc(:,:), tauc(:,:), taucc(:,:), Dc(:,:)
+
+   Rp = ZERO
+   nsize = SROMedium(n)%neigh_size
+   dsize = SROMedium(n)%blk_size
+
+   allocate(D(nsize*dsize, nsize*dsize), Tdiff(nsize*dsize, nsize*dsize), &
+     Dc(nsize*dsize, nsize*dsize), tauc(nsize*dsize, nsize*dsize), &
+     taucc(nsize*dsize, nsize*dsize), Tdiffc(nsize*dsize, nsize*dsize))
+   allocate(Dp(dsize, dsize), DtildeK(dsize, dsize), iden(dsize, dsize))
+   D = CZERO; Tdiff = CZERO; Dc = CZERO
+   Dp = CZERO; DtildeK = CZERO
+   iden = CZERO; tauc = CZERO; taucc = CZERO
+
+   do i = 1, dsize
+     iden(i, i) = CONE
+   enddo
+
+!  call writeMatrix('iden', iden, dsize, dsize)
+   Tdiff = SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%T_inv - &
+           SROMedium(n)%T_CPA_inv
+   Tdiffc = conjg(Tdiff)
+   tauc = SROMedium(n)%tau_cpa(:,:,is)
+   taucc = conjg(tauc)
+
+   if (caltype == 0) then
+     call computeAprojB('N', dsize*nsize, tauc, Tdiff, D)
+     call computeAprojB('N', dsize*nsize, taucc, Tdiffc, Dc)
+   else if (caltype == 1) then
+     call computeAprojB('N', dsize*nsize, Tdiff, SROMedium(n)%tau_cpa(:,:,is), D)
+     call computeAprojB('N', dsize*nsize, Tdiffc, taucc, Dc)
+   endif
+
+   do i = 1, nsize
+     istart = (i-1)*dsize + 1
+     iend = i*dsize
+     call obtainPosition(n, Rp, i)
+     kp = kvec(1)*Rp(1) + kvec(2)*Rp(2) + kvec(3)*Rp(3)
+     if (caltype == 0) then
+       exp_term = exp(sqrtm1*kp)
+       if (etype == 1) then
+      !  do iter2 = 1, dsize
+      !    do iter1 = 1, dsize
+      !      Dp(iter1, iter2) = D(iter1, iter2)
+      !    enddo
+      !  enddo
+         call zgemm('n', 'n', dsize, dsize, dsize, CONE, D(1:dsize, istart:iend), &
+            dsize, iden, dsize, CZERO, Dp, dsize)
+     !  call writeMatrix('Dp', Dp, dsize, dsize)
+     !  call writeMatrix('ProperDp', D(1:dsize, 1:dsize), dsize, dsize)
+     !   call ErrorHandler('clusterDtilde', 'stop')
+       else if (etype == 2) then
+         call zgemm('n', 'n', dsize, dsize, dsize, CONE, &
+           Dc(1:dsize, istart:iend), dsize, iden, dsize, CZERO, Dp, dsize)
+       endif
+     else if (caltype == 1) then
+       exp_term = exp(-sqrtm1*kp)
+       if (etype == 1) then
+         call zgemm('n', 'n', dsize, dsize, dsize, CONE, D(istart:iend, 1:dsize), &
+            dsize, iden, dsize, CZERO, Dp, dsize)
+       else if (etype == 2) then
+         call zgemm('n', 'n', dsize, dsize, dsize, CONE, &
+           Dc(istart:iend, 1:dsize), dsize, iden, dsize, CZERO, Dp, dsize)
+       endif
+     endif
+     call zgemm('n', 'n', dsize, dsize, dsize, exp_term, Dp, dsize, &
+         iden, dsize, CONE, DtildeK, dsize)
+  !  print *, exp_term
+  !  call writeMatrix('Dp', Dp, dsize, dsize)
+   enddo
+
+ ! call writeMatrix('DtildeK', DtildeK, dsize, dsize) 
+ ! call ErrorHandler('clusterDtilde', 'stop')
+
+   end function clusterDtilde
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -881,6 +1022,19 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getDoubleSpeciesTauMatrix(n, is, ic, ic1) result(sro_mat)
+!  ===================================================================
+
+   integer (kind=IntKind), intent(in) :: n, is, ic, ic1
+   complex (kind=CmplxKind), pointer :: sro_mat(:,:)   
+
+
+   sro_mat => SROMedium(n)%SROTMatrix(ic)%tau_sigma(ic1,:,:,is)
+
+   end function getDoubleSpeciesTauMatrix
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getSROParam(n, ic1, ic2) result(w12)
 !  ===================================================================
 
@@ -891,4 +1045,16 @@ contains
 
    end function getSROParam
 !  =================================================================== 
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getNeighSize(n) result(neigh_size)
+!  ===================================================================
+
+   integer (kind=IntKind), intent(in) :: n
+   integer (kind=IntKind) :: neigh_size
+
+   neigh_size = SROMedium(n)%neigh_size
+
+   end function getNeighSize
+!  ===================================================================
 end module SROModule
