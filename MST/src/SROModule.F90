@@ -34,6 +34,7 @@ private
    integer (kind=IntKind) :: ndim_Tmat
    integer (kind=IntKind) :: print_instruction
    integer (kind=IntKind) :: sigma
+   integer (kind=IntKind), allocatable :: lofk(:), mofk(:), jofk(:) 
 !
    complex(kind=CmplxKind), allocatable, target :: WORK0_sro(:), WORK1_sro(:), WORK2_sro(:)
    complex(kind=CmplxKind), pointer :: tm(:,:), tm0(:,:), tm1(:,:), tm2(:,:)
@@ -111,7 +112,7 @@ contains
    integer(kind=IntKind), intent(in) :: cant, pola
    integer(kind=IntKind) :: sro_param_nums, num, il, ic, is, ig, i, j, iter1, iter2, temp
    integer(kind=IntKind) :: in, jn
-   integer(kind=IntKind) :: type
+   integer(kind=IntKind) :: type, kl, jl, m, l, n, lmax_kkr_max
    real (kind=RealKind) :: spec_i, spec_j
    real(kind=RealKind), allocatable :: sro_params(:), sro_params_nn(:)
    real(kind=RealKind) :: cvm_sitei(2)
@@ -213,6 +214,7 @@ contains
             tm => getScatteringMatrix('T-Matrix',spin=1,site=SROMedium(il)%local_index,atom=i)
             
             SROMedium(il)%blk_size = size(tm, 1)
+            kmax_kkr_max = SROMedium(il)%blk_size
 
             if (nSpinCant == 2) then
                call ErrorHandler('initSROMatrix','SRO is not equipped to deal with spin canting yet')
@@ -287,6 +289,22 @@ contains
    allocate(WORK0_sro(SROMedium(1)%blk_size**2))
    allocate(WORK1_sro(SROMedium(1)%blk_size**2))
    allocate(WORK2_sro(SROMedium(1)%blk_size**2))
+
+   lmax_kkr_max = int(sqrt(1.0*kmax_kkr_max)) - 1
+   allocate(lofk(kmax_kkr_max), mofk(kmax_kkr_max),  &
+         jofk(kmax_kkr_max))
+
+   kl=0; jl = 0
+   do l=0,lmax_kkr_max
+      n=(l+1)*(l+2)/2-l
+      do m=-l,l
+         kl=kl+1
+         lofk(kl)=l
+         mofk(kl)=m
+         jofk(kl)=n+abs(m)
+      enddo
+   enddo
+
     
    end subroutine initSROMatrix
 !  =================================================================== 
@@ -314,6 +332,7 @@ contains
    enddo
    deallocate(SROMedium, WORK0_sro, WORK1_sro, WORK2_sro)
    deallocate(z, y)
+   deallocate(lofk, mofk, jofk)
 
    end subroutine endSROMatrix
 !  ===================================================================
@@ -666,7 +685,7 @@ contains
 
    integer (kind=IntKind), intent(in) :: n, ic, is, caltype, etype
    real (kind=RealKind), intent(in) :: kvec(3)
-   integer (kind=IntKind) :: i, iter1, iter2, nsize, dsize, istart, iend
+   integer (kind=IntKind) :: i, j, L1, L2, iter1, iter2, nsize, dsize, istart, iend
    real (kind=RealKind) :: Rp(3)
    complex (kind=CmplxKind) :: kp, exp_term
    complex (kind=CmplxKind), allocatable :: DtildeK(:,:), iden(:,:)
@@ -694,7 +713,16 @@ contains
            SROMedium(n)%T_CPA_inv
    Tdiffc = conjg(Tdiff)
    tauc = SROMedium(n)%tau_cpa(:,:,is)
-   taucc = conjg(tauc)
+   do i = 1, nsize
+     do j = 1, nsize
+       do L2 = 1, dsize
+         do L1 = 1, dsize
+           taucc((i-1)*dsize + L1, (j-1)*dsize + L2)  = &
+            (-1.0)**(lofk(L2) - lofk(L1))*conjg(tauc((j-1)*dsize + L2, (i-1)*dsize + L1))
+         enddo
+       enddo
+     enddo
+   enddo
 
    if (caltype == 0) then
      call computeAprojB('N', dsize*nsize, tauc, Tdiff, D)
@@ -712,16 +740,8 @@ contains
      if (caltype == 0) then
        exp_term = exp(sqrtm1*kp)
        if (etype == 1) then
-      !  do iter2 = 1, dsize
-      !    do iter1 = 1, dsize
-      !      Dp(iter1, iter2) = D(iter1, iter2)
-      !    enddo
-      !  enddo
          call zgemm('n', 'n', dsize, dsize, dsize, CONE, D(1:dsize, istart:iend), &
             dsize, iden, dsize, CZERO, Dp, dsize)
-     !  call writeMatrix('Dp', Dp, dsize, dsize)
-     !  call writeMatrix('ProperDp', D(1:dsize, 1:dsize), dsize, dsize)
-     !   call ErrorHandler('clusterDtilde', 'stop')
        else if (etype == 2) then
          call zgemm('n', 'n', dsize, dsize, dsize, CONE, &
            Dc(1:dsize, istart:iend), dsize, iden, dsize, CZERO, Dp, dsize)
@@ -738,7 +758,6 @@ contains
      endif
      call zgemm('n', 'n', dsize, dsize, dsize, exp_term, Dp, dsize, &
          iden, dsize, CONE, DtildeK, dsize)
-  !  print *, exp_term
   !  call writeMatrix('Dp', Dp, dsize, dsize)
    enddo
 
@@ -998,7 +1017,7 @@ contains
        sro_mat => SROMedium(n)%SROTMatrix(ic)%tau_ab(:,:,is)
      endif
      if (is_size) then
-       matsize = dsize*nsize
+       matsize = nsize
      endif
    else if (nocaseCompare(sm_type,'tcpa-inv')) then
      sro_mat => SROMedium(n)%Tcpa_inv
@@ -1012,7 +1031,7 @@ contains
        sro_mat => SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%T_inv
      endif
      if (is_size) then
-       matsize = dsize*nsize
+       matsize = nsize
      endif
    else
      call ErrorHandler('getSROMatrix', 'incorrect control string')
