@@ -97,7 +97,8 @@ PrimeFactorsModule.o \
 computeProdExpan.o \
 BroydenLib.o \
 AndersonLib.o \
-newtc.o
+newtc.o \
+decompose3Index.o
 
 ifdef ESSL_WORKAROUND
   LOBS += essl_workaround.o

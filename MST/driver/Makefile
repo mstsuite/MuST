@@ -192,7 +192,7 @@ $(ODIR)/tst_findFit: tst_findFit.o
 $(ODIR)/testStrConst: testStrConst.o $(SRC_OBJS)
 	$(LD) -o $(ODIR)/testStrConst testStrConst.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
-$(ODIR)/testBZone: testBZone.o
+$(ODIR)/testBZone: testBZone.o $(SRC_OBJS)
 	$(LD) -o $(ODIR)/testBZone testBZone.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/testQuadraticMatrix: testQuadraticMatrix.o

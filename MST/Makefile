@@ -45,6 +45,7 @@ else
          ODIR = $(OODIR)/$(suffix)
       endif
    else
+      SUFFIX = "."
       ODIR = $(OODIR)
    endif
 endif

@@ -31,6 +31,7 @@ public :: initChargeDistribution,           &
           getGlobalVPCellElectronTableOld,  &   ! Qvp_i
           getInterstitialElectronDensityOld,&   ! rho_0
           getAverageMoment,                 &
+          getNeighborChargeTable,           &
           printChargeDistribution
 !
 private
@@ -89,6 +90,10 @@ private
 !
    type (ChargeListStruct), target :: ChargeList
 !
+   integer (kind=IntKind) :: MaxNeighborShells = 0
+   integer (kind=IntKind), allocatable :: nbshells(:)
+   real (kind=RealKind), allocatable, target :: NeighborChargeTable(:,:)
+!
 contains
 !
    include '../lib/arrayTools.F90'
@@ -97,7 +102,7 @@ contains
    subroutine initChargeDistribution(na,nt,ns)
 !  ===================================================================
    use GroupCommModule, only : getGroupID, getNumPEsInGroup, getMyPEinGroup
-   use GroupCommModule, only : GlobalSumInGroup
+   use GroupCommModule, only : GlobalSumInGroup, GlobalMaxInGroup
    use Atom2ProcModule, only : getMaxLocalNumAtoms, getGlobalIndex
    use Atom2ProcModule, only : getLocalIndex, getAtom2ProcInGroup
    use AtomModule, only : getMixingParam4Charge, getLocalNumSpecies
@@ -106,6 +111,9 @@ contains
    use PolyhedraModule, only : getVolume
    use SystemModule, only : getAtomicNumber, getNumAlloyElements
    use PotentialTypeModule, only : isASAPotential
+   use PublicTypeDefinitionsModule, only : NeighborStruct
+   use NeighborModule, only  : getNeighbor
+   use ScfDataModule, only : isLSMS, isKKR
    implicit none
 !
    integer (kind=IntKind), intent(in) :: nt
@@ -121,6 +129,8 @@ contains
    real (kind=RealKind), pointer :: r_mesh(:)
    real (kind=RealKind), allocatable :: rho0(:)
    real (kind=RealKind) :: sums(2)
+!
+   type (NeighborStruct), pointer :: Neighbor
 !
    GlobalNumAtoms = nt
    LocalNumAtoms = na
@@ -138,6 +148,24 @@ contains
       global_table_line(ig) = global_table_size
       global_table_size = global_table_size + getNumAlloyElements(ig)
    enddo
+!
+   allocate(nbshells(LocalNumAtoms))
+   MaxNeighborShells = 0
+   nbshells = 0
+   if (isLSMS() .or. isKKR()) then
+      do id = 1, LocalNumAtoms
+         Neighbor => getNeighbor(id)
+         MaxNeighborShells = max(MaxNeighborShells,Neighbor%NumShells)
+         nbshells(id) = Neighbor%NumShells
+      enddo
+   endif
+!  -------------------------------------------------------------------
+   call GlobalMaxInGroup(GroupID,MaxNeighborShells)
+!  -------------------------------------------------------------------
+   if (MaxNeighborShells > 0) then
+      allocate(NeighborChargeTable(1:MaxNeighborShells,1:GlobalNumAtoms))
+      NeighborChargeTable = ZERO
+   endif
 !
    if ( n_spin_pola==2 ) then
       allocate( Table_Wkspace(1:global_table_size,10) )
@@ -314,6 +342,11 @@ contains
    endif
    deallocate( Table_Wkspace, global_table_line, local_array_line)
    deallocate( Vint, Qmt, Qvp, Mmt, Mvp, ExEn, Qmt_old, Qvp_old, q_mix )
+   deallocate(nbshells)
+   if (MaxNeighborShells > 0) then
+      deallocate(NeighborChargeTable)
+      MaxNeighborShells = 0
+   endif
 !
    Initialized = .false.
    Updated = .false.
@@ -334,16 +367,19 @@ contains
    use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies
    use AtomModule, only : getLocalSpeciesContent
    use SystemModule, only : getNumAlloyElements, getAlloyElementContent
+   use SystemModule, only : getAtomicNumber
    use PotentialTypeModule, only : isASAPotential
+   use PublicTypeDefinitionsModule, only : NeighborStruct
+   use NeighborModule, only  : getNeighbor
    implicit none
 !
    type (ChargeListStruct), pointer :: p_DL
 !
+   type (NeighborStruct), pointer :: Neighbor
+!
    integer (kind=IntKind) :: id, ig, ip, ia, lid, lig
    integer (kind=IntKind) :: jmt, NumRs
-#ifdef No_BLAS
    integer (kind=IntKind) :: j
-#endif
 !
    real (kind=RealKind) :: rmt, GVint, corr
    real (kind=RealKind) :: qint, mint, qint_old
@@ -487,9 +523,30 @@ contains
          endif
       enddo
    enddo
+!
 !  -------------------------------------------------------------------
    call GlobalSumInGroup(GroupID,Table_Wkspace,global_table_size,6+4*(n_spin_pola-1))
 !  -------------------------------------------------------------------
+!
+   if (MaxNeighborShells > 0) then ! Note: This will not happen in KKR-CPA case
+      NeighborChargeTable = ZERO
+      do id = 1, LocalNumAtoms
+         ig = getGlobalIndex(id)
+         Neighbor => getNeighbor(id)
+         do j = 1, Neighbor%NumShells
+            do ia = 1, Neighbor%NumAtoms
+               if (Neighbor%ShellIndex(ia) == j) then
+                  lig = Neighbor%GlobalIndex(ia)
+                  NeighborChargeTable(j,ig) = NeighborChargeTable(j,ig) + &
+                      (OnSiteElectronTableOld(lig) - getAtomicNumber(lig))
+               endif
+            enddo
+         enddo
+      enddo
+!     ----------------------------------------------------------------
+      call GlobalSumInGroup(GroupID,NeighborChargeTable,MaxNeighborShells,GlobalNumAtoms)
+!     ----------------------------------------------------------------
+   endif
 !
    mom_aver = ZERO
    if ( n_spin_pola==2 ) then
@@ -508,13 +565,18 @@ contains
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getGlobalTableLine() result(p)
+   function getGlobalTableLine(nsize) result(p)
 !  ===================================================================
    implicit none
 !
    integer (kind=IntKind), pointer :: p(:)
+   integer (kind=IntKind), optional, intent(out) :: nsize
 !
    p => global_table_line(1:GlobalNumAtoms)
+!
+   if (present(nsize)) then
+      nsize = global_table_size
+   endif
 !
    end function getGlobalTableLine
 !  ===================================================================
@@ -697,6 +759,33 @@ contains
    m = mom_aver
 !
    end function getAverageMoment
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getNeighborChargeTable(max_shells,ns) result(r)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(out) :: max_shells
+   integer (kind=IntKind), intent(out), optional :: ns(:)
+   integer (kind=IntKind) :: id
+!
+   real (kind=RealKind), pointer :: r(:,:)
+!
+   max_shells = MaxNeighborShells
+   if (present(ns)) then
+      do id = 1, LocalNumAtoms
+         ns(id) = nbshells(id)
+      enddo
+   endif
+!
+   if (MaxNeighborShells > 0) then
+      r => NeighborChargeTable
+   else
+      nullify(r)
+   endif
+!
+   end function getNeighborChargeTable
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
