@@ -1066,7 +1066,7 @@ contains
    use WriteMatrixModule, only : writeMatrix
 
    integer (kind=IntKind), intent(in) :: n, ic, is
-   integer (kind=IntKind) :: nsize, dir
+   integer (kind=IntKind) :: i, j, L1, L2, nsize, dir, dsize
    complex (kind=CmplxKind), pointer :: Ta(:,:), Tc(:,:), tauc(:,:)
    complex (kind=CmplxKind), allocatable :: taucc(:,:), Tcc(:,:), Tac(:,:)
    complex (kind=CmplxKind), allocatable :: D(:,:), Dt(:,:), D1(:,:), Dt1(:,:)
@@ -1075,6 +1075,7 @@ contains
    complex (kind=CmplxKind), allocatable :: buf1(:,:), buf2(:,:), &
                                                  buf3(:,:), buf4(:,:)
 
+   dsize = kmax_kkr_max
    Ta => getSROMatrix('blk-tinv', n, ic, is, nsize)
    Tc => getSROMatrix('blk-tinv', n, 0, is)
    tauc => getSROMatrix('blk-tau', n, 0, is)
@@ -1083,20 +1084,32 @@ contains
 !  call writeMatrix('Tc', Tc, nsize, nsize)
 !  call writeMatrix('tauc', tauc, nsize, nsize)
 
-   allocate(Tac(nsize, nsize), Tcc(nsize, nsize), taucc(nsize, nsize))
-   allocate(D(nsize, nsize), Dt(nsize, nsize), D1(nsize, nsize), &
-            Dt1(nsize, nsize), tmp1(nsize, nsize), tmp2(nsize, nsize))
-   allocate(buf1(kmax_kkr_max, kmax_kkr_max), buf2(kmax_kkr_max, kmax_kkr_max), &
-     buf3(kmax_kkr_max, kmax_kkr_max), buf4(kmax_kkr_max, kmax_kkr_max), &
-     D00(kmax_kkr_max, kmax_kkr_max), Dt00(kmax_kkr_max, kmax_kkr_max), &
-     D100(kmax_kkr_max, kmax_kkr_max), Dt100(kmax_kkr_max, kmax_kkr_max))
+   allocate(Tac(nsize*dsize, nsize*dsize), Tcc(nsize*dsize, nsize*dsize), &
+     taucc(nsize*dsize, nsize*dsize))
+   allocate(D(nsize*dsize, nsize*dsize), Dt(nsize*dsize, nsize*dsize), &
+      D1(nsize*dsize, nsize*dsize), Dt1(nsize*dsize, nsize*dsize), &
+      tmp1(nsize*dsize, nsize*dsize), tmp2(nsize*dsize, nsize*dsize))
+   allocate(buf1(dsize*nsize, dsize*nsize), buf2(dsize*nsize, dsize*nsize), &
+     buf3(dsize*nsize, dsize*nsize), buf4(dsize*nsize, dsize*nsize), &
+     D00(dsize*nsize, dsize*nsize), Dt00(dsize*nsize, dsize*nsize), &
+     D100(dsize*nsize, dsize*nsize), Dt100(dsize*nsize, dsize*nsize))
+   taucc = CZERO
 
    Tac = conjg(Ta)
    Tcc = conjg(Tc)
-   taucc = conjg(tauc)
+   do i = 1, nsize
+     do j = 1, nsize
+       do L2 = 1, dsize
+         do L1 = 1, dsize
+           taucc((i-1)*dsize + L1, (j-1)*dsize + L2) = &
+             (-1.0)**(lofk(L2) - lofk(L1))*conjg(taucc((j-1)*dsize + L2, (i-1)*dsize + L1)) 
+         enddo
+       enddo
+     enddo
+   enddo
 
    D = CZERO; Dt = CZERO; D1 = CZERO; Dt1 = CZERO;
-   D00 = CZERO; Dt00 = CZERO; D100 = CZERO; Dt100 = CZERO   
+   D00 = CZERO; Dt00 = CZERO; D100 = CZERO; Dt100 = CZERO
 
    tmp1 = Ta - Tc
    tmp2 = Tac - Tcc
@@ -1105,10 +1118,10 @@ contains
    call computeAprojB('N', nsize, taucc, tmp2, D1)
    call computeAprojB('N', nsize, tmp2, taucc, Dt1)
 
-   D00 = D(1:kmax_kkr_max, 1:kmax_kkr_max)
-   D100 = D1(1:kmax_kkr_max, 1:kmax_kkr_max)
-   Dt00 = Dt(1:kmax_kkr_max, 1:kmax_kkr_max)
-   Dt100 = Dt1(1:kmax_kkr_max, 1:kmax_kkr_max)
+   D00 = D(1:dsize, 1:dsize)
+   D100 = D1(1:dsize, 1:dsize)
+   Dt00 = Dt(1:dsize, 1:dsize)
+   Dt100 = Dt1(1:dsize, 1:dsize)
 !  call writeMatrix('D', D, nsize, nsize)
 !  call writeMatrix('D1', D1, nsize, nsize)
 !  call writeMatrix('Dt', Dt, nsize, nsize)
