@@ -35,9 +35,7 @@ private
                              kmax_sigma, kmax_sigma_2, kmax_max, kmax_cg
    integer (kind=IntKind) :: NumSpecies
 
-
    complex (kind=CmplxKind), allocatable :: iden(:,:)
-   complex (kind=CmplxKind) :: ep1(3), em1(3), e0(3)
 
 !  Conductivity data stored here
 !  --------------------------------------------------------------------
@@ -401,6 +399,226 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function calSigmaTildeSRO010(n, dir1, dir2, is, caltype) result(sigma010)
+!  ===================================================================
+
+   use SROModule, only : getDoubleSpeciesTauMatrix, getSROParam, &
+                         getNeighSize
+   use CurrentMatrixModule, only : getJMatrix
+   use AtomModule, only : getLocalNumSpecies, getLocalSpeciesContent
+   use SystemVolumeModule, only : getAtomicVPVolume
+   use WriteMatrixModule, only : writeMatrix
+
+   integer (kind=IntKind), intent(in) :: n, dir1, dir2, is, caltype
+
+   integer (kind=IntKind) :: ic1, ic2, L, i, neigh_size
+   real (kind=RealKind) :: Omega, c_a, w_ab, coeff
+   complex (kind=CmplxKind) :: sigma010
+   complex (kind=CmplxKind), pointer :: tauab(:,:), J1(:,:), J2(:,:)
+   complex (kind=CmplxKind), allocatable :: tauabc(:,:), tau1(:,:), tau2(:,:)
+   complex (kind=CmplxKind), allocatable :: tmp1(:,:), tmp2(:,:), tmp3(:,:)
+
+   neigh_size = getNeighSize(n)
+   Omega = getAtomicVPVolume(n)
+
+   allocate(tauabc(neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max), &
+      tau1(kmax_kkr_max, kmax_kkr_max), tau2(kmax_kkr_max, kmax_kkr_max), &
+      tmp1(kmax_kkr_max, kmax_kkr_max), tmp2(kmax_kkr_max, kmax_kkr_max), &
+      tmp3(kmax_kkr_max, kmax_kkr_max))
+   tauabc = CZERO
+   sigma010 = CZERO
+
+   do ic1 = 1, getLocalNumSpecies(n)
+     do ic2 = 1, getLocalNumSpecies(n)
+       c_a = getLocalSpeciesContent(n, ic1)
+       w_ab = getSROParam(n, ic1, ic2)
+       coeff = -(c_a*w_ab)/(PI*Omega)
+       tauab => getDoubleSpeciesTauMatrix(n, is, ic1, ic2)
+       tauabc = conjg(tauab)
+       J2 => getJMatrix(n, ic2, is, dir2, caltype, 0)
+      !call writeMatrix('tauab', tauab, kmax_kkr_max*neigh_size, kmax_kkr_max*neigh_size)
+       do i = 2, neigh_size
+         tmp1 = CZERO; tmp2 = CZERO; tmp3 = CZERO
+         tau1 = CZERO; tau2 = CZERO
+         if (caltype == 1) then
+           tau1 = tauab(1:kmax_kkr_max, &
+                (i-1)*kmax_kkr_max + 1:i*kmax_kkr_max); 
+           tau2 = tauabc((i-1)*kmax_kkr_max + 1:i*kmax_kkr_max, &
+                 1:kmax_kkr_max)
+           J1 => getJMatrix(n, ic1, is, dir1, caltype, 0)
+       !   call writeMatrix('tau1', tau1, kmax_kkr_max, kmax_kkr_max)
+       !   call writeMatrix('tau2', tau2, kmax_kkr_max, kmax_kkr_max)
+       !   call ErrorHandler('calSigmaTildeSRO010', 'stop')
+         else if (caltype == 2) then
+           tau1 = tauab(1:kmax_kkr_max, &
+                (i-1)*kmax_kkr_max + 1:i*kmax_kkr_max)
+           tau2 = tauabc((i-1)*kmax_kkr_max + 1:i*kmax_kkr_max, &
+                 1:kmax_kkr_max)
+           J1 => getJMatrix(n, ic1, is, dir1, 3, 0)
+         else if (caltype == 3) then
+           tau1 = tauabc(1:kmax_kkr_max, &
+                (i-1)*kmax_kkr_max+1:i*kmax_kkr_max) 
+           tau2 = tauab((i-1)*kmax_kkr_max + 1:i*kmax_kkr_max, &
+                  1:kmax_kkr_max)
+           J1 => getJMatrix(n, ic1, is, dir1, 2, 0)
+         else if (caltype == 4) then
+           tau1 = tauabc(1:kmax_kkr_max, &
+                (i-1)*kmax_kkr_max+1:i*kmax_kkr_max)
+           tau2 = tauabc((i-1)*kmax_kkr_max+1:i*kmax_kkr_max, &
+                1:kmax_kkr_max)
+           J1 => getJMatrix(n, ic1, is, dir1, caltype, 0)
+         endif
+!        ---------------------------------------------------------------
+         call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, &
+         CONE, J2, kmax_kkr_max, tau2, kmax_kkr_max, CZERO, tmp1, kmax_kkr_max)
+!        ---------------------------------------------------------------
+         call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, &
+         CONE, tau1, kmax_kkr_max, tmp1, kmax_kkr_max, CZERO, tmp2, kmax_kkr_max)
+!        ---------------------------------------------------------------
+         call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, &
+         CONE, J1, kmax_kkr_max, tmp2, kmax_kkr_max, CZERO, tmp3, kmax_kkr_max)
+!        ---------------------------------------------------------------
+         do L = 1, kmax_kkr_max
+           sigma010 = sigma010 + coeff*tmp3(L,L)
+         enddo
+       enddo
+     enddo
+   enddo
+
+   end function calSigmaTildeSRO010
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function calSigmaTildeSRO011(n, dir1, dir2, is, caltype) result(sigma011)
+!  ===================================================================
+
+   use SROModule, only : getSROMatrix, getNeighSize
+   use CurrentMatrixModule, only : getJMatrix
+   use AtomModule, only : getLocalNumSpecies, getLocalSpeciesContent
+   use SystemVolumeModule, only : getAtomicVPVolume
+
+   integer (kind=IntKind), intent(in) :: n, dir1, dir2, is, caltype
+   integer (kind=IntKind) :: neigh_size, ic1, ic2, L, i
+   real (kind=RealKind) :: Omega, c_a, c_b, coeff
+   complex (kind=CmplxKind) :: sigma011
+   complex (kind=CmplxKind), pointer :: taua(:,:), J1(:,:), J2(:,:)
+   complex (kind=CmplxKind), allocatable :: tauac(:,:), tau1(:,:), tau2(:,:)
+   complex (kind=CmplxKind), allocatable :: tmp1(:,:), tmp2(:,:), tmp3(:,:)
+   
+   neigh_size = getNeighSize(n)
+   Omega = getAtomicVPVolume(n)
+
+   allocate(tauac(neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max), &
+      tau1(kmax_kkr_max, kmax_kkr_max), tau2(kmax_kkr_max, kmax_kkr_max), &
+      tmp1(kmax_kkr_max, kmax_kkr_max), tmp2(kmax_kkr_max, kmax_kkr_max), &
+      tmp3(kmax_kkr_max, kmax_kkr_max))
+   tauac = CZERO
+   sigma011 = CZERO
+
+   do ic1 = 1, getLocalNumSpecies(n)
+     do ic2 = 1, getLocalNumSpecies(n)
+       c_a = getLocalSpeciesContent(n, ic1)
+       c_b = getLocalSpeciesContent(n, ic2)
+       coeff = (c_a*c_b)/(PI*Omega)
+       taua => getSROMatrix('blk-tau', n,ic1, is)
+       tauac = conjg(taua)
+       J2 => getJMatrix(n, ic2, is, dir2, caltype, 1)
+       do i = 2, neigh_size
+         if (caltype == 1) then
+           J1 => getJMatrix(n, ic1, is, dir1, caltype, 0)
+           tau1 = taua(1:kmax_kkr_max, &
+             (i - 1)*kmax_kkr_max +1: i*kmax_kkr_max)
+           tau2 = taua((i-1)*kmax_kkr_max+1:i*kmax_kkr_max, &
+              1:kmax_kkr_max)
+         else if (caltype == 2) then
+           J1 => getJMatrix(n, ic1, is, dir1, 3, 0)
+           tau1 = taua(1:kmax_kkr_max, &
+             (i - 1)*kmax_kkr_max + 1:i*kmax_kkr_max)
+           tau2 = tauac((i-1)*kmax_kkr_max+1:i*kmax_kkr_max, &
+             1:kmax_kkr_max)
+         else if (caltype == 3) then
+           J1 => getJMatrix(n, ic1, is, dir1, 2, 0)
+           tau1 = tauac(1:kmax_kkr_max, &
+              (i - 1)*kmax_kkr_max + 1:i*kmax_kkr_max)
+           tau2 = taua((i-1)*kmax_kkr_max+1:i*kmax_kkr_max, &
+              1:kmax_kkr_max)
+         else if (caltype == 4) then
+           J1 => getJMatrix(n, ic1, is, dir1, caltype, 0)
+           tau1 = tauac(1:kmax_kkr_max, &
+              (i - 1)*kmax_kkr_max + 1:i*kmax_kkr_max)
+           tau2 = tauac((i-1)*kmax_kkr_max+1:i*kmax_kkr_max, &
+              1:kmax_kkr_max)
+         endif
+!        ---------------------------------------------------------------
+         call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, &
+         CONE, J2, kmax_kkr_max, tau2, kmax_kkr_max, CZERO, tmp1, kmax_kkr_max)
+!        ---------------------------------------------------------------
+         call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, &
+         CONE, tau1, kmax_kkr_max, tmp1, kmax_kkr_max, CZERO, tmp2, kmax_kkr_max)
+!        ---------------------------------------------------------------
+         call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, &
+         CONE, J1, kmax_kkr_max, tmp2, kmax_kkr_max, CZERO, tmp3, kmax_kkr_max)
+!        ---------------------------------------------------------------
+         do L = 1, kmax_kkr_max
+           sigma011 = sigma011 + coeff*tmp3(L,L)
+         enddo
+       enddo
+     enddo
+   enddo       
+ 
+   end function calSigmaTildeSRO011
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function calSigmaTildeSRO10(n, dir, dir1, is, eval, caltype) result(sigma10)
+!  ===================================================================
+
+   use CPAMediumModule, only : getSingleSiteTmat
+   use SystemVolumeModule, only : getAtomicVPVolume
+   use AtomModule, only : getLocalSpeciesContent, getLocalNumSpecies
+   use CurrentMatrixModule, only : getJMatrix
+   use CrystalMatrixModule, only : calSigmaIntegralSRO
+   use WriteMatrixModule, only : writeMatrix
+
+   integer (kind=IntKind), intent(in) :: n, dir, dir1, is, caltype
+   complex (kind=CmplxKind), intent(in) :: eval 
+
+   integer (kind=IntKind) :: ic1, ic2, num_species
+   real (kind=RealKind) :: Omega, c_a, c_b, coeff
+   complex (kind=CmplxKind) :: sigma10
+   complex (kind=CmplxKind), pointer :: J1(:,:), J2(:,:)
+
+   Omega = getAtomicVPVolume(n)
+   num_species = getLocalNumSpecies(n)
+   sigma10 = CZERO
+
+   do ic1 = 1, num_species
+     do ic2 = 1, num_species
+       c_a = getLocalSpeciesContent(n, ic1)
+       c_b = getLocalSpeciesContent(n, ic2)
+       coeff = -(c_a*c_b)/(PI*Omega)
+       if (caltype == 1 .or. caltype == 4) then
+         J1 => getJMatrix(n, ic1, is, dir, caltype, 0)
+         J2 => getJMatrix(n, ic2, is, dir1, caltype, 0)
+       else if (caltype == 2) then
+         J1 => getJMatrix(n, ic1, is, dir, 3, 0)
+         J2 => getJMatrix(n, ic2, is, dir1, 2, 0)
+       else if (caltype == 3) then
+         J1 => getJMatrix(n, ic1, is, dir, 2, 0)
+         J2 => getJMatrix(n, ic2, is, dir1, 3, 0)
+       else
+         call ErrorHandler('calSigmaTildeSRO10', 'Incorrect caltype (1-4)', caltype)
+       endif
+       sigma10 = sigma10 + coeff*calSigmaIntegralSRO(n, eval, ic1, ic2, J1, J2, &
+           getSingleSiteTmat, tau_needed=.true.,use_tmat=.true.,caltype=caltype)
+       nullify(J1, J2)
+     enddo
+   enddo  
+   
+   end function calSigmaTildeSRO10
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine computeSROConductivity(n, is, delta, pot_type, dirnum, e)
 !  ===================================================================   
 
@@ -416,7 +634,10 @@ contains
      do dir1 = 1, dirnum
        int_val = CZERO
        do etype = 1, 4
-         int_val(etype) = calSigmaTildeSRO00(n, dir, dir1, is, etype)
+         int_val(etype) = calSigmaTildeSRO00(n, dir, dir1, is, etype) &
+           !+ calSigmaTildeSRO010(n, dir, dir1, is, etype) &
+           !+ calSigmaTildeSRO011(n, dir, dir1, is, etype) &
+            + calSigmaTildeSRO10(n, dir, dir1, is, e, etype)
        enddo
        sigmatilde(dir,dir1,is) = int_val(1)
        sigmatilde2(dir,dir1,is) = int_val(2)
@@ -454,7 +675,7 @@ contains
        int_val = CZERO
        do etype = 1, 4
          int_val(etype) = &
-!         calSigmaTildeCPA1(n, dir, dir1, is, e, etype) + &
+          calSigmaTildeCPA1(n, dir, dir1, is, e, etype) + &
           calSigmaTildeCPA0(n, dir, dir1, is, etype)
        enddo
        sigmatilde(dir,dir1,is) = int_val(1)
