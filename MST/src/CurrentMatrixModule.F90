@@ -1079,9 +1079,9 @@ contains
    Tc => getSROMatrix('blk-tinv', n, 0, is)
    tauc => getSROMatrix('blk-tau', n, 0, is)
   
-   call writeMatrix('Ta', Ta, nsize, nsize)
-   call writeMatrix('Tc', Tc, nsize, nsize)
-   call writeMatrix('tauc', tauc, nsize, nsize)
+!  call writeMatrix('Ta', Ta, nsize, nsize)
+!  call writeMatrix('Tc', Tc, nsize, nsize)
+!  call writeMatrix('tauc', tauc, nsize, nsize)
 
    allocate(Tac(nsize, nsize), Tcc(nsize, nsize), taucc(nsize, nsize))
    allocate(D(nsize, nsize), Dt(nsize, nsize), D1(nsize, nsize), &
