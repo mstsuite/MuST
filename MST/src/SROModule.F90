@@ -65,6 +65,10 @@ private
       type (TmatBlockStruct), allocatable :: tmat_s(:)
       complex (kind=CmplxKind), pointer :: tau_ab(:,:,:)
       complex (kind=CmplxKind), pointer :: tau_abc(:,:,:) ! if tauab = tau_ab(e+id), then tau_abc = tau_ab(e-id)
+      complex (kind=CmplxKind), pointer :: D_ab(:,:,:)
+      complex (kind=CmplxKind), pointer :: Dt_ab(:,:,:)
+      complex (kind=CmplxKind), pointer :: D_abc(:,:,:)
+      complex (kind=CmplxKind), pointer :: Dt_abc(:,:,:)
       complex (kind=CmplxKind), pointer :: tau_sigma(:,:,:,:)
       complex (kind=CmplxKind), pointer :: tau_sigmac(:,:,:,:) 
       complex (kind=CmplxKind), pointer :: kau11(:,:,:) 
@@ -234,8 +238,16 @@ contains
                  SROMedium(il)%blk_size*SROMedium(il)%neigh_size, nSpinCant**2))
               allocate(SROMedium(il)%SROTMatrix(i)%tau_sigmac(num, SROMedium(il)%blk_size*SROMedium(il)%neigh_size, &
                  SROMedium(il)%blk_size*SROMedium(il)%neigh_size, nSpinCant**2))
-            endif 
-
+              allocate(SROMedium(il)%SROTMatrix(i)%D_ab(SROMedium(il)%blk_size*SROMedium(il)%neigh_size, &
+                 SROMedium(il)%blk_size*SROMedium(il)%neigh_size, nSpinCant**2))
+              allocate(SROMedium(il)%SROTMatrix(i)%D_abc(SROMedium(il)%blk_size*SROMedium(il)%neigh_size, &
+                 SROMedium(il)%blk_size*SROMedium(il)%neigh_size, nSpinCant**2))
+              allocate(SROMedium(il)%SROTMatrix(i)%Dt_ab(SROMedium(il)%blk_size*SROMedium(il)%neigh_size, &
+                 SROMedium(il)%blk_size*SROMedium(il)%neigh_size, nSpinCant**2))
+              allocate(SROMedium(il)%SROTMatrix(i)%Dt_abc(SROMedium(il)%blk_size*SROMedium(il)%neigh_size, &
+                 SROMedium(il)%blk_size*SROMedium(il)%neigh_size, nSpinCant**2))
+            endif
+            
             do is = 1,nSpinCant**2
                allocate(SROMedium(il)%SROTMatrix(i)%tmat_s(is)%tmat_tilde_inv(SROMedium(il)%blk_size, &
                        SROMedium(il)%blk_size))
@@ -669,6 +681,10 @@ contains
    z = SROMedium(n)%SROTMatrix(ic)%tmat_s(1)%T_inv - SROMedium(n)%T_CPA_inv
 
    call computeAprojB('L', dsize*nsize, SROMedium(n)%tau_cpa(:,:, 1), z, y)
+   call computeAprojB('N', dsize*nsize, SROMedium(n)%tau_cpa(:,:, 1), z, &
+                SROMedium(n)%SROTMatrix(ic)%D_ab(:,:,1))
+   call computeAprojB('N', dsize*nsize, z, SROMedium(n)%tau_cpa(:,:,1), &
+                SROMedium(n)%SROTMatrix(ic)%Dt_ab(:,:,1))
 
    SROMedium(n)%SROTMatrix(ic)%tau_ab(:, :, 1) = y
 !  call writeMatrix('tau_a11', SROMedium(n)%SROTMatrix(ic)%tau_ab(1:dsize, 1:dsize, 1), &
@@ -716,6 +732,7 @@ contains
    Dp = CZERO; DtildeK = CZERO
    iden = CZERO; tauc = CZERO; taucc = CZERO
 
+   
    do i = 1, dsize
      iden(i, i) = CONE
    enddo
@@ -725,23 +742,29 @@ contains
            SROMedium(n)%T_CPA_inv
    Tdiffc = conjg(Tdiff)
    tauc = SROMedium(n)%tau_cpa(:,:,is)
-   do i = 1, nsize
-     do j = 1, nsize
-       do L2 = 1, dsize
-         do L1 = 1, dsize
-           taucc((i-1)*dsize + L1, (j-1)*dsize + L2)  = &
-            (-1.0)**(lofk(L2) - lofk(L1))*conjg(tauc((j-1)*dsize + L2, (i-1)*dsize + L1))
-         enddo
-       enddo
-     enddo
-   enddo
+   taucc = SROMedium(n)%tau_cpac(:,:,is)
+   
+!  do i = 1, nsize
+!    do j = 1, nsize
+!      do L2 = 1, dsize
+!        do L1 = 1, dsize
+!          taucc((i-1)*dsize + L1, (j-1)*dsize + L2)  = &
+!           (-1.0)**(lofk(L2) - lofk(L1))*conjg(tauc((j-1)*dsize + L2, (i-1)*dsize + L1))
+!        enddo
+!      enddo
+!    enddo
+!  enddo
 
    if (caltype == 0) then
-     call computeAprojB('N', dsize*nsize, tauc, Tdiff, D)
-     call computeAprojB('N', dsize*nsize, taucc, Tdiffc, Dc)
+     D = SROMedium(n)%SROTMatrix(ic)%D_ab(:,:,is)
+     Dc = SROMedium(n)%SROTMatrix(ic)%D_abc(:,:,is)
+   ! call computeAprojB('N', dsize*nsize, tauc, Tdiff, D)
+   ! call computeAprojB('N', dsize*nsize, taucc, Tdiffc, Dc)
    else if (caltype == 1) then
-     call computeAprojB('N', dsize*nsize, Tdiff, SROMedium(n)%tau_cpa(:,:,is), D)
-     call computeAprojB('N', dsize*nsize, Tdiffc, taucc, Dc)
+     D = SROMedium(n)%SROTMatrix(ic)%Dt_ab(:,:,is)
+     Dc = SROMedium(n)%SROTMatrix(ic)%Dt_abc(:,:,is)
+   ! call computeAprojB('N', dsize*nsize, Tdiff, SROMedium(n)%tau_cpa(:,:,is), D)
+   ! call computeAprojB('N', dsize*nsize, Tdiffc, taucc, Dc)
    endif
 
    do i = 1, nsize
@@ -816,22 +839,25 @@ contains
    enddo
    
    SROMedium(n)%tau_cpac(:,:,1) = taucc
-
+   
    do ic1 = 1, SROMedium(n)%num_species
      tauac = CZERO; Tdiff = CZERO; Tdiffc = CZERO
      Tdiff = SROMedium(n)%SROTMatrix(ic1)%tmat_s(1)%T_inv - &
               SROMedium(n)%T_CPA_inv
      Tdiffc = conjg(Tdiff)
      call computeAprojB('L',dsize*nsize, taucc, Tdiffc, SROMedium(n)%SROTMatrix(ic1)%tau_abc(:,:,1))
+     call computeAprojB('N',dsize*nsize, taucc, Tdiffc, SROMedium(n)%SROTMatrix(ic1)%D_abc(:,:,1))
+     call computeAprojB('N',dsize*nsize, Tdiffc, taucc, SROMedium(n)%SROTMatrix(ic1)%Dt_abc(:,:,1))
      do ic2 = 1, SROMedium(n)%num_species
        tausigmac = CZERO; Tdiffab = CZERO; Tdiffabc = CZERO
        Tdiffab = SROMedium(n)%SROTMatrix(ic1)%tmat_s(1)%T_sigma_inv(ic2,:,:) - &
              SROMedium(n)%T_CPA_inv
        Tdiffabc = conjg(Tdiffab)
-       call computeAprojB('L',dsize*nsize, taucc, Tdiffabc, SROMedium(n)%SROTMatrix(ic1)%tau_sigmac(ic2,:,:,1))
+       call computeAprojB('L',dsize*nsize, taucc, Tdiffabc, &
+                          SROMedium(n)%SROTMatrix(ic1)%tau_sigmac(ic2,:,:,1))
      enddo
    enddo
-
+   
    end subroutine calNegatives
 !  ===================================================================
 
