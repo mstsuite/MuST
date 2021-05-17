@@ -23,6 +23,7 @@ public :: initSROMatrix,             &
           getSROMatrix,              &
           getDoubleSpeciesTauMatrix, &
           getSROParam,               &
+          calNegatives,              &
           getNeighSize
 !
 
@@ -63,7 +64,9 @@ private
       real (kind=RealKind), pointer :: sro_param_a_nn(:)
       type (TmatBlockStruct), allocatable :: tmat_s(:)
       complex (kind=CmplxKind), pointer :: tau_ab(:,:,:)
+      complex (kind=CmplxKind), pointer :: tau_abc(:,:,:) ! if tauab = tau_ab(e+id), then tau_abc = tau_ab(e-id)
       complex (kind=CmplxKind), pointer :: tau_sigma(:,:,:,:)
+      complex (kind=CmplxKind), pointer :: tau_sigmac(:,:,:,:) 
       complex (kind=CmplxKind), pointer :: kau11(:,:,:) 
    end type SROTMatrixStruct
 !
@@ -82,6 +85,7 @@ private
       complex (kind=CmplxKind), pointer :: T_CPA(:,:)
       complex (kind=CmplxKind), pointer :: T_CPA_inv(:,:)
       complex (kind=CmplxKind), pointer :: tau_cpa(:,:,:)
+      complex (kind=CmplxKind), pointer :: tau_cpac(:,:,:) ! if tau_cpa = tau_cpa(e+id), then tau_cpac = tau_cpa(e-id)
       type(TauBlockStruct), pointer :: tau_c(:)
    end type SROMediumStruct
 !
@@ -163,8 +167,8 @@ contains
       SROMedium(il)%num_species = num
       SROMedium(il)%neigh_size = SROMedium(il)%Neighbor%NumAtoms+1
 
-      allocate(SROMedium(il)%tau_c((SROMedium(il)%neigh_size)**2))
-
+    ! allocate(SROMedium(il)%tau_c((SROMedium(il)%neigh_size)**2))
+      
       if (num > 1) then
         SROMedium(il)%isCPA = .true.
       else
@@ -226,6 +230,10 @@ contains
             if (sigma == 1) then
               allocate(SROMedium(il)%SROTMatrix(i)%tau_sigma(num, SROMedium(il)%blk_size*SROMedium(il)%neigh_size, &
                  SROMedium(il)%blk_size*SROMedium(il)%neigh_size, nSpinCant**2))
+              allocate(SROMedium(il)%SROTMatrix(i)%tau_abc(SROMedium(il)%blk_size*SROMedium(il)%neigh_size, &
+                 SROMedium(il)%blk_size*SROMedium(il)%neigh_size, nSpinCant**2))
+              allocate(SROMedium(il)%SROTMatrix(i)%tau_sigmac(num, SROMedium(il)%blk_size*SROMedium(il)%neigh_size, &
+                 SROMedium(il)%blk_size*SROMedium(il)%neigh_size, nSpinCant**2))
             endif 
 
             do is = 1,nSpinCant**2
@@ -252,6 +260,10 @@ contains
                           SROMedium(il)%blk_size*SROMedium(il)%neigh_size))
          allocate(SROMedium(il)%T_CPA_inv(SROMedium(il)%blk_size*SROMedium(il)%neigh_size,   &
                           SROMedium(il)%blk_size*SROMedium(il)%neigh_size))
+         if (sigma == 1) then
+           allocate(SROMedium(il)%tau_cpac(SROMedium(il)%blk_size*SROMedium(il)%neigh_size, &
+               SROMedium(il)%blk_size*SROMedium(il)%neigh_size, nSpinCant**2))
+         endif
          allocate(SROMedium(il)%tau_cpa(SROMedium(il)%blk_size*SROMedium(il)%neigh_size,  &
                           SROMedium(il)%blk_size*SROMedium(il)%neigh_size, nSpinCant**2))
          allocate(SROMedium(il)%tau_c((SROMedium(il)%neigh_size)**2))
@@ -768,6 +780,62 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine calNegatives(n)
+!  ===================================================================
+
+   use MatrixModule, only : computeAprojB
+   
+   integer (kind=IntKind), intent(in) :: n
+   integer (kind=IntKind) :: dsize, nsize, ic1, ic2, i, j, L1, L2
+   complex (kind=CmplxKind), allocatable :: taucc(:,:), tauc(:,:)
+   complex (kind=CmplxKind), allocatable :: Tdiff(:,:), Tdiffc(:,:)
+   complex (kind=CmplxKind), allocatable :: Tdiffab(:,:), Tdiffabc(:,:)
+   complex (kind=CmplxKind), allocatable :: tauac(:,:), tausigmac(:,:)
+   
+   nsize = SROMedium(n)%neigh_size
+   dsize = SROMedium(n)%blk_size
+   allocate(tauc(nsize*dsize, nsize*dsize), taucc(nsize*dsize, nsize*dsize))
+   allocate(Tdiff(nsize*dsize, nsize*dsize), Tdiffc(nsize*dsize, nsize*dsize))
+   allocate(Tdiffab(nsize*dsize, nsize*dsize), Tdiffabc(nsize*dsize, nsize*dsize))
+   allocate(tauac(nsize*dsize, nsize*dsize), tausigmac(nsize*dsize, nsize*dsize))
+   taucc = CZERO
+   Tdiff = CZERO
+   Tdiffc = CZERO
+   tausigmac = CZERO
+   tauc = SROMedium(n)%tau_cpa(:,:,1)
+   
+   do i = 1, nsize
+     do j = 1, nsize
+       do L2 = 1, dsize
+         do L1 = 1, dsize
+           taucc((i-1)*dsize + L1, (j-1)*dsize + L2)  = &  
+            (-1.0)**(lofk(L2) - lofk(L1))*conjg(tauc((j-1)*dsize + L2, (i-1)*dsize + L1)) 
+         enddo
+       enddo
+     enddo
+   enddo
+   
+   SROMedium(n)%tau_cpac(:,:,1) = taucc
+
+   do ic1 = 1, SROMedium(n)%num_species
+     tauac = CZERO; Tdiff = CZERO; Tdiffc = CZERO
+     Tdiff = SROMedium(n)%SROTMatrix(ic1)%tmat_s(1)%T_inv - &
+              SROMedium(n)%T_CPA_inv
+     Tdiffc = conjg(Tdiff)
+     call computeAprojB('L',dsize*nsize, taucc, Tdiffc, SROMedium(n)%SROTMatrix(ic1)%tau_abc(:,:,1))
+     do ic2 = 1, SROMedium(n)%num_species
+       tausigmac = CZERO; Tdiffab = CZERO; Tdiffabc = CZERO
+       Tdiffab = SROMedium(n)%SROTMatrix(ic1)%tmat_s(1)%T_sigma_inv(ic2,:,:) - &
+             SROMedium(n)%T_CPA_inv
+       Tdiffabc = conjg(Tdiffab)
+       call computeAprojB('L',dsize*nsize, taucc, Tdiffabc, SROMedium(n)%SROTMatrix(ic1)%tau_sigmac(ic2,:,:,1))
+     enddo
+   enddo
+
+   end subroutine calNegatives
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine calculateSCFSpeciesTerm (n, ic, c_ic)
 !  ===================================================================   
    
@@ -1019,6 +1087,15 @@ contains
      if (is_size) then
        matsize = nsize
      endif
+   else if (nocaseCompare(sm_type,'neg-blk-tau')) then
+     if (ic == 0) then
+       sro_mat => SROMedium(n)%tau_cpac(:,:,is)
+     else
+       sro_mat => SROMedium(n)%SROTMatrix(ic)%tau_abc(:,:,is)
+     endif
+     if (is_size) then
+       matsize = nsize
+     endif 
    else if (nocaseCompare(sm_type,'tcpa-inv')) then
      sro_mat => SROMedium(n)%Tcpa_inv
      if (is_size) then
@@ -1041,14 +1118,17 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getDoubleSpeciesTauMatrix(n, is, ic, ic1) result(sro_mat)
+   function getDoubleSpeciesTauMatrix(n, is, ic, ic1, neg) result(sro_mat)
 !  ===================================================================
 
-   integer (kind=IntKind), intent(in) :: n, is, ic, ic1
+   integer (kind=IntKind), intent(in) :: n, is, ic, ic1, neg
    complex (kind=CmplxKind), pointer :: sro_mat(:,:)   
 
-
-   sro_mat => SROMedium(n)%SROTMatrix(ic)%tau_sigma(ic1,:,:,is)
+   if (neg == 0) then
+     sro_mat => SROMedium(n)%SROTMatrix(ic)%tau_sigma(ic1,:,:,is)
+   else if (neg == 1) then
+     sro_mat => SROMedium(n)%SROTMatrix(ic)%tau_sigmac(ic1,:,:,is)
+   endif
 
    end function getDoubleSpeciesTauMatrix
 !  ===================================================================
