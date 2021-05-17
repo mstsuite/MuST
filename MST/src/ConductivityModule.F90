@@ -414,20 +414,18 @@ contains
    integer (kind=IntKind) :: ic1, ic2, L, i, neigh_size
    real (kind=RealKind) :: Omega, c_a, w_ab, coeff
    complex (kind=CmplxKind) :: sigma010
-   complex (kind=CmplxKind), pointer :: tauab(:,:), J1(:,:), J2(:,:)
-   complex (kind=CmplxKind), allocatable :: tauc(:,:), tauabc(:,:), tau1(:,:), tau2(:,:)
+   complex (kind=CmplxKind), pointer :: tauab(:,:), tauabc(:,:), J1(:,:), J2(:,:)
+   complex (kind=CmplxKind), allocatable :: tauc(:,:), tau1(:,:), tau2(:,:)
    complex (kind=CmplxKind), allocatable :: taucc(:,:), tmp1(:,:), tmp2(:,:), tmp3(:,:)
 
    neigh_size = getNeighSize(n)
    Omega = getAtomicVPVolume(n)
    
-   allocate(tauabc(neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max), &
-      tauc(neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max), &
+   allocate(tauc(neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max), &
       taucc(neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max), &
       tau1(kmax_kkr_max, kmax_kkr_max), tau2(kmax_kkr_max, kmax_kkr_max), &
       tmp1(kmax_kkr_max, kmax_kkr_max), tmp2(kmax_kkr_max, kmax_kkr_max), &
       tmp3(kmax_kkr_max, kmax_kkr_max))
-   tauabc = CZERO
    sigma010 = CZERO
    
    do ic1 = 1, getLocalNumSpecies(n)
@@ -435,8 +433,8 @@ contains
        c_a = getLocalSpeciesContent(n, ic1)
        w_ab = getSROParam(n, ic1, ic2)
        coeff = -(c_a*w_ab)/(PI*Omega)
-       tauab => getDoubleSpeciesTauMatrix(n, is, ic1, ic2)
-       tauabc = conjg(tauab)
+       tauab => getDoubleSpeciesTauMatrix(n, is, ic1, ic2, 0)
+       tauabc => getDoubleSpeciesTauMatrix(n, is, ic1, ic2, 1)
        J2 => getJMatrix(n, ic2, is, dir2, caltype, 0)
       !call writeMatrix('tauab', tauab, kmax_kkr_max*neigh_size, kmax_kkr_max*neigh_size)
        do i = 2, neigh_size
@@ -503,18 +501,16 @@ contains
    integer (kind=IntKind) :: neigh_size, ic1, ic2, L, i
    real (kind=RealKind) :: Omega, c_a, c_b, coeff
    complex (kind=CmplxKind) :: sigma011
-   complex (kind=CmplxKind), pointer :: taua(:,:), J1(:,:), J2(:,:)
-   complex (kind=CmplxKind), allocatable :: tauac(:,:), tau1(:,:), tau2(:,:)
+   complex (kind=CmplxKind), pointer :: tauac(:,:), taua(:,:), J1(:,:), J2(:,:)
+   complex (kind=CmplxKind), allocatable :: tau1(:,:), tau2(:,:)
    complex (kind=CmplxKind), allocatable :: tmp1(:,:), tmp2(:,:), tmp3(:,:)
    
    neigh_size = getNeighSize(n)
    Omega = getAtomicVPVolume(n)
 
-   allocate(tauac(neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max), &
-      tau1(kmax_kkr_max, kmax_kkr_max), tau2(kmax_kkr_max, kmax_kkr_max), &
+   allocate(tau1(kmax_kkr_max, kmax_kkr_max), tau2(kmax_kkr_max, kmax_kkr_max), &
       tmp1(kmax_kkr_max, kmax_kkr_max), tmp2(kmax_kkr_max, kmax_kkr_max), &
       tmp3(kmax_kkr_max, kmax_kkr_max))
-   tauac = CZERO
    sigma011 = CZERO
 
    do ic1 = 1, getLocalNumSpecies(n)
@@ -523,7 +519,7 @@ contains
        c_b = getLocalSpeciesContent(n, ic2)
        coeff = (c_a*c_b)/(PI*Omega)
        taua => getSROMatrix('blk-tau', n,ic1, is)
-       tauac = conjg(taua)
+       tauac => getSROMatrix('neg-blk-tau',n,ic1,is)
        J2 => getJMatrix(n, ic2, is, dir2, caltype, 1)
        do i = 2, neigh_size
          if (caltype == 1) then
@@ -637,9 +633,9 @@ contains
        int_val = CZERO
        do etype = 1, 4
          int_val(etype) = calSigmaTildeSRO00(n, dir, dir1, is, etype) &
-            ! + calSigmaTildeSRO010(n, dir, dir1, is, etype) &
-            !+ calSigmaTildeSRO011(n, dir, dir1, is, etype) !&
-            + calSigmaTildeSRO10(n, dir, dir1, is, e, etype)
+            + calSigmaTildeSRO010(n, dir, dir1, is, etype) &
+            + calSigmaTildeSRO011(n, dir, dir1, is, etype) !&
+            ! + calSigmaTildeSRO10(n, dir, dir1, is, e, etype)
        enddo
        sigmatilde(dir,dir1,is) = int_val(1)
        sigmatilde2(dir,dir1,is) = int_val(2)
@@ -711,7 +707,7 @@ contains
    use WriteMatrixModule, only : writeMatrix
    use CrystalMatrixModule, only : calCrystalMatrix, retrieveTauSRO
    use CPAMediumModule, only : computeCPAMedium, populateBigTCPA, getSingleSiteMatrix
-   use SROModule, only : calSpeciesTauMatrix
+   use SROModule, only : calSpeciesTauMatrix, calNegatives
    use CurrentMatrixModule, only : calCurrentMatrix
 
    integer (kind=IntKind), intent(in) :: LocalNumAtoms, n_spin_pola
@@ -761,9 +757,12 @@ contains
            call retrieveTauSRO()
            call calSpeciesTauMatrix()
 !          --------------------------------------------------------------
+           call calNegatives(id)
+!          --------------------------------------------------------------
          else if (scf == 1) then
 !          --------------------------------------------------------------
            call computeCPAMedium(eval, do_sro = .true.)
+           call calNegatives(id)
 !          --------------------------------------------------------------
          endif
       !  ----------------------------------------------------------------
