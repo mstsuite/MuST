@@ -634,8 +634,8 @@ contains
        do etype = 1, 4
          int_val(etype) = calSigmaTildeSRO00(n, dir, dir1, is, etype) &
             + calSigmaTildeSRO010(n, dir, dir1, is, etype) &
-            + calSigmaTildeSRO011(n, dir, dir1, is, etype) !&
-            ! + calSigmaTildeSRO10(n, dir, dir1, is, e, etype)
+            + calSigmaTildeSRO011(n, dir, dir1, is, etype) &
+            + calSigmaTildeSRO10(n, dir, dir1, is, e, etype)
        enddo
        sigmatilde(dir,dir1,is) = int_val(1)
        sigmatilde2(dir,dir1,is) = int_val(2)
