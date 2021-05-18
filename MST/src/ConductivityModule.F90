@@ -597,13 +597,13 @@ contains
        coeff = -(c_a*c_b)/(PI*Omega)
        if (caltype == 1 .or. caltype == 4) then
          J1 => getJMatrix(n, ic1, is, dir, caltype, 0)
-         J2 => getJMatrix(n, ic2, is, dir1, caltype, 0)
+         J2 => getJMatrix(n, ic2, is, dir1, caltype, 1)
        else if (caltype == 2) then
          J1 => getJMatrix(n, ic1, is, dir, 3, 0)
-         J2 => getJMatrix(n, ic2, is, dir1, 2, 0)
+         J2 => getJMatrix(n, ic2, is, dir1, 2, 1)
        else if (caltype == 3) then
          J1 => getJMatrix(n, ic1, is, dir, 2, 0)
-         J2 => getJMatrix(n, ic2, is, dir1, 3, 0)
+         J2 => getJMatrix(n, ic2, is, dir1, 3, 1)
        else
          call ErrorHandler('calSigmaTildeSRO10', 'Incorrect caltype (1-4)', caltype)
        endif
