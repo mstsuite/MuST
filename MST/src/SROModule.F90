@@ -731,8 +731,7 @@ contains
    D = CZERO; Tdiff = CZERO; Dc = CZERO
    Dp = CZERO; DtildeK = CZERO
    iden = CZERO; tauc = CZERO; taucc = CZERO
-
-   
+ 
    do i = 1, dsize
      iden(i, i) = CONE
    enddo
@@ -1121,7 +1120,27 @@ contains
      endif
      if (is_size) then
        matsize = nsize
-     endif 
+     endif
+   else if (nocaseCompare(sm_type,'Dmat')) then
+     sro_mat => SROMedium(n)%SROTMatrix(ic)%D_ab(:,:,is)
+     if (is_size) then
+       matsize = nsize
+     endif
+   else if (nocaseCompare(sm_type,'Dtmat')) then
+     sro_mat => SROMedium(n)%SROTMatrix(ic)%Dt_ab(:,:,is)
+     if (is_size) then
+       matsize = nsize
+     endif
+   else if (nocaseCompare(sm_type,'neg-Dmat')) then
+     sro_mat => SROMedium(n)%SROTMatrix(ic)%D_abc(:,:,is)
+     if (is_size) then
+       matsize = nsize
+     endif
+   else if (nocaseCompare(sm_type,'neg-Dtmat')) then
+     sro_mat => SROMedium(n)%SROTMatrix(ic)%Dt_abc(:,:,is)
+     if (is_size) then
+       matsize = nsize
+     endif
    else if (nocaseCompare(sm_type,'tcpa-inv')) then
      sro_mat => SROMedium(n)%Tcpa_inv
      if (is_size) then
