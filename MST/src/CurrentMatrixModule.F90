@@ -1069,7 +1069,7 @@ contains
    integer (kind=IntKind) :: i, j, L1, L2, nsize, dir, dsize
    complex (kind=CmplxKind), pointer :: Ta(:,:), Tc(:,:), tauc(:,:)
    complex (kind=CmplxKind), allocatable :: taucc(:,:), Tcc(:,:), Tac(:,:)
-   complex (kind=CmplxKind), allocatable :: D(:,:), Dt(:,:), D1(:,:), Dt1(:,:)
+   complex (kind=CmplxKind), pointer :: D(:,:), Dt(:,:), D1(:,:), Dt1(:,:)
    complex (kind=CmplxKind), allocatable :: D00(:,:), Dt00(:,:), D100(:,:), Dt100(:,:)
    complex (kind=CmplxKind), allocatable :: tmp1(:,:), tmp2(:,:)
    complex (kind=CmplxKind), allocatable :: buf1(:,:), buf2(:,:), &
@@ -1079,45 +1079,19 @@ contains
    Ta => getSROMatrix('blk-tinv', n, ic, is, nsize)
    Tc => getSROMatrix('blk-tinv', n, 0, is)
    tauc => getSROMatrix('blk-tau', n, 0, is)
-  
-!  call writeMatrix('Ta', Ta, nsize, nsize)
-!  call writeMatrix('Tc', Tc, nsize, nsize)
+   D => getSROMatrix('Dmat', n, ic, is)
+   D1 => getSROMatrix('neg-Dmat', n, ic, is)
+   Dt => getSROMatrix('Dtmat', n, ic, is)
+   Dt1 => getSROMatrix('neg-Dtmat', n, ic, is)
+
 !  call writeMatrix('tauc', tauc, nsize, nsize)
 
-   allocate(Tac(nsize*dsize, nsize*dsize), Tcc(nsize*dsize, nsize*dsize), &
-     taucc(nsize*dsize, nsize*dsize))
-   allocate(D(nsize*dsize, nsize*dsize), Dt(nsize*dsize, nsize*dsize), &
-      D1(nsize*dsize, nsize*dsize), Dt1(nsize*dsize, nsize*dsize), &
-      tmp1(nsize*dsize, nsize*dsize), tmp2(nsize*dsize, nsize*dsize))
-   allocate(buf1(dsize*nsize, dsize*nsize), buf2(dsize*nsize, dsize*nsize), &
-     buf3(dsize*nsize, dsize*nsize), buf4(dsize*nsize, dsize*nsize), &
-     D00(dsize*nsize, dsize*nsize), Dt00(dsize*nsize, dsize*nsize), &
-     D100(dsize*nsize, dsize*nsize), Dt100(dsize*nsize, dsize*nsize))
-   taucc = CZERO
-
-   Tac = conjg(Ta)
-   Tcc = conjg(Tc)
-   do i = 1, nsize
-     do j = 1, nsize
-       do L2 = 1, dsize
-         do L1 = 1, dsize
-           taucc((i-1)*dsize + L1, (j-1)*dsize + L2) = &
-             (-1.0)**(lofk(L2) - lofk(L1))*conjg(taucc((j-1)*dsize + L2, (i-1)*dsize + L1)) 
-         enddo
-       enddo
-     enddo
-   enddo
-
-   D = CZERO; Dt = CZERO; D1 = CZERO; Dt1 = CZERO;
-   D00 = CZERO; Dt00 = CZERO; D100 = CZERO; Dt100 = CZERO
-
-   tmp1 = Ta - Tc
-   tmp2 = Tac - Tcc
-   call computeAprojB('N', nsize, tauc, tmp1, D)
-   call computeAprojB('N', nsize, tmp1, tauc, Dt)
-   call computeAprojB('N', nsize, taucc, tmp2, D1)
-   call computeAprojB('N', nsize, tmp2, taucc, Dt1)
-
+   allocate(tmp1(nsize*dsize, nsize*dsize), tmp2(nsize*dsize, nsize*dsize))
+   allocate(buf1(dsize, dsize), buf2(dsize, dsize), &
+     buf3(dsize, dsize), buf4(dsize, dsize), &
+     D00(dsize, dsize), Dt00(dsize, dsize), &
+     D100(dsize, dsize), Dt100(dsize, dsize))
+   
    D00 = D(1:dsize, 1:dsize)
    D100 = D1(1:dsize, 1:dsize)
    Dt00 = Dt(1:dsize, 1:dsize)
@@ -1169,6 +1143,13 @@ contains
      CZERO, jtspace4(:,:,n,ic,is,dir), kmax_kkr_max)
 !    -----------------------------------------------------------------
    enddo
+
+!  if (ic == 1) then
+!    call writeMatrix('Jtx', jtspace(:,:,n,1,is,1), dsize, dsize)
+!    call writeMatrix('Jtx_2', jtspace2(:,:,n,ic,is,1), dsize, dsize)
+!    call writeMatrix('Jtx_3', jtspace3(:,:,n,ic,is,1), dsize, dsize)
+!    call writeMatrix('Jtx_4', jtspace4(:,:,n,ic,is,1), dsize, dsize)
+!  endif
 
    end subroutine calJtildeSRO
 !  ===================================================================
