@@ -335,20 +335,20 @@ contains
    use CurrentMatrixModule, only : getJMatrix
    use AtomModule, only : getLocalNumSpecies, getLocalSpeciesContent
    use SystemVolumeModule, only : getAtomicVPVolume
+   use WriteMatrixModule, only : writeMatrix
  
    integer (kind=IntKind), intent(in) :: n, dir1, dir2, is, caltype
    integer (kind=IntKind) :: ic1, ic2, L
    real (kind=RealKind) :: Omega, c_a, c_b, coeff
    complex (kind=CmplxKind) :: sigma00
-   complex (kind=CmplxKind), pointer :: taua(:,:), J1(:,:), J2(:,:), J3(:,:)
-   complex (kind=CmplxKind), allocatable :: tauac(:,:), Jdiff(:,:), tau1(:,:), tau2(:,:)
+   complex (kind=CmplxKind), pointer :: tauac(:,:), taua(:,:), J1(:,:), J2(:,:), J3(:,:)
+   complex (kind=CmplxKind), allocatable :: Jdiff(:,:), tau1(:,:), tau2(:,:)
    complex (kind=CmplxKind), allocatable :: tmp1(:,:), tmp2(:,:), tmp3(:,:)
 
-   allocate(tauac(kmax_kkr_max, kmax_kkr_max), Jdiff(kmax_kkr_max, kmax_kkr_max), &
+   allocate(Jdiff(kmax_kkr_max, kmax_kkr_max), &
       tau1(kmax_kkr_max, kmax_kkr_max), tau2(kmax_kkr_max, kmax_kkr_max), &
       tmp1(kmax_kkr_max, kmax_kkr_max), tmp2(kmax_kkr_max, kmax_kkr_max), &
       tmp3(kmax_kkr_max, kmax_kkr_max))
-   tauac = CZERO
    sigma00 = CZERO
    
    Omega = getAtomicVPVolume(n)
@@ -358,9 +358,9 @@ contains
        c_a = getLocalSpeciesContent(n, ic1)
        c_b = getLocalSpeciesContent(n, ic2)
        coeff = -(c_a*c_b)/(PI*Omega)
-       tauac = CZERO; Jdiff = CZERO; tau1 = CZERO; tau2 = CZERO;
+       Jdiff = CZERO; tau1 = CZERO; tau2 = CZERO;
        taua => getSROMatrix('tau11', n, ic1, is)
-       tauac = conjg(taua)
+       tauac => getSROMatrix('neg-tau11', n, ic1,is)
        if (caltype == 1) then
          J1 => getJMatrix(n, ic1, is, dir1, caltype ,0)
          tau1 = taua; tau2 = taua;
@@ -379,9 +379,10 @@ contains
        J2 => getJMatrix(n, ic1, is, dir2, caltype, 0)
        J3 => getJMatrix(n, ic2, is, dir2, caltype, 1)
        Jdiff = J2 - J3
+       call writeMatrix('tau1', tau1, kmax_kkr_max, kmax_kkr_max)
 !      ---------------------------------------------------------------
        call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, &
-       CONE, Jdiff, kmax_kkr_max, tau2, kmax_kkr_max, CZERO, tmp1, kmax_kkr_max)
+       CONE, J2, kmax_kkr_max, tau2, kmax_kkr_max, CZERO, tmp1, kmax_kkr_max)
 !      ---------------------------------------------------------------
        call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, &
        CONE, tau1, kmax_kkr_max, tmp1, kmax_kkr_max, CZERO, tmp2, kmax_kkr_max)
@@ -403,7 +404,7 @@ contains
 !  ===================================================================
 
    use SROModule, only : getDoubleSpeciesTauMatrix, getSROParam, &
-                         getNeighSize
+                         getNeighSize, getSROMatrix
    use CurrentMatrixModule, only : getJMatrix
    use AtomModule, only : getLocalNumSpecies, getLocalSpeciesContent
    use SystemVolumeModule, only : getAtomicVPVolume
@@ -499,7 +500,7 @@ contains
    use WriteMatrixModule, only : writeMatrix
 
    integer (kind=IntKind), intent(in) :: n, dir1, dir2, is, caltype
-   integer (kind=IntKind) :: neigh_size, ic1, ic2, L, i
+   integer (kind=IntKind) :: j, neigh_size, ic1, ic2, L, i
    real (kind=RealKind) :: Omega, c_a, c_b, coeff
    complex (kind=CmplxKind) :: sigma011
    complex (kind=CmplxKind), pointer :: tauac(:,:), taua(:,:), J1(:,:), J2(:,:), &
@@ -531,7 +532,7 @@ contains
        Dc => getSROMatrix('neg-Dmat',n,ic2,is)
        Dt => getSROMatrix('Dtmat', n,ic2,is)
        Dtc => getSROMatrix('neg-Dtmat',n,ic2,is)
-       call writeMatrix('Dtc', Dtc, neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max)
+!      call writeMatrix('Dtc', Dtc, neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max)
        J2 => getJMatrix(n, ic2, is, dir2, caltype, 0)
        if (caltype == 1) then
          J1 => getJMatrix(n, ic1, is, dir1, caltype, 0)
@@ -539,57 +540,51 @@ contains
            CONE, taua, neigh_size*kmax_kkr_max, Dt, neigh_size*kmax_kkr_max, CZERO, tau1, neigh_size*kmax_kkr_max)
          call zgemm('n', 'n', neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max, &
            CONE, D, neigh_size*kmax_kkr_max, taua, neigh_size*kmax_kkr_max, CZERO, tau2, neigh_size*kmax_kkr_max)
-        !  tau1 = taua(1:kmax_kkr_max, &
-        !    (i - 1)*kmax_kkr_max +1: i*kmax_kkr_max)
-        !  tau2 = taua((i-1)*kmax_kkr_max+1:i*kmax_kkr_max, &
-        !     1:kmax_kkr_max)
+!        tau1 = taua
+!        tau2 = taua
        else if (caltype == 2) then
          J1 => getJMatrix(n, ic1, is, dir1, 3, 0)
          call zgemm('n', 'n', neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max, &
            CONE, taua, neigh_size*kmax_kkr_max, Dt, neigh_size*kmax_kkr_max, CZERO, tau1, neigh_size*kmax_kkr_max)
          call zgemm('n', 'n', neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max, &
            CONE, Dc, neigh_size*kmax_kkr_max, tauac, neigh_size*kmax_kkr_max, CZERO, tau2, neigh_size*kmax_kkr_max)
-        !  tau1 = taua(1:kmax_kkr_max, &
-        !    (i - 1)*kmax_kkr_max + 1:i*kmax_kkr_max)
-        !  tau2 = tauac((i-1)*kmax_kkr_max+1:i*kmax_kkr_max, &
-        !    1:kmax_kkr_max)
+!        tau1 = taua
+!        tau2 = tauac
        else if (caltype == 3) then
          J1 => getJMatrix(n, ic1, is, dir1, 2, 0)
          call zgemm('n', 'n', neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max, &
            CONE, tauac, neigh_size*kmax_kkr_max, Dtc, neigh_size*kmax_kkr_max, CZERO, tau1, neigh_size*kmax_kkr_max)
          call zgemm('n', 'n', neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max, &
            CONE, D, neigh_size*kmax_kkr_max, taua, neigh_size*kmax_kkr_max, CZERO, tau2, neigh_size*kmax_kkr_max)
-        !   tau1 = tauac(1:kmax_kkr_max, &
-        !     (i - 1)*kmax_kkr_max + 1:i*kmax_kkr_max)
-        !  tau2 = taua((i-1)*kmax_kkr_max+1:i*kmax_kkr_max, &
-        !     1:kmax_kkr_max)
+!        tau1 = tauac
+!        tau2 = taua
        else if (caltype == 4) then
          J1 => getJMatrix(n, ic1, is, dir1, caltype, 0)
          call zgemm('n', 'n', neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max, &
            CONE, tauac, neigh_size*kmax_kkr_max, Dtc, neigh_size*kmax_kkr_max, CZERO, tau1, neigh_size*kmax_kkr_max)
          call zgemm('n', 'n', neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max, neigh_size*kmax_kkr_max, &
            CONE, Dc, neigh_size*kmax_kkr_max, tauac, neigh_size*kmax_kkr_max, CZERO, tau2, neigh_size*kmax_kkr_max)
-        !  tau1 = tauac(1:kmax_kkr_max, &
-        !     (i - 1)*kmax_kkr_max + 1:i*kmax_kkr_max)
-        !  tau2 = tauac((i-1)*kmax_kkr_max+1:i*kmax_kkr_max, &
-        !     1:kmax_kkr_max)
+!        tau1 = tauac
+!        tau2 = tauac
        endif
        do i = 1, neigh_size
-         taublk1 = tau1(1:kmax_kkr_max, (i-1)*kmax_kkr_max+1:i*kmax_kkr_max)
-         taublk2 = tau2((i-1)*kmax_kkr_max+1:i*kmax_kkr_max, 1:kmax_kkr_max)
-!        ---------------------------------------------------------------
-         call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, &
-         CONE, J2, kmax_kkr_max, taublk2, kmax_kkr_max, CZERO, tmp1, kmax_kkr_max)
-!        ---------------------------------------------------------------
-         call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, &
-         CONE, taublk1, kmax_kkr_max, tmp1, kmax_kkr_max, CZERO, tmp2, kmax_kkr_max)
-!        ---------------------------------------------------------------
-         call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, &
-         CONE, J1, kmax_kkr_max, tmp2, kmax_kkr_max, CZERO, tmp3, kmax_kkr_max)
-!        ---------------------------------------------------------------
-         do L = 1, kmax_kkr_max
-           sigma011 = sigma011 + coeff*tmp3(L,L)
-         enddo
+ !       do j = 1, neigh_size
+           taublk1 = tau1(1:kmax_kkr_max, (i-1)*kmax_kkr_max+1:i*kmax_kkr_max)
+           taublk2 = tau2((i-1)*kmax_kkr_max+1:i*kmax_kkr_max, 1:kmax_kkr_max)
+!          ---------------------------------------------------------------
+           call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, &
+           CONE, J2, kmax_kkr_max, taublk2, kmax_kkr_max, CZERO, tmp1, kmax_kkr_max)
+!          ---------------------------------------------------------------
+           call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, &
+           CONE, taublk1, kmax_kkr_max, tmp1, kmax_kkr_max, CZERO, tmp2, kmax_kkr_max)
+!          ---------------------------------------------------------------
+           call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, &
+           CONE, J1, kmax_kkr_max, tmp2, kmax_kkr_max, CZERO, tmp3, kmax_kkr_max)
+!          ---------------------------------------------------------------
+           do L = 1, kmax_kkr_max
+             sigma011 = sigma011 + coeff*tmp3(L,L)
+           enddo
+!        enddo
        enddo
      enddo
    enddo
@@ -627,13 +622,13 @@ contains
        coeff = -(c_a*c_b)/(PI*Omega)
        if (caltype == 1 .or. caltype == 4) then
          J1 => getJMatrix(n, ic1, is, dir, caltype, 0)
-         J2 => getJMatrix(n, ic2, is, dir1, caltype, 1)
+         J2 => getJMatrix(n, ic2, is, dir1, caltype, 0)
        else if (caltype == 2) then
          J1 => getJMatrix(n, ic1, is, dir, 3, 0)
-         J2 => getJMatrix(n, ic2, is, dir1, 2, 1)
+         J2 => getJMatrix(n, ic2, is, dir1, 2, 0)
        else if (caltype == 3) then
          J1 => getJMatrix(n, ic1, is, dir, 2, 0)
-         J2 => getJMatrix(n, ic2, is, dir1, 3, 1)
+         J2 => getJMatrix(n, ic2, is, dir1, 3, 0)
        else
          call ErrorHandler('calSigmaTildeSRO10', 'Incorrect caltype (1-4)', caltype)
        endif
@@ -664,8 +659,8 @@ contains
        int_val = CZERO
        do etype = 1, 4
          int_val(etype) = calSigmaTildeSRO00(n, dir, dir1, is, etype) &
-            !calSigmaTildeSRO010(n, dir, dir1, is, etype) !&
-            !+ calSigmaTildeSRO011(n, dir, dir1, is, etype) !&
+            + calSigmaTildeSRO010(n, dir, dir1, is, etype) &
+            + calSigmaTildeSRO011(n, dir, dir1, is, etype) &
             + calSigmaTildeSRO10(n, dir, dir1, is, e, etype)
        enddo
        sigmatilde(dir,dir1,is) = int_val(1)
