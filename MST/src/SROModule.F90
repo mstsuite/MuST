@@ -717,6 +717,7 @@ contains
    real (kind=RealKind) :: Rp(3)
    complex (kind=CmplxKind) :: kp, exp_term
    complex (kind=CmplxKind) :: DtildeK(kmax_kkr_max,kmax_kkr_max)
+   complex (kind=CmplxKind), allocatable :: tmp1(:,:), tmp2(:,:)
    complex (kind=CmplxKind), allocatable :: iden(:,:), D(:,:), Dp(:,:), Tdiff(:,:), &
                               Tdiffc(:,:), tauc(:,:), taucc(:,:), Dc(:,:)
 
@@ -727,10 +728,11 @@ contains
    allocate(D(nsize*dsize, nsize*dsize), Tdiff(nsize*dsize, nsize*dsize), &
      Dc(nsize*dsize, nsize*dsize), tauc(nsize*dsize, nsize*dsize), &
      taucc(nsize*dsize, nsize*dsize), Tdiffc(nsize*dsize, nsize*dsize))
-   allocate(Dp(dsize, dsize), iden(dsize, dsize))
+   allocate(Dp(dsize, dsize), iden(dsize, dsize), tmp1(dsize, dsize), tmp2(dsize, dsize))
    D = CZERO; Tdiff = CZERO; Dc = CZERO
    Dp = CZERO; DtildeK = CZERO
    iden = CZERO; tauc = CZERO; taucc = CZERO
+   tmp1 = CZERO; tmp2 = CZERO
  
    do i = 1, dsize
      iden(i, i) = CONE
@@ -755,31 +757,32 @@ contains
    ! call computeAprojB('N', dsize*nsize, Tdiffc, taucc, Dc)
    endif
 
-   Print *, kvec
+!  Print *, kvec
    do i = 1, nsize
+     tmp1 = CZERO
      istart = (i-1)*dsize + 1
      iend = i*dsize
      call obtainPosition(n, Rp, i)
      kp = kvec(1)*Rp(1) + kvec(2)*Rp(2) + kvec(3)*Rp(3)
-     Print *, Rp
+!    Print *, Rp
      if (caltype == 0) then
        exp_term = exp(sqrtm1*kp)
        if (etype == 1) then
-         call zgemm('n', 'n', dsize, dsize, dsize, CONE, D(1:dsize, istart:iend), &
-            dsize, iden, dsize, CZERO, Dp, dsize)
+         tmp1 = D(1:dsize, istart:iend)
        else if (etype == 2) then
-         call zgemm('n', 'n', dsize, dsize, dsize, CONE, &
-           Dc(1:dsize, istart:iend), dsize, iden, dsize, CZERO, Dp, dsize)
+         tmp1 = Dc(1:dsize, istart:iend)
        endif
+       call zgemm('n', 'n', dsize, dsize, dsize, CONE, tmp1, &
+            dsize, iden, dsize, CZERO, Dp, dsize)
      else if (caltype == 1) then
        exp_term = exp(-sqrtm1*kp)
        if (etype == 1) then
-         call zgemm('n', 'n', dsize, dsize, dsize, CONE, D(istart:iend, 1:dsize), &
-            dsize, iden, dsize, CZERO, Dp, dsize)
+         tmp1 = D(istart:iend, 1:dsize)
        else if (etype == 2) then
-         call zgemm('n', 'n', dsize, dsize, dsize, CONE, &
-           Dc(istart:iend, 1:dsize), dsize, iden, dsize, CZERO, Dp, dsize)
+         tmp1 = Dc(istart:iend, 1:dsize)
        endif
+       call zgemm('n', 'n', dsize, dsize, dsize, CONE, tmp1, &
+          dsize, iden, dsize, CZERO, Dp, dsize)
      endif
      call zgemm('n', 'n', dsize, dsize, dsize, exp_term, Dp, dsize, &
          iden, dsize, CONE, DtildeK, dsize)
@@ -787,8 +790,8 @@ contains
   !  Print *, exp_term
    enddo
 
-   call writeMatrix('DtildeK', DtildeK, dsize, dsize) 
-   call ErrorHandler('clusterDtilde', 'stop')
+!  call writeMatrix('DtildeK', DtildeK, dsize, dsize) 
+!  call ErrorHandler('clusterDtilde', 'stop')
 
    end function clusterDtilde
 !  ===================================================================
