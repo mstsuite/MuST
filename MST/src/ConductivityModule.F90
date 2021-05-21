@@ -379,7 +379,7 @@ contains
        J2 => getJMatrix(n, ic1, is, dir2, caltype, 0)
        J3 => getJMatrix(n, ic2, is, dir2, caltype, 1)
        Jdiff = J2 - J3
-       call writeMatrix('tau1', tau1, kmax_kkr_max, kmax_kkr_max)
+!      call writeMatrix('tau1', tau1, kmax_kkr_max, kmax_kkr_max)
 !      ---------------------------------------------------------------
        call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, &
        CONE, J2, kmax_kkr_max, tau2, kmax_kkr_max, CZERO, tmp1, kmax_kkr_max)
