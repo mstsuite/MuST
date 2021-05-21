@@ -1391,14 +1391,15 @@ contains
    nrot = getNumIBZRotations()
    cfac = CONE/real(nrot, RealKind)
    allocate(tmbsym(kkrsz, kkrsz), tmb(kkrsz, kkrsz), tau1(kkrsz, kkrsz), &
-            tau2(kkrsz, kkrsz), D1(kkrsz,kkrsz), Dt1(kkrsz,kkrsz))
+    tau2(kkrsz, kkrsz), D1(kkrsz,kkrsz), Dt1(kkrsz,kkrsz), D2(kkrsz, kkrsz), &
+    Dt2(kkrsz, kkrsz))
    tmbsym = CZERO
    tmb = CZERO
    tau1 = CZERO
    tau2 = CZERO 
    wint = CZERO
-   D1 = CZERO
-   Dt1 = CZERO
+   D1 = CZERO; D2 = CZERO
+   Dt1 = CZERO; Dt2 = CZERO
 
    method = 0
    if (present(use_tmat)) then
