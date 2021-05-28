@@ -681,12 +681,16 @@ contains
    z = SROMedium(n)%SROTMatrix(ic)%tmat_s(1)%T_inv - SROMedium(n)%T_CPA_inv
 
    call computeAprojB('L', dsize*nsize, SROMedium(n)%tau_cpa(:,:, 1), z, y)
-   call computeAprojB('N', dsize*nsize, SROMedium(n)%tau_cpa(:,:, 1), z, &
-                SROMedium(n)%SROTMatrix(ic)%D_ab(:,:,1))
-   call computeAprojB('N', dsize*nsize, z, SROMedium(n)%tau_cpa(:,:,1), &
-                SROMedium(n)%SROTMatrix(ic)%Dt_ab(:,:,1))
 
    SROMedium(n)%SROTMatrix(ic)%tau_ab(:, :, 1) = y
+
+   if (sigma == 1) then
+     call computeAprojB('N', dsize*nsize, SROMedium(n)%tau_cpa(:,:, 1), z, &
+                SROMedium(n)%SROTMatrix(ic)%D_ab(:,:,1))
+     call computeAprojB('N', dsize*nsize, z, SROMedium(n)%tau_cpa(:,:,1), &
+                SROMedium(n)%SROTMatrix(ic)%Dt_ab(:,:,1))
+   endif
+
 !  call writeMatrix('tau_a11', SROMedium(n)%SROTMatrix(ic)%tau_ab(1:dsize, 1:dsize, 1), &
 !                 dsize, dsize, TEN2m8) 
 !  enddo
