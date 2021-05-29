@@ -30,13 +30,13 @@ endif
 ifndef FFTW_PATH
 #export ERROR_TARGETS=no_fftw
 export ADDITIONAL_TARGETS+=fftw
-export LIBXC_PATH=$(TOP_DIR)/fftw/FFTW/$(SUFFIX)
+export FFTW_PATH=$(TOP_DIR)/fftw/FFTW/$(SUFFIX)
 endif
 
 ifndef P3DFFT_PATH
 export ADDITIONAL_TARGETS+=p3dfft
-export LIBXC_PATH=$(TOP_DIR)/p3dfft/P3DFFT/$(SUFFIX)
-export P3DFFT_CONFIG_FLAGS += --with-fftw=$(TOP_DIR)/fftw/FFTW/$(SUFFIX)
+export P3DFFT_PATH=$(TOP_DIR)/p3dfft/P3DFFT/$(SUFFIX)
+export P3DFFT_CONFIG_FLAGS += --with-fftw=$(FFTW_PATH)
 endif
 
 all: $(ERROR_TARGETS) $(ADDITIONAL_TARGETS)
@@ -73,7 +73,7 @@ ln -fs $$DIR_NAME FFTW; fi
 cd fftw/FFTW && echo $$PWD && ./configure --prefix=$$PWD/$(SUFFIX) --enable-fortran $(FFTW_CONFIG_FLAGS) && make clean && \
 make && make install; fi
 
-p3dfft: fftw
+p3dfft:
 	if [ ! -d p3dfft/P3DFFT ]; then \
 DIR_NAME="$(shell tar -tzf p3dfft/p3dfft.tar.gz | head -1 | cut -f1 -d"/")" && cd p3dfft && rm -f P3DFFT && tar xfz p3dfft.tar.gz && \
 ln -fs $$DIR_NAME P3DFFT; fi
