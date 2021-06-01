@@ -190,7 +190,7 @@
 !                   the specified number if the neighbors on the next shell adds up over its maximum set.
    n = n + 1; Keys(n) = 'Default LIZ # NN Shells';               Values(n) = '16'
    n = n + 1; Keys(n) = 'Default LIZ Shell Lmax';                Values(n) = '4 4 4 4 3 3 3 3 2 2 2 2 1 1 1 1'
-   n = n + 1; Keys(n) = 'Default LIZ Cutoff Radius';             Values(n) = '8.5'
+   n = n + 1; Keys(n) = 'Default LIZ Cutoff Radius';             Values(n) = '25.0'
    n = n + 1; Keys(n) = 'Default Rho  Mix Param.';               Values(n) = '0.1000'
    n = n + 1; Keys(n) = 'Default Pot  Mix Param.';               Values(n) = '0.1000'
    n = n + 1; Keys(n) = 'Default Mom  Mix Param.';               Values(n) = '0.1500'
