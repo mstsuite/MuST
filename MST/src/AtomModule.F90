@@ -499,41 +499,56 @@ contains
    rstatus = getKeyIndexValue(info_id,'Lmax-Charge Den',              &
                               ind_lmax_rho,lmax_rho(1:GlobalNumAtoms),GlobalNumAtoms)
 !
-   if (getKeyValue(info_id,'Default LIZ # Neighbors',nmax_liz(0)) /= 0) then
-      call ErrorHandler('initAtom','Default LIZ # Neighbors is missing from input')
-   endif
-   ind_nmax_liz = 0
-   rstatus = getKeyIndexValue(info_id,'LIZ # Neighbors',              &
-                              ind_nmax_liz,nmax_liz(1:GlobalNumAtoms),GlobalNumAtoms)
+   if (.not.isKKRCPASRO() .and. .not.isKKRCPA()) then
+      if (getKeyValue(info_id,'Default LIZ # Neighbors',nmax_liz(0)) /= 0) then
+         call ErrorHandler('initAtom','Default LIZ # Neighbors is missing from input')
+      endif
+      ind_nmax_liz = 0
+      rstatus = getKeyIndexValue(info_id,'LIZ # Neighbors',              &
+                                 ind_nmax_liz,nmax_liz(1:GlobalNumAtoms),GlobalNumAtoms)
 !
-   if (getKeyValue(info_id,'Default LIZ # NN Shells',num_shells(0),default_param=.false.) /= 0) then
+      if (getKeyValue(info_id,'Default LIZ # NN Shells',num_shells(0),default_param=.false.) /= 0) then
+         num_shells(0) = 8
+      endif
+      ind_num_shells = 0
+      rstatus = getKeyIndexValue(info_id,'LIZ # NN Shells',              &
+                                 ind_num_shells,num_shells(1:GlobalNumAtoms),GlobalNumAtoms)
+!
+      if (getKeyValue(info_id,'Default LIZ Shell Lmax',lmax_shell(0)) /= 0) then
+         write(s2,'(i2)')lmax_kkr(0)
+         lmax_shell(0) = s2
+         do i = 2, num_shells(0)
+            lmax_shell(0) = trim(lmax_shell(0))//' '//s2
+         enddo
+      else 
+         call initString(lmax_shell(0))
+         num_shells(0) = getNumTokens()
+         call endString()
+      endif
+      ind_lmax_shell = 0
+      rstatus = getKeyIndexValue(info_id,'LIZ Shell Lmax',               &
+                                 ind_lmax_shell,lmax_shell(1:GlobalNumAtoms),GlobalNumAtoms)
+!
+      if (getKeyValue(info_id,'Default LIZ Cutoff Radius',cutoff_r(0)) /= 0) then
+         call ErrorHandler('initAtom','Default LIZ Cutoff Radius is missing from input')
+      endif
+      ind_cutoff_r = 0
+      rstatus = getKeyIndexValue(info_id,'LIZ Cutoff Radius',            &
+                                 ind_cutoff_r,cutoff_r(1:GlobalNumAtoms),GlobalNumAtoms)
+   else ! In the case of CA-KKR-CPA calculations, we setup local cluster with the following parameters
+      nmax_liz(0) = 90 
+      ind_nmax_liz = 0
       num_shells(0) = 8
-   endif
-   ind_num_shells = 0
-   rstatus = getKeyIndexValue(info_id,'LIZ # NN Shells',              &
-                              ind_num_shells,num_shells(1:GlobalNumAtoms),GlobalNumAtoms)
-!
-   if (getKeyValue(info_id,'Default LIZ Shell Lmax',lmax_shell(0)) /= 0) then
+      ind_num_shells = 0
       write(s2,'(i2)')lmax_kkr(0)
       lmax_shell(0) = s2
       do i = 2, num_shells(0)
          lmax_shell(0) = trim(lmax_shell(0))//' '//s2
       enddo
-   else 
-      call initString(lmax_shell(0))
-      num_shells(0) = getNumTokens()
-      call endString()
+      ind_lmax_shell = 0
+      cutoff_r(0) = 20.0d0
+      ind_cutoff_r = 0
    endif
-   ind_lmax_shell = 0
-   rstatus = getKeyIndexValue(info_id,'LIZ Shell Lmax',               &
-                              ind_lmax_shell,lmax_shell(1:GlobalNumAtoms),GlobalNumAtoms)
-!
-   if (getKeyValue(info_id,'Default LIZ Cutoff Radius',cutoff_r(0)) /= 0) then
-      call ErrorHandler('initAtom','Default LIZ Cutoff Radius is missing from input')
-   endif
-   ind_cutoff_r = 0
-   rstatus = getKeyIndexValue(info_id,'LIZ Cutoff Radius',            &
-                              ind_cutoff_r,cutoff_r(1:GlobalNumAtoms),GlobalNumAtoms)
 !
    rstatus = getKeyValue(info_id,'Default Rcut-Screen',cutoff_r_s(0))
    ind_cutoff_r_s = 0

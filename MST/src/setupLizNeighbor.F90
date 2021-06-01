@@ -325,11 +325,11 @@ subroutine setupLizNeighbor(print_level)
 !        call WarningHandler('setupLizNeighbor','no neighbor for this atom',ig)
 !        -------------------------------------------------------------
 !     else
-      if (ns > 0) then
-!        -------------------------------------------------------------
-         call HeapSort(ns, rs, indx)
-!        -------------------------------------------------------------
-      endif
+         if (ns > 0) then
+!           ----------------------------------------------------------
+            call HeapSort(ns, rs, indx)
+!           ----------------------------------------------------------
+         endif
          neighb%NumAtoms = na
          neighb%NumShells = ns
          allocate( neighb%Z(na), neighb%Lmax(na) )
@@ -337,10 +337,11 @@ subroutine setupLizNeighbor(print_level)
          allocate( neighb%GlobalIndex(na), neighb%Position(3,na) )
          allocate( neighb%IndexMN(GlobalNumAtoms) )
          allocate( neighb%Rmunu(3,index_mn_max,GlobalNumAtoms))
-         allocate( neighb%ShellIndex(na) ) 
-         allocate( neighb%ShellRad(ns) )
+         allocate( neighb%ShellIndex(na) )
+         allocate( neighb%ShellRad(ns), neighb%NAsOnShell(ns) )
          do i=1,ns
             neighb%ShellRad(i)=rs(i)
+            neighb%NAsOnShell(i)=0
          enddo
          neighb%IndexMN = -1
          neighb%Rmunu = real(-10000)
@@ -395,13 +396,21 @@ subroutine setupLizNeighbor(print_level)
                neighb%NumReceives = neighb%NumReceives + 1
             endif
          enddo
+         do js = 1, neighb%NumShells
+            neighb%NAsOnShell(js) = 0
+            do i = 1, neighb%NumAtoms
+               if (neighb%ShellIndex(i) == js) then
+                  neighb%NAsOnShell(js) = neighb%NAsOnShell(js) + 1
+               endif
+            enddo
+         enddo
 !        -------------------------------------------------------------
          call setNeighbor(id,neighb)
 !        -------------------------------------------------------------
          deallocate( neighb%Z, neighb%Lmax, neighb%ProcIndex,          &
                      neighb%LocalIndex, neighb%GlobalIndex )
          deallocate( neighb%Position, neighb%IndexMN, neighb%Rmunu )
-         deallocate( neighb%ShellIndex, neighb%ShellRad)
+         deallocate( neighb%ShellIndex, neighb%NAsOnShell, neighb%ShellRad)
 !     endif
       deallocate( m1, m2, m3 )
 !

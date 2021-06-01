@@ -664,14 +664,14 @@ contains
    if (nspin > 2) then
       do i=1,NumAtoms
          em = sqrt(Evec(1,i)*Evec(1,i)+Evec(2,i)*Evec(2,i)+Evec(3,i)*Evec(3,i))
-         if (abs(em-ONE) > TEN2m8) then
-            Evec(1,i)=Evec(1,i)/em
-            Evec(2,i)=Evec(2,i)/em
-            Evec(3,i)=Evec(3,i)/em
-         else if (em < TEN2m8) then
+         if (em < TEN2m8) then
             Evec(1,i)=ZERO
             Evec(2,i)=ZERO
             Evec(3,i)=ONE
+         else if (abs(em-ONE) > TEN2m8) then
+            Evec(1,i)=Evec(1,i)/em
+            Evec(2,i)=Evec(2,i)/em
+            Evec(3,i)=Evec(3,i)/em
          endif
       enddo
    endif

@@ -21,6 +21,7 @@ public :: initNeighbor,            &
           getSendTable,            &
           getShellRadius,          &
           getRecvTable,            &
+          getNumAtomsOnShell,      &
           printNeighbor,           &
           printCommunicationTable
 !
@@ -109,6 +110,7 @@ contains
          deallocate( Neighbor(id)%GlobalIndex, Neighbor(id)%Position )
          deallocate( Neighbor(id)%IndexMN, Neighbor(id)%Rmunu )
          deallocate( Neighbor(id)%ShellIndex, Neighbor(id)%ShellRad )
+         deallocate( Neighbor(id)%NAsOnShell )
          Neighbor(id)%NumAtoms = 0
          Neighbor(id)%NumReceives = 0
          Neighbor(id)%NumShells = 0
@@ -122,6 +124,7 @@ contains
          deallocate( NeighborEIZ(id)%GlobalIndex )
          deallocate( NeighborEIZ(id)%Position )
          deallocate( NeighborEIZ(id)%ShellIndex,NeighborEIZ(id)%ShellRad )
+         deallocate( NeighborEIZ(id)%NAsOnShell )
          NeighborEIZ(id)%NumAtoms = 0
          NeighborEIZ(id)%NumReceives = 0
          NeighborEIZ(id)%NumShells = 0
@@ -218,6 +221,7 @@ contains
       deallocate( Neighbor(id)%ProcIndex, Neighbor(id)%LocalIndex )
       deallocate( Neighbor(id)%GlobalIndex, Neighbor(id)%Position )
       deallocate( Neighbor(id)%ShellIndex, Neighbor(id)%ShellRad )
+      deallocate( Neighbor(id)%NAsOnShell )
       deallocate( Neighbor(id)%IndexMN )
       deallocate( Neighbor(id)%Rmunu )
    endif
@@ -231,6 +235,7 @@ contains
    allocate( Neighbor(id)%ShellIndex(n))
    Neighbor(id)%NumShells = nshells
    allocate( Neighbor(id)%ShellRad(nshells))
+   allocate( Neighbor(id)%NAsOnShell(nshells))
 !
    nsa = getNumAtoms()
 !   nsa = size( nb%IndexMN, dim=1 )
@@ -257,6 +262,7 @@ contains
    Neighbor(id)%NumShells = nb%NumShells
    do i=1,nshells
       Neighbor(id)%ShellRad(i)=nb%ShellRad(i)
+      Neighbor(id)%NAsOnShell(i) = nb%NAsOnShell(i)
    enddo
 !
 !  -------------------------------------------------------------------
@@ -299,6 +305,7 @@ contains
       deallocate( NeighborEIZ(id)%ProcIndex, NeighborEIZ(id)%LocalIndex )
       deallocate( NeighborEIZ(id)%GlobalIndex, NeighborEIZ(id)%Position )
       deallocate( NeighborEIZ(id)%ShellIndex, NeighborEIZ(id)%ShellRad )
+      deallocate( NeighborEIZ(id)%NAsOnShell )
    endif
    NeighborEIZ(id)%NumAtoms = n
    allocate( NeighborEIZ(id)%Z(n) )
@@ -309,6 +316,8 @@ contains
    allocate( NeighborEIZ(id)%Position(3,n) )
    allocate( NeighborEIZ(id)%ShellIndex(n) )
    NeighborEIZ(id)%NumShells = nshells
+   allocate( NeighborEIZ(id)%ShellRad(nshells) )
+   allocate( NeighborEIZ(id)%NAsOnShell(nshells) )
 !
    do i=1,n
       NeighborEIZ(id)%Z(i) = nb%Z(i)
@@ -324,6 +333,7 @@ contains
    NeighborEIZ(id)%NumShells = nb%NumShells
    do i=1,nshells
       NeighborEIZ(id)%ShellRad(i)=nb%ShellRad(i)
+      NeighborEIZ(id)%NAsOnShell(i)=nb%NAsOnShell(i)
    enddo
 !
    end subroutine setNeighborEIZ
@@ -440,7 +450,8 @@ contains
    write(6,'(a,i5)')' Number of shells: ', nshells
    do i=1,nshells
     write(6,'(a,i3,a,3x,a,f12.5,5x,a,i5)')' shell ',i,':','radius:', &
-      Neighbor(id)%ShellRad(i),'atoms: ',nat(i)
+      Neighbor(id)%ShellRad(i),'atoms: ',Neighbor(id)%NAsOnShell(i)
+!     Neighbor(id)%ShellRad(i),'atoms: ',nat(i)
    enddo
    deallocate(nat)
 !
@@ -928,6 +939,27 @@ contains
    shell_rad = Neighbor(id)%ShellRad(nshell)
 
    end function getShellRadius
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getNumAtomsOnShell(id, nshell) result (na)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: id, nshell
+   integer (kind=IntKind) :: na
+
+   if (id < 1 .or. id > LocalNumAtoms) then
+     call ErrorHandler('getNumAtomsOnShell', 'invalid local atom index', id)
+   else if (nshell < 1 .or. nshell > Neighbor(id)%NumShells) then
+     call ErrorHandler('getNumAtomsOnShell', 'invalid shell index', nshell)
+   endif
+
+   na = Neighbor(id)%NAsOnShell(nshell)
+
+   end function getNumAtomsOnShell
 !  ===================================================================
 !
 !  *******************************************************************

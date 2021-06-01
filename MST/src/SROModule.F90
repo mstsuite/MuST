@@ -106,6 +106,8 @@ contains
    real(kind=RealKind), allocatable :: sro_params(:), sro_params_nn(:)
    real(kind=RealKind) :: cvm_sitei(2)
    real(kind=RealKind), allocatable :: cvm_params(:)
+!
+   logical :: isWarrenCowley = .false.
 
 !  --------------------------------------------------------
    next_near_option = isNextNearestSRO()
@@ -113,12 +115,14 @@ contains
 
    if (next_near_option == 0) then
    !  --------------------------------------------------------
-      call retrieveSROParams(sro_params, sro_param_nums)
+      call retrieveSROParams(sro_params, sro_param_nums, isWC=isWarrenCowley)
    !  --------------------------------------------------------
    else 
    !  --------------------------------------------------------
-      call retrieveSROParams(sro_param_list=sro_params,   &
-              param_num=sro_param_nums, sro_param_list_nn=sro_params_nn)
+      call retrieveSROParams(sro_param_list=sro_params,       &
+                             param_num=sro_param_nums,        &
+                             sro_param_list_nn=sro_params_nn, &
+                             isWC=isWarrenCowley)
    !  --------------------------------------------------------
    endif
 
@@ -185,9 +189,16 @@ contains
                  endif
               else
                  temp = (i - 1)*num - (i - 1)*(i - 2)/2
-                 SROMedium(il)%SROTMatrix(i)%sro_param_a(j) = sro_params(temp + j - i + 1)
-                 if (next_near_option == 1) then
-                    SROMedium(il)%SROTMatrix(i)%sro_param_a_nn(j) = sro_params_nn(temp + j - i + 1)
+                 if (isWarrenCowley) then
+                    SROMedium(il)%SROTMatrix(i)%sro_param_a(j) = spec_j*(ONE-sro_params(temp + j - i + 1))
+                    if (next_near_option == 1) then
+                       SROMedium(il)%SROTMatrix(i)%sro_param_a_nn(j) = spec_j*(ONE-sro_params_nn(temp + j - i + 1))
+                    endif
+                 else
+                    SROMedium(il)%SROTMatrix(i)%sro_param_a(j) = sro_params(temp + j - i + 1)
+                    if (next_near_option == 1) then
+                       SROMedium(il)%SROTMatrix(i)%sro_param_a_nn(j) = sro_params_nn(temp + j - i + 1)
+                    endif
                  endif
               endif
             enddo

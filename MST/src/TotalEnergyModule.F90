@@ -856,8 +856,7 @@ contains
 !
    use SystemVolumeModule, only : getTotalInterstitialVolume
 !
-   use ScfDataModule, only : isInterstitialElectronPolarized, &
-                             retrieveSROParams, isKKRCPASRO, isChargeCorr
+   use ScfDataModule, only : isInterstitialElectronPolarized, isChargeCorr
 !
    use PublicTypeDefinitionsModule, only : GridStruct
    use RadialGridModule, only : getGrid
@@ -1134,7 +1133,6 @@ contains
 !  ===================================================================
    emad = ZERO
    emadp = ZERO
-   echarge = ZERO
    if ( isMuffintinPotential() ) then
       if (gga_functional) then
          if (n_spin_pola == 1) then
@@ -1166,11 +1164,6 @@ contains
       do na = 1, LocalNumAtoms
          SiteEnPres(1,na) = SiteEnPres(1,na) + emad/GlobalNumAtoms
          SiteEnPres(2,na) = SiteEnPres(2,na) + emadp/GlobalNumAtoms
-
-      ! Charge Correlation Addition to the Total Energy
-         if (isChargeCorr()) then
-            echarge = getEnergyCorrectionTerm(na)
-         endif
       enddo
    else if (isMuffintinASAPotential()) then
 !     ================================================================
@@ -1221,6 +1214,14 @@ contains
 !     ----------------------------------------------------------------
    endif
 !
+!  Charge Correlation Addition to the Total Energy
+   echarge = ZERO
+   if (isChargeCorr()) then
+      do na = 1, LocalNumAtoms
+         echarge = echarge + getEnergyCorrectionTerm(na)
+      enddo
+   endif
+!
 !  -------------------------------------------------------------------
    u0 = getu0(u0i)
 !  -------------------------------------------------------------------
@@ -1239,6 +1240,7 @@ contains
       LocalEnergy(1:2,getGlobalIndex(na)) = SiteEnPres(1:2,na)
    enddo
 !  -------------------------------------------------------------------
+   call GlobalSumInGroup(GroupID,echarge)
    call GlobalSumInGroup(GroupID,LocalEnergy,2,GlobalNumAtoms)
 !  -------------------------------------------------------------------
    call setAtomEnergy(localEnergy)
@@ -1817,6 +1819,8 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getu0(u0i) result(u0)
 !  ===================================================================
+   use MPPModule, only : MyPE
+!
    use GroupCommModule, only : GlobalSumInGroup
 !
    use PublicTypeDefinitionsModule, only : GridStruct

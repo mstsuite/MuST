@@ -71,6 +71,7 @@ public
       integer (kind=IntKind),pointer:: ShellIndex(:) ! index to which shell 
                                                      ! this neighbor atom
                                                      ! belongs
+      integer (kind=IntKind),pointer:: NAsOnShell(:) ! Number Atoms on each shell
       real (kind=RealKind), pointer :: ShellRad(:)   ! radii of shells
 
    end type NeighborStruct

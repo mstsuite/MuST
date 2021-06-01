@@ -1,14 +1,14 @@
 module ChargeScreeningModule
    use KindParamModule, only : IntKind, RealKind, CmplxKind
    use MathParamModule, only : ZERO, ONE, TWO, CZERO, CONE, SQRTm1, TEN2m6, TEN2m8
-  use ErrorHandlerModule, only : ErrorHandler, WarningHandler
-  use PublicTypeDefinitionsModule, only : NeighborStruct
+   use ErrorHandlerModule, only : ErrorHandler, WarningHandler
+   use PublicTypeDefinitionsModule, only : NeighborStruct
 
 !
 public :: initChargeScreeningModule,     &
           calPotentialCorrection,        &
           calCPAEnergyShift,             &
-          calSROEnergyShift,             &
+!         calSROEnergyShift,             &
           calChargeCorrection,           &
           getSpeciesPotentialCorrection, &
           getEnergyCorrectionTerm,       &
@@ -18,6 +18,7 @@ public :: initChargeScreeningModule,     &
 private
   integer (kind=IntKind) :: GlobalNumSites, LocalNumSites
   integer (kind=IntKind) :: NumSpecies
+  integer (kind=IntKind) :: NumSROShells = 2 ! Assume upto 2 neighboring shells
 
   type ChargeCorrectionData
       real (kind=RealKind) :: fs_radius
@@ -27,7 +28,7 @@ private
    end type ChargeCorrectionData
 
   type (ChargeCorrectionData), allocatable :: scr(:)
-  real (kind=RealKind), allocatable :: w_ab(:,:)
+  real (kind=RealKind), allocatable :: w_ab(:,:,:)
 
 contains
 !
@@ -42,7 +43,7 @@ contains
    use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies,   &
            getLocalSpeciesContent
 !
-   use PolyhedraModule, only : getNeighborDistance
+   use NeighborModule, only : getShellRadius
 !
    use ScfDataModule, only : retrieveSROParams, isKKRCPASRO,  &
                    getSpeciesSlope, getSpeciesIntercept
@@ -51,6 +52,8 @@ contains
    integer (kind=IntKind) :: i, j, sro_param_num, temp, na
    real (kind=RealKind) :: spec_i, spec_j
    real (kind=RealKind), allocatable :: sro_params(:)
+!
+   logical :: isWarrenCowley = .false.
 
    GlobalNumSites = num_atoms
    LocalNumSites  = nlocal
@@ -59,19 +62,25 @@ contains
    do i = 1, LocalNumSites
       NumSpecies = getLocalNumSpecies(i)
       allocate(scr(i)%vmt1_corr(getLocalNumSpecies(i)))
-      scr(i)%fs_radius = getNeighborDistance(i, dmin=.true.)
-      scr(i)%ss_radius = getLatticeConstant()
+      scr(i)%fs_radius = getShellRadius(i,1)
+!     scr(i)%ss_radius = getLatticeConstant()
+      scr(i)%ss_radius = getShellRadius(i,2)
       scr(i)%echarge = ZERO
       do j = 1, getLocalNumSpecies(i)
          scr(i)%vmt1_corr(j) = ZERO
       enddo
    enddo
-   allocate(w_ab(NumSpecies, NumSpecies))
+   allocate(w_ab(NumSpecies,NumSpecies,NumSROShells))
 
    if (isKKRCPASRO() .eqv. .true.) then
    !  --------------------------------------------------------
-      call retrieveSROParams(sro_param_list=sro_params, param_num=sro_param_num)
+      call retrieveSROParams(sro_param_list=sro_params, param_num=sro_param_num, &
+                             isWC=isWarrenCowley)
    !  --------------------------------------------------------
+!     In the following code, we only consider 1st neighboring shell charge
+!     correlation case, will add the 2nd neighboring shell charge correlation
+!     later.
+!     ================================================================
       w_ab = ZERO
       do na = 1, LocalNumSites
         do i = 1, getLocalNumSpecies(na)
@@ -79,10 +88,14 @@ contains
           do j = 1, getLocalNumSpecies(na)
             spec_j = getLocalSpeciesContent(na, j)
             if (j < i) then
-               w_ab(i, j) = (spec_j/spec_i)*w_ab(j, i)
+               w_ab(i,j,1) = (spec_j/spec_i)*w_ab(j,i,1)
             else
                temp = (i - 1)*getLocalNumSpecies(na) - (i - 1)*(i - 2)/2
-               w_ab(i, j) = sro_params(temp + j - i + 1)
+               if (isWarrenCowley) then
+                  w_ab(i,j,1) = spec_j*(ONE - sro_params(temp + j - i + 1))
+               else
+                  w_ab(i,j,1) = sro_params(temp + j - i + 1)
+               endif
             endif
           enddo
         enddo
@@ -97,14 +110,19 @@ contains
 !  ===================================================================
 
    use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies,   &
-            getLocalSpeciesContent
-   use ScfDataModule, only : isLinRel, getSpeciesSlope, getSpeciesIntercept
+                          getLocalSpeciesContent
+!
+   use ScfDataModule, only : isLinRel, isKKRCPASRO,  getSpeciesSlope, getSpeciesIntercept
+!
    use Atom2ProcModule, only : getGlobalIndex
+!
+   use NeighborModule, only : getShellRadius, getNumAtomsOnShell
+!
    use ChargeDistributionModule, only : getGlobalOnSiteElectronTableOld, &
                                      getGlobalTableLine
                                         
-   integer (kind=IntKind) :: i, j, ia, na, lig
-   real (kind=RealKind) :: qtemp, slope, intercept
+   integer (kind=IntKind) :: i, j, ia, na, lig, ja, mig
+   real (kind=RealKind) :: qtemp, slope, intercept, dq, avq
    real (kind=RealKind), pointer :: Q_Table(:)
    integer (kind=IntKind), pointer :: global_table_line(:)
 
@@ -117,10 +135,27 @@ contains
       do ia = 1, getLocalNumSpecies(na)
         lig = global_table_line(j) + ia
         qtemp = getLocalAtomicNumber(j, ia) - Q_Table(lig)
-        if (isLinRel()) then
+        if (isKKRCPASRO()) then
+           scr(na)%vmt1_corr(ia) = ZERO
+           do ns = 1, NumSROShells
+              avq = ZERO
+              do ja = 1, getLocalNumSpecies(na)
+                 mig = global_table_line(j) + ja
+                 dq = getLocalAtomicNumber(j,ja) - Q_Table(mig)
+                 avq = avq + w_ab(ia,ja,ns)*dq
+              enddo
+              scr(na)%vmt1_corr(ia) = scr(na)%vmt1_corr(ia)     &
+                 -TWO*avq*getNumAtomsOnShell(na,ns)/getShellRadius(na,ns)
+           enddo
+        else if (isLinRel()) then
            slope = getSpeciesSlope(ia)
            intercept = getSpeciesIntercept(ia)
-           scr(na)%vmt1_corr(ia) = slope*qtemp + intercept
+!          ===========================================================
+!          Note: <vmad> will be subtracted from this term when function
+!          getSpeciesPotentialCorrection is called from
+!          PotentialGenerationModule
+!          ===========================================================
+           scr(na)%vmt1_corr(ia) = -slope*qtemp + intercept
         else
            scr(na)%vmt1_corr(ia) = TWO*(qtemp/scr(na)%fs_radius)
         endif
@@ -133,31 +168,60 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine calCPAEnergyShift ()
 !  ===================================================================
-
+   use MPPModule, only : MyPE
+!
+   use MathParamModule, only : PI4, THREE, HALF, THIRD, ZERO
+!
    use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies,  &
                                         getLocalSpeciesContent
 
    use Atom2ProcModule, only : getGlobalIndex
-
+!
+   use ScfDataModule, only : isLinRel, isKKRCPASRO 
+!
    use ChargeDistributionModule, only : getGlobalOnSiteElectronTable, &
-                                     getGlobalTableLine
-
-   integer (kind=IntKind) :: i, j, ia, na, lig
-   real (kind=RealKind) :: qtemp
+                                        getGlobalTableLine
+!
+   use SystemModule, only : getAtomicNumber, getNumAlloyElements, getAlloyElementContent
+!
+   use SystemVolumeModule, only : getAtomicVPVolume
+!
+   use NeighborModule, only : getShellRadius, getNumAtomsOnShell
+!
+   integer (kind=IntKind) :: i, j, ia, na, lig, ja, mig, ns
+   real (kind=RealKind) :: qtemp, uc
+!  real (kind=RealKind) :: uc, avq
    real (kind=RealKind), pointer :: Q_Table(:)
    integer (kind=IntKind), pointer :: global_table_line(:)
-
+!
    Q_Table => getGlobalOnSiteElectronTable()
    global_table_line => getGlobalTableLine()
-   
+!   
    do na = 1, LocalNumSites
       scr(na)%echarge = ZERO
       j = getGlobalIndex(na)
       do ia = 1, getLocalNumSpecies(na)
         lig = global_table_line(j) + ia
         qtemp = getLocalAtomicNumber(j, ia) - Q_Table(lig)
-        scr(na)%echarge = scr(na)%echarge -  &
-           getLocalSpeciesContent(na, ia)*((qtemp*qtemp)/scr(na)%fs_radius)
+        if (isKKRCPASRO()) then
+           uc = ZERO
+           do ns = 1, NumSROShells
+              avq = ZERO
+              do ja = 1, getLocalNumSpecies(na)
+                 mig = global_table_line(j) + ja
+                 dq = getLocalAtomicNumber(j,ja) - Q_Table(mig)
+                 avq = avq + w_ab(ia,ja,ns)*dq
+              enddo
+              uc = uc + avq*getNumAtomsOnShell(na,ns)/getShellRadius(na,ns)
+           enddo
+           scr(na)%echarge = scr(na)%echarge + getLocalSpeciesContent(na,ia)*qtemp*uc
+        else if (isLinRel()) then
+           uc = HALF*qtemp*getSpeciesPotentialCorrection(na,ia,ZERO)
+           scr(na)%echarge = scr(na)%echarge - getLocalSpeciesContent(na,ia)*uc
+        else
+           scr(na)%echarge = scr(na)%echarge -  &
+              getLocalSpeciesContent(na, ia)*((qtemp*qtemp)/scr(na)%fs_radius)
+        endif
       enddo
    enddo
 
@@ -192,7 +256,7 @@ contains
            lig1 = global_table_line(ig) + j
            dq_b = getLocalAtomicNumber(na, j) - Q_Table(lig1)
            scr(na)%echarge = scr(na)%echarge + &
-                   getLocalSpeciesContent(na, i)*w_ab(i, j)* &
+                   getLocalSpeciesContent(na, i)*w_ab(i,j,1)* &
                   ((dq_b*(dq_b - 2*dq_a))/scr(na)%fs_radius & 
                   -(dq_b - dq_a)**2/scr(na)%ss_radius)
          enddo
@@ -206,36 +270,34 @@ contains
    subroutine calChargeCorrection()
 !  ===================================================================
 
-   use ScfDataModule, only : isKKRCPASRO, isKKRCPA, isLinRel
+   use ScfDataModule, only : isKKRCPASRO, isChargeCorr
 
-   if (isLinRel() .and. isKKRCPA()) then
+   if (.not.isChargeCorr()) then
+      return
+!  else if (isKKRCPASRO()) then
+!    ! -----------------------------
+!      call calPotentialCorrection()
+!      call calSROEnergyShift()
+!    ! -----------------------------
+   else
      ! -----------------------------
        call calPotentialCorrection()
+       call calCPAEnergyShift()
      ! -----------------------------
-   else
-     if (isKKRCPA()) then
-       ! -----------------------------
-         call calPotentialCorrection()
-         call calCPAEnergyShift()
-       ! -----------------------------
-     else if (isKKRCPASRO()) then
-       ! -----------------------------
-         call calPotentialCorrection()
-         call calSROEnergyShift()
-       ! -----------------------------
-     endif
    endif
 
    end subroutine calChargeCorrection
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getSpeciesPotentialCorrection(na, ia)  result(corr)
+   function getSpeciesPotentialCorrection(na, ia, vmad)  result(corr)
 !  ===================================================================
+   use ScfDataModule, only : isLinRel
 
    use AtomModule, only : getLocalNumSpecies
 
    integer (kind=IntKind), intent(in) :: na, ia
+   real (kind=RealKind), intent(in) :: vmad
    real (kind=RealKind) :: corr
 
    if (na < 1 .or. na > LocalNumSites) then
@@ -246,7 +308,11 @@ contains
               'Invalid Species Index', ia)
    endif
 
-   corr = scr(na)%vmt1_corr(ia)
+   if (isLinRel()) then
+      corr = scr(na)%vmt1_corr(ia) - vmad
+   else
+      corr = scr(na)%vmt1_corr(ia)
+   endif
 
    end function getSpeciesPotentialCorrection
 !  ===================================================================
