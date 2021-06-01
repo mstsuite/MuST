@@ -1224,6 +1224,8 @@ contains
 !
    use ChargeScreeningModule, only : getSpeciesPotentialCorrection
 !
+   use ScfDataModule, only : isChargeCorr
+!
    implicit   none
 !
    logical, optional :: isMT
@@ -1305,14 +1307,24 @@ contains
       enddo
 !
       MadelungShiftTable = ZERO
-      do id = 1,LocalNumAtoms
-         ig = GlobalIndex(id)
-         do ia = 1, getNumAlloyElements(ig)
-            lig = global_table_line(ig) + ia
-            MadelungShiftTable(lig) = Potential(id)%Madelung_Shift +  &
-                                      getSpeciesPotentialCorrection(id,ia)
+      if (isChargeCorr()) then
+         do id = 1,LocalNumAtoms
+            ig = GlobalIndex(id)
+            do ia = 1, getNumAlloyElements(ig)
+               lig = global_table_line(ig) + ia
+               MadelungShiftTable(lig) = Potential(id)%Madelung_Shift +  &
+                  getSpeciesPotentialCorrection(id,ia,Potential(id)%Madelung_Shift)
+            enddo
          enddo
-      enddo
+      else
+         do id = 1,LocalNumAtoms
+            ig = GlobalIndex(id)
+            do ia = 1, getNumAlloyElements(ig)
+               lig = global_table_line(ig) + ia
+               MadelungShiftTable(lig) = Potential(id)%Madelung_Shift
+            enddo
+         enddo
+      endif
 !     ----------------------------------------------------------------
       call GlobalSumInGroup(GroupID,MadelungShiftTable,gsize)
 !     ----------------------------------------------------------------
@@ -2215,17 +2227,19 @@ contains
          endif
          do is =1, n_spin_pola
             Vexc => getExchCorrPot(jmt,is)
-            do ir = 1, jmt
-               if (.not. isChargeCorr()) then
+            if (isChargeCorr()) then
+               do ir = 1, jmt
+                  Potential(na)%potr_sph(ir,is,ia) =                                  &
+                     TWO*(-ztotss+PI8*(V1_r(ir)+(V2rmt-V2_r(ir))*r_mesh(ir))) + &
+                     (Vexc(ir) - vmt1(na) + getSpeciesPotentialCorrection(na, ia, -vmt1(na)))*r_mesh(ir)
+               enddo
+            else
+               do ir = 1, jmt
                   Potential(na)%potr_sph(ir,is,ia) =                                  &
                      TWO*(-ztotss+PI8*(V1_r(ir)+(V2rmt-V2_r(ir))*r_mesh(ir))) + &
                      (Vexc(ir) - vmt1(na))*r_mesh(ir)
-               else if (isChargeCorr()) then
-                  Potential(na)%potr_sph(ir,is,ia) =                                  &
-                     TWO*(-ztotss+PI8*(V1_r(ir)+(V2rmt-V2_r(ir))*r_mesh(ir))) + &
-                     (Vexc(ir) - vmt1(na) + getSpeciesPotentialCorrection(na, ia))*r_mesh(ir)
-               endif
-            enddo
+               enddo
+            endif
             do ir = jmt+1, n_Rpts
                Potential(na)%potr_sph(ir,is,ia) = ZERO
             enddo
@@ -2299,9 +2313,10 @@ contains
    Q_Table => getGlobalOnSiteElectronTableOld()
 !
 !  ===================================================================
-!  vmt = [1/5*rhoint*sum_i(surf_i*tau_i) + sum_i(qsub_i*surf_i)
-!         + 2*sum_ij(madmat(i,j)*tau_i*qsub_j)]/Omega_0
+!  vmt = [1/5*rhoint*sum_i(surf_i*omt_i) + sum_i(qsub_i*surf_i)
+!         + 2*sum_ij(madmat(i,j)*omt_i*qsub_j)]/Omega_0
 !  where:
+!       omt_i  = pi4*Rmt_i^3/3
 !       surf_i = pi4*Rmt_i^2
 !       qsub_i = dQ_i + rho_0*Omega_i
 !         dQ_i = Z_i - (Qmt_i + rho_0*Omega0_i)
@@ -3011,7 +3026,8 @@ contains
          vmad_aver(ia) = vmad_aver(ia)/real(getNumAtomsOfType(ia),kind=RealKind)
          dqv_aver(ia) = dqv_aver(ia)/real(getNumAtomsOfType(ia),kind=RealKind)
          dq2_aver(ia) = dq2_aver(ia)/real(getNumAtomsOfType(ia),kind=RealKind)
-         if (getNumAtomsOfType(ia) > 1) then
+         if (getNumAtomsOfType(ia) > 1 .and.                          &
+             abs(dq2_aver(ia)-dq_aver(ia)*dq_aver(ia)) > TEN2m6) then
             a(ia) = (dqv_aver(ia) - dq_aver(ia)*vmad_aver(ia))/(dq2_aver(ia)-dq_aver(ia)*dq_aver(ia))
          else
             a(ia) = ZERO
