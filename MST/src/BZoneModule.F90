@@ -1538,9 +1538,9 @@ contains
 !           rx(i,k)=rx(i,k)+r(l,i,1)*x_1(k)
 !           rx(i,k)=rx(i,k)+r(l,i,2)*x_2(k)
 !           rx(i,k)=rx(i,k)+r(l,i,3)*x_3(k)
-            rx(i,k)=rx(i,k)+r(i,1,1)*x_1(k)
-            rx(i,k)=rx(i,k)+r(i,2,1)*x_2(k)
-            rx(i,k)=rx(i,k)+r(i,3,1)*x_3(k)
+            rx(i,k)=rx(i,k)+r(i,1,l)*x_1(k)
+            rx(i,k)=rx(i,k)+r(i,2,l)*x_2(k)
+            rx(i,k)=rx(i,k)+r(i,3,l)*x_3(k)
          enddo
       enddo
 !     consider the first rotated atom k1=1

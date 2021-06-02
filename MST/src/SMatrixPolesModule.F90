@@ -25,14 +25,20 @@ public :: initSMatrixPoles,          &
           getNumResonanceStates,     &
           getNumResonanceStateDegen, &
           getResonanceStateEnergy,   &
+          isEnergyInResonanceRange,  &
           findSMatrixPoles,          &
           computeBoundStateDensity,  &
           getBoundStateDensity,      &
           getBoundStateChargeInCell, &
+          computeResonanceStateDensity,  &
+          getResonanceStateDensity,      &
           printSMatrixPoleInfo,      &
-          printBoundStateDensity
+          printBoundStateDensity,    &
+          isSMatrixPolesInitialized
 !
 private
+   logical :: isInitialized = .false.
+!
    integer (kind=IntKind) :: LocalNumAtoms
    integer (kind=IntKind) :: n_spin_pola
    integer (kind=IntKind) :: print_level
@@ -159,10 +165,10 @@ contains
 !
    do id = 1, LocalNumAtoms
       n = Pole(id)%NumSpecies
-      allocate( Pole(id)%NumBoundPoles(n_spin_pola,n) )
-      allocate( Pole(id)%NumBPDegens(kmax_kkr_max,n_spin_pola,n) )
-      allocate( Pole(id)%NumResPoles(n_spin_pola,n) )
-      allocate( Pole(id)%NumRPDegens(kmax_kkr_max,n_spin_pola,n) )
+      allocate( Pole(id)%NumBoundPoles(n_spin_pola,n) );            Pole(id)%NumBoundPoles = 0
+      allocate( Pole(id)%NumBPDegens(kmax_kkr_max,n_spin_pola,n) ); Pole(id)%NumBPDegens = 0
+      allocate( Pole(id)%NumResPoles(n_spin_pola,n) );              Pole(id)%NumResPoles = 0
+      allocate( Pole(id)%NumRPDegens(kmax_kkr_max,n_spin_pola,n) ); Pole(id)%NumRPDegens = 0
 !
       allocate( Pole(id)%BoundPoles(kmax_kkr_max,n_spin_pola,n) )
       allocate( Pole(id)%ResPoles(kmax_kkr_max,n_spin_pola,n) )
@@ -191,6 +197,8 @@ contains
       call initIntegerFactors(lmax_max)
 !     ----------------------------------------------------------------
    endif
+!
+   isInitialized = .true.
 !
    end subroutine initSMatrixPoles
 !  ===================================================================
@@ -232,7 +240,21 @@ contains
    call endQuadraticMatrix()
 !  -------------------------------------------------------------------
 !
+   isInitialized = .false.
+!
    end subroutine endSMatrixPoles
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isSMatrixPolesInitialized() result(y)
+!  ===================================================================
+   implicit none
+!
+   logical :: y
+!
+   y = isInitialized
+!
+   end function isSMatrixPolesInitialized
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -344,14 +366,14 @@ contains
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getNumResonanceStates(id,ia,is) result(n)
+   function getNumResonanceStates(site,atom,spin) result(n)
 !  ===================================================================
    implicit none
 !
-   integer (kind=IntKind), intent(in) :: is, id, ia
+   integer (kind=IntKind), intent(in) :: spin, site, atom
    integer (kind=IntKind) :: n
 !
-   n = Pole(id)%NumResPoles(is,ia)
+   n = Pole(site)%NumResPoles(spin,atom)
 !
    end function getNumResonanceStates
 !  ===================================================================
@@ -383,6 +405,90 @@ contains
    hw = Pole(id)%ResWidth(ib,is,ia)
 !
    end function getResonanceStateEnergy
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isEnergyInResonanceRange(e,site,atom,spin,res_id) result(y)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: site, atom, spin
+   integer (kind=IntKind), intent(out), optional :: res_id
+!
+   real (kind=RealKind), intent(in) :: e
+!
+   logical :: y
+!
+   if (present(res_id)) then
+      res_id = 0
+!
+   endif
+!
+   end function isEnergyInResonanceRange
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine computeResonanceStateDensity(site,atom,spin)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: site, spin, atom
+!
+!
+   end subroutine computeResonanceStateDensity
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getResonanceStateDensity(site,atom,spin,rstate,peak_term,e, &
+                                     NumRs,jmax_rho,derivative) result(p)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: site, atom, spin, rstate
+   integer (kind=IntKind), intent(out), optional :: NumRs, jmax_rho
+   integer (kind=IntKind) :: NumRPs
+!
+   logical, intent(in) :: peak_term
+   logical, intent(in), optional :: derivative
+   logical :: deriv_den
+!
+   real (kind=RealKind), intent(in), optional :: e
+!
+   complex (kind=CmplxKind), pointer :: Rdensity(:,:,:)
+   complex (kind=CmplxKind), pointer :: p(:,:)
+!
+   if (present(NumRs)) then
+       NumRs = Pole(site)%NumRs
+   endif
+!
+   if (present(jmax_rho)) then
+      jmax_rho = Pole(site)%jmax_rho
+   endif
+!
+   NumRPs = Pole(site)%NumResPoles(spin,atom)
+   if (NumRPs < 1) then
+      nullify(p)
+      return
+   else if (rstate < 1 .or. rstate > NumRPs) then
+      call ErrorHandler('getBoundStateDensity','Invalid resonance state index',rstate)
+   endif
+!
+   if (present(derivative)) then
+      deriv_den = derivative
+   else
+      deriv_den = .false.
+   endif
+!
+   if (deriv_den) then
+      Rdensity => aliasArray3_c(Pole(site)%Deriv_Density(:,spin,atom),   &
+                                Pole(site)%NumRs,Pole(site)%jmax_rho,NumRPs)
+   else
+      Rdensity => aliasArray3_c(Pole(site)%Density(:,spin,atom),         &
+                                Pole(site)%NumRs,Pole(site)%jmax_rho,NumRPs)
+   endif
+   p => Rdensity(:,:,rstate)
+!
+   end function getResonanceStateDensity
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -543,7 +649,7 @@ contains
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine findSMatrixPoles(id,ia,is,eb,et,Delta,CheckPoles,PanelOnZero)
+   subroutine findSMatrixPoles(id,ia,is,eb,et,Delta,MaxResWidth,CheckPoles,PanelOnZero)
 !  ===================================================================
    use SSSolverModule, only : solveSingleScattering, getJostMatrix
 !
@@ -558,6 +664,7 @@ contains
 !
    real (kind=RealKind), intent(in) :: eb, et
    real (kind=RealKind), intent(in), optional :: Delta
+   real (kind=RealKind), intent(in), optional :: MaxResWidth
 !
    logical, optional, intent(in) :: CheckPoles
    logical, optional, intent(in) :: PanelOnZero
@@ -570,8 +677,8 @@ contains
    logical :: isZeroInterval = .false.
    logical :: chkpole = .false.
 !
-   real (kind=RealKind) :: WindowWidth
-   real (kind=RealKind) :: e0, de, de2, dede2, pe, w0, err
+   real (kind=RealKind) :: WindowWidth, ResWidth
+   real (kind=RealKind) :: e0, de, de2, dede2, pe, w0, err, w
 !
    real (kind=RealKind) :: bpe(kmax_kkr_max), ebr(kmax_kkr_max), bpe_prev, rpe_prev
 !
@@ -594,6 +701,12 @@ contains
       WindowWidth = 4.0d0*Delta
    else
       WindowWidth = 0.01d0
+   endif
+!
+   if (present(MaxResWidth)) then
+      ResWidth = abs(MaxResWidth)
+   else
+      ResWidth = 1.0d20
    endif
 !
    kmax_kkr = Pole(id)%kmax_kkr
@@ -798,7 +911,8 @@ contains
             endif
          else if (aimag(sqrt(pv(ie)+e0)) < ZERO) then  ! Resonance states
             pe = real(pv(ie),kind=RealKind) + e0
-            if (pe >= w0 .and. pe <= w0+WindowWidth .and. pe > ZERO) then
+            w = aimag(sqrt(pv(ie)))**2
+            if (pe >= w0 .and. pe <= w0+WindowWidth .and. pe > ZERO .and. TWO*w <= ResWidth) then
 !              -------------------------------------------------------
                em => getEigenMatrix(ie) ! em is the residule matrix of
                                         ! integrating sm^{-1} around its eigenvalue
@@ -806,7 +920,7 @@ contains
                if (abs(pe-rpe_prev) > TEN2m6) then
                   nr = nr + 1
 !                 Pole(id)%ResPoles(nr,is,ia) = pe
-!                 Pole(id)%ResWidth(nr,is,ia) = aimag(sqrt(pv(ie)))**2
+!                 Pole(id)%ResWidth(nr,is,ia) = w
                   rpe(nr) = cmplx(pe,aimag(sqrt(pv(ie)))**2)
                   rpdeg(nr) = 1
 !write(6,'(a,2d15.8,a,2d15.8)')'Pole = ',pv(ie)+e0,', kappa = ',sqrt(pv(ie)+e0)
@@ -912,7 +1026,7 @@ contains
 !        -------------------------------------------------------------
          do ir = 1, nbr(2)
             Pole(id)%ResPoles(nr0+ir,is,ia) = real(erc(ir),kind=RealKind)
-            Pole(id)%ResWidth(nr0+ir,is,ia) = aimag(erc(ir))
+            Pole(id)%ResWidth(nr0+ir,is,ia) = TWO*aimag(erc(ir))
             Pole(id)%NumRPDegens(nr0+ir,is,ia) = degens(ir)
 !           ----------------------------------------------------------
 !           call zcopy(kmax_kkr*kmax_kkr,brmat(1,ir),1,          &

@@ -177,6 +177,7 @@ public
 !  ===================================================================
 !  Effective medium parameters
 !  ===================================================================
+   logical :: isWarrenCowley = .false.
    integer (kind=IntKind), private :: EM_mix_type=2
    integer (kind=IntKind), private :: EM_max_iter = 30
    real (kind=RealKind), private ::   EM_mix_0 = 0.1d0
@@ -433,7 +434,11 @@ contains
       rstatus = getKeyValue(tbl_id,'SRO Parameters',svalue)
       if (rstatus == 0) then
          read(svalue,*) sro_params(1:sro_param_num)
-      else if (rstatus /= 0  .and. isKKRCPASRO()) then
+         isWarrenCowley = .false.
+      else if (getKeyValue(tbl_id,'Warren-Cowley SRO Parameters',svalue) == 0) then
+         read(svalue,*) sro_params(1:sro_param_num)
+         isWarrenCowley = .true.
+      else if (isKKRCPASRO()) then
          call ErrorHandler('initScfData', 'SRO Parameters not found')
       endif
       rstatus = getKeyValue(tbl_id, 'Next Nearest', next_nearest)
@@ -1092,10 +1097,12 @@ contains
 !
    logical :: isChargeCorrelated
 !
-   if (charge_corr == 0) then
-      isChargeCorrelated = .false.
-   else if (charge_corr == 1) then
+   if (isKKRCPA() .and. charge_corr == 1) then
       isChargeCorrelated = .true.
+   else if (isKKRCPASRO() .and. charge_corr == 1) then
+      isChargeCorrelated = .true.
+   else
+      isChargeCorrelated = .false.
    endif
 !
    end function isChargeCorr
@@ -1110,10 +1117,10 @@ contains
 !
    logical :: isLinearRelationUsed
 !
-   if (use_linear_relation == 0) then
-      isLinearRelationUsed = .false.
-   else if (use_linear_relation == 1) then
+   if (isChargeCorr() .and. use_linear_relation == 1) then
       isLinearRelationUsed = .true.
+   else
+      isLinearRelationUsed = .false.
    endif
 !
    end function isLinRel
@@ -1691,7 +1698,7 @@ contains
 !  *******************************************************************
 !  
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
-   subroutine retrieveSROParams(sro_param_list, param_num, sro_param_list_nn)
+   subroutine retrieveSROParams(sro_param_list, param_num, sro_param_list_nn, isWC)
 !  ===================================================================
    implicit none
 
@@ -1700,6 +1707,8 @@ contains
    real (kind=RealKind), allocatable, intent(out) :: sro_param_list(:)
    real (kind=RealKind), allocatable, intent(out), optional :: sro_param_list_nn(:)
 
+   logical, intent(out), optional :: isWC
+
    param_num = sro_param_num
    allocate(sro_param_list(param_num))
    sro_param_list = sro_params
@@ -1707,6 +1716,8 @@ contains
       allocate(sro_param_list_nn(param_num))
       sro_param_list_nn = sro_params_nn
    endif
+!
+   isWC = isWarrenCowley
 !
    end subroutine retrieveSROParams
 !  ==================================================================
