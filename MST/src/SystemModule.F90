@@ -658,9 +658,18 @@ contains
             Evec(1:3,i) = evt(1:3)
          enddo
       else
+         do i=1,NumAtoms
+            Evec(1:3,i) = evt(1:3)
+         enddo
+         if (MyPE == 0) then
+!           ----------------------------------------------------------
+            call WarningHandler('initSystem',                              &
+                 'Moment directions are not specified from input, so they are set to default.')
+!           ----------------------------------------------------------
+         endif
 !        -------------------------------------------------------------
-         call ErrorHandler('initSystem',                              &
-                           'Not able to identify Moment Direction Data')
+!        call ErrorHandler('initSystem',                              &
+!                          'Not able to identify Moment Direction Data')
 !        -------------------------------------------------------------
       endif
    endif
@@ -717,9 +726,18 @@ contains
             ConstrainField(1:3,i) = evt(1:3)
          enddo
       else
+         do i=1,NumAtoms
+            ConstrainField(1:3,i) = evt(1:3)
+         enddo
+         if (MyPE == 0) then
+!           ----------------------------------------------------------
+            call WarningHandler('initSystem',                              &
+                 'Constraint fields are not specified from input, so they are set to dedault')
+!           ----------------------------------------------------------
+         endif
 !        -------------------------------------------------------------
-         call ErrorHandler('initSystem',                              &
-                           'Not able to identify Constrain Field Data')
+!        call ErrorHandler('initSystem',                              &
+!                          'Not able to identify Constrain Field Data')
 !        -------------------------------------------------------------
       endif
    endif
