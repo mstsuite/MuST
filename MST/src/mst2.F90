@@ -7,7 +7,7 @@ program mst2
 !
    use ChemElementModule, only : getZval
 !
-   use TimerModule, only : initTimer, getTime
+   use TimerModule, only : initTimer, getTime, fetchStoredTime
 !
    use ErrorHandlerModule, only : setErrorOutput, ErrorHandler, WarningHandler
 !
@@ -315,7 +315,7 @@ program mst2
    real (kind=RealKind) :: rmt, rinsc, rend, rws, hin, rmt_grid, rc
    real (kind=RealKind) :: Efermi, volume, cfac
    real (kind=RealKind) :: v0, val, evb
-   real (kind=RealKind) :: t0, t1, t2, t3
+   real (kind=RealKind) :: t0, t1, t2, t3, t_inp, t_outp
 !
    real (kind=RealKind), pointer :: mom_table(:)
 !
@@ -402,6 +402,7 @@ program mst2
    call initTimer()
 !  -------------------------------------------------------------------
    t0 = getTime()
+   t_inp = ZERO; t_outp = ZERO
 !
 !  -------------------------------------------------------------------
    call initMPP()
@@ -456,6 +457,8 @@ program mst2
 !  inquire(unit=5,name=FileName,named=FileNamed)
    inquire(unit=5,name=FileName,exist=StandardInputExist)
 !  write(6,*) "main:: Input file open: ",trim(FileName)
+!  *******************************************************************
+   t3 = getTime()
 !  if (FileNamed) then
    if (StandardInputExist) then
 !     ----------------------------------------------------------------
@@ -502,6 +505,8 @@ program mst2
    else
       info_id = def_id
    endif
+   t_inp = t_inp + (getTime() - t3)
+!  *******************************************************************
 !
 !  ===================================================================
 !  initialize SCF-calculation related data
@@ -520,6 +525,7 @@ program mst2
 !  ===================================================================
    call initSystem(def_id)
 !  -------------------------------------------------------------------
+   t_inp = t_inp + fetchStoredTime()
 !
 !  ===================================================================
 !  Check data consistency
@@ -1227,6 +1233,8 @@ program mst2
    endif
 !  ===================================================================
 !
+!  *******************************************************************
+   t3 = getTime()
    if (isTestPotential()) then
 !     ----------------------------------------------------------------
       call initTestPotential(LocalNumAtoms,n_spin_pola)
@@ -1298,8 +1306,8 @@ program mst2
    endif
 !  -------------------------------------------------------------------
    call syncAllPEs()
-!  ===================================================================
-!
+!  -------------------------------------------------------------------
+   t_inp = t_inp + (getTime() - t3)
 !  *******************************************************************
 !
 !  ===================================================================
@@ -1487,8 +1495,10 @@ program mst2
 !           ----------------------------------------------------------
             call calValenceDOS()
 !           ----------------------------------------------------------
+            t3 = getTime()
             call writeDOS(inputpath,getSystemID(),getDOSrunID())
             call writeSS_DOS(inputpath,getSystemID(),getDOSrunID())
+            t_outp = t_outp + (getTime() - t3)
 !           ----------------------------------------------------------
             exit SCF_LOOP
          endif
@@ -1546,7 +1556,9 @@ program mst2
             enddo
          else if (isFrozenCore(iter=iscf)) then
             if (.not.isFrozenCore(iter=iscf-1) .and. .not.FrozenCoreFileExist) then
+               t3 = getTime()
                call writeCoreDensity(FrozenCoreFileName)
+               t_outp = t_outp + (getTime() - t3)
                FrozenCoreFileExist = .true.
             endif
             if (node_print_level >= 0) then
@@ -1820,9 +1832,11 @@ program mst2
          n_potwrite = n_potwrite + 1
          if ( potwrite > 0 .and. (n_potwrite==potwrite .or. iscf==nscf &
                                   .or. ScfConverged) ) then
+            t3 = getTime()
 !           ----------------------------------------------------------
             call writePotential()
 !           ----------------------------------------------------------
+            t_outp = t_outp + (getTime() - t3)
             n_potwrite = 0
          endif
 !
@@ -1863,9 +1877,11 @@ program mst2
    deallocate(LocalNumValenceElectrons)
 !
    if (n_spin_cant == 2) then
+      t3 = getTime()
 !     ----------------------------------------------------------------
       call writeMomentDirectionData()
 !     ----------------------------------------------------------------
+      t_outp = t_outp + (getTime() - t3)
    endif
 !
    if ( isExchangeParamNeeded() .and. n_spin_cant == 2 ) then
@@ -1939,8 +1955,10 @@ stop 'Under construction...'
    endif
    if (node_print_level >= 0) then
       write(6,'(/,80(''=''))')
-      write(6,'(''Time:: Job total  '',5x,'' :'',f12.5,''Sec'')') &
-                    getTime()-t0
+      t3 = getTime()-t0
+      t2 = t_inp + t_outp
+      write(6,'(''Time:: Job total including IO :'',f12.5,''Sec'')') t3
+      write(6,'(''       Job total excluding IO :'',f12.5,''Sec'')') t3 - t2
       write(6,'(80(''-''))')
    endif
 !
