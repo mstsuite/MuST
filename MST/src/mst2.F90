@@ -1818,11 +1818,13 @@ program mst2
          endif
 !        =============================================================
 !
+         t3 = getTime()
 !        -------------------------------------------------------------
          call  printScfResults(GlobalNumAtoms,LocalNumAtoms,             &
                                node_print_level,atom_print_level,n_write,&
                                movie,iscf,nscf,ScfConverged)
 !        -------------------------------------------------------------
+         t_outp = t_outp + (getTime() - t3)
 !
 !        *************************************************************
 !
