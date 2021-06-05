@@ -102,7 +102,7 @@ TEST_CASES = $(ODIR)/testStrConst \
              $(ODIR)/tst_ylm \
              $(ODIR)/tst_bessel \
              $(ODIR)/testIntegration \
-             $(ODIR)/tst_string \
+             $(ODIR)/testString \
              $(ODIR)/testNeighbor \
              $(ODIR)/tst_write \
              $(ODIR)/tst_read \
@@ -148,7 +148,7 @@ TEST_CASES_O = $(ODIR)/testStrConst.o \
                $(ODIR)/tst_ylm.o \
                $(ODIR)/tst_bessel.o \
                $(ODIR)/testIntegration.o \
-               $(ODIR)/tst_string.o \
+               $(ODIR)/testString.o \
                $(ODIR)/testNeighbor.o \
                $(ODIR)/tst_write.o \
                $(ODIR)/tst_read.o \
@@ -210,8 +210,8 @@ $(ODIR)/tst_bessel: tst_bessel.o
 $(ODIR)/testIntegration: testIntegration.o
 	$(LD) -o $(ODIR)/testIntegration testIntegration.o $(MSTLIB) $(ADDLIBS)
 
-$(ODIR)/tst_string: tst_string.o $(ODIR)/StringModule.o
-	$(LD) -o $(ODIR)/tst_string tst_string.o $(ODIR)/StringModule.o $(MSTLIB) $(ADDLIBS)
+$(ODIR)/testString: testString.o $(ODIR)/StringModule.o $(ODIR)/breakLine.o
+	$(LD) -o $(ODIR)/testString testString.o $(ODIR)/StringModule.o $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/tst_write: tst_write.o
 	$(LD) -o $(ODIR)/tst_write tst_write.o $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)

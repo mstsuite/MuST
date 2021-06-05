@@ -112,7 +112,7 @@ private
 !
    integer (kind=IntKind) :: RECORD_LENGTH
 !
-   real (kind=RealKind) :: efermi
+   real (kind=RealKind) :: efermi, efermi_min, efermi_max
    real (kind=RealKind), allocatable :: efermi_in(:,:)
    real (kind=RealKind), target :: vdif(1)
    real (kind=RealKind) :: v0(2)
@@ -1679,7 +1679,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine readPotential()
 !  ===================================================================
-   use GroupCommModule, only : GlobalMinInGroup, GlobalSumInGroup
+   use GroupCommModule, only : GlobalMinInGroup, GlobalSumInGroup, GlobalMaxInGroup
 !
    use ChemElementModule, only : getZtot
 !
@@ -1707,6 +1707,9 @@ contains
    real (kind=RealKind) :: pot_shift
 !
    file_form = adjustl(getInPotFileForm())
+!
+   efermi_min=1.0d+10 ! efermi_min and efermi_max will be updated inside
+   efermi_max=ZERO    ! readFormattedData or readUnformattedData
 !
    if (trim(file_form) == 'FORMATTED') then
 !     if (getInPotFileForm(id) == 'FORMATTED') then
@@ -1769,10 +1772,20 @@ contains
 !     ----------------------------------------------------------------
    endif
 !
+!  ==================================================================
+!  Notes on 6/2/2021:
+!     The initial Fermi energy was taken by averaging the Fermi energy
+!     read from different potential files. Unfortunately, the way
+!     it was done causes the initial Fermi energy becomes dependent on
+!     the parallelization. I now change to taking the maximum value.
 !  -------------------------------------------------------------------
-   call GlobalSumInGroup(GroupID,efermi)
+!  call GlobalSumInGroup(GroupID,efermi)
 !  -------------------------------------------------------------------
-   efermi = efermi/real(NumPEsInGroup,kind=RealKind)
+!  efermi = efermi/real(NumPEsInGroup,kind=RealKind)
+   call GlobalMinInGroup(GroupID,efermi_min)
+   call GlobalMaxInGroup(GroupID,efermi_max)
+   efermi = HALF*(efermi_min+efermi_max)
+!  -------------------------------------------------------------------
 !
 !  ===================================================================
 !  The starting potential may come with different fermi energy.
@@ -1949,7 +1962,7 @@ contains
                              nr+1, NumSpecies(id), RealMark )
    endif
 !
-   efermi = ZERO; nef = 0
+   nef = 0
    do ia = 1, NumSpecies(id)
       filename = getInPotFileName(id,ia)
 !     ----------------------------------------------------------------
@@ -2255,12 +2268,22 @@ contains
             enddo
          enddo
       endif
-!     efermi=min(efermi,efermi_in(ia,id))
-      efermi = efermi + efermi_in(ia,id); nef = nef + 1
+!     ===============================================================
+!     Notes on 6/2/2021:
+!        The initial Fermi energy was taken by averaging the Fermi energy
+!        read from different potential files. Unfortunately, the way
+!        it was done causes the initial Fermi energy becomes dependent on
+!        the parallelization. I now change to taking the mid of min/max values.
+!     efermi = efermi + efermi_in(ia,id); nef = nef + 1
+!     ===============================================================
+      efermi_min = min(efermi_min,efermi_in(ia,id))
+      efermi_max = max(efermi_max,efermi_in(ia,id))
+!     ===============================================================
 !
       close(unit=funit)
    enddo
-   efermi = efermi/real(nef,kind=RealKind) ! Average Ef on current processor.
+!  The following line was commented out on 6/2/2021
+!  efermi = efermi/real(nef,kind=RealKind) ! Average Ef on current processor.
    deallocate(rhotot)
 !
    end subroutine readFormattedData
@@ -2399,7 +2422,7 @@ contains
                              nr+1, NumSpecies(id), RealMark )
    endif
 !
-   efermi = ZERO; nef = 0
+   nef = 0
    do ia = 1, NumSpecies(id)
       ThisP%ztss(ia) = ztotss(ia)
       if ( numc(ia) > getNumCoreStates(atname(ia)) ) then
@@ -2416,8 +2439,16 @@ contains
          call setNumCoreStates(atname(ia),numc(ia))
       endif
 !
-!     efermi = min(efermi, efermi_in(ia,id))
-      efermi = efermi + efermi_in(ia,id); nef = nef + 1
+!     ===============================================================
+!     Notes on 6/2/2021:
+!        The initial Fermi energy was taken by averaging the Fermi energy
+!        read from different potential files. Unfortunately, the way
+!        it was done causes the initial Fermi energy becomes dependent on
+!        the parallelization. I now change to taking the maximum value.
+!     efermi = efermi + efermi_in(ia,id); nef = nef + 1
+!     ===============================================================
+      efermi_min = min(efermi_min, efermi_in(ia,id))
+      efermi_max = max(efermi_max, efermi_in(ia,id))
 !
       do is = 1, n_spin_pola
          do i = 1, numc(ia)
@@ -2452,7 +2483,8 @@ contains
       endif
    enddo
 !
-   efermi = efermi/real(nef,kind=RealKind)
+!  The following line was commented out on 6/2/2021
+!  efermi = efermi/real(nef,kind=RealKind)
    nullify(ec0,pc0,rho0,mom0)
    deallocate( rhotot )
 !

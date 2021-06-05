@@ -207,6 +207,8 @@ contains
 !
    use PublicParamDefinitionsModule, only : ASA, MuffinTin, MuffinTinASA
 !
+   use TimerModule, only : getTime, storeTime
+!
    implicit none
 !
    character (len=50) :: info_table
@@ -232,7 +234,7 @@ contains
    real (kind=RealKind), allocatable :: radplane(:)
 !
    real (kind=RealKind) :: volume
-   real (kind=RealKind) :: evt(3), em, alpev, an
+   real (kind=RealKind) :: evt(3), em, alpev, an, t0, t_inp
 !
    interface
       function nocaseCompare(s1,s2) result(t)
@@ -260,7 +262,8 @@ contains
       end subroutine copyCharArray2String
    end interface
 !
-   alat = 0.0d0
+   alat = ZERO
+   t_inp = ZERO
 !
 !  -------------------------------------------------------------------
    rstatus = getKeyValue(tbl_id,'Text Identification',SystemID)
@@ -309,9 +312,11 @@ contains
    fposi_out = trim(fposi_in)//'_out'
 !
    if ( len_trim(fposi_in) > 0 .and. .not.nocaseCompare(fposi_in,'None') ) then
+      t0 = getTime()
 !     ----------------------------------------------------------------
       call readPositionData(trim(file_path)//trim(fposi_in),NumAtomsIn=NumAtoms)
 !     ----------------------------------------------------------------
+      t_inp = t_inp + (getTime() - t0)
    endif
 !
    if ( nspin > 2 ) then
@@ -325,10 +330,12 @@ contains
          fevec_in ='None'
       endif
       if ( len_trim(fevec_in) > 0 .and. .not.nocaseCompare(fevec_in,'None') ) then
+         t0 = getTime()
 !        -------------------------------------------------------------
          call readMomentDirectionData(trim(file_path)//trim(fevec_in), &
                                       NumAtoms)
 !        -------------------------------------------------------------
+         t_inp = t_inp + (getTime() - t0)
          fevec_out = trim(fevec_in)//'_out'
       else
          fevec_out = 'Evec_out.dat'
@@ -651,9 +658,18 @@ contains
             Evec(1:3,i) = evt(1:3)
          enddo
       else
+         do i=1,NumAtoms
+            Evec(1:3,i) = evt(1:3)
+         enddo
+         if (MyPE == 0) then
+!           ----------------------------------------------------------
+            call WarningHandler('initSystem',                              &
+                 'Moment directions are not specified from input, so they are set to default.')
+!           ----------------------------------------------------------
+         endif
 !        -------------------------------------------------------------
-         call ErrorHandler('initSystem',                              &
-                           'Not able to identify Moment Direction Data')
+!        call ErrorHandler('initSystem',                              &
+!                          'Not able to identify Moment Direction Data')
 !        -------------------------------------------------------------
       endif
    endif
@@ -710,9 +726,18 @@ contains
             ConstrainField(1:3,i) = evt(1:3)
          enddo
       else
+         do i=1,NumAtoms
+            ConstrainField(1:3,i) = evt(1:3)
+         enddo
+         if (MyPE == 0) then
+!           ----------------------------------------------------------
+            call WarningHandler('initSystem',                              &
+                 'Constraint fields are not specified from input, so they are set to dedault')
+!           ----------------------------------------------------------
+         endif
 !        -------------------------------------------------------------
-         call ErrorHandler('initSystem',                              &
-                           'Not able to identify Constrain Field Data')
+!        call ErrorHandler('initSystem',                              &
+!                          'Not able to identify Constrain Field Data')
 !        -------------------------------------------------------------
       endif
    endif
@@ -798,6 +823,10 @@ contains
    LmaxRhoMax = maxval(LmaxRho(1:NumAtoms))
    LmaxPhiMax = maxval(LmaxPhi(1:NumAtoms))
    LmaxMax = max(LmaxPotMax, LmaxKKRMax, LmaxRhoMax, LmaxPhiMax)
+!
+!  -------------------------------------------------------------------
+   call storeTime(t_inp)
+!  -------------------------------------------------------------------
 !
    end subroutine initSystem
 !  ===================================================================

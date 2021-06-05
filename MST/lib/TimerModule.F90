@@ -2,7 +2,9 @@ module TimerModule
    use KindParamModule, only : IntKind, RealKind
 !
 public :: initTimer, &
-          getTime
+          getTime,   &
+          storeTime, &
+          fetchStoredTime
 !
 private
    character (len=8) :: date
@@ -25,6 +27,7 @@ private
    real (kind=RealKind) :: ClockTime
    real (kind=RealKind) :: MaxSec = -1.0
    real (kind=RealKind) :: seconds
+   real (kind=RealKind) :: StoredTime
 
 contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -110,4 +113,33 @@ contains
    endif
 !
    end function getTime
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine storeTime(t)
+!  ===================================================================
+   implicit none
+!
+   real (kind=RealKind), intent(in) :: t
+!
+   StoredTime = t
+!
+   end subroutine storeTime
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function fetchStoredTime() result(t)
+!  ===================================================================
+   implicit none
+!
+   real (kind=RealKind) :: t
+!
+   t = StoredTime
+!
+   end function fetchStoredTime
+!  ===================================================================
 end module TimerModule

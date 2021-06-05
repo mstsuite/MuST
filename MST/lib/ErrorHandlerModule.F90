@@ -52,6 +52,26 @@ private
    integer (kind=IntKind) :: ErrorPrintLevel = 1
    integer (kind=IntKind) :: WarningPrintLevel = 1
    integer (kind=IntKind) :: MessagePrintLevel = 1
+   integer (kind=IntKind), parameter :: line_width = 60
+!
+   character (len=line_width), pointer :: msg_ml(:)
+   integer (kind=IntKind) :: num_lines
+!
+   interface
+!     cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+      subroutine breakLine(s,lw,nl,sml)
+!     ================================================================
+      use KindParamModule, only : IntKind
+!
+      integer (kind=IntKind), intent(in) :: lw
+      integer (kind=IntKind), intent(out) :: nl
+!
+      character (len=*), intent(in) :: s
+      character (len=*), pointer, intent(out) :: sml(:)
+!
+      end subroutine breakLine
+!     ================================================================
+   end interface
 !
 contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -93,6 +113,7 @@ contains
    character (len=*), intent(in) :: rname,error_message
    integer (kind=IntKind), intent(in) :: value
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -105,7 +126,12 @@ contains
    endif
 !
    if (pr) then
-      write(FileUnit,'(2a)')'ERROR: ',error_message
+!     write(FileUnit,'(2a)')'ERROR: ',error_message
+      call breakLine(error_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a)')'ERROR: ',msg_ml(1)
+      do i = 2, num_lines
+         write(FileUnit,'(a,a)')'       ',msg_ml(i)
+      enddo
       write(FileUnit,'(a,i8)')'VALUE: ',value
       write(FileUnit,'(2a)')'STOP AT ',rname
    endif
@@ -123,6 +149,7 @@ contains
    character (len=*), intent(in) :: rname,error_message
    integer (kind=IntKind), intent(in) :: value1,value2
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -135,7 +162,12 @@ contains
    endif
 !
    if (pr) then
-      write(FileUnit,'(2a)')'ERROR: ',error_message
+!     write(FileUnit,'(2a)')'ERROR: ',error_message
+      call breakLine(error_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a)')'ERROR: ',msg_ml(1)
+      do i = 2, num_lines
+         write(FileUnit,'(a,a)')'       ',msg_ml(i)
+      enddo
       write(FileUnit,'(a,2(i8,2x))')'VALUE: ',value1,value2
       write(FileUnit,'(2a)')'STOP AT ',rname
    endif
@@ -153,6 +185,7 @@ contains
    character (len=*), intent(in) :: rname,error_message
    integer (kind=IntKind), intent(in) :: value1,value2,value3
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -165,7 +198,12 @@ contains
    endif
 !
    if (pr) then
-      write(FileUnit,'(2a)')'ERROR: ',error_message
+!     write(FileUnit,'(2a)')'ERROR: ',error_message
+      call breakLine(error_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a)')'ERROR: ',msg_ml(1)
+      do i = 2, num_lines
+         write(FileUnit,'(a,a)')'       ',msg_ml(i)
+      enddo
       write(FileUnit,'(a,3(i8,2x))')'VALUE: ',value1,value2,value3
       write(FileUnit,'(2a)')'STOP AT ',rname
    endif
@@ -184,6 +222,7 @@ contains
    character (len=*), intent(in) :: rname,error_message
    integer (kind=IntKind), intent(in) :: value1,value2,value3,value4
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -196,7 +235,12 @@ contains
    endif
 !
    if (pr) then
-      write(FileUnit,'(2a)')'ERROR: ',error_message
+!     write(FileUnit,'(2a)')'ERROR: ',error_message
+      call breakLine(error_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a)')'ERROR: ',msg_ml(1)
+      do i = 2, num_lines
+         write(FileUnit,'(a,a)')'       ',msg_ml(i)
+      enddo
       write(FileUnit,'(a,4(i8,2x))')'VALUE: ',value1,value2,value3,value4
       write(FileUnit,'(2a)')'STOP AT ',rname
    endif
@@ -214,6 +258,7 @@ contains
    character (len=*), intent(in) :: rname,error_message
    real (kind=RealKind), intent(in) :: value
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -226,7 +271,12 @@ contains
    endif
 !
    if (pr) then
-      write(FileUnit,'(2a)')'ERROR: ',error_message
+!     write(FileUnit,'(2a)')'ERROR: ',error_message
+      call breakLine(error_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a)')'ERROR: ',msg_ml(1)
+      do i = 2, num_lines
+         write(FileUnit,'(a,a)')'       ',msg_ml(i)
+      enddo
       write(FileUnit,'(a,d18.7)')'VALUE: ',value
       write(FileUnit,'(2a)')'STOP AT ',rname
    endif
@@ -244,6 +294,7 @@ contains
    character (len=*), intent(in) :: rname,error_message
    real (kind=RealKind), intent(in) :: value1,value2
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -256,7 +307,12 @@ contains
    endif
 !
    if (pr) then
-      write(FileUnit,'(2a)')'ERROR: ',error_message
+!     write(FileUnit,'(2a)')'ERROR: ',error_message
+      call breakLine(error_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a)')'ERROR: ',msg_ml(1)
+      do i = 2, num_lines
+         write(FileUnit,'(a,a)')'       ',msg_ml(i)
+      enddo
       write(FileUnit,'(a,d18.7,2x,d18.7)')'VALUE: ',value1,value2
       write(FileUnit,'(2a)')'STOP AT ',rname
    endif
@@ -274,6 +330,7 @@ contains
    character (len=*), intent(in) :: rname,error_message
    complex (kind=CmplxKind), intent(in) :: value
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -286,7 +343,12 @@ contains
    endif
 !
    if (pr) then
-      write(FileUnit,'(2a)')'ERROR: ',error_message
+!     write(FileUnit,'(2a)')'ERROR: ',error_message
+      call breakLine(error_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a)')'ERROR: ',msg_ml(1)
+      do i = 2, num_lines
+         write(FileUnit,'(a,a)')'       ',msg_ml(i)
+      enddo
       write(FileUnit,'(a,2d18.7)')'VALUE: ',value
       write(FileUnit,'(2a)')'STOP AT ',rname
    endif
@@ -304,6 +366,7 @@ contains
    character (len=*), intent(in) :: rname,error_message
    complex (kind=CmplxKind), intent(in) :: value1,value2
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -316,7 +379,12 @@ contains
    endif
 !
    if (pr) then
-      write(FileUnit,'(2a)')'ERROR: ',error_message
+!     write(FileUnit,'(2a)')'ERROR: ',error_message
+      call breakLine(error_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a)')'ERROR: ',msg_ml(1)
+      do i = 2, num_lines
+         write(FileUnit,'(a,a)')'       ',msg_ml(i)
+      enddo
       write(FileUnit,'(a,2d18.7,2x,2d18.7)')'VALUE: ',value1,value2
       write(FileUnit,'(2a)')'STOP AT ',rname
    endif
@@ -333,6 +401,7 @@ contains
    implicit none
    character (len=*), intent(in) :: rname,error_message,value
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -345,7 +414,12 @@ contains
    endif
 !
    if (pr) then
-      write(FileUnit,'(2a)')'ERROR: ',error_message
+!     write(FileUnit,'(2a)')'ERROR: ',error_message
+      call breakLine(error_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a)')'ERROR: ',msg_ml(1)
+      do i = 2, num_lines
+         write(FileUnit,'(a,a)')'       ',msg_ml(i)
+      enddo
       write(FileUnit,'(2a)')'VALUE: ',value
       write(FileUnit,'(2a)')'STOP AT ',rname
    endif
@@ -362,6 +436,7 @@ contains
    implicit none
    character (len=*), intent(in) :: rname,error_message,value1,value2
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -374,7 +449,12 @@ contains
    endif
 !
    if (pr) then
-      write(FileUnit,'(2a)')'ERROR: ',error_message
+!     write(FileUnit,'(2a)')'ERROR: ',error_message
+      call breakLine(error_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a)')'ERROR: ',msg_ml(1)
+      do i = 2, num_lines
+         write(FileUnit,'(a,a)')'       ',msg_ml(i)
+      enddo
       write(FileUnit,'(3a)')'VALUE: ',value1,value2
       write(FileUnit,'(2a)')'STOP AT ',rname
    endif
@@ -391,6 +471,7 @@ contains
    implicit none
    character (len=*), intent(in) :: rname,error_message
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -403,7 +484,12 @@ contains
    endif
 !
    if (pr) then
-      write(FileUnit,'(2a)')'ERROR: ',error_message
+!     write(FileUnit,'(2a)')'ERROR: ',error_message
+      call breakLine(error_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a)')'ERROR: ',msg_ml(1)
+      do i = 2, num_lines
+         write(FileUnit,'(a,a)')'       ',msg_ml(i)
+      enddo
       write(FileUnit,'(2a)')'STOP AT ',rname
    endif
 !
@@ -448,6 +534,7 @@ contains
    character (len=*), intent(in) :: rname,stop_message
    integer (kind=IntKind), intent(in) :: value
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -460,7 +547,12 @@ contains
    endif
 !
    if (pr) then
-      write(FileUnit,'(2a)')'MESSAGE: ',stop_message
+!     write(FileUnit,'(2a)')'MESSAGE: ',stop_message
+      call breakLine(stop_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a)')'MESSAGE: ',msg_ml(1)
+      do i = 2, num_lines
+         write(FileUnit,'(a,a)')'         ',msg_ml(i)
+      enddo
       write(FileUnit,'(a,i8)')'VALUE: ',value
       write(FileUnit,'(2a)')'STOP AT ',rname
    endif
@@ -478,6 +570,7 @@ contains
    character (len=*), intent(in) :: rname,stop_message
    integer (kind=IntKind), intent(in) :: value1,value2
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -490,7 +583,12 @@ contains
    endif
 !
    if (pr) then
-      write(FileUnit,'(2a)')'MESSAGE: ',stop_message
+!     write(FileUnit,'(2a)')'MESSAGE: ',stop_message
+      call breakLine(stop_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a)')'MESSAGE: ',msg_ml(1)
+      do i = 2, num_lines
+         write(FileUnit,'(a,a)')'         ',msg_ml(i)
+      enddo
       write(FileUnit,'(a,i8,2x,i8)')'VALUE: ',value1,value2
       write(FileUnit,'(2a)')'STOP AT ',rname
    endif
@@ -508,6 +606,7 @@ contains
    character (len=*), intent(in) :: rname,stop_message
    real (kind=RealKind), intent(in) :: value
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -520,7 +619,12 @@ contains
    endif
 !
    if (pr) then
-      write(FileUnit,'(2a)')'MESSAGE: ',stop_message
+!     write(FileUnit,'(2a)')'MESSAGE: ',stop_message
+      call breakLine(stop_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a)')'MESSAGE: ',msg_ml(1)
+      do i = 2, num_lines
+         write(FileUnit,'(a,a)')'         ',msg_ml(i)
+      enddo
       write(FileUnit,'(a,d18.7)')'VALUE: ',value
       write(FileUnit,'(2a)')'STOP AT ',rname
    endif
@@ -538,6 +642,7 @@ contains
    character (len=*), intent(in) :: rname,stop_message
    real (kind=RealKind), intent(in) :: value1,value2
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -550,7 +655,12 @@ contains
    endif
 !
    if (pr) then
-      write(FileUnit,'(2a)')'MESSAGE: ',stop_message
+!     write(FileUnit,'(2a)')'MESSAGE: ',stop_message
+      call breakLine(stop_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a)')'MESSAGE: ',msg_ml(1)
+      do i = 2, num_lines
+         write(FileUnit,'(a,a)')'         ',msg_ml(i)
+      enddo
       write(FileUnit,'(a,d18.7,2x,d18.7)')'VALUE: ',value1,value2
       write(FileUnit,'(2a)')'STOP AT ',rname
    endif
@@ -568,6 +678,7 @@ contains
    character (len=*), intent(in) :: rname,stop_message
    complex (kind=CmplxKind), intent(in) :: value
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -580,7 +691,12 @@ contains
    endif
 !
    if (pr) then
-      write(FileUnit,'(2a)')'MESSAGE: ',stop_message
+!     write(FileUnit,'(2a)')'MESSAGE: ',stop_message
+      call breakLine(stop_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a)')'MESSAGE: ',msg_ml(1)
+      do i = 2, num_lines
+         write(FileUnit,'(a,a)')'         ',msg_ml(i)
+      enddo
       write(FileUnit,'(a,2d18.7)')'VALUE: ',value
       write(FileUnit,'(2a)')'STOP AT ',rname
    endif
@@ -598,6 +714,7 @@ contains
    character (len=*), intent(in) :: rname,stop_message
    complex (kind=CmplxKind), intent(in) :: value1,value2
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -610,7 +727,12 @@ contains
    endif
 !
    if (pr) then
-      write(FileUnit,'(2a)')'MESSAGE: ',stop_message
+!     write(FileUnit,'(2a)')'MESSAGE: ',stop_message
+      call breakLine(stop_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a)')'MESSAGE: ',msg_ml(1)
+      do i = 2, num_lines
+         write(FileUnit,'(a,a)')'         ',msg_ml(i)
+      enddo
       write(FileUnit,'(a,2d18.7,2x,2d18.7)')'VALUE: ',value1,value2
       write(FileUnit,'(2a)')'STOP AT ',rname
    endif
@@ -627,6 +749,7 @@ contains
    implicit none
    character (len=*), intent(in) :: rname,stop_message,value
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -639,7 +762,12 @@ contains
    endif
 !
    if (pr) then
-      write(FileUnit,'(2a)')'MESSAGE: ',stop_message
+!     write(FileUnit,'(2a)')'MESSAGE: ',stop_message
+      call breakLine(stop_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a)')'MESSAGE: ',msg_ml(1)
+      do i = 2, num_lines
+         write(FileUnit,'(a,a)')'         ',msg_ml(i)
+      enddo
       write(FileUnit,'(2a)')'VALUE: ',value
       write(FileUnit,'(2a)')'STOP AT ',rname
    endif
@@ -656,6 +784,7 @@ contains
    implicit none
    character (len=*), intent(in) :: rname,stop_message,value1,value2
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -668,7 +797,12 @@ contains
    endif
 !
    if (pr) then
-      write(FileUnit,'(2a)')'MESSAGE: ',stop_message
+!     write(FileUnit,'(2a)')'MESSAGE: ',stop_message
+      call breakLine(stop_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a)')'MESSAGE: ',msg_ml(1)
+      do i = 2, num_lines
+         write(FileUnit,'(a,a)')'         ',msg_ml(i)
+      enddo
       write(FileUnit,'(3a)')'VALUE: ',value1,value2
       write(FileUnit,'(2a)')'STOP AT ',rname
    endif
@@ -685,6 +819,7 @@ contains
    implicit none
    character (len=*), intent(in) :: rname,stop_message
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -697,7 +832,12 @@ contains
    endif
 !
    if (pr) then
-      write(FileUnit,'(2a)')'MESSAGE: ',stop_message
+!     write(FileUnit,'(2a)')'MESSAGE: ',stop_message
+      call breakLine(stop_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a)')'MESSAGE: ',msg_ml(1)
+      do i = 2, num_lines
+         write(FileUnit,'(a,a)')'         ',msg_ml(i)
+      enddo
       write(FileUnit,'(2a)')'STOP AT ',rname
    endif
 !
@@ -742,6 +882,7 @@ contains
    character (len=*), intent(in) :: rname,warning_message
    integer (kind=IntKind), intent(in) :: value
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -756,7 +897,12 @@ contains
    if (pr) then
       write(FileUnit,'(/,1x,78(''!''))')
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
-      write(FileUnit,'(a,a,t79,a1)')' ! WARNING: ',warning_message,'!'
+!     write(FileUnit,'(a,a,t79,a1)')' ! WARNING: ',warning_message,'!'
+      call breakLine(warning_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',msg_ml(1),'!'
+      do i = 2, num_lines
+         write(FileUnit,'(a,a,t79,a1)')' !          ',msg_ml(i),'!'
+      enddo
       write(FileUnit,'(a,i8,t79,a1)')' ! VALUE: ',value,'!'
       write(FileUnit,'(a,a)') ' ! AT: ',rname
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
@@ -775,6 +921,7 @@ contains
    character (len=*), intent(in) :: rname,warning_message
    integer (kind=IntKind), intent(in) :: value1,value2
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -789,7 +936,12 @@ contains
    if (pr) then
       write(FileUnit,'(/,1x,78(''!''))')
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
-      write(FileUnit,'(a,a,t79,a1)')' ! WARNING: ',warning_message,'!'
+!     write(FileUnit,'(a,a,t79,a1)')' ! WARNING: ',warning_message,'!'
+      call breakLine(warning_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',msg_ml(1),'!'
+      do i = 2, num_lines
+         write(FileUnit,'(a,a,t79,a1)')' !          ',msg_ml(i),'!'
+      enddo
       write(FileUnit,'(a,i8,2x,i8,t79,a1)')' ! VALUE: ',value1,value2,'!'
       write(FileUnit,'(a,a)') ' ! AT: ',rname
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
@@ -808,6 +960,7 @@ contains
    character (len=*), intent(in) :: rname,warning_message
    real (kind=RealKind), intent(in) :: value
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -822,7 +975,12 @@ contains
    if (pr) then
       write(FileUnit,'(/,1x,78(''!''))')
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
-      write(FileUnit,'(a,a,t79,a1)')' ! WARNING: ',warning_message,'!'
+!     write(FileUnit,'(a,a,t79,a1)')' ! WARNING: ',warning_message,'!'
+      call breakLine(warning_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',msg_ml(1),'!'
+      do i = 2, num_lines
+         write(FileUnit,'(a,a,t79,a1)')' !          ',msg_ml(i),'!'
+      enddo
       write(FileUnit,'(a,d20.13,t79,a1)')' ! VALUE: ',value,'!'
       write(FileUnit,'(a,a)') ' ! AT: ',rname
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
@@ -841,6 +999,7 @@ contains
    character (len=*), intent(in) :: rname,warning_message
    real (kind=RealKind), intent(in) :: value1,value2
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -855,7 +1014,12 @@ contains
    if (pr) then
       write(FileUnit,'(/,1x,78(''!''))')
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
-      write(FileUnit,'(a,a,t79,a1)')' ! WARNING: ',warning_message,'!'
+!     write(FileUnit,'(a,a,t79,a1)')' ! WARNING: ',warning_message,'!'
+      call breakLine(warning_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',msg_ml(1),'!'
+      do i = 2, num_lines
+         write(FileUnit,'(a,a,t79,a1)')' !          ',msg_ml(i),'!'
+      enddo
       write(FileUnit,'(a,d20.13,2x,d20.13,t79,a1)')' ! VALUE: ',value1,value2,'!'
       write(FileUnit,'(a,a)') ' ! AT: ',rname
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
@@ -874,6 +1038,7 @@ contains
    character (len=*), intent(in) :: rname,warning_message
    complex (kind=CmplxKind), intent(in) :: value
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -888,7 +1053,12 @@ contains
    if (pr) then
       write(FileUnit,'(/,1x,78(''!''))')
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
-      write(FileUnit,'(a,a,t79,a1)')' ! WARNING: ',warning_message,'!'
+!     write(FileUnit,'(a,a,t79,a1)')' ! WARNING: ',warning_message,'!'
+      call breakLine(warning_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',msg_ml(1),'!'
+      do i = 2, num_lines
+         write(FileUnit,'(a,a,t79,a1)')' !          ',msg_ml(i),'!'
+      enddo
       write(FileUnit,'(a,2d15.8,t79,a1)')' ! VALUE: ',value,'!'
       write(FileUnit,'(a,a)') ' ! AT: ',rname
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
@@ -907,6 +1077,7 @@ contains
    character (len=*), intent(in) :: rname,warning_message
    complex (kind=CmplxKind), intent(in) :: value1,value2
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -921,7 +1092,12 @@ contains
    if (pr) then
       write(FileUnit,'(/,1x,78(''!''))')
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
-      write(FileUnit,'(a,a,t79,a1)')' ! WARNING: ',warning_message,'!'
+!     write(FileUnit,'(a,a,t79,a1)')' ! WARNING: ',warning_message,'!'
+      call breakLine(warning_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',msg_ml(1),'!'
+      do i = 2, num_lines
+         write(FileUnit,'(a,a,t79,a1)')' !          ',msg_ml(i),'!'
+      enddo
       write(FileUnit,'(a,2d15.8,2x,2d15.8,t79,a1)')' ! VALUE: ',value1,value2,'!'
       write(FileUnit,'(a,a)') ' ! AT: ',rname
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
@@ -939,6 +1115,7 @@ contains
    implicit none
    character (len=*), intent(in) :: rname,warning_message,value
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -953,7 +1130,12 @@ contains
    if (pr) then
       write(FileUnit,'(/,1x,78(''!''))')
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
-      write(FileUnit,'(a,a,t79,a1)')' ! WARNING: ',warning_message,'!'
+!     write(FileUnit,'(a,a,t79,a1)')' ! WARNING: ',warning_message,'!'
+      call breakLine(warning_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',msg_ml(1),'!'
+      do i = 2, num_lines
+         write(FileUnit,'(a,a,t79,a1)')' !          ',msg_ml(i),'!'
+      enddo
       write(FileUnit,'(a,a,t79,a1)')' ! VALUE: ',trim(value),'!'
       write(FileUnit,'(a,a)') ' ! AT: ',rname
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
@@ -971,6 +1153,7 @@ contains
    implicit none
    character (len=*), intent(in) :: rname,warning_message,value1,value2
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -985,7 +1168,12 @@ contains
    if (pr) then
       write(FileUnit,'(/,1x,78(''!''))')
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
-      write(FileUnit,'(a,a,t79,a1)')' ! WARNING: ',warning_message,'!'
+!     write(FileUnit,'(a,a,t79,a1)')' ! WARNING: ',warning_message,'!'
+      call breakLine(warning_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',msg_ml(1),'!'
+      do i = 2, num_lines
+         write(FileUnit,'(a,a,t79,a1)')' !          ',msg_ml(i),'!'
+      enddo
       write(FileUnit,'(a,a,a,t79,a1)')' ! VALUE: ',trim(value1),trim(value2),'!'
       write(FileUnit,'(a,a)') ' ! AT: ',rname
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
@@ -1003,6 +1191,7 @@ contains
    implicit none
    character (len=*), intent(in) :: rname,warning_message
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -1017,7 +1206,12 @@ contains
    if (pr) then
       write(FileUnit,'(/,1x,78(''!''))')
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
-      write(FileUnit,'(a,a,t79,a1)')' ! WARNING: ',warning_message,'!'
+!     write(FileUnit,'(a,a,t79,a1)')' ! WARNING: ',warning_message,'!'
+      call breakLine(warning_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',msg_ml(1),'!'
+      do i = 2, num_lines
+         write(FileUnit,'(a,a,t79,a1)')' !          ',msg_ml(i),'!'
+      enddo
       write(FileUnit,'(a,a)') ' ! AT: ',rname
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
       write(FileUnit,'(1x,78(''!''),/)')
@@ -1066,6 +1260,7 @@ contains
    character (len=*), intent(in) :: rname,warning_message
    integer (kind=IntKind), intent(in) :: value
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -1080,7 +1275,12 @@ contains
    if (pr) then
       write(FileUnit,'(/,1x,78(''!''))')
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
-      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+!     write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+      call breakLine(warning_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',msg_ml(1),'!'
+      do i = 2, num_lines
+         write(FileUnit,'(a,a,t79,a1)')' !          ',msg_ml(i),'!'
+      enddo
       write(FileUnit,'(a,i8,t79,a1)')' ! VALUE: ',value,'!'
       write(FileUnit,'(a,a)') ' ! AT: ',rname
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
@@ -1099,6 +1299,7 @@ contains
    character (len=*), intent(in) :: rname,warning_message
    integer (kind=IntKind), intent(in) :: value1,value2
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -1113,7 +1314,12 @@ contains
    if (pr) then
       write(FileUnit,'(/,1x,78(''!''))')
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
-      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+!     write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+      call breakLine(warning_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',msg_ml(1),'!'
+      do i = 2, num_lines
+         write(FileUnit,'(a,a,t79,a1)')' !          ',msg_ml(i),'!'
+      enddo
       write(FileUnit,'(a,i8,2x,i8,t79,a1)')' ! VALUE: ',value1,value2,'!'
       write(FileUnit,'(a,a)') ' ! AT: ',rname
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
@@ -1132,6 +1338,7 @@ contains
    character (len=*), intent(in) :: rname,warning_message
    real (kind=RealKind), intent(in) :: value
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -1146,7 +1353,12 @@ contains
    if (pr) then
       write(FileUnit,'(/,1x,78(''!''))')
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
-      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+!     write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+      call breakLine(warning_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',msg_ml(1),'!'
+      do i = 2, num_lines
+         write(FileUnit,'(a,a,t79,a1)')' !          ',msg_ml(i),'!'
+      enddo
       write(FileUnit,'(a,d20.13,t79,a1)')' ! VALUE: ',value,'!'
       write(FileUnit,'(a,a)') ' ! AT: ',rname
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
@@ -1165,6 +1377,7 @@ contains
    character (len=*), intent(in) :: rname,warning_message
    real (kind=RealKind), intent(in) :: value1,value2
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -1179,7 +1392,12 @@ contains
    if (pr) then
       write(FileUnit,'(/,1x,78(''!''))')
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
-      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+!     write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+      call breakLine(warning_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',msg_ml(1),'!'
+      do i = 2, num_lines
+         write(FileUnit,'(a,a,t79,a1)')' !          ',msg_ml(i),'!'
+      enddo
       write(FileUnit,'(a,d20.13,2x,d20.13,t79,a1)')' ! VALUE: ',value1,value2,'!'
       write(FileUnit,'(a,a)') ' ! AT: ',rname
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
@@ -1198,6 +1416,7 @@ contains
    character (len=*), intent(in) :: rname,warning_message
    complex (kind=CmplxKind), intent(in) :: value
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -1212,7 +1431,12 @@ contains
    if (pr) then
       write(FileUnit,'(/,1x,78(''!''))')
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
-      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+!     write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+      call breakLine(warning_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',msg_ml(1),'!'
+      do i = 2, num_lines
+         write(FileUnit,'(a,a,t79,a1)')' !          ',msg_ml(i),'!'
+      enddo
       write(FileUnit,'(a,2d15.8,t79,a1)')' ! VALUE: ',value,'!'
       write(FileUnit,'(a,a)') ' ! AT: ',rname
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
@@ -1231,6 +1455,7 @@ contains
    character (len=*), intent(in) :: rname,warning_message
    complex (kind=CmplxKind), intent(in) :: value1,value2
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -1245,7 +1470,12 @@ contains
    if (pr) then
       write(FileUnit,'(/,1x,78(''!''))')
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
-      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+!     write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+      call breakLine(warning_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',msg_ml(1),'!'
+      do i = 2, num_lines
+         write(FileUnit,'(a,a,t79,a1)')' !          ',msg_ml(i),'!'
+      enddo
       write(FileUnit,'(a,2d15.8,2x,2d15.8,t79,a1)')' ! VALUE: ',value1,value2,'!'
       write(FileUnit,'(a,a)') ' ! AT: ',rname
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
@@ -1263,6 +1493,7 @@ contains
    implicit none
    character (len=*), intent(in) :: rname,warning_message,value
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -1277,7 +1508,12 @@ contains
    if (pr) then
       write(FileUnit,'(/,1x,78(''!''))')
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
-      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+!     write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+      call breakLine(warning_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',msg_ml(1),'!'
+      do i = 2, num_lines
+         write(FileUnit,'(a,a,t79,a1)')' !          ',msg_ml(i),'!'
+      enddo
       write(FileUnit,'(a,a,t79,a1)')' ! VALUE: ',trim(value),'!'
       write(FileUnit,'(a,a)') ' ! AT: ',rname
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
@@ -1295,6 +1531,7 @@ contains
    implicit none
    character (len=*), intent(in) :: rname,warning_message,value1,value2
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -1309,7 +1546,12 @@ contains
    if (pr) then
       write(FileUnit,'(/,1x,78(''!''))')
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
-      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+!     write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+      call breakLine(warning_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',msg_ml(1),'!'
+      do i = 2, num_lines
+         write(FileUnit,'(a,a,t79,a1)')' !          ',msg_ml(i),'!'
+      enddo
       write(FileUnit,'(a,a,a,t79,a1)')' ! VALUE: ',trim(value1),trim(value2),'!'
       write(FileUnit,'(a,a)') ' ! AT: ',rname
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
@@ -1327,6 +1569,7 @@ contains
    implicit none
    character (len=*), intent(in) :: rname,warning_message
    logical :: pr
+   integer (kind=IntKind) :: i
 !
    logical, optional, intent(in) :: force_to_print
 !
@@ -1341,7 +1584,11 @@ contains
    if (pr) then
       write(FileUnit,'(/,1x,78(''!''))')
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
-      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',warning_message,'!'
+      call breakLine(warning_message,line_width,num_lines,msg_ml)
+      write(FileUnit,'(a,a,t79,a1)')' ! MESSAGE: ',msg_ml(1),'!'
+      do i = 2, num_lines
+         write(FileUnit,'(a,a,t79,a1)')' !          ',msg_ml(i),'!'
+      enddo
       write(FileUnit,'(a,a)') ' ! AT: ',rname
       write(FileUnit,'(1x,a1,t79,a1)')'!','!'
       write(FileUnit,'(1x,78(''!''),/)')
