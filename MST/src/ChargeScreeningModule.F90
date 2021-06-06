@@ -63,8 +63,8 @@ contains
       NumSpecies = getLocalNumSpecies(i)
       allocate(scr(i)%vmt1_corr(getLocalNumSpecies(i)))
       scr(i)%fs_radius = getShellRadius(i,1)
-!     scr(i)%ss_radius = getLatticeConstant()
-      scr(i)%ss_radius = getShellRadius(i,2)
+      scr(i)%ss_radius = getLatticeConstant()
+!     scr(i)%ss_radius = getShellRadius(i,2)
       scr(i)%echarge = ZERO
       do j = 1, getLocalNumSpecies(i)
          scr(i)%vmt1_corr(j) = ZERO
