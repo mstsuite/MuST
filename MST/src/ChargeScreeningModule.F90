@@ -18,7 +18,7 @@ public :: initChargeScreeningModule,     &
 private
   integer (kind=IntKind) :: GlobalNumSites, LocalNumSites
   integer (kind=IntKind) :: NumSpecies
-  integer (kind=IntKind) :: NumSROShells = 2 ! Assume upto 2 neighboring shells
+  integer (kind=IntKind) :: NumSROShells = 1 ! Temporary, right now we want only nearest neighbor screening
 
   type ChargeCorrectionData
       real (kind=RealKind) :: fs_radius
