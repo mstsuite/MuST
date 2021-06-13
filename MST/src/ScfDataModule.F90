@@ -37,6 +37,7 @@ public :: initScfData,                 &
           isConductivity,              &
           useStepFunctionForSigma,     &
           useCubicSymmetryForSigma,    &
+          includeVertexCorrections,    &
           isScreenKKR_LSMS,            &
           isSingleSite,                &
           isFrozenCore,                &
@@ -207,6 +208,7 @@ public
    integer (kind=IntKind), private :: use_sf = 1
    integer (kind=IntKind), private :: use_csymm = 1
    integer (kind=IntKind), private :: is_ef_rp = 0
+   integer (kind=IntKind), private :: vertex_corr = 0
    real (kind=RealKind), private :: imag_part = 0.001
    real (kind=RealKind), private :: sigma_real_part = 0.5
 !
@@ -511,6 +513,7 @@ contains
    rstatus = getKeyValue(tbl_id,'Fermi Energy Real Part', sigma_real_part)
    rstatus = getKeyValue(tbl_id,'Integrate Upto Muffin Tin', use_sf)
    rstatus = getKeyValue(tbl_id,'Use Cubic Symmetry', use_csymm)
+   rstatus = getKeyValue(tbl_id,'Vertex Corrections', vertex_corr)
 
    end subroutine initScfData
 !  ===================================================================
@@ -927,6 +930,23 @@ contains
    endif
    
    end function useCubicSymmetryForSigma
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function includeVertexCorrections() result(md)
+!  ===================================================================
+   implicit none
+   logical :: md
+
+   if (vertex_corr == 0) then
+     md = .false.
+   else
+     md = .true.
+   endif
+
+   end function includeVertexCorrections
 !  ===================================================================
 !
 !  *******************************************************************
