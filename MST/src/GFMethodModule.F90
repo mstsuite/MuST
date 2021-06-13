@@ -777,7 +777,9 @@ contains
    use RelSSSolverModule, only : SingleDiracScattering, computeRelSingleSiteDOS !xianglin
 !
    use MSSolverModule, only : initMSSolver, endMSSolver
-   use ConductivityModule, only : initConductivity, calConductivity, endConductivity
+   use ConductivityModule, only : initConductivity, calConductivity, &
+                       endConductivity
+   use ScfDataModule, only : includeVertexCorrections
    use RelMSSolverModule, only : initRelMSSolver, endRelMSSolver, computeRelMST, getRelMSDOS !xianglin
 !
 !  use RelScattererModule, only : initRelScatterer, endRelScatterer !xianglin
@@ -803,6 +805,7 @@ contains
    real (kind=RealKind), allocatable :: local_density_matrix(:,:,:)
 !
    logical, optional, intent(in) :: PartialDensity_Ef
+   logical :: vc
    logical :: isBxyz(LocalNumAtoms) !xianglin
    complex (kind=CmplxKind) :: energy !xianglin
    complex (kind=CmplxKind) :: temp_en
@@ -821,6 +824,7 @@ contains
    call FlushFile(6)
 #endif
 !
+   vc = includeVertexCorrections()
    zvaltss = ZERO
    do id = 1,LocalNumAtoms
       do ia = 1, getLocalNumSpecies(id)
@@ -890,7 +894,7 @@ contains
                         stop_routine, print_level, derivative=rad_derivative)
       if (isConductivity()) then
         call initConductivity(temp_en, LocalNumAtoms, lmax_kkr, lmax_phi, lmax_green, &
-               n_spin_pola, n_spin_cant, RelativisticFlag,stop_routine, print_level)
+               n_spin_pola, n_spin_cant, RelativisticFlag,stop_routine, print_level, vc)
       endif
 !  -------------------------------------------------------------------
    endif
