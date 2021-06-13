@@ -106,6 +106,7 @@ public :: initCrystalMatrix, &
           endCrystalMatrix,  &
           calCrystalMatrix,  &
           calSigmaIntegralCPA, &
+          calChiIntegralCPA,     &
           calSigmaIntegralSRO, &
           getTau,            &
           getKau,            &
@@ -1590,6 +1591,160 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function calChiIntegralCPA(n,e,getSingleScatteringMatrix,&
+                                           configuration) result(chi)
+!  ===================================================================
+   use MPPModule, only : MyPE 
+   use BZoneModule, only : getNumKs, getAllWeights, getAllKPoints,    &    
+                           getWeightSum
+   use ProcMappingModule, only : isKPointOnMyProc, getNumKsOnMyProc,  &
+                                 getKPointIndex, getNumRedundantKsOnMyProc
+   use GroupCommModule, only : getGroupID, GlobalSumInGroup, getMyPEinGroup
+   use StrConstModule, only : getStrConstMatrix, &
+                   checkFreeElectronPoles, getFreeElectronPoleFactor
+   use WriteMatrixModule,  only : writeMatrix
+
+   character (len=20) :: sname = "calChiMatrixCPA"   
+
+   integer (kind=IntKind), intent(in) :: n
+   integer (kind=IntKind), intent(in), optional :: configuration(:)
+   integer (kind=IntKind) :: k_loc, k, row, col, MyPEinKGroup, method
+   integer (kind=IntKind) :: NumKs, kGID, aGID, NumKsOnMyProc, NumRedunKs
+   integer (kind=IntKind) :: site_config(LocalNumAtoms), itertmp
+   integer (kind=IntKind) :: ig, i, j, kkrsz, L1, L2, L3, L4, K1, K2
+
+   real (kind=RealKind), pointer :: kpts(:,:), weight(:)
+   real (kind=RealKind) :: kfac, kaij, aij(3)
+   real (kind=RealKind) :: weightSum, kvec(1:3)
+
+   complex (kind=CmplxKind), intent(in) :: e
+   complex (kind=CmplxKind) :: wfac, cfac, efac, fepf, sint
+   complex (kind=CmplxKind) :: tauprod, tauprod2, tauprod3, tauprod4
+   complex (kind=CmplxKind), target :: wtmp(kmax_kkr_max*kmax_kkr_max)
+   complex (kind=CmplxKind), target :: wtmpsym(kmax_kkr_max*kmax_kkr_max)
+   complex (kind=CmplxKind), target :: wint(kmax_kkr_max*kmax_kkr_max)
+   complex (kind=CmplxKind), pointer :: scm(:,:), tauk(:,:), pm(:), tmat(:,:)
+   complex (kind=CmplxKind), allocatable :: tmbsym(:,:), tmb(:,:)
+   complex (kind=CmplxKind) :: chi(kmax_kkr_max*kmax_kkr_max, &
+                                       kmax_kkr_max*kmax_kkr_max, 4)
+! 
+   interface
+      function getSingleScatteringMatrix(smt,spin,site,atom,dsize) result(sm)
+         use KindParamModule, only : IntKind, CmplxKind
+         character (len=*), intent(in) :: smt
+         integer (kind=IntKind), intent(in), optional :: spin, site, atom
+         integer (kind=IntKind), intent(out), optional :: dsize
+         complex (kind=CmplxKind), pointer :: sm(:,:)
+      end function getSingleScatteringMatrix
+   end interface
+! 
+   energy = e
+   if (isRelativistic) then !xianglin
+      kappa = sqrt(2.d0*Me*e + e**2/LightSpeed**2)
+   else
+      kappa = sqrt(e)
+   endif
+
+   kkrsz = kmax_kkr_max
+  !cfac = CONE/real(nrot, RealKind)
+   allocate(tmbsym(kkrsz, kkrsz), tmb(kkrsz, kkrsz))
+   tmbsym = CZERO
+   tmb = CZERO
+   wint = CZERO
+   chi = CZERO
+
+   method = 2
+! 
+   if (present(configuration)) then
+      site_config(1:LocalNumAtoms) = configuration(1:LocalNumAtoms)
+   else
+      site_config = 0
+   endif
+
+!  ===================================================================
+!  Exchange single site scattering matrix among processes.
+!  -------------------------------------------------------------------
+   call setupSSMatrixBuf(getSingleScatteringMatrix,method,site_config)
+!  -------------------------------------------------------------------
+!
+   kGID = getGroupID('K-Mesh')
+   aGID = getGroupID('Unit Cell')
+   NumKsOnMyProc = getNumKsOnMyProc()
+   NumRedunKs = getNumRedundantKsOnMyProc()
+   MyPEinKGroup = getMyPEinGroup(kGID)
+!
+   NumKs = getNumKs()
+   kpts => getAllKPoints(kfac)
+   weight => getAllWeights()
+   weightSum = getWeightSum()
+   tmat => getSingleScatteringMatrix('T-Matrix',site=n,atom=0)
+
+   
+   do k_loc = 1,NumKsOnMyProc
+     k = getKPointIndex(k_loc)
+     kvec(1:3) = kpts(1:3,k)*kfac
+!    ================================================================
+!    get structure constant matrix for the k-point and energy
+!    ----------------------------------------------------------------
+     call checkFreeElectronPoles(kvec,kappa)
+!    ----------------------------------------------------------------
+     do col = 1, LocalNumAtoms
+       do row = 1, GlobalNumAtoms
+!        ----------------------------------------------------------
+         scm => getStrConstMatrix(kvec,kappa,id_array(row),jd_array(col), &
+                            lmaxi_array(row),lmaxj_array(col),aij)
+!        ----------------------------------------------------------
+         sc_blocks(row,col)%strcon_matrix = scm
+       enddo
+     enddo
+!    ----------------------------------------------------------------
+     fepf = getFreeElectronPoleFactor() ! Returns the free eletron pole factor
+!    ----------------------------------------------------------------
+     wfac = weight(k)/weightSum
+!    write(6,'(a,i4,a,3f12.5,a,2d12.5,a,2d12.5)')'k-ind = ',k,       &
+!    ', kvec = ',kvec,', wfac = ',wfac,', weightsum = ',weightSum
+!  
+!    ================================================================
+!    Compute the modified KKR matrix, which is stored in TMP_MatrixBand
+!    ----------------------------------------------------------------
+     call computeMatrixBand(TMP_MatrixBand,method,fepf, &
+                 getSingleScatteringMatrix=getSingleScatteringMatrix)
+!    ----------------------------------------------------------------
+     pm => TMP_MatrixBand(1:kkrsz*kkrsz)
+     tauk => aliasArray2_c(pm,kkrsz,kkrsz)
+     call zgemm('n', 'n', kkrsz, kkrsz, kkrsz, CONE, tmat, kkrsz, &
+         tauk, kkrsz, CZERO, tmb, kkrsz)
+     do j = 1, kkrsz
+       do i = 1, kkrsz
+         tmbsym(i, j) = ((-1.0)**(lofk(j) - lofk(i)))*conjg(tmb(j, i))
+       enddo
+     enddo
+     if (k_loc <= NumKsOnMyProc - NumRedunKs .or. MyPEinKGroup == 0) then
+       do L4 = 1, kmax_kkr_max
+         do L3 = 1, kmax_kkr_max
+           do L2 = 1, kmax_kkr_max
+             do L1 = 1, kmax_kkr_max
+               K1 = (L1 - 1)*kmax_kkr_max + L4
+               K2 = (L2 - 1)*kmax_kkr_max + L3
+               chi(K1,K2,1) = chi(K1,K2,1) + wfac*tmb(L1,L2)*tmb(L3,L4)
+               chi(K1,K2,2) = chi(K1,K2,2) + wfac*tmb(L1,L2)*tmbsym(L3,L4)
+               chi(K1,K2,3) = chi(K1,K2,3) + wfac*tmbsym(L1,L2)*tmb(L3,L4)
+               chi(K1,K2,4) = chi(K1,K2,4) + wfac*tmbsym(L1,L2)*tmbsym(L3,L4)
+             enddo 
+           enddo 
+         enddo
+       enddo
+     endif
+   enddo
+
+   call GlobalSumInGroup(kGID,chi,kmax_kkr_max*kmax_kkr_max,kmax_kkr_max*kmax_kkr_max,4)
+   
+   end function calChiIntegralCPA
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function calSigmaIntegralCPA(n,e,Ja,Jb,getSingleScatteringMatrix,&
        tau_needed,use_tmat,configuration,caltype) result(sint)
 !  ===================================================================
@@ -1601,9 +1756,8 @@ contains
    use ProcMappingModule, only : isKPointOnMyProc, getNumKsOnMyProc,  &
                                  getKPointIndex, getNumRedundantKsOnMyProc
    use GroupCommModule, only : getGroupID, GlobalSumInGroup, getMyPEinGroup
-   use StrConstModule, only : getStrConstMatrix
-   use SROModule, only : obtainPosition
-   use StrConstModule, only : checkFreeElectronPoles, getFreeElectronPoleFactor
+   use StrConstModule, only : getStrConstMatrix, &
+                    checkFreeElectronPoles, getFreeElectronPoleFactor
    use WriteMatrixModule,  only : writeMatrix
 ! 
    implicit none
@@ -1766,73 +1920,6 @@ contains
             do irot = 1, nrot
               w0 = CZERO
               w1 = CZERO
-              rotmat => getIBZRotationMatrix('c',irot)
-              call writeMatrix('rotmat', rotmat, kkrsz,kkrsz)
-              if (caltype == 1) then
-!               -------------------------------------------------
-                call computeUAUtc(rotmat,kkrsz,kkrsz,rotmat,kkrsz,cfac, &
-                                tmb,kkrsz,CONE,w0,kkrsz,WORK)
-!               -------------------------------------------------
-                call zgemm('n','n',kkrsz,kkrsz,kkrsz,CONE,Jb,kkrsz,w0,kkrsz,&
-                          CZERO,prod1,kkrsz)
-!               -------------------------------------------------
-                call zgemm('n','n',kkrsz,kkrsz,kkrsz,CONE,w0,kkrsz,prod1,&
-                          kkrsz,CZERO,prod2,kkrsz)
-!               -------------------------------------------------
-                call zgemm('n','n',kkrsz,kkrsz,kkrsz,CONE,Ja,kkrsz,prod2,&
-                          kkrsz,CONE,tilde,kkrsz)
-!               -------------------------------------------------
-              else if (caltype == 2) then
-!               -------------------------------------------------
-                call computeUAUtc(rotmat,kkrsz,kkrsz,rotmat,kkrsz,cfac, &
-                                tmb,kkrsz,CONE,w0,kkrsz,WORK)
-!               -------------------------------------------------
-                call computeUAUtc(rotmat,kkrsz,kkrsz,rotmat,kkrsz,cfac, &
-                             tmbsym,kkrsz,CONE,w1,kkrsz,WORK)
-!               -------------------------------------------------
-                call zgemm('n','n',kkrsz,kkrsz,kkrsz,CONE,Jb,kkrsz,w1,kkrsz,&
-                          CZERO,prod1,kkrsz)
-!               -------------------------------------------------
-                call zgemm('n','n',kkrsz,kkrsz,kkrsz,CONE,w0,kkrsz,prod1,&
-                          kkrsz,CZERO,prod2,kkrsz)
-!               -------------------------------------------------
-                call zgemm('n','n',kkrsz,kkrsz,kkrsz,CONE,Ja,kkrsz,prod2,&
-                          kkrsz,CONE,tilde,kkrsz)
-!               -------------------------------------------------
-              else if (caltype == 3) then
-!               -------------------------------------------------
-                call computeUAUtc(rotmat,kkrsz,kkrsz,rotmat,kkrsz,cfac, &
-                                tmb,kkrsz,CONE,w0,kkrsz,WORK)
-!               -------------------------------------------------
-                call computeUAUtc(rotmat,kkrsz,kkrsz,rotmat,kkrsz,cfac, &
-                             tmbsym,kkrsz,CONE,w1,kkrsz,WORK)
-!               -------------------------------------------------
-                call zgemm('n','n',kkrsz,kkrsz,kkrsz,CONE,Jb,kkrsz,w0,kkrsz,&
-                          CZERO,prod1,kkrsz)
-!               -------------------------------------------------
-                call zgemm('n','n',kkrsz,kkrsz,kkrsz,CONE,w1,kkrsz,prod1,&
-                          kkrsz,CZERO,prod2,kkrsz)
-!               -------------------------------------------------
-                call zgemm('n','n',kkrsz,kkrsz,kkrsz,CONE,Ja,kkrsz,prod2,&
-                          kkrsz,CONE,tilde,kkrsz)
-!               -------------------------------------------------
-              else if (caltype == 4) then
-!               -------------------------------------------------
-                call computeUAUtc(rotmat,kkrsz,kkrsz,rotmat,kkrsz,cfac, &
-                             tmbsym,kkrsz,CONE,w1,kkrsz,WORK)
-!               -------------------------------------------------
-                call zgemm('n','n',kkrsz,kkrsz,kkrsz,CONE,Jb,kkrsz,w1,kkrsz,&
-                          CZERO,prod1,kkrsz)
-!               -------------------------------------------------
-                call zgemm('n','n',kkrsz,kkrsz,kkrsz,CONE,w1,kkrsz,prod1,&
-                          kkrsz,CZERO,prod2,kkrsz)
-!               -------------------------------------------------
-                call zgemm('n','n',kkrsz,kkrsz,kkrsz,CONE,Ja,kkrsz,prod2,&
-                          kkrsz,CONE,tilde,kkrsz)
-!               -------------------------------------------------
-              else
-                call ErrorHandler('calSigmaIntegralCPA','Incorrect calculation type (1-4)')
-              endif
             enddo
           else
             if (caltype == 1) then
@@ -2461,7 +2548,7 @@ contains
    integer (kind=IntKind) :: in, jn, index
 !
    complex (kind=CmplxKind), pointer :: strcon(:,:), tau_j(:,:)
-   complex (kind=CmplxKInd), intent(in) :: fepf
+   complex (kind=CmplxKind), intent(in) :: fepf
    complex (kind=CmplxKind), pointer :: jinvB(:)
    complex (kind=CmplxKind), allocatable :: temp(:,:)
    complex (kind=CmplxKind), pointer :: p_jinvi(:)
