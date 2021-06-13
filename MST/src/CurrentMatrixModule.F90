@@ -19,6 +19,8 @@ public :: initCurrentMatrixModule, &
           RadialIntegral, &
           calJyzFromJx, &
           calJtildeCPA, &
+          cal1DCurrentMatrix, &
+          getJMatrix1D, &
           getJMatrix
 !
 
@@ -41,6 +43,7 @@ private
    integer (kind=IntKind) :: kmax_phi_max, kmax_green_max, iend_max, &
                              kmax_sigma, kmax_sigma_2, kmax_max, kmax_cg
    integer (kind=IntKind) :: NumSpecies
+   logical :: vertex_corr
 
    type CGCoeff
       integer (kind=IntKind) :: lsize
@@ -66,6 +69,10 @@ private
 
    complex (kind=CmplxKind), allocatable, target :: jtspace(:,:,:,:,:,:), &
        jtspace2(:,:,:,:,:,:), jtspace3(:,:,:,:,:,:), jtspace4(:,:,:,:,:,:)
+
+!  Re-shaped tilde-matrices for vertex correction calculation
+   complex (kind=CmplxKind), allocatable, target :: Jtk(:,:,:,:,:), &
+       Jtk2(:,:,:,:,:), Jtk3(:,:,:,:,:), Jtk4(:,:,:,:,:)
 !  ---------------------------------------------------------------------
    complex (kind=CmplxKind), pointer :: gaunt(:,:,:)
    complex (kind=CmplxKind), allocatable :: store_space(:)
@@ -79,7 +86,7 @@ contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine initCurrentMatrixModule(energy, num_atoms, lmaxkkr, lmaxphi, lmaxgreen,  &
-                              pola, cant, rel, istop, iprint, mode)
+                              pola, cant, rel, istop, iprint, mode, vc)
 !  ===================================================================
    use RadialGridModule, only : getNumRmesh, getMaxNumRmesh
    use AtomModule, only : getLocalNumSpecies
@@ -101,6 +108,7 @@ contains
    integer (kind=IntKind), intent(in) :: mode
    
    complex (kind=CmplxKind), intent(in) :: energy
+   logical, intent(in) :: vc
 
    integer (kind=LongIntKind) :: wspace_size, gspace_size
    integer (kind=IntKind) :: i, lmax_max, jmax, iend, kmax, NumSpecies, NumPolyhedra
@@ -112,6 +120,7 @@ contains
    
    complex (kind=CmplxKind) :: tmp
 
+   vertex_corr = vc
    LocalNumAtoms = num_atoms
    n_spin_pola = pola
    n_spin_cant = cant
@@ -189,6 +198,13 @@ contains
      jtspace3(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
      jtspace4(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3))
      jtspace = CZERO; jtspace2 = CZERO; jtspace3 = CZERO; jtspace4 = CZERO
+     if (vertex_corr) then
+       allocate(Jtk(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+         Jtk2(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+         Jtk3(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+         Jtk4(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3))
+       Jtk = CZERO; Jtk2 = CZERO; Jtk3 = CZERO; Jtk4 = CZERO
+     endif
    endif
 
    allocate(iden(jsize, jsize))
@@ -1053,6 +1069,12 @@ contains
 !      ------------------------------------------------------
      enddo
    endif
+   
+   if (vertex_corr) then
+     do ic = 1, num_species(n)
+       call cal1DCurrentMatrix(n, ic, is)
+     enddo
+   endif
 
    end subroutine calCurrentMatrix
 !  ===================================================================
@@ -1275,6 +1297,50 @@ contains
    enddo
 
    end subroutine calJtildeCPA
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine cal1DCurrentMatrix(n, ic, is)
+!  ===================================================================
+
+   integer (kind=IntKind), intent(in) :: n, ic, is
+   integer (kind=IntKind) :: dir, L, L1, L2
+
+   do dir = 1, 3
+     do L2 = 1, kmax_kkr_max
+       do L1 = 1, kmax_kkr_max
+         L = kmax_kkr_max*(L1 - 1) + L2
+         Jtk(L, n, ic, is, dir) = jtspace(L1, L2, n, ic, is, dir)
+         Jtk2(L, n, ic, is, dir) = jtspace2(L1, L2, n, ic, is, dir)
+         Jtk3(L, n, ic, is, dir) = jtspace3(L1, L2, n, ic, is, dir)
+         Jtk4(L, n, ic, is, dir) = jtspace4(L1, L2, n, ic, is, dir)
+       enddo
+     enddo
+   enddo
+   
+   end subroutine cal1DCurrentMatrix
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getJMatrix1D(n, ic, is, dir, en_type) result(Jmat)
+!  ===================================================================
+
+   integer (kind=IntKind), intent(in) :: n, ic, is, dir, en_type
+   complex (kind=CmplxKind), pointer :: Jmat(:) 
+ 
+   if (en_type == 1) then
+     Jmat => Jtk(:,n,ic,is,dir)
+   else if (en_type == 2) then
+     Jmat => Jtk2(:,n,ic,is,dir)
+   else if (en_type == 3) then
+     Jmat => Jtk3(:,n,ic,is,dir)
+   else if (en_type == 4) then
+     Jmat => Jtk4(:,n,ic,is,dir)
+   else
+     call ErrorHandler('getJMatrix','Incorrect energy type (1-4)', en_type)
+   endif
+
+   end function getJMatrix1D
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
