@@ -348,7 +348,6 @@ contains
    integer (kind=IntKind) :: num_species, ic, L1, L2, L3, L4, K1, K2
    real (kind=RealKind) :: c_a
    complex (kind=CmplxKind), pointer :: ta(:,:), tc(:,:), tauc(:,:)
-   complex (kind=CmplxKind) :: test(kmax_kkr_max, kmax_kkr_max)
    complex (kind=CmplxKind) :: tac(kmax_kkr_max, kmax_kkr_max), &
      tcc(kmax_kkr_max, kmax_kkr_max), taucc(kmax_kkr_max, kmax_kkr_max)
    complex (kind=CmplxKind) :: temp(kmax_kkr_max, kmax_kkr_max), &
@@ -359,7 +358,6 @@ contains
      kmax_kkr_max*kmax_kkr_max,4)
  
    wmat = CZERO
-   test = CZERO
    num_species = getLocalNumSpecies(n)
 
    tc => getSingleSiteTmat('TInv-Matrix', spin=is, site=n, atom=0)
@@ -378,7 +376,6 @@ contains
      call computeAprojB('L', kmax_kkr_max, temp, tauc, xa)
      call computeAprojB('L', kmax_kkr_max, tempc, taucc, xac)
 !    ------------------------------------------------------------
-     test = test - c_a*xa
      do L4 = 1, kmax_kkr_max
        do L3 = 1, kmax_kkr_max
          do L2 = 1, kmax_kkr_max
@@ -394,8 +391,6 @@ contains
        enddo
      enddo
    enddo
-
-   call writeMatrix('test', test, kmax_kkr_max, kmax_kkr_max)
 
    end function calOmegaMatrix
 !  ===================================================================
@@ -894,9 +889,6 @@ contains
 !    --------------------------------------------------------------------
    enddo
 
-!  call writeMatrix('X', X(:,:,1), kmax_kkr_max*kmax_kkr_max, kmax_kkr_max*kmax_kkr_max)
-!  call writeMatrix('A', A(:,:,1), kmax_kkr_max*kmax_kkr_max, kmax_kkr_max*kmax_kkr_max)
-
    end function calVertexCorrectionMatrixCPA
 !  ===================================================================
 
@@ -971,8 +963,6 @@ contains
    real (kind=RealKind) :: delta, efermi, ti, tf
    complex (kind=CmplxKind) :: eval
 
-   call cpu_time(ti)
-
    delta = getFermiEnergyImagPart()
    pot_type = useStepFunctionForSigma()
 
@@ -1040,9 +1030,7 @@ contains
    call writeMatrix('sigmatilde3', sigmatilde3, dirnum, dirnum, n_spin_pola)
    call writeMatrix('sigmatilde4', sigmatilde4, dirnum, dirnum, n_spin_pola)
 !  --------------------------------------------------------------------
-   call cpu_time(tf)
 
-   write(*,*) "Total Time: ", tf-ti, " seconds"
    end subroutine calConductivity
 !  ===================================================================
 end module ConductivityModule
