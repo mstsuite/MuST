@@ -135,7 +135,7 @@ contains
       do ia = 1, getLocalNumSpecies(na)
         lig = global_table_line(j) + ia
         qtemp = getLocalAtomicNumber(j, ia) - Q_Table(lig)
-        if (isKKRCPASRO()) then
+        if (isKKRCPASRO() .and. 1 == 2) then
            scr(na)%vmt1_corr(ia) = ZERO
            do ns = 1, NumSROShells
               avq = ZERO
@@ -203,7 +203,7 @@ contains
       do ia = 1, getLocalNumSpecies(na)
         lig = global_table_line(j) + ia
         qtemp = getLocalAtomicNumber(j, ia) - Q_Table(lig)
-        if (isKKRCPASRO()) then
+        if (isKKRCPASRO() .and. 1 == 2) then
            uc = ZERO
            do ns = 1, NumSROShells
               avq = ZERO
