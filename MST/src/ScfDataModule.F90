@@ -208,7 +208,7 @@ public
    integer (kind=IntKind), private :: use_sf = 1
    integer (kind=IntKind), private :: use_csymm = 1
    integer (kind=IntKind), private :: is_ef_rp = 0
-   integer (kind=IntKind), private :: vertex_corr = 0
+   integer (kind=IntKind), private :: vertex_corr = 1
    real (kind=RealKind), private :: imag_part = 0.001
    real (kind=RealKind), private :: sigma_real_part = 0.5
 !
