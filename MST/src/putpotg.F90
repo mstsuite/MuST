@@ -69,7 +69,7 @@
 !
    integer (kind=IntKind) :: integer4_size
    integer (kind=IntKind) :: real8_size
-   integer (kind=IntKind) :: i, n, np, ia
+   integer (kind=IntKind) :: i, n, np, ia, mp, ip
    integer (kind=IntKind) :: present_atom
    integer (kind=IntKind) :: fp_pos
    integer (kind=IntKind) :: msg_bytes
@@ -166,10 +166,16 @@
 !        =============================================================
          call c_string_padsize(wunit,imsgbuf(2),pad_bytes)
          msg_bytes=imsgbuf(2)+pad_bytes+(imsgbuf(3)+3)*real8_size
-         fp_pos = fp_pos + (getAlloySpeciesIndex(present_atom,ia)-1)*msg_bytes + 1
-         if (imsgbuf(1) < 0) then
-            fp_pos = fp_pos + (imsgbuf(12)+(ia-1)*(imsgbuf(13)+imsgbuf(14)))*real8_size
-         endif
+!!!      =============================================================
+!!!      The following code was re-written to take care the situation
+!!!      that fp_pos value becomes overflow when a large number of atoms
+!!!      are involved. Function c_fseek is now called repeatedly.
+!!!      By Yang Wang on June 13, 2021.
+!!!      *************************************************************
+!!!      fp_pos = fp_pos + (getAlloySpeciesIndex(present_atom,ia)-1)*msg_bytes + 1
+!!!      if (imsgbuf(1) < 0) then
+!!!         fp_pos = fp_pos + (imsgbuf(12)+(ia-1)*(imsgbuf(13)+imsgbuf(14)))*real8_size
+!!!      endif
 !        if (imsgbuf(1) > 0) then
 !           fp_pos=num_atoms*integer4_size*10+(present_atom-1)*msg_bytes+1
 !        else
@@ -179,7 +185,22 @@
 !        write(6,'(a,2i10)')'#2: fp_pos = ',fp_pos,msg_bytes
 !        write(6,'(a,10d12.5)')'local FMSGBUF(1-10) = ',fmsgbuf(1:10)
 !        -------------------------------------------------------------
+!!!      call c_fseek(wunit,fp_pos,0)
+!!!      The values of msg_byte, imsgbuf(13), and imsgbuf(14) are 
+!!!      the same for all atoms, since jmtmax and jwsmax are used.
+!        -------------------------------------------------------------
+         fp_pos = fp_pos + 1
          call c_fseek(wunit,fp_pos,0)
+         if (imsgbuf(1) < 0) then
+            msg_bytes = msg_bytes + (imsgbuf(13)+imsgbuf(14))*real8_size
+         endif
+         mp = getAlloySpeciesIndex(present_atom,ia)-1
+         do ip = 1, mp
+            call c_fseek(wunit,msg_bytes,1)
+         enddo
+!!!      *************************************************************
+!!!      End of the change made on June 13, 2021
+!!!      =============================================================
          call c_write_string(wunit,cmsgbuf,imsgbuf(2),slen)
 !        -------------------------------------------------------------
 !        write(6,'(a,2i8)')'imsgbuf, slen = ',imsgbuf(2),slen
@@ -269,10 +290,16 @@
             call c_string_padsize(wunit,imsgbuf(2),pad_bytes)
 !           ----------------------------------------------------------
             msg_bytes=imsgbuf(2)+pad_bytes+(imsgbuf(3)+3)*real8_size
-            fp_pos = fp_pos + (getAlloySpeciesIndex(present_atom,ia)-1)*msg_bytes + 1
-            if (imsgbuf(1) < 0) then ! In case data_ldapu and/or data_nspot are written
-               fp_pos = fp_pos + (imsgbuf(12)+(ia-1)*(imsgbuf(13)+imsgbuf(14)))*real8_size
-            endif
+!!!         ==========================================================
+!!!         The following code was re-written to take care the situation
+!!!         that fp_pos value becomes overflow when a large number of atoms
+!!!         are involved. Function c_fseek is now called repeatedly.
+!!!         By Yang Wang on June 13, 2021.
+!!!         **********************************************************
+!!!         fp_pos = fp_pos + (getAlloySpeciesIndex(present_atom,ia)-1)*msg_bytes + 1
+!!!         if (imsgbuf(1) < 0) then ! In case data_ldapu and/or data_nspot are written
+!!!            fp_pos = fp_pos + (imsgbuf(12)+(ia-1)*(imsgbuf(13)+imsgbuf(14)))*real8_size
+!!!         endif
 !           if (imsgbuf(1) > 0) then
 !              fp_pos=num_atoms*integer4_size*10+(present_atom-1)*msg_bytes+1
 !           else
@@ -280,7 +307,20 @@
 !                     num_atoms*integer4_size*20+(present_atom-1)*msg_bytes+1
 !           endif
 !           ----------------------------------------------------------
+!!!         call c_fseek(wunit,fp_pos,0)
+!           ----------------------------------------------------------
+            fp_pos = fp_pos + 1
             call c_fseek(wunit,fp_pos,0)
+            if (imsgbuf(1) < 0) then ! In case data_ldapu and/or data_nspot are written
+               msg_bytes = msg_bytes + (imsgbuf(13)+imsgbuf(14))*real8_size
+            endif
+            mp = getAlloySpeciesIndex(present_atom,ia)-1
+            do ip = 1, mp
+               call c_fseek(wunit,msg_bytes,1)
+            enddo
+!!!         **********************************************************
+!!!         End of the change made on June 13, 2021
+!!!         ==========================================================
             call c_write_string(wunit,cmsgbuf,imsgbuf(2),slen)
             call c_write_double(wunit,fmsgbuf,imsgbuf(3))
             call c_write_double(wunit,evec_othern,3)
@@ -449,8 +489,19 @@
          imsgbuf(14) = da_nsp(present_atom)/num_species
       else
          imsgbuf(12) = da_ldapu(present_atom-1) + da_nsp(present_atom-1)
-         imsgbuf(13) = (da_ldapu(present_atom) - da_ldapu(present_atom-1))/num_species
-         imsgbuf(14) = (da_nsp(present_atom) - da_nsp(present_atom-1))/num_species
+!!!      =============================================================
+!!!      The following code was re-written to take care the situation
+!!!      that da_nsp value may be overflow when a large number of atoms
+!!!      are involved. Its value is modified in PotentialModule
+!!!      By Yang Wang on June 14, 2021.
+!!!      *************************************************************
+!!!      imsgbuf(13) = (da_ldapu(present_atom) - da_ldapu(present_atom-1))/num_species
+!!!      imsgbuf(14) = (da_nsp(present_atom) - da_nsp(present_atom-1))/num_species
+         imsgbuf(13) = da_ldapu(present_atom)/num_species
+         imsgbuf(14) = da_nsp(present_atom)/num_species
+!!!      *************************************************************
+!!!      End of the change made on June 14, 2021
+!!!      =============================================================
       endif
    endif
 !

@@ -1012,7 +1012,7 @@ contains
    character (len=*), intent(in) :: fname
 !
    integer (kind=IntKind) :: integer4_size,real8_size
-   integer (kind=IntKind) :: cunit, i, id, ia, ic, ig, is, fp_pos
+   integer (kind=IntKind) :: cunit, i, id, ia, ic, ig, is, fp_pos, jg
    integer (kind=IntKind) :: isize, fsize, imsgbuf_size, fmsgbuf_size
    integer (kind=IntKind) :: num_clients, proc_client, present_atom
 !
@@ -1020,7 +1020,7 @@ contains
    integer (kind=IntKind) :: msgid1, msgid2
 !
 !  Assuming that the size of the core density file does not exceed 2**31 bytes.
-   integer (kind=IntKind) :: file_loc(GlobalNumAtoms+1) 
+   integer (kind=IntKind) :: offset(GlobalNumAtoms+1) 
    integer (kind=IntKind) :: block_size(2,GlobalNumAtoms)
 !
    integer (kind=IntKind), allocatable :: imsgbuf(:)
@@ -1064,6 +1064,7 @@ contains
       call recvMessage(block_size,2,GlobalNumAtoms,212232,getMyInputProc())
 !     ----------------------------------------------------------------
    endif
+   fp_pos = 2*GlobalNumAtoms*integer4_size
 !
 !  ===================================================================
 !  Determine the address of the core density data for each atomic site
@@ -1072,18 +1073,10 @@ contains
    imsgbuf_size = 0
    fmsgbuf_size = 0
    do ig = 1, GlobalNumAtoms
-      file_loc(ig) = block_size(1,ig)*integer4_size + block_size(2,ig)*real8_size
+      offset(ig) = block_size(1,ig)*integer4_size + block_size(2,ig)*real8_size
       imsgbuf_size = max(block_size(1,ig),imsgbuf_size)
       fmsgbuf_size = max(block_size(2,ig),fmsgbuf_size)
    enddo
-   do ig = 2, GlobalNumAtoms
-      file_loc(ig) = file_loc(ig) + file_loc(ig-1)
-   enddo
-   do ig = GlobalNumAtoms+1, 2, -1
-      file_loc(ig) = file_loc(ig-1) + 1
-   enddo
-   file_loc(1) = 1
-   file_loc = file_loc + 2*GlobalNumAtoms*integer4_size
 !
    allocate(imsgbuf(imsgbuf_size), fmsgbuf(fmsgbuf_size))
    do id = 1, LocalNumAtoms
@@ -1091,15 +1084,17 @@ contains
       if ( isInputProc() ) then
 !        =============================================================
 !        read in the core density data...................................
-!        =============================================================
-         fp_pos=file_loc(ig)
 !        -------------------------------------------------------------
          call c_fseek(cunit,fp_pos,0)
+!        -------------------------------------------------------------
+         do jg = 1, ig-1
+!           ----------------------------------------------------------
+            call c_fseek(cunit,offset(jg),1)
+!           ----------------------------------------------------------
+         enddo
+!        -------------------------------------------------------------
          call c_read_integer(cunit,imsgbuf,block_size(1,ig))
 !        -------------------------------------------------------------
-         fp_pos = fp_pos + block_size(1,ig)*integer4_size
-!        -------------------------------------------------------------
-         call c_fseek(cunit,fp_pos,0)
          call c_read_double(cunit,fmsgbuf,block_size(2,ig))
 !        -------------------------------------------------------------
 !
@@ -1107,14 +1102,16 @@ contains
          do i = 1, num_clients
             proc_client = getInputClient(i)
             present_atom = getGlobalIndex(id,proc_client)
-            fp_pos=file_loc(present_atom)
 !           ----------------------------------------------------------
             call c_fseek(cunit,fp_pos,0)
+!           ----------------------------------------------------------
+            do jg = 1, present_atom-1
+!              -------------------------------------------------------
+               call c_fseek(cunit,offset(jg),1)
+!              -------------------------------------------------------
+            enddo
+!           ----------------------------------------------------------
             call c_read_integer(cunit,imsgbuf,block_size(1,present_atom))
-!           ----------------------------------------------------------
-            fp_pos = fp_pos + block_size(1,present_atom)*integer4_size
-!           ----------------------------------------------------------
-            call c_fseek(cunit,fp_pos,0)
             call c_read_double(cunit,fmsgbuf,block_size(2,present_atom))
 !           ----------------------------------------------------------
             call sendMessage(imsgbuf,block_size(1,present_atom),212233,proc_client)
@@ -1309,7 +1306,7 @@ contains
    character (len=*), intent(in) :: fname
 !
    integer (kind=IntKind) :: integer4_size,real8_size
-   integer (kind=IntKind) :: cunit, i, id, ia, ic, ig, is, fp_pos
+   integer (kind=IntKind) :: cunit, i, id, ia, ic, ig, is, fp_pos, jg
    integer (kind=IntKind) :: isize, fsize, imsgbuf_size, fmsgbuf_size
    integer (kind=IntKind) :: num_clients, proc_client, present_atom
 !
@@ -1317,7 +1314,7 @@ contains
    integer (kind=IntKind) :: msgid1, msgid2
 !
 !  Assuming that the size of the core density file does not exceed 2**31 bytes.
-   integer (kind=IntKind) :: file_loc(GlobalNumAtoms+1) 
+   integer (kind=IntKind) :: offset(GlobalNumAtoms) 
    integer (kind=IntKind) :: block_size(2,GlobalNumAtoms)
 !
    integer (kind=IntKind), allocatable :: imsgbuf(:)
@@ -1369,7 +1366,6 @@ contains
 !     real (kind=RealKind) :: Core(id)%rcore_mt
 !     ================================================================
       ig = getGlobalIndex(id)
-!     file_loc(ig) = file_loc(ig) + 6*integer4_size + 6*real8_size
       isize = 6
       fsize = 6
 !
@@ -1402,7 +1398,6 @@ contains
 !        real (kind=RealKind) :: Core(id)%qcorws(:)
 !        real (kind=RealKind) :: Core(id)%qcorout(:)
 !        =============================================================
-!        file_loc(ig) = file_loc(ig) + 2*integer4_size + (n_spin_pola*4+12)*real8_size
          isize = isize + 2
          fsize = fsize + (n_spin_pola*4+12)
 !
@@ -1415,7 +1410,6 @@ contains
 !           integer :: Core(id)%kc(:,:)
 !           real (kind=RealKind) :: Core(id)%ec(:,:,:)
 !           ==========================================================
-!           file_loc(ig) = file_loc(ig) + 3*integer4_size + n_spin_pola*real8_size
             isize = isize + 3
             fsize = fsize + n_spin_pola
          enddo
@@ -1425,7 +1419,6 @@ contains
 !        real (kind=RealKind) :: Core(id)%corden(:,:,:)
 !        real (kind=RealKind) :: Core(id)%semden(:,:,:)
 !        =============================================================
-!        file_loc(ig) = file_loc(ig) + 2*Core(id)%rsize*n_spin_pola*real8_size
          fsize = fsize + 2*Core(id)%rsize*n_spin_pola
       enddo
       imsgbuf_size = max(isize,imsgbuf_size)
@@ -1450,22 +1443,15 @@ contains
       call c_write_integer(cunit,block_size,2*GlobalNumAtoms)
 !     ----------------------------------------------------------------
    endif
+   fp_pos = 2*GlobalNumAtoms*integer4_size+1
 !
 !  ===================================================================
 !  Determine the address of the core density data for each atomic site
 !  in the core density file.
 !  ===================================================================
    do ig = 1, GlobalNumAtoms
-      file_loc(ig) = block_size(1,ig)*integer4_size + block_size(2,ig)*real8_size
+      offset(ig) = block_size(1,ig)*integer4_size + block_size(2,ig)*real8_size
    enddo
-   do ig = 2, GlobalNumAtoms
-      file_loc(ig) = file_loc(ig) + file_loc(ig-1)
-   enddo
-   do ig = GlobalNumAtoms+1, 2, -1
-      file_loc(ig) = file_loc(ig-1) + 1
-   enddo
-   file_loc(1) = 1
-   file_loc = file_loc + 2*GlobalNumAtoms*integer4_size
 !  ===================================================================
 !
 !  ===================================================================
@@ -1561,7 +1547,7 @@ contains
 !        -------------------------------------------------------------
          call ErrorHandler('writeCoreDensity','Inconsistent real data size')
 !        -------------------------------------------------------------
-      else if (fsize*real8_size+isize*integer4_size /= file_loc(ig+1)-file_loc(ig)) then
+      else if (fsize*real8_size+isize*integer4_size /= offset(ig)) then
 !        -------------------------------------------------------------
          call ErrorHandler('writeCoreDensity','Inconsistent data location and size')
 !        -------------------------------------------------------------
@@ -1570,15 +1556,14 @@ contains
       if ( isOutputProc() ) then
 !        =============================================================
 !        write out imsgbuf of the present local atom..................
-!        =============================================================
-         fp_pos=file_loc(ig)
 !        -------------------------------------------------------------
          call c_fseek(cunit,fp_pos,0)
+!        -------------------------------------------------------------
+         do jg = 1, ig-1
+            call c_fseek(cunit,offset(jg),1)
+         enddo
+!        -------------------------------------------------------------
          call c_write_integer(cunit,imsgbuf,isize)
-!        -------------------------------------------------------------
-         fp_pos = fp_pos + isize*integer4_size
-!        -------------------------------------------------------------
-         call c_fseek(cunit,fp_pos,0)
          call c_write_double(cunit,fmsgbuf,fsize)
 !        -------------------------------------------------------------
 !
@@ -1595,15 +1580,14 @@ contains
 !
 !           ==========================================================
 !           Write clients data
-!           ==========================================================
-            fp_pos=file_loc(present_atom)
 !           ----------------------------------------------------------
             call c_fseek(cunit,fp_pos,0)
+!           ----------------------------------------------------------
+            do jg = 1, present_atom-1
+               call c_fseek(cunit,offset(jg),1)
+            enddo
+!           ----------------------------------------------------------
             call c_write_integer(cunit,imsgbuf,isize)
-!           ----------------------------------------------------------
-            fp_pos = fp_pos + isize*integer4_size
-!           ----------------------------------------------------------
-            call c_fseek(cunit,fp_pos,0)
             call c_write_double(cunit,fmsgbuf,fsize)
 !           ----------------------------------------------------------
          enddo
