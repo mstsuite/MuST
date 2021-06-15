@@ -16,14 +16,11 @@ public :: initSROMatrix,             &
           assembleTauFromBlocks,     &
           calculateImpurityMatrix,   &
           calSpeciesTauMatrix,       &
-          clusterDtilde,             &
           calculateSCFSpeciesTerm,   &
           getKauFromTau,             &
           calculateNewTCPA,          &
           getSROMatrix,              &
-          getDoubleSpeciesTauMatrix, &
           getSROParam,               &
-          calNegatives,              &
           getNeighSize
 !
 
@@ -662,26 +659,10 @@ contains
 
    SROMedium(n)%SROTMatrix(ic)%tau_ab(:, :, 1) = y
 
-   if (sigma == 1) then
-     call computeAprojB('N', dsize*nsize, SROMedium(n)%tau_cpa(:,:, 1), z, &
-                SROMedium(n)%SROTMatrix(ic)%D_ab(:,:,1))
-     call computeAprojB('N', dsize*nsize, z, SROMedium(n)%tau_cpa(:,:,1), &
-                SROMedium(n)%SROTMatrix(ic)%Dt_ab(:,:,1))
-   endif
 
 !  call writeMatrix('tau_a11', SROMedium(n)%SROTMatrix(ic)%tau_ab(1:dsize, 1:dsize, 1), &
 !                 dsize, dsize, TEN2m8) 
 !  enddo
-
-   if (sigma == 1) then
-     do ic1 = 1, getLocalNumSpecies(n)
-       y = CZERO
-       z = SROMedium(n)%SROTMatrix(ic)%tmat_s(1)%T_sigma_inv(ic1,:,:) - &
-           SROMedium(n)%T_CPA_inv
-       call computeAprojB('L', dsize*nsize, SROMedium(n)%tau_cpa(:,:,1), z, y)
-       SROMedium(n)%SROTMatrix(ic)%tau_sigma(ic1,:,:,1) = y
-     enddo
-   endif
 
    end subroutine calculateImpurityMatrix
 !  ===================================================================
@@ -929,50 +910,12 @@ contains
      if (is_size) then
        matsize = dsize
      endif
-   else if (nocaseCompare(sm_type,'neg-tau11')) then
-     if (ic == 0) then
-       sro_mat => SROMedium(n)%tau_cpac(1:dsize, 1:dsize,is)
-     else
-       sro_mat => SROMedium(n)%SROTMatrix(ic)%tau_abc(1:dsize, 1:dsize, is)
-     endif
-     if (is_size) then
-       matsize = dsize
-     endif
    else if (nocaseCompare(sm_type,'blk-tau')) then
      if (ic == 0) then
        sro_mat => SROMedium(n)%tau_cpa(:,:,is)
      else
        sro_mat => SROMedium(n)%SROTMatrix(ic)%tau_ab(:,:,is)
      endif
-     if (is_size) then
-       matsize = nsize
-     endif
-   else if (nocaseCompare(sm_type,'neg-blk-tau')) then
-     if (ic == 0) then
-       sro_mat => SROMedium(n)%tau_cpac(:,:,is)
-     else
-       sro_mat => SROMedium(n)%SROTMatrix(ic)%tau_abc(:,:,is)
-     endif
-     if (is_size) then
-       matsize = nsize
-     endif
-   else if (nocaseCompare(sm_type,'Dmat')) then
-     sro_mat => SROMedium(n)%SROTMatrix(ic)%D_ab(:,:,is)
-     if (is_size) then
-       matsize = nsize
-     endif
-   else if (nocaseCompare(sm_type,'Dtmat')) then
-     sro_mat => SROMedium(n)%SROTMatrix(ic)%Dt_ab(:,:,is)
-     if (is_size) then
-       matsize = nsize
-     endif
-   else if (nocaseCompare(sm_type,'neg-Dmat')) then
-     sro_mat => SROMedium(n)%SROTMatrix(ic)%D_abc(:,:,is)
-     if (is_size) then
-       matsize = nsize
-     endif
-   else if (nocaseCompare(sm_type,'neg-Dtmat')) then
-     sro_mat => SROMedium(n)%SROTMatrix(ic)%Dt_abc(:,:,is)
      if (is_size) then
        matsize = nsize
      endif
@@ -995,22 +938,6 @@ contains
    endif
    
    end function getSROMatrix
-!  ===================================================================
-
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getDoubleSpeciesTauMatrix(n, is, ic, ic1, neg) result(sro_mat)
-!  ===================================================================
-
-   integer (kind=IntKind), intent(in) :: n, is, ic, ic1, neg
-   complex (kind=CmplxKind), pointer :: sro_mat(:,:)   
-
-   if (neg == 0) then
-     sro_mat => SROMedium(n)%SROTMatrix(ic)%tau_sigma(ic1,:,:,is)
-   else if (neg == 1) then
-     sro_mat => SROMedium(n)%SROTMatrix(ic)%tau_sigmac(ic1,:,:,is)
-   endif
-
-   end function getDoubleSpeciesTauMatrix
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
