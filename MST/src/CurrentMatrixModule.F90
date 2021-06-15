@@ -198,13 +198,11 @@ contains
      jtspace3(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
      jtspace4(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3))
      jtspace = CZERO; jtspace2 = CZERO; jtspace3 = CZERO; jtspace4 = CZERO
-     if (vertex_corr) then
-       allocate(Jtk(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
-         Jtk2(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
-         Jtk3(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
-         Jtk4(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3))
-       Jtk = CZERO; Jtk2 = CZERO; Jtk3 = CZERO; Jtk4 = CZERO
-     endif
+     allocate(Jtk(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+       Jtk2(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+       Jtk3(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+       Jtk4(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3))
+     Jtk = CZERO; Jtk2 = CZERO; Jtk3 = CZERO; Jtk4 = CZERO
    endif
 
    allocate(iden(jsize, jsize))
@@ -303,6 +301,7 @@ contains
 
    deallocate(jspace, jspace2, jspace3, jspace4)
    deallocate(jtspace, jtspace2, jtspace3, jtspace4)
+   deallocate(Jtk, Jtk2, Jtk3, Jtk4)
 
    do L_1 = 1, kmax_cg
      do L_2 = 1, kmax_cg
@@ -1070,11 +1069,11 @@ contains
      enddo
    endif
    
-   if (vertex_corr) then
-     do ic = 1, num_species(n)
-       call cal1DCurrentMatrix(n, ic, is)
-     enddo
-   endif
+   do ic = 1, num_species(n)
+!    -------------------------------------------------------
+     call cal1DCurrentMatrix(n, ic, is)
+!    ------------------------------------------------------
+   enddo
 
    end subroutine calCurrentMatrix
 !  ===================================================================
