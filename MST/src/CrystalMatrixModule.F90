@@ -1600,9 +1600,11 @@ contains
    use ProcMappingModule, only : isKPointOnMyProc, getNumKsOnMyProc,  &
                                  getKPointIndex, getNumRedundantKsOnMyProc
    use GroupCommModule, only : getGroupID, GlobalSumInGroup, getMyPEinGroup
+   use IBZRotationModule, only : getNumIBZRotations, getIBZRotationMatrix
    use StrConstModule, only : getStrConstMatrix, &
                    checkFreeElectronPoles, getFreeElectronPoleFactor
    use WriteMatrixModule,  only : writeMatrix
+   use MatrixModule, only : computeUAUtc
 
    character (len=20) :: sname = "calChiMatrixCPA"   
 
@@ -1612,6 +1614,7 @@ contains
    integer (kind=IntKind) :: NumKs, kGID, aGID, NumKsOnMyProc, NumRedunKs
    integer (kind=IntKind) :: site_config(LocalNumAtoms), itertmp
    integer (kind=IntKind) :: ig, i, j, kkrsz, L1, L2, L3, L4, K1, K2
+   integer (kind=IntKind) :: nrot, irot
 
    real (kind=RealKind), pointer :: kpts(:,:), weight(:)
    real (kind=RealKind) :: kfac, kaij, aij(3)
@@ -1624,6 +1627,7 @@ contains
    complex (kind=CmplxKind), target :: wtmpsym(kmax_kkr_max*kmax_kkr_max)
    complex (kind=CmplxKind), target :: wint(kmax_kkr_max*kmax_kkr_max)
    complex (kind=CmplxKind), pointer :: scm(:,:), tauk(:,:), pm(:), tmat(:,:)
+   complex (kind=CmplxKind), pointer :: w0(:,:), w1(:,:), rotmat(:,:)
    complex (kind=CmplxKind), allocatable :: tmbsym(:,:), tmb(:,:)
    complex (kind=CmplxKind) :: chi(kmax_kkr_max*kmax_kkr_max, &
                                        kmax_kkr_max*kmax_kkr_max, 4)
@@ -1646,7 +1650,8 @@ contains
    endif
 
    kkrsz = kmax_kkr_max
-  !cfac = CONE/real(nrot, RealKind)
+   nrot = getNumIBZRotations()
+   cfac = CONE/real(nrot, RealKind)
    allocate(tmbsym(kkrsz, kkrsz), tmb(kkrsz, kkrsz))
    tmbsym = CZERO
    tmb = CZERO
@@ -1678,6 +1683,8 @@ contains
    weight => getAllWeights()
    weightSum = getWeightSum()
    tmat => getSingleScatteringMatrix('T-Matrix',site=n,atom=0)
+   w0 => aliasArray2_c(wtmp, kkrsz, kkrsz)
+   w1 => aliasArray2_c(wtmpsym,kkrsz,kkrsz)
 
    
    do k_loc = 1,NumKsOnMyProc
@@ -1719,26 +1726,61 @@ contains
          tmbsym(i, j) = ((-1.0)**(lofk(j) - lofk(i)))*conjg(tmb(j, i))
        enddo
      enddo
+     
      if (k_loc <= NumKsOnMyProc - NumRedunKs .or. MyPEinKGroup == 0) then
-       do L4 = 1, kmax_kkr_max
-         do L3 = 1, kmax_kkr_max
-           do L2 = 1, kmax_kkr_max
-             do L1 = 1, kmax_kkr_max
-               K1 = (L1 - 1)*kmax_kkr_max + L4
-               K2 = (L2 - 1)*kmax_kkr_max + L3
-               chi(K1,K2,1) = chi(K1,K2,1) + wfac*tmb(L1,L2)*tmb(L3,L4)
-               chi(K1,K2,2) = chi(K1,K2,2) + wfac*tmb(L1,L2)*tmbsym(L3,L4)
-               chi(K1,K2,3) = chi(K1,K2,3) + wfac*tmbsym(L1,L2)*tmb(L3,L4)
-               chi(K1,K2,4) = chi(K1,K2,4) + wfac*tmbsym(L1,L2)*tmbsym(L3,L4)
-             enddo 
-           enddo 
+       if (nrot > 1) then
+         do irot = 1, nrot
+           w0 = CZERO
+           w1 = CZERO
+           WORK = CZERO
+           rotmat => getIBZRotationMatrix('c', irot)
+!          ----------------------------------------------------------------
+           call computeUAUtc(rotmat,kkrsz,kkrsz,rotmat,kkrsz,CONE, &
+                        tmb,kkrsz,CONE,w0,kkrsz,WORK)
+!          ----------------------------------------------------------------
+           call computeUAUtc(rotmat,kkrsz,kkrsz,rotmat,kkrsz,CONE, &
+                        tmbsym,kkrsz,CONE,w1,kkrsz,WORK)
+!          ----------------------------------------------------------------
+           do L4 = 1, kmax_kkr_max
+             do L3 = 1, kmax_kkr_max
+               do L2 = 1, kmax_kkr_max
+                 do L1 = 1, kmax_kkr_max
+                   K1 = (L1 - 1)*kmax_kkr_max + L4
+                   K2 = (L2 - 1)*kmax_kkr_max + L3
+                   chi(K1,K2,1) = chi(K1,K2,1) + (1.0/nrot)*wfac*w0(L1,L2)*w0(L3,L4)
+                   chi(K1,K2,2) = chi(K1,K2,2) + (1.0/nrot)*wfac*w0(L1,L2)*w1(L3,L4)
+                   chi(K1,K2,3) = chi(K1,K2,3) + (1.0/nrot)*wfac*w1(L1,L2)*w0(L3,L4)
+                   chi(K1,K2,4) = chi(K1,K2,4) + (1.0/nrot)*wfac*w1(L1,L2)*w1(L3,L4)
+                 enddo
+               enddo
+             enddo
+           enddo
          enddo
-       enddo
-     endif
+       else
+         do L4 = 1, kmax_kkr_max
+           do L3 = 1, kmax_kkr_max
+             do L2 = 1, kmax_kkr_max
+               do L1 = 1, kmax_kkr_max
+                 K1 = (L1 - 1)*kmax_kkr_max + L4
+                 K2 = (L2 - 1)*kmax_kkr_max + L3
+                 chi(K1,K2,1) = chi(K1,K2,1) + wfac*tmb(L1,L2)*tmb(L3,L4)
+                 chi(K1,K2,2) = chi(K1,K2,2) + wfac*tmb(L1,L2)*tmbsym(L3,L4)
+                 chi(K1,K2,3) = chi(K1,K2,3) + wfac*tmbsym(L1,L2)*tmb(L3,L4)
+                 chi(K1,K2,4) = chi(K1,K2,4) + wfac*tmbsym(L1,L2)*tmbsym(L3,L4)
+               enddo 
+             enddo 
+           enddo
+         enddo
+       endif
+     endif 
    enddo
 
    call GlobalSumInGroup(kGID,chi,kmax_kkr_max*kmax_kkr_max,kmax_kkr_max*kmax_kkr_max,4)
-   
+  
+!  call writeMatrix('chi',chi(:,:,1), kmax_kkr_max*kmax_kkr_max, kmax_kkr_max*kmax_kkr_max)
+
+!  call ErrorHandler('calChiIntegralCPA','stop')
+ 
    end function calChiIntegralCPA
 !  ===================================================================
 !
