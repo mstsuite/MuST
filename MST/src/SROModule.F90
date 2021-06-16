@@ -31,7 +31,6 @@ private
    integer (kind=IntKind) :: kmax_kkr_max
    integer (kind=IntKind) :: ndim_Tmat
    integer (kind=IntKind) :: print_instruction
-   integer (kind=IntKind) :: sigma
    integer (kind=IntKind), allocatable :: lofk(:), mofk(:), jofk(:) 
 !
    complex(kind=CmplxKind), allocatable, target :: WORK0_sro(:), WORK1_sro(:), WORK2_sro(:)
@@ -51,7 +50,6 @@ private
       complex (kind=CmplxKind), pointer :: tmat_tilde_inv(:,:)
       complex (kind=CmplxKind), pointer :: tmat_tilde_inv_nn(:,:)
       complex (kind=CmplxKind), pointer :: T_inv(:,:)
-      complex (kind=CmplxKind), pointer :: T_sigma_inv(:,:,:)
       complex (kind=CmplxKind), pointer :: proj_a(:,:)
       complex (kind=CmplxKind), pointer :: proj_b(:,:)
    end type TmatBlockStruct
@@ -117,11 +115,6 @@ contains
 !
    logical :: isWarrenCowley = .false.
 
-   if (isConductivity()) then
-     sigma = 1
-   else
-     sigma = 0
-   endif
 
 !  --------------------------------------------------------
    next_near_option = isNextNearestSRO()
@@ -407,12 +400,6 @@ contains
          do iter1 = 1, nsize
             SROMedium(n)%SROTMatrix(ia)%tmat_s(is)%T_inv(iter1,iter2) =  &
               SROMedium(n)%SROTMatrix(ia)%tmat_s(is)%tmat_inv(iter1,iter2)
-            if (sigma == 1) then
-              do ic = 1, num_species
-                SROMedium(n)%SROTMatrix(ia)%tmat_s(is)%T_sigma_inv(ic,iter1,iter2) &
-                = SROMedium(n)%SROTMatrix(ia)%tmat_s(is)%tmat_inv(iter1,iter2)
-              enddo
-            endif
          enddo
       enddo
    
@@ -460,12 +447,6 @@ contains
                      SROMedium(n)%SROTMatrix(ia)%tmat_s(is)%tmat_tilde_inv(iter1, iter2)
                  endif
 
-                 if (sigma == 1) then
-                   do ic = 1, num_species
-                     SROMedium(n)%SROTMatrix(ia)%tmat_s(is)%T_sigma_inv(ic,iter1+tmp,iter2+tmp) &
-                     = SROMedium(n)%SROTMatrix(ic)%tmat_s(is)%tmat_inv(iter1,iter2)
-                   enddo
-                 endif
                enddo
             enddo
          enddo
