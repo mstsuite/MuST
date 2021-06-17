@@ -42,7 +42,7 @@ private
                              lmax_sigma, lmax_sigma_2, lmax_cg
    integer (kind=IntKind) :: kmax_phi_max, kmax_green_max, iend_max, &
                              kmax_sigma, kmax_sigma_2, kmax_max, kmax_cg
-   integer (kind=IntKind) :: NumSpecies
+   integer (kind=IntKind) :: NumSpecies, NumClusterSize
    logical :: vertex_corr
 
    type CGCoeff
@@ -70,9 +70,10 @@ private
    complex (kind=CmplxKind), allocatable, target :: jtspace(:,:,:,:,:,:), &
        jtspace2(:,:,:,:,:,:), jtspace3(:,:,:,:,:,:), jtspace4(:,:,:,:,:,:)
 
-!  Re-shaped tilde-matrices for vertex correction calculation
+!  Re-shaped tilde-matrices for conductivity calculation
    complex (kind=CmplxKind), allocatable, target :: Jtk(:,:,:,:,:), &
        Jtk2(:,:,:,:,:), Jtk3(:,:,:,:,:), Jtk4(:,:,:,:,:)
+
 !  ---------------------------------------------------------------------
    complex (kind=CmplxKind), pointer :: gaunt(:,:,:)
    complex (kind=CmplxKind), allocatable :: store_space(:)
@@ -95,6 +96,7 @@ contains
    use ScfDataModule, only : isKKR, isLSMS, isKKRCPA, isKKRCPASRO
    use GauntFactorsModule, only : initGauntFactors, endGauntFactors
    use GauntFactorsModule, only : getK3, getNumK3, getGauntFactor
+   use SROModule, only : getNeighSize
 
    integer (kind=IntKind), intent(in) :: num_atoms
    integer (kind=IntKind), intent(in) :: lmaxkkr(num_atoms)
@@ -112,7 +114,7 @@ contains
 
    integer (kind=LongIntKind) :: wspace_size, gspace_size
    integer (kind=IntKind) :: i, lmax_max, jmax, iend, kmax, NumSpecies, NumPolyhedra
-   integer (kind=IntKind) :: lmax, kl, jl, m, n, l, j, jsize
+   integer (kind=IntKind) :: lmax, kl, jl, m, n, l, j, jsize, sro_size
    integer (kind=IntKind) :: klp1, klp2, i3, klg
    integer (kind=IntKind), pointer :: nj3(:,:), kj3(:,:,:)
 
@@ -125,6 +127,11 @@ contains
    n_spin_pola = pola
    n_spin_cant = cant
    NumPolyhedra = getNumPolyhedra()
+   
+   if (mode == 4) then
+   ! SRO has only been tested for single sublattice calculations.
+     NumClusterSize = getNeighSize(1)
+   endif
 
    allocate( print_instruction(LocalNumAtoms) ) 
    allocate( lmax_kkr(LocalNumAtoms) )
@@ -191,18 +198,24 @@ contains
    jspace3(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
    jspace4(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3)) 
    
-   if (mode == 3 .or. mode == 4) then
-     allocate(jtspace(jsize, jsize, &
+   allocate(jtspace(jsize, jsize, &
              LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
-     jtspace2(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
-     jtspace3(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
-     jtspace4(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3))
-     jtspace = CZERO; jtspace2 = CZERO; jtspace3 = CZERO; jtspace4 = CZERO
+   jtspace2(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+   jtspace3(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+   jtspace4(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3))
+   jtspace = CZERO; jtspace2 = CZERO; jtspace3 = CZERO; jtspace4 = CZERO
+   if (mode == 3) then
      allocate(Jtk(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
        Jtk2(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
        Jtk3(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
        Jtk4(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3))
      Jtk = CZERO; Jtk2 = CZERO; Jtk3 = CZERO; Jtk4 = CZERO
+   else if (mode == 4) then
+     sro_size = NumClusterSize*jsize
+     allocate(Jtk(sro_size*sro_size, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+       Jtk2(sro_size*sro_size, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+       Jtk3(sro_size*sro_size, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+       Jtk4(sro_size*sro_size, LocalNumAtoms, NumSpecies, n_spin_pola, 3))
    endif
 
    allocate(iden(jsize, jsize))
@@ -1017,165 +1030,6 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calCurrentMatrix(n, is, eval, pot_type, mode)
-!  ===================================================================
-
-   use RadialGridModule, only : getRmesh, getRadialGridRadius
-   use StepFunctionModule, only : interpolateStepFunction, getRadialStepFunction
-
-   integer (kind=IntKind), intent(in) :: n, is, pot_type, mode
-   complex (kind=CmplxKind), intent(in) :: eval
-
-   integer (kind=IntKind) :: iend, ic, dir
-   real (kind=RealKind) :: rmt
-   real(kind=RealKind), pointer :: radial_grid(:)
-   complex(kind=CmplxKind), allocatable :: sf_term(:,:,:), &
-                               sf_single(:,:), sfqsum(:)
-
-   rmt = getRadialGridRadius(n, MT=.true., nr=iend)
-   radial_grid => getRmesh(n)
-
-   allocate(sf_term(iend, kmax_sigma_2, kmax_sigma_2), sfqsum(iend), &
-     sf_single(iend, jofk(kmax_sigma)))
-
-!  ---------------------------------------------------------------- 
-   call interpolateStepFunction(n, iend, radial_grid(1:iend), &
-         kmax_sigma_2, kmax_sigma_2, sf_term)
-!  ----------------------------------------------------------------
-   call getRadialStepFunction(n, 1, iend, radial_grid, &
-        lmax_sigma, sf_single)
-!  ----------------------------------------------------------------
-   
-   do ic = 1, num_species(n)
-!     -------------------------------------------------------------
-      call calJxFromPhiLrIntegral(n,ic,eval,iend, &
-           is,sf_single,sf_term,mt=pot_type)
-!     -------------------------------------------------------------
-      call calJyzFromJx(n, ic, is)
-!     -------------------------------------------------------------
-   enddo
-
-   if (mode == 3) then
-     do ic = 1, num_species(n)
-!      ------------------------------------------------------    
-       call calJtildeCPA(n, ic, is)
-!      ------------------------------------------------------
-     enddo
-   else if (mode == 4) then
-     do ic = 1, num_species(n)
-!      ------------------------------------------------------
-       call calJtildeSRO(n, ic, is)
-!      ------------------------------------------------------
-     enddo
-   endif
-   
-   do ic = 1, num_species(n)
-!    -------------------------------------------------------
-     call cal1DCurrentMatrix(n, ic, is)
-!    ------------------------------------------------------
-   enddo
-
-   end subroutine calCurrentMatrix
-!  ===================================================================
-
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calJtildeSRO(n, ic, is)
-!  ===================================================================
-   
-   use SROModule, only : getSROMatrix
-   use MatrixModule, only : computeAprojB
-   use WriteMatrixModule, only : writeMatrix
-
-   integer (kind=IntKind), intent(in) :: n, ic, is
-   integer (kind=IntKind) :: i, j, L1, L2, nsize, dir, dsize
-   complex (kind=CmplxKind), pointer :: Ta(:,:), Tc(:,:), tauc(:,:)
-   complex (kind=CmplxKind), allocatable :: taucc(:,:), Tcc(:,:), Tac(:,:)
-   complex (kind=CmplxKind), pointer :: D(:,:), Dt(:,:), D1(:,:), Dt1(:,:)
-   complex (kind=CmplxKind), allocatable :: D00(:,:), Dt00(:,:), D100(:,:), Dt100(:,:)
-   complex (kind=CmplxKind), allocatable :: tmp1(:,:), tmp2(:,:)
-   complex (kind=CmplxKind), allocatable :: buf1(:,:), buf2(:,:), &
-                                                 buf3(:,:), buf4(:,:)
-
-   dsize = kmax_kkr_max
-   Ta => getSROMatrix('blk-tinv', n, ic, is, nsize)
-   Tc => getSROMatrix('blk-tinv', n, 0, is)
-   tauc => getSROMatrix('blk-tau', n, 0, is)
-   D => getSROMatrix('Dmat', n, ic, is)
-   D1 => getSROMatrix('neg-Dmat', n, ic, is)
-   Dt => getSROMatrix('Dtmat', n, ic, is)
-   Dt1 => getSROMatrix('neg-Dtmat', n, ic, is)
-
-!  call writeMatrix('tauc', tauc, nsize, nsize)
-
-   allocate(tmp1(nsize*dsize, nsize*dsize), tmp2(nsize*dsize, nsize*dsize))
-   allocate(buf1(dsize, dsize), buf2(dsize, dsize), &
-     buf3(dsize, dsize), buf4(dsize, dsize), &
-     D00(dsize, dsize), Dt00(dsize, dsize), &
-     D100(dsize, dsize), Dt100(dsize, dsize))
-   
-   D00 = D(1:dsize, 1:dsize)
-   D100 = D1(1:dsize, 1:dsize)
-   Dt00 = Dt(1:dsize, 1:dsize)
-   Dt100 = Dt1(1:dsize, 1:dsize)
-!  call writeMatrix('D', D, nsize, nsize)
-!  call writeMatrix('D1', D1, nsize, nsize)
-!  call writeMatrix('Dt', Dt, nsize, nsize)
-!  call writeMatrix('Dt1', Dt1, nsize, nsize)
-
-   do dir = 1, 3
-     buf1 = CZERO; buf2 = CZERO; buf3 = CZERO; buf4 = CZERO
-!    -----------------------------------------------------------------
-     call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, CONE, &
-     jspace(:,:,n,ic,is,dir), kmax_kkr_max, D00, &
-     kmax_kkr_max, CZERO, buf1, kmax_kkr_max)
-!    -----------------------------------------------------------------
-     call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, CONE, &
-     Dt00, kmax_kkr_max, buf1, kmax_kkr_max, &
-     CZERO, jtspace(:,:,n,ic,is,dir), kmax_kkr_max)
-!    -----------------------------------------------------------------
-
-!    -----------------------------------------------------------------
-     call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, CONE, &
-     jspace2(:,:,n,ic,is,dir), kmax_kkr_max, D100, &
-     kmax_kkr_max, CZERO,buf2, kmax_kkr_max)
-!    -----------------------------------------------------------------
-     call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, CONE, &
-     Dt00, kmax_kkr_max, buf2, kmax_kkr_max, &
-     CZERO, jtspace2(:,:,n,ic,is,dir), kmax_kkr_max)
-!    -----------------------------------------------------------------
-
-!    -----------------------------------------------------------------
-     call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, CONE, &
-     jspace3(:,:,n,ic,is,dir), kmax_kkr_max, D00, &
-     kmax_kkr_max, CZERO, buf3, kmax_kkr_max)
-!    -----------------------------------------------------------------
-     call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, CONE, &
-     Dt100, kmax_kkr_max, buf3, kmax_kkr_max, &
-     CZERO, jtspace3(:,:,n,ic,is,dir), kmax_kkr_max)
-!    -----------------------------------------------------------------
-    
-!    -----------------------------------------------------------------
-     call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, CONE, &
-     jspace4(:,:,n,ic,is,dir), kmax_kkr_max, D100, &
-     kmax_kkr_max, CZERO, buf4, kmax_kkr_max)
-!    -----------------------------------------------------------------
-     call zgemm('n', 'n', kmax_kkr_max, kmax_kkr_max, kmax_kkr_max, CONE, &
-     Dt100, kmax_kkr_max, buf4, kmax_kkr_max, &
-     CZERO, jtspace4(:,:,n,ic,is,dir), kmax_kkr_max)
-!    -----------------------------------------------------------------
-   enddo
-
-!  if (ic == 1) then
-!    call writeMatrix('Jtx', jtspace(:,:,n,1,is,1), dsize, dsize)
-!    call writeMatrix('Jtx_2', jtspace2(:,:,n,ic,is,1), dsize, dsize)
-!    call writeMatrix('Jtx_3', jtspace3(:,:,n,ic,is,1), dsize, dsize)
-!    call writeMatrix('Jtx_4', jtspace4(:,:,n,ic,is,1), dsize, dsize)
-!  endif
-
-   end subroutine calJtildeSRO
-!  ===================================================================
-
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine calJtildeCPA(n, ic, is)
 !  ===================================================================
    use SSSolverModule, only : getScatteringMatrix
@@ -1299,7 +1153,7 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine cal1DCurrentMatrix(n, ic, is)
+   subroutine cal1DCurrentMatrixCPA(n, ic, is)
 !  ===================================================================
 
    integer (kind=IntKind), intent(in) :: n, ic, is
@@ -1317,7 +1171,152 @@ contains
      enddo
    enddo
    
-   end subroutine cal1DCurrentMatrix
+   end subroutine cal1DCurrentMatrixCPA
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine cal1DCurrentMatrixSRO(n, ic, is)
+!  ===================================================================
+
+   use SSSolverModule, only : getScatteringMatrix
+   use CPAMediumModule, only : getSingleSiteTmat, getCPAMatrix
+   use SROModule, only : getSROMatrix
+   use MatrixModule, only : computeAprojB
+   use WriteMatrixModule, only : writeMatrix
+
+   integer (kind=IntKind), intent(in) :: n, ic, is
+
+   integer (kind=IntKind) :: dir, l, m, L1, L4, Lp, Lpp, K1, C1, CK1, i, j
+   complex (kind=CmplxKind), pointer :: Tc(:,:), Ta(:,:), tauc(:,:)
+   complex (kind=CmplxKind) :: Tcc(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize), Tac(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize), taucc(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize), tdiff(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize), tdiffc(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize)
+   complex (kind=CmplxKind) :: Dt(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize), Dt1(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize), D(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize), D1(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize)
+   tdiff = CZERO; tdiffc = CZERO
+   Tcc = CZERO; Tac = CZERO; taucc = CZERO
+   Dt = CZERO; Dt1 = CZERO; D = CZERO; D1 = CZERO
+
+   Tc => getSROMatrix('blk-tinv', n=n, ic=0, is=is)
+   Ta => getSROMatrix('blk-tinv', n=n, ic=ic, is=is)
+   tauc => getSROMatrix('blk-tau', n=n, ic=0, is=is)
+   
+!  Constructing negatives
+   Tcc = conjg(Tc); Tac = conjg(Ta)
+   tdiff = Ta - Tc; tdiffc = Tac - Tcc
+
+   do L4 = 1, kmax_kkr_max
+     do L1 = 1, kmax_kkr_max
+       do l = 1, NumClusterSize
+         do m = 1, NumClusterSize
+           Lp = kmax_kkr_max*(l - 1) + L1
+           Lpp = kmax_kkr_max*(m - 1) + L4
+           taucc(Lp, Lpp) = (-1.0)**(lofk(L1) - lofk(L4)) * tauc(Lpp, Lp)
+         enddo
+       enddo
+     enddo
+   enddo
+
+!  Constructing D matrices   
+   call computeAprojB('N', kmax_kkr_max*NumClusterSize, tdiff, tauc, Dt)
+   call computeAprojB('N', kmax_kkr_max*NumClusterSize, tdiffc, taucc, Dt1)
+   call computeAprojB('N', kmax_kkr_max*NumClusterSize, tauc, tdiff, D)
+   call computeAprojB('N', kmax_kkr_max*NumClusterSize, taucc, tdiffc, D1)
+
+!  Constructing 1D current matrix
+   do dir = 1, 3
+     do l = 1, NumClusterSize
+       do m = 1, NumClusterSize 
+         do L1 = 1, kmax_kkr_max
+           do L4 = 1, kmax_kkr_max
+             CK1 = (kmax_kkr_max**2)*(NumClusterSize*(l - 1) + m - 1) + kmax_kkr_max*(L1 - 1) + L4
+               i = kmax_kkr_max*(l - 1) + L1
+               j = kmax_kkr_max*(m - 1) + L4
+             do Lp = 1, kmax_kkr_max
+               do Lpp = 1, kmax_kkr_max
+                 Jtk(CK1,n,ic,is,dir) = Jtk(CK1,n,ic,is,dir) + &
+                                Dt(i,Lp)*jspace(Lp,Lpp,n,ic,is,dir)*D(Lpp,j)
+                 Jtk2(CK1,n,ic,is,dir) = Jtk2(CK1,n,ic,is,dir) + &
+                                Dt(i,Lp)*jspace2(Lp,Lpp,n,ic,is,dir)*D1(Lpp,j)
+                 Jtk3(CK1,n,ic,is,dir) = Jtk3(CK1,n,ic,is,dir) + &
+                                Dt1(i,Lp)*jspace3(Lp,Lpp,n,ic,is,dir)*D(Lpp,j)
+                 Jtk4(CK1,n,ic,is,dir) = Jtk4(CK1,n,ic,is,dir) + &
+                                Dt1(i,Lp)*jspace4(Lp,Lpp,n,ic,is,dir)*D1(Lpp,j)
+               enddo
+             enddo
+           enddo
+         enddo
+       enddo
+     enddo
+   enddo
+
+   end subroutine cal1DCurrentMatrixSRO
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine calCurrentMatrix(n, is, eval, pot_type, mode)
+!  ===================================================================
+
+   use RadialGridModule, only : getRmesh, getRadialGridRadius
+   use StepFunctionModule, only : interpolateStepFunction, getRadialStepFunction
+
+   integer (kind=IntKind), intent(in) :: n, is, pot_type, mode
+   complex (kind=CmplxKind), intent(in) :: eval
+
+   integer (kind=IntKind) :: iend, ic, dir
+   real (kind=RealKind) :: rmt
+   real(kind=RealKind), pointer :: radial_grid(:)
+   complex(kind=CmplxKind), allocatable :: sf_term(:,:,:), &
+                               sf_single(:,:), sfqsum(:)
+
+   rmt = getRadialGridRadius(n, MT=.true., nr=iend)
+   radial_grid => getRmesh(n)
+
+   allocate(sf_term(iend, kmax_sigma_2, kmax_sigma_2), sfqsum(iend), &
+     sf_single(iend, jofk(kmax_sigma)))
+
+!  ---------------------------------------------------------------- 
+   call interpolateStepFunction(n, iend, radial_grid(1:iend), &
+         kmax_sigma_2, kmax_sigma_2, sf_term)
+!  ----------------------------------------------------------------
+   call getRadialStepFunction(n, 1, iend, radial_grid, &
+        lmax_sigma, sf_single)
+!  ----------------------------------------------------------------
+
+   do ic = 1, num_species(n)
+!     -------------------------------------------------------------
+      call calJxFromPhiLrIntegral(n,ic,eval,iend, &
+           is,sf_single,sf_term,mt=pot_type)
+!     -------------------------------------------------------------
+      call calJyzFromJx(n, ic, is)
+!     -------------------------------------------------------------
+   enddo
+
+   if (mode == 3) then
+     do ic = 1, num_species(n)
+!      ------------------------------------------------------    
+       call calJtildeCPA(n, ic, is)
+!      ------------------------------------------------------
+       call cal1DCurrentMatrixCPA(n, ic, is)
+!      ------------------------------------------------------
+     enddo
+   else if (mode == 4) then
+   !  Under development
+     do ic = 1, num_species(n)
+!      ------------------------------------------------------
+       call cal1DCurrentMatrixSRO(n, ic, is)
+!      ------------------------------------------------------
+     enddo
+   endif
+
+
+   end subroutine calCurrentMatrix
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
