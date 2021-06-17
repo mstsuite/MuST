@@ -107,6 +107,8 @@ public :: initCrystalMatrix, &
           calCrystalMatrix,  &
           calSigmaIntegralCPA, &
           calChiIntegralCPA,     &
+          calChiIntegralSRO, &
+          getChiIntegralSRO, &
           getTau,            &
           getKau,            &
           getTauSRO,         &
@@ -180,6 +182,11 @@ private
    complex (kind=CmplxKind), allocatable, target :: tmat_g(:,:) ! t-matrix in global frame
    complex (kind=CmplxKind), allocatable, target :: tmatinv_g(:,:) ! tinv-matrix in global frame
    complex (kind=CmplxKind), pointer :: cosine_g(:,:)  ! Cosine matrix in global frame
+
+!  Double tau integral matrix - for SRO conductivity
+!  Note this is being defined dynamically here because of large size (about 13 GB)
+   complex (kind=CmplxKind), allocatable, target :: chi(:,:,:)
+
 !
 #ifdef USE_SCALAPACK
 !  ===================================================================
@@ -214,6 +221,7 @@ contains
    use StrConstModule, only : initStrConst
    use NeighborModule, only : getNumNeighbors
    use MediumHostModule, only : getNumSpecies
+   use ScfDataModule, only : isConductivity
 !
    implicit none
 !
@@ -341,6 +349,12 @@ contains
    tsize = kmax_kkr_max*kmax_kkr_max*nSpinCant*nSpinCant
    allocate(lofk(kmax_kkr_max), mofk(kmax_kkr_max),  &
          jofk(kmax_kkr_max))
+
+!  -----SRO conductivity addition
+   if (isConductivity() .and. isSRO) then
+     allocate(chi(NeighDimSize*kmax_kkr_max*kmax_kkr_max, NeighDimSize*kmax_kkr_max*kmax_kkr_max, 4))
+     chi = CZERO
+   endif
 
 !
 !  ----- SRO Additions
@@ -1510,6 +1524,172 @@ contains
 !  call ErrorHandler('calChiIntegralCPA','stop')
  
    end function calChiIntegralCPA
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine calChiIntegralSRO(n,e,getSingleScatteringMatrix)
+!  ===================================================================
+   use MPPModule, only : MyPE
+   use BZoneModule, only : getNumKs, getAllWeights, getAllKPoints,    &
+                           getWeightSum
+   use ProcMappingModule, only : isKPointOnMyProc, getNumKsOnMyProc,  &
+                                 getKPointIndex, getNumRedundantKsOnMyProc
+   use GroupCommModule, only : getGroupID, GlobalSumInGroup, getMyPEinGroup
+   use StrConstModule, only : getStrConstMatrix, &
+                   checkFreeElectronPoles, getFreeElectronPoleFactor
+   use SROModule, only : obtainPosition, getNeighSize
+   use WriteMatrixModule,  only : writeMatrix
+
+   integer (kind=IntKind), intent(in) :: n
+   integer (kind=IntKind) :: k_loc, k, row, col, MyPEinKGroup, method
+   integer (kind=IntKind) :: NumKs, kGID, aGID, NumKsOnMyProc, NumRedunKs
+   integer (kind=IntKind) :: site_config(LocalNumAtoms), itertmp, NCS
+   integer (kind=IntKind) :: CK1, CK2, m, l, z, r, kkrsz, L1, L2, L3, L4
+
+   real (kind=RealKind), pointer :: kpts(:,:), weight(:)
+   real (kind=RealKind) :: kfac, kaij, aij(3), exp_term
+   real (kind=RealKind) :: Rr(3), Rl(3), Rz(3), Rm(3)
+   real (kind=RealKind) :: weightSum, kvec(1:3)
+
+   complex (kind=CmplxKind), intent(in) :: e
+   complex (kind=CmplxKind) :: wfac, efac, fepf
+   complex (kind=CmplxKind), pointer :: scm(:,:), tauk(:,:), pm(:), tmat(:,:)
+   complex (kind=CmplxKind), allocatable :: tmbsym(:,:), tmb(:,:)
+
+   interface
+      function getSingleScatteringMatrix(smt,spin,site,atom,dsize) result(sm)
+         use KindParamModule, only : IntKind, CmplxKind
+         character (len=*), intent(in) :: smt
+         integer (kind=IntKind), intent(in), optional :: spin, site, atom
+         integer (kind=IntKind), intent(out), optional :: dsize
+         complex (kind=CmplxKind), pointer :: sm(:,:)
+      end function getSingleScatteringMatrix
+   end interface
+! 
+   energy = e
+   if (isRelativistic) then !xianglin
+      kappa = sqrt(2.d0*Me*e + e**2/LightSpeed**2)
+   else
+      kappa = sqrt(e)
+   endif
+
+   kkrsz = kmax_kkr_max
+   allocate(tmbsym(kkrsz, kkrsz), tmb(kkrsz, kkrsz))
+   tmbsym = CZERO
+   tmb = CZERO
+   chi = CZERO
+
+   NCS = num_neighbors(1)
+   method = 2
+   site_config = 0
+
+!  ===================================================================
+!  Exchange single site scattering matrix among processes.
+!  -------------------------------------------------------------------
+   call setupSSMatrixBuf(getSingleScatteringMatrix,method,site_config)
+!  -------------------------------------------------------------------
+!
+   kGID = getGroupID('K-Mesh')
+   aGID = getGroupID('Unit Cell')
+   NumKsOnMyProc = getNumKsOnMyProc()
+   NumRedunKs = getNumRedundantKsOnMyProc()
+   MyPEinKGroup = getMyPEinGroup(kGID)
+!
+   NumKs = getNumKs()
+   kpts => getAllKPoints(kfac)
+   weight => getAllWeights()
+   weightSum = getWeightSum()
+   tmat => getSingleScatteringMatrix('T-Matrix',site=n,atom=0)
+
+   do k_loc = 1,NumKsOnMyProc
+     k = getKPointIndex(k_loc)
+     kvec(1:3) = kpts(1:3,k)*kfac
+!    ================================================================
+!    get structure constant matrix for the k-point and energy
+!    ----------------------------------------------------------------
+     call checkFreeElectronPoles(kvec,kappa)
+!    ----------------------------------------------------------------
+     do col = 1, LocalNumAtoms
+       do row = 1, GlobalNumAtoms
+!        ----------------------------------------------------------
+         scm => getStrConstMatrix(kvec,kappa,id_array(row),jd_array(col), &
+                            lmaxi_array(row),lmaxj_array(col),aij)
+!        ----------------------------------------------------------
+         sc_blocks(row,col)%strcon_matrix = scm
+       enddo
+     enddo
+!    ----------------------------------------------------------------
+     fepf = getFreeElectronPoleFactor() ! Returns the free eletron pole factor
+!    ----------------------------------------------------------------
+     wfac = weight(k)/weightSum
+!    write(6,'(a,i4,a,3f12.5,a,2d12.5,a,2d12.5)')'k-ind = ',k,       &
+!    ', kvec = ',kvec,', wfac = ',wfac,', weightsum = ',weightSum
+!  
+!    ================================================================
+!    Compute the modified KKR matrix, which is stored in TMP_MatrixBand
+!    ----------------------------------------------------------------
+     call computeMatrixBand(TMP_MatrixBand,method,fepf, &
+                 getSingleScatteringMatrix=getSingleScatteringMatrix)
+!    ----------------------------------------------------------------
+     pm => TMP_MatrixBand(1:kkrsz*kkrsz)
+     tauk => aliasArray2_c(pm,kkrsz,kkrsz)
+     call zgemm('n', 'n', kkrsz, kkrsz, kkrsz, CONE, tmat, kkrsz, &
+         tauk, kkrsz, CZERO, tmb, kkrsz)
+     do j = 1, kkrsz
+       do i = 1, kkrsz
+         tmbsym(i, j) = ((-1.0)**(lofk(j) - lofk(i)))*conjg(tmb(j, i))
+       enddo
+     enddo
+
+     if (k_loc <= NumKsOnMyProc - NumRedunKs .or. MyPEinKGroup == 0) then
+       do r = 1, num_neighbors(n)
+         call obtainPosition(n, Rr, r)
+         do z = 1, num_neighbors(n)
+           call obtainPosition(n, Rz, z)
+           do l = 1, num_neighbors(n)
+             call obtainPosition(n, Rl, l)
+             do m = 1, num_neighbors(n)
+               call obtainPosition(n, Rm, m)
+               exp_term = exp(kvec(1)*(Rl(1) - Rz(1) + Rr(1) - Rm(1)) &
+                        + kvec(2)*(Rl(2) - Rz(2) + Rr(2) - Rm(2)) &
+                        + kvec(3)*(Rl(3) - Rz(3) + Rr(3) - Rm(3)))
+               do L4 = 1, kmax_kkr_max
+                 do L2 = 1, kmax_kkr_max
+                   do L1 = 1, kmax_kkr_max
+                     do L3 = 1, kmax_kkr_max
+                       CK1 = (kmax_kkr_max**2)*(NCS*(l-1)+m-1)+kmax_kkr_max*(L1-1)+L4
+                       CK2 = (kmax_kkr_max**2)*(NCS*(z-1)+r-1)+kmax_kkr_max*(L2-1)+L3
+                       chi(CK1,CK2,1) = chi(CK1,CK2,1) + wfac*tmb(L1,L2)*tmb(L3,L4)*exp_term
+                       chi(CK1,CK2,2) = chi(CK1,CK2,2) + wfac*tmb(L1,L2)*tmbsym(L3,L4)*exp_term
+                       chi(CK1,CK2,3) = chi(CK1,CK2,3) + wfac*tmbsym(L1,L2)*tmb(L3,L4)*exp_term
+                       chi(CK1,CK2,4) = chi(CK1,CK2,4) + wfac*tmbsym(L1,L2)*tmbsym(L3,L4)*exp_term
+                     enddo
+                   enddo
+                 enddo
+               enddo
+             enddo
+           enddo
+         enddo
+       enddo 
+     endif
+   enddo
+
+   end subroutine calChiIntegralSRO
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getChiIntegralSRO() result(chi_point)
+!  ===================================================================
+
+   complex (kind=CmplxKind), pointer :: chi_point(:,:,:)
+
+   chi_point => chi
+
+   end function getChiIntegralSRO
 !  ===================================================================
 !
 !  *******************************************************************
