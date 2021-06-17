@@ -1768,8 +1768,8 @@ contains
    real (kind=RealKind) :: del
 
    if (.not. isConductivity()) then
-     call ErrorHandler('getFermiEnergyImagPart', 'Choose SCF type option &
-                 6 for conductivity calculation')
+     call ErrorHandler('getFermiEnergyImagPart', 'You are not doing a &
+                     conductivity calculation')
    endif
    del = imag_part
 
