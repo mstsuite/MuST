@@ -9,7 +9,6 @@ public :: initConductivity,        &
           endConductivity,   &
           calSigmaTildeCPA0, &
           calSigmaTildeCPA1, &
-          calSigmaTildeSRO00, &
           computeSROConductivity, &
           computeCPAConductivity, &
           calConductivity
@@ -34,10 +33,11 @@ private
                              lmax_sigma, lmax_sigma_2, lmax_cg
    integer (kind=IntKind) :: kmax_phi_max, kmax_green_max, iend_max, &
                              kmax_sigma, kmax_sigma_2, kmax_max, kmax_cg
-   integer (kind=IntKind) :: NumSpecies
+   integer (kind=IntKind) :: NumSpecies, NumClusterSize
 
    complex (kind=CmplxKind), allocatable :: iden(:,:)
-
+   complex (kind=CmplxKind), allocatable :: wmatSRO(:,:,:)
+   complex (kind=CmplxKind), allocatable :: vcSRO(:,:,:)
 !  Conductivity data stored here
 !  --------------------------------------------------------------------
    complex (kind=CmplxKind), allocatable :: sigmatilde(:,:,:), sigmatilde2(:,:,:), &
@@ -63,6 +63,7 @@ contains
    use WriteMatrixModule, only : writeMatrix
    use ScfDataModule, only : isKKR, isLSMS, isKKRCPA, isKKRCPASRO, isSROSCF
    use CurrentMatrixModule, only : initCurrentMatrixModule
+   use SROModule, only : getNeighSize
 
    integer (kind=IntKind), intent(in) :: num_atoms
    integer (kind=IntKind), intent(in) :: lmaxkkr(num_atoms)
@@ -141,6 +142,17 @@ contains
    enddo
    
    iend_max = getMaxNumRmesh()
+   if (mode == 4) then
+     NumClusterSize = getNeighSize(1)
+     if (vertex_corr) then
+       allocate(wmatSRO(NumClusterSize*NumClusterSize*kmax_kkr_max*kmax_kkr_max, &
+         NumClusterSize*NumClusterSize*kmax_kkr_max*kmax_kkr_max, 4))
+       wmatSRO = CZERO
+     endif
+     allocate(vcSRO(NumCluster*NumCluster*kmax_kkr_max*kmax_kkr_max, &
+            NumCluster*NumCluster*kmax_kkr_max*kmax_kkr_max, 4))
+     vcSRO = CZERO
+   endif
 
 !  -------------------------------------------------------------------
 !  Initialize the arrays which store conductivity data
@@ -330,7 +342,7 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function calOmegaMatrix(n, is) result(wmat)
+   function calOmegaMatrixCPA(n, is) result(wmat)
 !  ===================================================================
 
    use SSSolverModule, only : getScatteringMatrix
@@ -387,62 +399,7 @@ contains
      enddo
    enddo
 
-   end function calOmegaMatrix
-!  ===================================================================
-
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function calSigmaTildeCPA1VC(n, dir1, dir2, is, caltype, chi) result(sigma1)
-!  ===================================================================
-
-   use CPAMediumModule, only : getSingleSiteTmat
-   use SystemVolumeModule, only : getAtomicVPVolume
-   use AtomModule, only : getLocalSpeciesContent, getLocalNumSpecies
-   use CurrentMatrixModule, only : getJMatrix1D 
-
-   integer (kind=IntKind), intent(in) :: n, dir1, dir2, is, caltype
-   complex (kind=CmplxKind), intent(in) :: chi(kmax_kkr_max*kmax_kkr_max, &
-                                         kmax_kkr_max*kmax_kkr_max)
-
-   integer (kind=IntKind) :: num_species, ic1, ic2, K, L1, L4, K1, K1_t
-   real (kind=RealKind) :: Omega, c_a, c_b, coeff
-   complex (kind=CmplxKind) :: sigma1 ! dir1, dir2, caltype
-   complex (kind=CmplxKind), pointer :: J1(:), J2(:)
-   complex (kind=CmplxKind) :: J1avg(kmax_kkr_max*kmax_kkr_max), &
-            J2avg(kmax_kkr_max*kmax_kkr_max)
-   
-   J1avg = CZERO; J2avg = CZERO; sigma1 = CZERO
-   Omega = getAtomicVPVolume(n)
-   num_species = getLocalNumSpecies(n)
-   coeff = -1.0/(PI*Omega)
-
-   do ic1 = 1, num_species
-     c_a = getLocalSpeciesContent(n, ic1)
-     if (caltype == 2) then
-       J1 => getJMatrix1D(n, ic1, is, dir1, 3)
-     else if (caltype == 3) then
-       J1 => getJMatrix1D(n, ic1, is, dir1, 2)
-     else
-       J1 => getJMatrix1D(n, ic1, is, dir1, caltype)
-     endif
-     J2 => getJMatrix1D(n, ic1, is, dir2, caltype)
-     J1avg = J1avg + c_a*J1
-     J2avg = J2avg + c_a*J2
-    !call zaxpy(kmax_kkr_max*kmax_kkr_max, c_a, J1, 1, J1avg, 1)
-    !call zaxpy(kmax_kkr_max*kmax_kkr_max, c_a, J2, 1, J2avg, 1)
-   enddo
-     
-   do K = 1, kmax_kkr_max**2
-     do L1 = 1, kmax_kkr_max
-       do L4 = 1, kmax_kkr_max
-         K1 = kmax_kkr_max*(L1 - 1) + L4
-         K1_t = kmax_kkr_max*(L4 - 1) + L1
-         sigma1 = sigma1 + coeff*J1avg(K1_t)*chi(K1, K)*J2avg(K)
-       enddo
-     enddo
-   enddo
-       
-   
-   end function calSigmaTildeCPA1VC
+   end function calOmegaMatrixCPA
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -505,7 +462,7 @@ contains
 
    X = calChiMatrixCPA(n, is, e)
    if (vertex_corr) then
-     W = calOmegaMatrix(n, is)
+     W = calOmegaMatrixCPA(n, is)
    endif
    do i = 1, 4
 !    --------------------------------------------------------------------
@@ -514,6 +471,61 @@ contains
    enddo
 
    end function calVertexCorrectionMatrixCPA
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function calSigmaTildeCPA1VC(n, dir1, dir2, is, caltype, chi) result(sigma1)
+!  ===================================================================
+
+   use CPAMediumModule, only : getSingleSiteTmat
+   use SystemVolumeModule, only : getAtomicVPVolume
+   use AtomModule, only : getLocalSpeciesContent, getLocalNumSpecies
+   use CurrentMatrixModule, only : getJMatrix1D
+
+   integer (kind=IntKind), intent(in) :: n, dir1, dir2, is, caltype
+   complex (kind=CmplxKind), intent(in) :: chi(kmax_kkr_max*kmax_kkr_max, &
+                                         kmax_kkr_max*kmax_kkr_max)
+
+   integer (kind=IntKind) :: num_species, ic1, ic2, K, L1, L4, K1, K1_t
+   real (kind=RealKind) :: Omega, c_a, c_b, coeff
+   complex (kind=CmplxKind) :: sigma1 ! dir1, dir2, caltype
+   complex (kind=CmplxKind), pointer :: J1(:), J2(:)
+   complex (kind=CmplxKind) :: J1avg(kmax_kkr_max*kmax_kkr_max), &
+            J2avg(kmax_kkr_max*kmax_kkr_max)
+
+   J1avg = CZERO; J2avg = CZERO; sigma1 = CZERO
+   Omega = getAtomicVPVolume(n)
+   num_species = getLocalNumSpecies(n)
+   coeff = -1.0/(PI*Omega)
+
+   do ic1 = 1, num_species
+     c_a = getLocalSpeciesContent(n, ic1)
+     if (caltype == 2) then
+       J1 => getJMatrix1D(n, ic1, is, dir1, 3)
+     else if (caltype == 3) then
+       J1 => getJMatrix1D(n, ic1, is, dir1, 2)
+     else
+       J1 => getJMatrix1D(n, ic1, is, dir1, caltype)
+     endif
+     J2 => getJMatrix1D(n, ic1, is, dir2, caltype)
+     J1avg = J1avg + c_a*J1
+     J2avg = J2avg + c_a*J2
+    !call zaxpy(kmax_kkr_max*kmax_kkr_max, c_a, J1, 1, J1avg, 1)
+    !call zaxpy(kmax_kkr_max*kmax_kkr_max, c_a, J2, 1, J2avg, 1)
+   enddo
+
+   do K = 1, kmax_kkr_max**2
+     do L1 = 1, kmax_kkr_max
+       do L4 = 1, kmax_kkr_max
+         K1 = kmax_kkr_max*(L1 - 1) + L4
+         K1_t = kmax_kkr_max*(L4 - 1) + L1
+         sigma1 = sigma1 + coeff*J1avg(K1_t)*chi(K1, K)*J2avg(K)
+       enddo
+     enddo
+   enddo
+
+
+   end function calSigmaTildeCPA1VC
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -560,8 +572,244 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine calOmegaMatrixSRO(n, is)
+!  ===================================================================
+
+   use SROModule, only : getSROMatrix
+   use AtomModule, only : getLocalSpeciesContent, getLocalNumSpecies
+   use MatrixModule, only : computeAprojB
+
+   integer (kind=IntKind), intent(in) :: n, is
+
+   integer (kind=IntKind) :: num_species, ic
+   integer (kind=IntKind) :: l,m,z,r,L1,L2,L3,L4,K1,K2,K3,K4,CK1,CK2
+   real (kind=RealKind) :: c_a
+   complex (kind=CmplxKind), pointer :: tauc(:,:), Ta(:,:), Tc(:,:)
+   complex (kind=CmplxKind) :: taucc(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize), Tcc(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize), Tac(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize), xa(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize), xac(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize), tdiff(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize), tdiffc(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize)
+   taucc = CZERO; Tcc = CZERO;
+
+   num_species = getLocalNumSpecies(n)
+
+   tauc => getSROMatrix('blk-tau', n=n, ic=0, is=is)
+   Tc => getSROMatrix('blk-tinv', n=n, ic=0, is=is)
+   Tcc = conjg(Tc)
+
+   do L4 = 1, kmax_kkr_max
+     do L1 = 1, kmax_kkr_max
+       do l = 1, NumClusterSize
+         do m = 1, NumClusterSize
+           Lp = kmax_kkr_max*(l - 1) + L1
+           Lpp = kmax_kkr_max*(m - 1) + L4
+           taucc(Lp, Lpp) = (-1.0)**(lofk(L1) - lofk(L4)) * tauc(Lpp, Lp)
+         enddo
+       enddo
+     enddo
+   enddo
+
+   do ic = 1, num_species
+     Tac = CZERO; xa = CZERO; xac = CZERO; tdiff = CZERO; tdiffc = CZERO
+     c_a = getLocalSpeciesContent(n, ic)
+     Ta => getSROMatrix('blk-tinv', n=n, ic=ic, is=is)
+     Tac = conjg(Ta)
+     tdiff = Ta - Tc
+     tdiffc = Tac - Tcc
+!    -------------------------------------------------------------------------
+     call computeAprojB('L', kmax_kkr_max*NumClusterSize, tdiff, tauc, xa)
+     call computeAprojB('L', kmax_kkr_max*NumClusterSize, tdiffc, taucc, xac)
+!    -------------------------------------------------------------------------
+     do z = 1, NumClusterSize
+       do L2 = 1, kmax_kkr_max
+         K2 = kmax_kkr_max*(z - 1) + L2
+         do r = 1, NumClusterSize
+           do L3 = 1, kmax_kkr_max
+             K3 = kmax_kkr_max*(r - 1) + L3
+             do l = 1, NumClusterSize
+               do L1 = 1, kmax_kkr_max
+                 K1 = kmax_kkr_max*(l - 1) + L1
+                 do m = 1, NumClusterSize
+                   do L4 = 1, kmax_kkr_max
+                     K4 = kmax_kkr_max*(m - 1) + L4
+                     CK1 = (kmax_kkr_max**2)*(NumClusterSize*(l-1)+m-1)+kmax_kkr_max*(L1-1)+L4
+                     CK2 = (kmax_kkr_max**2)*(NumClusterSize*(z-1)+r-1)+kmax_kkr_max*(L2-1)+L3
+                     wmatSRO(CK1,CK2,1) = wmatSRO(CK1,CK2,1) - c_a*xa(K1,K2)*xa(K3,K4)
+                     wmatSRO(CK1,CK2,2) = wmatSRO(CK1,CK2,2) - c_a*xa(K1,K2)*xac(K3,K4)
+                     wmatSRO(CK1,CK2,3) = wmatSRO(CK1,CK2,3) - c_a*xac(K1,K2)*xa(K3,K4)
+                     wmatSRO(CK1,CK2,4) = wmatSRO(CK1,CK2,4) - c_a*xac(K1,K2)*xac(K3,K4)
+                   enddo
+                 enddo
+               enddo
+             enddo
+           enddo
+         enddo
+       enddo
+     enddo
+   enddo
+   
+
+   end subroutine calOmegaMatrixSRO
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function calChiMatrixSRO(n, is, e) result(chi)
+!  ===================================================================   
+
+   use CrystalMatrixModule, only : calChiIntegralSRO, getChiIntegralSRO
+   use CPAMediumModule, only : getSingleSiteTmat
+   use SROModule, only : getSROMatrix
+
+   integer (kind=IntKind), intent(in) :: n, is
+   complex (kind=CmplxKind), intent(in) :: e
+   
+   integer (kind=IntKind) :: Lp, Lpp, l, z, r, m, L1, L2, L3, L4, CK1, CK2
+   integer (kind=IntKind) :: K1, K2, K3, K4
+   complex (kind=CmplxKind), pointer :: tauc(:,:), chi(:,:,:)
+   complex (kind=CmplxKind) :: taucc(kmax_kkr_max*NumClusterSize, &
+       kmax_kkr_max*NumClusterSize)
+
+   taucc = CZERO
+   tauc => getSROMatrix('blk-tau', n=n, ic=0, is=is)
+   
+   do L4 = 1, kmax_kkr_max
+     do L1 = 1, kmax_kkr_max
+       do l = 1, NumClusterSize
+         do m = 1, NumClusterSize
+           Lp = kmax_kkr_max*(l - 1) + L1 
+           Lpp = kmax_kkr_max*(m - 1) + L4 
+           taucc(Lp, Lpp) = (-1.0)**(lofk(L1) - lofk(L4)) * tauc(Lpp, Lp)
+         enddo
+       enddo
+     enddo
+   enddo
+ 
+!  -----------------------------------------------------------
+   call calChiIntegralSRO(n, e, getSingleSiteTmat)
+   chi => getChiIntegralSRO()
+!  -----------------------------------------------------------
+
+   do z = 1, NumClusterSize
+     do L2 = 1, kmax_kkr_max
+       K2 = kmax_kkr_max*(z - 1) + L2
+       do r = 1, NumClusterSize
+         do L3 = 1, kmax_kkr_max
+           K3 = kmax_kkr_max*(r - 1) + L3
+           do l = 1, NumClusterSize
+             do L1 = 1, kmax_kkr_max
+               K1 = kmax_kkr_max*(l - 1) + L1
+               do m = 1, NumClusterSize
+                 do L4 = 1, kmax_kkr_max
+                   K4 = kmax_kkr_max*(m - 1) + L4
+                   CK1 = (kmax_kkr_max**2)*(NumClusterSize*(l-1)+m-1)+kmax_kkr_max*(L1-1)+L4
+                   CK2 = (kmax_kkr_max**2)*(NumClusterSize*(z-1)+r-1)+kmax_kkr_max*(L2-1)+L3
+                   chi(CK1,CK2,1) = chi(CK1,CK2,1) - tauc(K1,K2)*tauc(K3,K4)
+                   chi(CK1,Ck2,2) = chi(CK1,CK2,2) - tauc(K1,K2)*taucc(K3,K4)
+                   chi(CK1,CK2,3) = chi(CK1,CK2,3) - taucc(K1,K2)*tauc(K3,K4)
+                   chi(CK1,CK2,4) = chi(CK1,CK2,4) - taucc(K1,K2)*taucc(K3,K4)
+                 enddo
+               enddo
+             enddo
+           enddo
+         enddo
+       enddo
+     enddo
+   enddo
+
+   end function calChiMatrixSRO
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine calVertexCorrectionMatrixSRO(n,is,e)
+!  ===================================================================
+
+   use MatrixModule, only : computeAprojB
+   use WriteMatrixModule, only : writeMatrix
+
+   integer (kind=IntKind), intent(in) :: n, is
+   complex (kind=CmplxKind), intent(in) :: e
+
+   integer (kind=IntKind) :: i
+   complex (kind=CmplxKind), pointer :: chi(:,:,:)
+
+   chi => calChiMatrixSRO(n, is, e)
+   if (vertex_corr) then
+     call calOmegaMatrixSRO(n,is)
+     do i = 1, 4
+!      -----------------------------------------------------------------
+       call computeAprojB('L', kmax_kkr_max*kmax_kkr_max*NumClusterSize*NumClusterSize, &
+         chi(:,:,i), wmatSRO(:,:,i), vcSRO(:,:,1))
+!      -----------------------------------------------------------------
+     enddo
+   else 
+     vcSRO = chi
+   endif
+
+   end subroutine calVertexCorrectionMatrixSRO
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function calSigmaTildeSRO1(n, dir1, dir2, is, caltype) result(sigma1)
+!  ===================================================================
+
+   use CurrentMatrixModule, only : getJMatrix1D
+   use AtomModule, only : getLocalSpeciesContent, getLocalNumSpecies
+   use SystemVolumeModule, only : getAtomicVPVolume
+
+   integer (kind=IntKind), intent(in) :: n, dir1, dir2, is, caltype
+
+   integer (kind=IntKind) :: num_species, ic1, ic2, CK2, CK1, CK1_t, L1,L4,l,m
+   real (kind=RealKind) :: Omega, c_a, c_b, coeff
+   complex (kind=CmplxKind) :: sigma1 ! dir1, dir2, caltype
+   complex (kind=CmplxKind), pointer :: J1(:), J2(:)
+   complex (kind=CmplxKind) :: J1avg(kmax_kkr_max*kmax_kkr_max*NumClusterSize*NumClusterSize), &
+            J2avg(kmax_kkr_max*kmax_kkr_max*NumClusterSize*NumClusterSize)
+
+   J1avg = CZERO; J2avg = CZERO; sigma1 = CZERO
+   Omega = getAtomicVPVolume(n)
+   num_species = getLocalNumSpecies(n)
+   coeff = -1.0/(PI*Omega)
+
+   do ic1 = 1, num_species
+     c_a = getLocalSpeciesContent(n, ic1)
+     if (caltype == 2) then
+       J1 => getJMatrix1D(n, ic1, is, dir1, 3)
+     else if (caltype == 3) then
+       J1 => getJMatrix1D(n, ic1, is, dir1, 2)
+     else
+       J1 => getJMatrix1D(n, ic1, is, dir1, caltype)
+     endif
+     J2 => getJMatrix1D(n, ic1, is, dir2, caltype)
+     J1avg = J1avg + c_a*J1
+     J2avg = J2avg + c_a*J2
+   enddo
+
+   do CK2 = 1, NumClusterSize*NumClusterSize*kmax_kkr_max*kmax_kkr_max
+     do l = 1, NumClusterSize
+       do L1 = 1, kmax_kkr_max
+         do m = 1, NumClusterSize
+           do L4 = 1, kmax_kkr_max
+             CK1 = (kmax_kkr_max**2)*(NumClusterSize*(l-1)+m-1)+kmax_kkr_max*(L1-1)+L4
+             CK1_t = (kmax_kkr_max**2)*(NumClusterSize*(m-1)+l-1)+kmax_kkr_max*(L4-1)+L1
+             sigma1 = sigma1 + J1avg(CK1_t)*vcSRO(CK1,CK2,caltype)*J2avg(CK2)
+           enddo
+         enddo
+       enddo
+     enddo
+   enddo
+
+   end function calSigmaTildeSRO1
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine computeSROConductivity(n, is, delta, pot_type, dirnum, e)
 !  ===================================================================   
+
+   use WriteMatrixModule, only : writeMatrix
 
    integer (kind=IntKind), intent(in) :: n, is, pot_type, dirnum
    real (kind=RealKind), intent(in) :: delta
@@ -569,13 +817,16 @@ contains
 
    integer (kind=IntKind) :: etype
    integer (kind=IntKind) :: dir, dir1
-   complex(kind=CmplxKind) :: int_val(4)
+   complex (kind=CmplxKind) :: int_val(4)
+   complex (kind=CmplxKind), pointer :: chi(:,:,:)
+
+   call calVertexCorrectionMatrixSRO(n,is,e)
 
    do dir = 1, dirnum
      do dir1 = 1, dirnum
        int_val = CZERO
        do etype = 1, 4
-         int_val(etype) = CZERO
+         int_val(etype) = calSigmaTildeSRO1(n, dir, dir1, is, etype)
        enddo
        sigmatilde(dir,dir1,is) = int_val(1)
        sigmatilde2(dir,dir1,is) = int_val(2)
@@ -591,7 +842,7 @@ contains
        sigmatilde2(dir,dir1,is) - sigmatilde3(dir,dir1,is) + & 
        sigmatilde4(dir,dir1,is))
      enddo
-   enddo   
+   enddo
 
    end subroutine computeSROConductivity
 !  ===================================================================
@@ -681,7 +932,7 @@ contains
    call writeMatrix('sigmatilde4', sigmatilde4, dirnum, dirnum, n_spin_pola)
 !  --------------------------------------------------------------------
    call cpu_time(tf)
-   write(*,*), "Time: ", tf-ti, " seconds"
+   write(*,*) "Time: ", tf-ti, " seconds"
 
    end subroutine calConductivity
 !  ===================================================================
