@@ -693,32 +693,32 @@ contains
    chi => getChiIntegralSRO()
 !  -----------------------------------------------------------
 
-   do z = 1, NumClusterSize
-     do L2 = 1, kmax_kkr_max
-       K2 = kmax_kkr_max*(z - 1) + L2
-       do r = 1, NumClusterSize
-         do L3 = 1, kmax_kkr_max
-           K3 = kmax_kkr_max*(r - 1) + L3
-           do l = 1, NumClusterSize
-             do L1 = 1, kmax_kkr_max
-               K1 = kmax_kkr_max*(l - 1) + L1
-               do m = 1, NumClusterSize
-                 do L4 = 1, kmax_kkr_max
-                   K4 = kmax_kkr_max*(m - 1) + L4
-                   CK1 = (kmax_kkr_max**2)*(NumClusterSize*(l-1)+m-1)+kmax_kkr_max*(L1-1)+L4
-                   CK2 = (kmax_kkr_max**2)*(NumClusterSize*(z-1)+r-1)+kmax_kkr_max*(L2-1)+L3
-                   chi(CK1,CK2,1) = chi(CK1,CK2,1) - tauc(K1,K2)*tauc(K3,K4)
-                   chi(CK1,Ck2,2) = chi(CK1,CK2,2) - tauc(K1,K2)*taucc(K3,K4)
-                   chi(CK1,CK2,3) = chi(CK1,CK2,3) - taucc(K1,K2)*tauc(K3,K4)
-                   chi(CK1,CK2,4) = chi(CK1,CK2,4) - taucc(K1,K2)*taucc(K3,K4)
-                 enddo
-               enddo
-             enddo
-           enddo
-         enddo
-       enddo
-     enddo
-   enddo
+!  do z = 1, NumClusterSize
+!    do L2 = 1, kmax_kkr_max
+!      K2 = kmax_kkr_max*(z - 1) + L2
+!      do r = 1, NumClusterSize
+!        do L3 = 1, kmax_kkr_max
+!          K3 = kmax_kkr_max*(r - 1) + L3
+!          do l = 1, NumClusterSize
+!            do L1 = 1, kmax_kkr_max
+!              K1 = kmax_kkr_max*(l - 1) + L1
+!              do m = 1, NumClusterSize
+!                do L4 = 1, kmax_kkr_max
+!                  K4 = kmax_kkr_max*(m - 1) + L4
+!                  CK1 = (kmax_kkr_max**2)*(NumClusterSize*(l-1)+m-1)+kmax_kkr_max*(L1-1)+L4
+!                  CK2 = (kmax_kkr_max**2)*(NumClusterSize*(z-1)+r-1)+kmax_kkr_max*(L2-1)+L3
+!                  chi(CK1,CK2,1) = chi(CK1,CK2,1) - tauc(K1,K2)*tauc(K3,K4)
+!                  chi(CK1,Ck2,2) = chi(CK1,CK2,2) - tauc(K1,K2)*taucc(K3,K4)
+!                  chi(CK1,CK2,3) = chi(CK1,CK2,3) - taucc(K1,K2)*tauc(K3,K4)
+!                  chi(CK1,CK2,4) = chi(CK1,CK2,4) - taucc(K1,K2)*taucc(K3,K4)
+!                enddo
+!              enddo
+!            enddo
+!          enddo
+!        enddo
+!      enddo
+!    enddo
+!  enddo
 
    end function calChiMatrixSRO
 !  ===================================================================
