@@ -149,8 +149,8 @@ contains
          NumClusterSize*NumClusterSize*kmax_kkr_max*kmax_kkr_max, 4))
        wmatSRO = CZERO
      endif
-     allocate(vcSRO(NumCluster*NumCluster*kmax_kkr_max*kmax_kkr_max, &
-            NumCluster*NumCluster*kmax_kkr_max*kmax_kkr_max, 4))
+     allocate(vcSRO(NumClusterSize*NumClusterSize*kmax_kkr_max*kmax_kkr_max, &
+            NumClusterSize*NumClusterSize*kmax_kkr_max*kmax_kkr_max, 4))
      vcSRO = CZERO
    endif
 
@@ -578,6 +578,7 @@ contains
    use SROModule, only : getSROMatrix
    use AtomModule, only : getLocalSpeciesContent, getLocalNumSpecies
    use MatrixModule, only : computeAprojB
+   use WriteMatrixModule, only : writeMatrix
 
    integer (kind=IntKind), intent(in) :: n, is
 
@@ -593,8 +594,9 @@ contains
      kmax_kkr_max*NumClusterSize), tdiff(kmax_kkr_max*NumClusterSize, &
      kmax_kkr_max*NumClusterSize), tdiffc(kmax_kkr_max*NumClusterSize, &
      kmax_kkr_max*NumClusterSize)
-   taucc = CZERO; Tcc = CZERO;
+   taucc = CZERO; Tcc = CZERO; 
 
+   write(*,*) NumClusterSize
    num_species = getLocalNumSpecies(n)
 
    tauc => getSROMatrix('blk-tau', n=n, ic=0, is=is)
@@ -607,7 +609,7 @@ contains
          do m = 1, NumClusterSize
            Lp = kmax_kkr_max*(l - 1) + L1
            Lpp = kmax_kkr_max*(m - 1) + L4
-           taucc(Lp, Lpp) = (-1.0)**(lofk(L1) - lofk(L4)) * tauc(Lpp, Lp)
+           taucc(Lp, Lpp) = (-1.0)**(lofk(L1) - lofk(L4)) * conjg(tauc(Lpp, Lp))
          enddo
        enddo
      enddo
@@ -651,7 +653,6 @@ contains
        enddo
      enddo
    enddo
-   
 
    end subroutine calOmegaMatrixSRO
 !  ===================================================================
@@ -682,7 +683,7 @@ contains
          do m = 1, NumClusterSize
            Lp = kmax_kkr_max*(l - 1) + L1 
            Lpp = kmax_kkr_max*(m - 1) + L4 
-           taucc(Lp, Lpp) = (-1.0)**(lofk(L1) - lofk(L4)) * tauc(Lpp, Lp)
+           taucc(Lp, Lpp) = (-1.0)**(lofk(L1) - lofk(L4)) * conjg(tauc(Lpp, Lp))
          enddo
        enddo
      enddo
@@ -693,32 +694,32 @@ contains
    chi => getChiIntegralSRO()
 !  -----------------------------------------------------------
 
-!  do z = 1, NumClusterSize
-!    do L2 = 1, kmax_kkr_max
-!      K2 = kmax_kkr_max*(z - 1) + L2
-!      do r = 1, NumClusterSize
-!        do L3 = 1, kmax_kkr_max
-!          K3 = kmax_kkr_max*(r - 1) + L3
-!          do l = 1, NumClusterSize
-!            do L1 = 1, kmax_kkr_max
-!              K1 = kmax_kkr_max*(l - 1) + L1
-!              do m = 1, NumClusterSize
-!                do L4 = 1, kmax_kkr_max
-!                  K4 = kmax_kkr_max*(m - 1) + L4
-!                  CK1 = (kmax_kkr_max**2)*(NumClusterSize*(l-1)+m-1)+kmax_kkr_max*(L1-1)+L4
-!                  CK2 = (kmax_kkr_max**2)*(NumClusterSize*(z-1)+r-1)+kmax_kkr_max*(L2-1)+L3
-!                  chi(CK1,CK2,1) = chi(CK1,CK2,1) - tauc(K1,K2)*tauc(K3,K4)
-!                  chi(CK1,Ck2,2) = chi(CK1,CK2,2) - tauc(K1,K2)*taucc(K3,K4)
-!                  chi(CK1,CK2,3) = chi(CK1,CK2,3) - taucc(K1,K2)*tauc(K3,K4)
-!                  chi(CK1,CK2,4) = chi(CK1,CK2,4) - taucc(K1,K2)*taucc(K3,K4)
-!                enddo
-!              enddo
-!            enddo
-!          enddo
-!        enddo
-!      enddo
-!    enddo
-!  enddo
+   do z = 1, NumClusterSize
+     do L2 = 1, kmax_kkr_max
+       K2 = kmax_kkr_max*(z - 1) + L2
+       do r = 1, NumClusterSize
+         do L3 = 1, kmax_kkr_max
+           K3 = kmax_kkr_max*(r - 1) + L3
+           do l = 1, NumClusterSize
+             do L1 = 1, kmax_kkr_max
+               K1 = kmax_kkr_max*(l - 1) + L1
+               do m = 1, NumClusterSize
+                 do L4 = 1, kmax_kkr_max
+                   K4 = kmax_kkr_max*(m - 1) + L4
+                   CK1 = (kmax_kkr_max**2)*(NumClusterSize*(l-1)+m-1)+kmax_kkr_max*(L1-1)+L4
+                   CK2 = (kmax_kkr_max**2)*(NumClusterSize*(z-1)+r-1)+kmax_kkr_max*(L2-1)+L3
+                   chi(CK1,CK2,1) = chi(CK1,CK2,1) - tauc(K1,K2)*tauc(K3,K4)
+                   chi(CK1,Ck2,2) = chi(CK1,CK2,2) - tauc(K1,K2)*taucc(K3,K4)
+                   chi(CK1,CK2,3) = chi(CK1,CK2,3) - taucc(K1,K2)*tauc(K3,K4)
+                   chi(CK1,CK2,4) = chi(CK1,CK2,4) - taucc(K1,K2)*taucc(K3,K4)
+                 enddo
+               enddo
+             enddo
+           enddo
+         enddo
+       enddo
+     enddo
+   enddo
 
    end function calChiMatrixSRO
 !  ===================================================================
@@ -742,7 +743,7 @@ contains
      do i = 1, 4
 !      -----------------------------------------------------------------
        call computeAprojB('L', kmax_kkr_max*kmax_kkr_max*NumClusterSize*NumClusterSize, &
-         chi(:,:,i), wmatSRO(:,:,i), vcSRO(:,:,1))
+         chi(:,:,i), wmatSRO(:,:,i), vcSRO(:,:,i))
 !      -----------------------------------------------------------------
      enddo
    else 
@@ -795,7 +796,7 @@ contains
            do L4 = 1, kmax_kkr_max
              CK1 = (kmax_kkr_max**2)*(NumClusterSize*(l-1)+m-1)+kmax_kkr_max*(L1-1)+L4
              CK1_t = (kmax_kkr_max**2)*(NumClusterSize*(m-1)+l-1)+kmax_kkr_max*(L4-1)+L1
-             sigma1 = sigma1 + J1avg(CK1_t)*vcSRO(CK1,CK2,caltype)*J2avg(CK2)
+             sigma1 = sigma1 + coeff*J1avg(CK1_t)*vcSRO(CK1,CK2,caltype)*J2avg(CK2)
            enddo
          enddo
        enddo
