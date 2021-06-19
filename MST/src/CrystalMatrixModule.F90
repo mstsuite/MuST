@@ -1549,12 +1549,12 @@ contains
    integer (kind=IntKind) :: CK1, CK2, m, l, z, r, kkrsz, L1, L2, L3, L4
 
    real (kind=RealKind), pointer :: kpts(:,:), weight(:)
-   real (kind=RealKind) :: kfac, kaij, aij(3), exp_term
+   real (kind=RealKind) :: kfac, kaij, aij(3)
    real (kind=RealKind) :: Rr(3), Rl(3), Rz(3), Rm(3)
    real (kind=RealKind) :: weightSum, kvec(1:3)
 
    complex (kind=CmplxKind), intent(in) :: e
-   complex (kind=CmplxKind) :: wfac, efac, fepf
+   complex (kind=CmplxKind) :: wfac, efac, fepf, exp_term
    complex (kind=CmplxKind), pointer :: scm(:,:), tauk(:,:), pm(:), tmat(:,:)
    complex (kind=CmplxKind), allocatable :: tmbsym(:,:), tmb(:,:)
 
@@ -1642,7 +1642,7 @@ contains
          tmbsym(i, j) = ((-1.0)**(lofk(j) - lofk(i)))*conjg(tmb(j, i))
        enddo
      enddo
-
+     
      if (k_loc <= NumKsOnMyProc - NumRedunKs .or. MyPEinKGroup == 0) then
        do r = 1, num_neighbors(n)
          call obtainPosition(n, Rr, r)
@@ -1652,9 +1652,9 @@ contains
              call obtainPosition(n, Rl, l)
              do m = 1, num_neighbors(n)
                call obtainPosition(n, Rm, m)
-               exp_term = exp(kvec(1)*(Rl(1) - Rz(1) + Rr(1) - Rm(1)) &
+               exp_term = exp(sqrtm1*(kvec(1)*(Rl(1) - Rz(1) + Rr(1) - Rm(1)) &
                         + kvec(2)*(Rl(2) - Rz(2) + Rr(2) - Rm(2)) &
-                        + kvec(3)*(Rl(3) - Rz(3) + Rr(3) - Rm(3)))
+                        + kvec(3)*(Rl(3) - Rz(3) + Rr(3) - Rm(3))))
                do L4 = 1, kmax_kkr_max
                  do L2 = 1, kmax_kkr_max
                    do L1 = 1, kmax_kkr_max
@@ -1675,6 +1675,8 @@ contains
        enddo 
      endif
    enddo
+
+   call GlobalSumInGroup(kGID,chi,NCS*NCS*kmax_kkr_max*kmax_kkr_max,NCS*NCS*kmax_kkr_max*kmax_kkr_max,4)
 
    end subroutine calChiIntegralSRO
 !  ===================================================================
