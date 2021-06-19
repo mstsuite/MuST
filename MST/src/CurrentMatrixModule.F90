@@ -1217,7 +1217,7 @@ contains
          do m = 1, NumClusterSize
            Lp = kmax_kkr_max*(l - 1) + L1
            Lpp = kmax_kkr_max*(m - 1) + L4
-           taucc(Lp, Lpp) = (-1.0)**(lofk(L1) - lofk(L4)) * tauc(Lpp, Lp)
+           taucc(Lp, Lpp) = (-1.0)**(lofk(L1) - lofk(L4)) * conjg(tauc(Lpp, Lp))
          enddo
        enddo
      enddo
