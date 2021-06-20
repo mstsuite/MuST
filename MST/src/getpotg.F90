@@ -252,8 +252,8 @@
             if (imsgbuf(1,ia) < 0) then ! In case there are data_ldapu and/or data_nspot
                msg_bytes = msg_bytes + (imsgbuf(13,ia)+imsgbuf(14,ia))*real8_size
             endif
-            mp = getAlloySpeciesIndex(present_atom,ia)-1
-            do ip = 1, mp
+!           mp = getAlloySpeciesIndex(present_atom,ia)-1
+            do ip = 1, present_atom-1
 !              -------------------------------------------------------
                call c_fseek(vunit,msg_bytes,1)
 !              -------------------------------------------------------
@@ -370,8 +370,8 @@
          if (imsgbuf(1,ia) < 0) then ! In case there are data_ldapu and/or data_nspot
             msg_bytes = msg_bytes + (imsgbuf(13,ia)+imsgbuf(14,ia))*real8_size
          endif
-         mp = getAlloySpeciesIndex(present_atom,ia)-1
-         do ip = 1, mp
+!        mp = getAlloySpeciesIndex(ig,ia)-1
+         do ip = 1, present_atom-1
 !           ----------------------------------------------------------
             call c_fseek(vunit,msg_bytes,1)
 !           ----------------------------------------------------------
