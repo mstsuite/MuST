@@ -209,7 +209,6 @@ contains
        Jtk2(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
        Jtk3(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
        Jtk4(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3))
-     Jtk = CZERO; Jtk2 = CZERO; Jtk3 = CZERO; Jtk4 = CZERO
    else if (mode == 4) then
      sro_size = NumClusterSize*jsize
      allocate(Jtk(sro_size*sro_size, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
@@ -217,6 +216,7 @@ contains
        Jtk3(sro_size*sro_size, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
        Jtk4(sro_size*sro_size, LocalNumAtoms, NumSpecies, n_spin_pola, 3))
    endif
+   Jtk = CZERO; Jtk2 = CZERO; Jtk3 = CZERO; Jtk4 = CZERO
 
    allocate(iden(jsize, jsize))
 
