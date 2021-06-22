@@ -868,6 +868,7 @@ contains
    complex (kind=CmplxKind) :: eval
 
    call cpu_time(ti)
+   MyPE = getMyPE()
    delta = getFermiEnergyImagPart()
    pot_type = useStepFunctionForSigma()
 
