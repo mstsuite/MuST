@@ -221,7 +221,7 @@ contains
    use StrConstModule, only : initStrConst
    use NeighborModule, only : getNumNeighbors
    use MediumHostModule, only : getNumSpecies
-   use ScfDataModule, only : isConductivity
+   use ScfDataModule, only : isConductivity, isManualNeighborChoice, getManualNumNeighbor
 !
    implicit none
 !
@@ -335,7 +335,15 @@ contains
 !  -------- SRO Additions
      if (isSRO) then
         if (isCPA(i) == 1) then
-            num_neighbors(i) = getNumNeighbors(i) + 1
+            if (isManualNeighborChoice()) then
+              if (getManualNumNeighbor() > getNumNeighbors(i)) then
+                call ErrorHandler('initCrystalMatrix','Impossible number of neighbors set!')
+              else
+                num_neighbors(i) = getManualNumNeighbor() + 1
+              endif
+            else
+              num_neighbors(i) = getNumNeighbors(i) + 1
+            endif
             NeighDimSize = max( NeighDimSize, num_neighbors(i)**2 )
             OKKRMatrixSize = max( OKKRMatrixSize, kmaxi ) !KKRMatrixSize + kmaxi
         endif
