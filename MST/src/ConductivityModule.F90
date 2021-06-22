@@ -596,7 +596,6 @@ contains
      kmax_kkr_max*NumClusterSize)
    taucc = CZERO; Tcc = CZERO; 
 
-   write(*,*) NumClusterSize
    num_species = getLocalNumSpecies(n)
 
    tauc => getSROMatrix('blk-tau', n=n, ic=0, is=is)
@@ -861,9 +860,10 @@ contains
    use CPAMediumModule, only : computeCPAMedium, populateBigTCPA, getSingleSiteMatrix
    use SROModule, only : calSpeciesTauMatrix
    use CurrentMatrixModule, only : calCurrentMatrix
+   use MPPModule, only : getMyPE
 
    integer (kind=IntKind), intent(in) :: LocalNumAtoms, n_spin_pola
-   integer (kind=IntKind) :: id, is, pot_type, dirnum
+   integer (kind=IntKind) :: id, is, pot_type, dirnum, MyPE
    real (kind=RealKind) :: delta, efermi, ti, tf
    complex (kind=CmplxKind) :: eval
 
@@ -926,14 +926,16 @@ contains
 
 !  Print calculated results to output file
 !  --------------------------------------------------------------------
-   call writeMatrix('sigma', sigma, dirnum, dirnum, n_spin_pola)
-   call writeMatrix('sigmatilde', sigmatilde, dirnum, dirnum, n_spin_pola)
-   call writeMatrix('sigmatilde2', sigmatilde2, dirnum, dirnum, n_spin_pola)
-   call writeMatrix('sigmatilde3', sigmatilde3, dirnum, dirnum, n_spin_pola)
-   call writeMatrix('sigmatilde4', sigmatilde4, dirnum, dirnum, n_spin_pola)
+   if (MyPE == 0) then
+     call writeMatrix('sigma', sigma, dirnum, dirnum, n_spin_pola)
+     call writeMatrix('sigmatilde', sigmatilde, dirnum, dirnum, n_spin_pola)
+     call writeMatrix('sigmatilde2', sigmatilde2, dirnum, dirnum, n_spin_pola)
+     call writeMatrix('sigmatilde3', sigmatilde3, dirnum, dirnum, n_spin_pola)
+     call writeMatrix('sigmatilde4', sigmatilde4, dirnum, dirnum, n_spin_pola)
 !  --------------------------------------------------------------------
-   call cpu_time(tf)
-   write(*,*) "Time: ", tf-ti, " seconds"
+     call cpu_time(tf)
+     write(*,*) "Time: ", tf-ti, " seconds"
+   endif
 
    end subroutine calConductivity
 !  ===================================================================
