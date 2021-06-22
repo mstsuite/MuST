@@ -62,6 +62,8 @@ public :: initScfData,                 &
           getPoleSearchStep,           &
           retreiveEffectiveMediumParams,   &
           isNextNearestSRO,            &
+          isManualNeighborChoice,      &
+          getManualNumNeighbor,        &
           retrieveSROParams,           &
           getMixingParamForFermiEnergy, &
           printScfData
@@ -149,7 +151,6 @@ public
    integer (kind=IntKind), parameter, private :: KKRCPA = 3
    integer (kind=IntKind), parameter, private :: EmbeddedCluster = 4
    integer (kind=IntKind), parameter, private :: KKRCPASRO = 5
-   integer (kind=IntKind), parameter, private :: CPAConductivity = 6
 !
    integer (kind=IntKind), private :: read_emesh = 0
    integer (kind=IntKind), private :: read_kmesh = 0
@@ -192,6 +193,8 @@ public
    integer (kind=IntKind), private :: SRO_max_iter = 5
    integer (kind=IntKind), private :: sro_param_num = 0
    integer (kind=IntKind), private :: next_nearest
+   integer (kind=IntKind), private :: set_neighbors = 0
+   integer (kind=IntKind), private :: num_neighbors
    integer (kind=IntKind), private :: sro_scf = 0
    real (kind=RealKind), private, allocatable :: sro_params(:)
    real (kind=RealKind), private, allocatable :: sro_params_nn(:)
@@ -459,6 +462,8 @@ contains
       call ErrorHandler('initScfData','Number of SRO Parameters not found')
    endif
 
+   rstatus = getKeyValue(tbl_id, 'Neighbor Choice', set_neighbors)
+   rstatus = getKeyValue(tbl_id, 'Set Number of Neighbors', num_neighbors)
    rstatus = getKeyValue(tbl_id, 'SCF Mode', sro_scf)
    rstatus = getKeyValue(tbl_id, 'SRO Medium Mixing Scheme', SRO_mix_type)
    rstatus = getKeyValue(tbl_id, 'SRO Medium T-matrix Tol (> 0)', SRO_tol)
@@ -760,8 +765,6 @@ contains
       write(fu,'(a)')'# MST Method        : KKRCPA'
    else if ( scf_method == 5) then
       write(fu,'(a)')'# MST Method        : KKRCPASRO'
-   else if ( scf_method == 6) then
-      write(fu,'(a)')'# MST Method        : CPA Conductivity'
    endif
    if ( nspin==1 ) then
       write(fu,'(a,i3)')'# Spin Parameter    : Non-magnetic -',nspin
@@ -1684,6 +1687,42 @@ contains
    max_iter = SRO_max_iter
 
    end subroutine retrieveSROSCFParams
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc   
+   function isManualNeighborChoice()  result(md)
+!  ===================================================================
+   implicit none
+  
+   logical :: md
+
+   if (set_neighbors == 1) then
+     md = .true.
+   else
+     md = .false.
+   endif   
+
+   end function isManualNeighborChoice
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getManualNumNeighbor() result(num_neigh)
+!  ===================================================================
+   implicit none
+
+   integer (kind=IntKind) :: num_neigh
+
+   if (set_neighbors == 1) then
+     num_neigh = num_neighbors
+   else
+     call ErrorHandler('getManualNumNeighbor', 'Neighbor Type is not Manual!')
+   endif
+
+   end function getManualNumNeighbor
 !  ===================================================================
 !
 !  *******************************************************************
