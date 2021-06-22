@@ -97,7 +97,7 @@ contains
    use MediumHostModule, only  : getNumSites, getLocalNumSites, &
                      getGlobalSiteIndex, getNumSpecies, getSpeciesContent
    use ScfDataModule, only : retrieveSROParams, isNextNearestSRO, &
-                    isSROSCF, isSROCVM, retrieveCVMParams, isConductivity
+     isSROSCF, isSROCVM, retrieveCVMParams, isManualNeighborChoice, getManualNumNeighbor
    use NeighborModule, only : getNeighbor
    use SSSolverModule, only : getScatteringMatrix
    use SystemModule, only : getAtomPosition
@@ -155,8 +155,15 @@ contains
       SROMedium(il)%global_index = ig
       num = getNumSpecies(ig)
       SROMedium(il)%num_species = num
-      SROMedium(il)%neigh_size = SROMedium(il)%Neighbor%NumAtoms+1
-
+      if (isManualNeighborChoice()) then
+        if (getManualNumNeighbor() > SROMedium(il)%Neighbor%NumAtoms) then
+          call ErrorHandler('initSROMatrix','Impossible number of neighbors given')
+        else
+          SROMedium(il)%neigh_size = getManualNumNeighbor() + 1
+        endif
+      else
+        SROMedium(il)%neigh_size = SROMedium(il)%Neighbor%NumAtoms+1
+      endif
     ! allocate(SROMedium(il)%tau_c((SROMedium(il)%neigh_size)**2))
       
       if (num > 1) then
