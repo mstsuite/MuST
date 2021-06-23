@@ -494,10 +494,19 @@ contains
 !     ---------------------------------------------------------------
       call GlobalSumInGroup(GroupID,NonSphPot_DataAccum,GlobalNumAtoms)
 !     ---------------------------------------------------------------
-      do id = 2, GlobalNumAtoms
-         NonSphPot_DataAccum(id) = NonSphPot_DataAccum(id) +         &
-                                   NonSphPot_DataAccum(id-1)
-      enddo
+!!!   ================================================================
+!!!   The following code was re-written to take care the situation
+!!!   that fp_pos value becomes overflow when a large number of atoms
+!!!   are involved. Function c_fseek is now called repeatedly.
+!!!   By Yang Wang on June 14, 2021.
+!!!   ****************************************************************
+!!!   do id = 2, GlobalNumAtoms
+!!!      NonSphPot_DataAccum(id) = NonSphPot_DataAccum(id) +         &
+!!!                                NonSphPot_DataAccum(id-1)
+!!!   enddo
+!!!   ****************************************************************
+!!!   End of the change made on June 13, 2021
+!!!   ================================================================
    endif
 !
    deallocate( DataSize )
