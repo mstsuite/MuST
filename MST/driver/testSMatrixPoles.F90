@@ -72,6 +72,7 @@ program testSMatrixPoles
 !
    use SMatrixPolesModule, only : initSMatrixPoles, endSMatrixPoles, &
                                   findSMatrixPoles, computeBoundStateDensity, &
+                                  computeResonanceStateDensity,               &
                                   printSMatrixPoleInfo, printBoundStateDensity
 !
    implicit   none
@@ -107,7 +108,7 @@ program testSMatrixPoles
    real (kind=RealKind), pointer :: bravais(:,:)
    real (kind=RealKind), pointer :: r_mesh(:)
    real (kind=RealKind), allocatable :: AtomPosition(:,:)
-   real (kind=RealKind) :: t0, t1, t2, ebot, etop, rfac
+   real (kind=RealKind) :: t0, t1, t2, ebot, etop, rfac, Efermi
    real (kind=RealKind), pointer :: ec(:)
 !
    real (kind=RealKind), parameter :: ZeroIntHalfWidth = TEN2m6
@@ -202,15 +203,19 @@ program testSMatrixPoles
          do is = 1,n_spin_pola
             ec => getSemiCoreStates(id,ia,is,numc)
             ebot = ec(1) - HALF
-            etop = ec(numc) + HALF
-            if (etop > ZERO) then
-               etop = -TEN2m6
-            endif
+!           etop = ec(numc) + HALF
+!           if (etop > ZERO) then
+!              etop = -TEN2m6
+!           endif
+            etop = Efermi
 !           ---------------------------------------------------------
-            call findSMatrixPoles(id,ia,is,ebot,etop,pole_step,      &
+            call findSMatrixPoles(id,ia,is,ebot,etop,Delta=pole_step, &
+                                  MaxResWidth = 0.02d0,               &
                                   CheckPoles =.false.)
 !           ---------------------------------------------------------
             call computeBoundStateDensity(id,ia,is)
+!           ---------------------------------------------------------
+            call computeResonanceStateDensity(id,ia,is)
 !           ---------------------------------------------------------
             if (node_print_level >= 0) then
 !              ------------------------------------------------------
@@ -276,7 +281,7 @@ contains
    integer (kind=IntKind) :: jmax_pot, jmax_rho, NumEsOnMyProc
    integer (kind=IntKind) :: ndivin, ndivout, nmult, lmax_max
 !
-   real (kind=RealKind) :: rmt, rend, rws, rinsc, v0, Efermi
+   real (kind=RealKind) :: rmt, rend, rws, rinsc, v0
    real (kind=RealKind), pointer :: potr_0(:)
    real (kind=RealKind), allocatable :: evec(:,:)
 !
@@ -471,17 +476,19 @@ contains
                endif
             enddo
          enddo
-         write(6,'(/)')
-         pflag => getTruncatedPotComponentFlag(id)
-         jl = 0
-         do l = 0, lmax_pot(id)
-            do m = 0, l
-               jl = jl + 1
-               if (pflag(jl) /= 0 .and. node_print_level >= 0) then
-                  write(6,'(a,i2,a,i2,a)')'Truncated pflag<>0 component at (l,m) channel: (',l,',',m,')'
-               endif
+         if (isFullPotential()) then
+            write(6,'(/)')
+            pflag => getTruncatedPotComponentFlag(id)
+            jl = 0
+            do l = 0, lmax_pot(id)
+               do m = 0, l
+                  jl = jl + 1
+                  if (pflag(jl) /= 0 .and. node_print_level >= 0) then
+                     write(6,'(a,i2,a,i2,a)')'Truncated pflag<>0 component at (l,m) channel: (',l,',',m,')'
+                  endif
+               enddo
             enddo
-         enddo
+         endif
          do is = 1,n_spin_pola
             write(6,'(/,a,i2)')'spin = ',is
             pot_jl => getPotential(id,1,is)
@@ -501,24 +508,26 @@ contains
                   endif
                enddo
             enddo
-            write(6,'(/)')
-            pot_jl => getTruncatedPotential(id,1,is)
-            jl = 0
-            do l = 0, getTruncPotLmax(id)
-               do m = 0, l
-                  jl = jl + 1
-                  non_zero = .false.
-                  LOOP_ir_1: do ir = 1, Grid%jend-Grid%jmt+1
-                     if (abs(pot_jl(ir,jl)) > TEN2m6) then
-                        non_zero = .true.
-                        exit LOOP_ir_1
+            if (isFullPotential()) then
+               write(6,'(/)')
+               pot_jl => getTruncatedPotential(id,1,is)
+               jl = 0
+               do l = 0, getTruncPotLmax(id)
+                  do m = 0, l
+                     jl = jl + 1
+                     non_zero = .false.
+                     LOOP_ir_1: do ir = 1, Grid%jend-Grid%jmt+1
+                        if (abs(pot_jl(ir,jl)) > TEN2m6) then
+                           non_zero = .true.
+                           exit LOOP_ir_1
+                        endif
+                     enddo LOOP_ir_1
+                     if (non_zero .and. node_print_level >= 0) then
+                        write(6,'(a,i2,a,i2,a)')'Recheck non-zero truncated potential component at (l,m) channel: (',l,',',m,')'
                      endif
-                  enddo LOOP_ir_1
-                  if (non_zero .and. node_print_level >= 0) then
-                     write(6,'(a,i2,a,i2,a)')'Recheck non-zero truncated potential component at (l,m) channel: (',l,',',m,')'
-                  endif
+                  enddo
                enddo
-            enddo
+            endif
          enddo
       enddo
    endif

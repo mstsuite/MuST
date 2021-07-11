@@ -217,6 +217,8 @@ contains
 !
    use AdaptIntegrationModule, only : initAdaptIntegration
 !
+   use SMatrixPolesModule, only : isSMatrixPolesInitialized, initSMatrixPoles
+!
    implicit none
 !
    character (len=*), intent(in) :: istop
@@ -230,9 +232,10 @@ contains
    integer (kind=IntKind), intent(in) :: lmax_green_in(na)
    integer (kind=IntKind), intent(in) :: pola, cant
    integer (kind=IntKind), intent(in) :: iprint(na)
-   integer (kind=IntKind) :: id, nsize, n, ia, MaxNumSpecies
+   integer (kind=IntKind) :: id, nsize, n, ia, MaxNumSpecies, iprint_loc
    integer (kind=IntKind) :: lmax_max, jmax, green_size, green_ind
    integer (kind=IntKind), allocatable :: NumRs(:)
+   integer (kind=IntKind), allocatable :: LocalNumSpecies(:)
 !
    real (kind=RealKind), intent(in) :: posi_in(3,na)
    real (kind=RealKind), pointer :: p1(:)
@@ -400,6 +403,7 @@ contains
 !  setup the data structure
 !  ===================================================================
    allocate( NumRs(LocalNumAtoms) )
+   allocate( LocalNumSpecies(LocalNumAtoms) )
 !
    green_size = 0
    nsize = 0
@@ -416,6 +420,7 @@ contains
          nsize = max(nsize,NumRs(id)*jmax*getLocalNumSpecies(id))
       endif
       MaxRs = max(MaxRs,NumRs(id))
+      LocalNumSpecies(id) = getLocalNumSpecies(id)
    enddo
 !
    if (getAdaptiveIntegrationMethod() == 1) then
@@ -471,6 +476,19 @@ contains
 !
    call random_seed()
 !
+   if (.not.isSMatrixPolesInitialized()) then
+      if (MyPE == 0) then
+         iprint_loc = 0
+      else
+         iprint_loc = -1
+      endif
+!     ----------------------------------------------------------------
+      call initSMatrixPoles(LocalNumAtoms,n_spin_pola,LocalNumSpecies,&
+                            lmax_kkr,lmax_green,iprint_loc)
+!     ----------------------------------------------------------------
+   endif
+   deallocate(LocalNumSpecies)
+!
    end subroutine initGFMethod
 !  ===================================================================
 !
@@ -482,6 +500,8 @@ contains
    use IntegerFactorsModule, only : endIntegerFactors
 !
    use AdaptIntegrationModule, only : endAdaptIntegration
+!
+   use SMatrixPolesModule, only : isSMatrixPolesInitialized, endSMatrixPoles
 !
    implicit none
    integer (kind=IntKind) :: id
@@ -526,6 +546,12 @@ contains
          nullify(dosdata(id)%rarray3)
       enddo
       deallocate(dosdata,wk_dosdata)
+   endif
+!
+   if (isSMatrixPolesInitialized()) then
+!     ----------------------------------------------------------------
+      call endSMatrixPoles()
+!     ----------------------------------------------------------------
    endif
 !
    Initialized = .false.
@@ -1133,7 +1159,7 @@ contains
    logical :: redundant
    logical :: isBxyz(LocalNumAtoms) !xianglin
 !
-   integer (kind=IntKind) :: id, is, ne, ie, me, info(4), nvals, js, ns, ia
+   integer (kind=IntKind) :: id, is, ne, ie, me, info(5), nvals, js, ns, ia
    integer (kind=IntKind) :: num_species, nsize
 !
    real (kind=RealKind) :: e_imag, de, msDOS(2), ssDOS, eb
@@ -1290,7 +1316,7 @@ contains
                   energy = cmplx(e_real(ie),e_imag)
                   do js = 1, 1
                      do id = 1, LocalNumAtoms
-                        info(1) = max(is,js); info(2) = id; info(3) = -1; info(4) = -1
+                        info(1) = max(is,js); info(2) = id; info(3) = -1; info(4) = -1; info(5) = 0
 !                       -------------------------------------------------
                         ssDOS = returnRelSingleSiteDOSinCP(info,energy,wk_dos)
                         call calElectroStruct(info,4,wk_dos,LastValue(id),ss_int=.true.)
@@ -1314,7 +1340,7 @@ contains
                   call computeRelMST(adjustEnergy(is,energy))
 !                 ----------------------------------------------------
                   do id =  1,LocalNumAtoms
-                     info(1) = is; info(2) = id; info(3) = -1; info(4) = 0
+                     info(1) = is; info(2) = id; info(3) = -1; info(4) = 0; info(5) = 0
 !                    ----------------------------------------------------
                      msDOS = returnRelMultipleSiteDOS(info,energy,wk_dos)
                      call calElectroStruct(info,4,wk_dos,LastValue(id))
@@ -1380,7 +1406,7 @@ contains
                   energy = cmplx(e_real(ie),e_imag)
                   do js = 1, n_spin_cant
                      do id = 1, LocalNumAtoms
-                        info(1) = max(is,js); info(2) = id; info(3) = -1; info(4) = -1
+                        info(1) = max(is,js); info(2) = id; info(3) = -1; info(4) = -1; info(5) = 0
 !                       -------------------------------------------------
                         ssDOS = returnSingleSiteDOSinCP(info,energy,wk_dos)
                         call calElectroStruct(info,1,wk_dos,LastValue(id),ss_int=.true.)
@@ -1421,7 +1447,7 @@ contains
 !                    -------------------------------------------------
                   endif
                   do id =  1,LocalNumAtoms
-                     info(1) = is; info(2) = id; info(3) = -1; info(4) = 0
+                     info(1) = is; info(2) = id; info(3) = -1; info(4) = 0; info(5) = 0
 !                    -------------------------------------------------
                      msDOS = returnMultipleSiteDOS(info,energy,wk_dos)
                      call calElectroStruct(info,n_spin_cant,wk_dos,LastValue(id))
@@ -1431,6 +1457,7 @@ contains
                            info(1) = max(is,js); info(2) = id; info(3) = -1 
                            info(4) = -1 ! do not set internal print to 1, otherwise, it
                                         ! could possiblly hang the MPI process
+                           info(5) = 0
 !                          -------------------------------------------
                            ssDOS = returnSingleSiteDOS(info,e_real(ie),wk_dos)
 !                          -------------------------------------------
@@ -1570,7 +1597,7 @@ contains
    logical :: useIrregularSolution = .true.
    logical :: isContourInitialized = .false.
 !
-   integer (kind=IntKind) :: id, BadFermiEnergy, is, info(4), ns, ia
+   integer (kind=IntKind) :: id, BadFermiEnergy, is, info(5), ns, ia
    integer (kind=IntKind), parameter :: MaxIterations = 20
 !
    real (kind=RealKind), intent(inout) :: efermi
@@ -1889,7 +1916,7 @@ contains
 !           ----------------------------------------------------------
          endif
          do id =  1,LocalNumAtoms
-            info(1) = is; info(2) = id; info(3) = -1; info(4) = 1
+            info(1) = is; info(2) = id; info(3) = -1; info(4) = 1; info(5) = 0
 !           ----------------------------------------------------------
             msDOS = returnMultipleSiteDOS(info,eLast,wk_dos)
             call calElectroStruct(info,n_spin_cant,wk_dos,LastValue(id))
@@ -1920,7 +1947,7 @@ contains
             call zeroElectroStruct(ssLastValue(id))
 !           ----------------------------------------------------------
             do is = 1, n_spin_pola
-               info(1) = is; info(2) = id; info(3) = -1; info(4) = 0
+               info(1) = is; info(2) = id; info(3) = -1; info(4) = 0; info(5) = 0
 !              -------------------------------------------------------
                ssDOS = returnSingleSiteDOS(info,efermi,wk_dos)
                call calElectroStruct(info,1,wk_dos,ssLastValue(id),ss_int=.true.)
@@ -2563,17 +2590,21 @@ contains
    use AtomModule, only : getLocalAtomicNumber, getLocalAtomName
    use AtomModule, only : getLocalNumSpecies
 !
+   use SMatrixPolesModule, only : getResonanceStateDensity,     &
+                                  getBoundStateDensity, isEnergyInResonanceRange
+!
    implicit none
 !
    real (kind=RealKind), intent(in) :: e
    real (kind=RealKind), intent(in), optional :: rfac
 !
    logical, intent(in), optional :: redundant
-   logical :: red
+   logical :: red, InResonancePeak
 !
    integer (kind=IntKind), intent(in) :: info(*)
    integer (kind=IntKind) :: jmax_dos, kmax_phi, iend, n, kl, jl, ir
-   integer (kind=IntKind) :: is, id, print_dos, ia, i, atom
+   integer (kind=IntKind) :: is, id, print_dos, ia, i, atom, ib
+   integer (kind=IntKind) :: NumResonanceStates, NumBoundStates
 !
    real (kind=RealKind), pointer :: dos(:), dos_mt(:), dos_out(:), tps(:)
    real (kind=RealKind) :: sfac, rmul, t0, ssdos
@@ -2626,87 +2657,100 @@ contains
 !
    energy = adjustEnergy(is,e)
 !
-   t0 = getTime()
-!  -------------------------------------------------------------------
-   call solveSingleScattering(spin=is,site=id,atom=atom,e=energy,vshift=CZERO)
-!  -------------------------------------------------------------------
-   Timing_SS = Timing_SS + (getTime() - t0)
-   NumCalls_SS = NumCalls_SS + 1
-!
-   if (getLocalAtomicNumber(id,1) == 0) then
-!     call computeDOS(add_highl_fec=.true.)
-      call computeDOS(spin=is,site=id,atom=atom)
-   else
-      call computeDOS(spin=is,site=id,atom=atom)
+   InResonancePeak = .false.; ib = 0
+   if (info(5) > 0) then
+      if (atom < 1) then
+         call ErrorHandler('returnSingleSiteDOS','Ill condition: info(5) > 0 while atom < 1', &
+                           info(5),atom)
+      else if (isEnergyInResonanceRange(e=real(energy,kind=RealKind),site=id,atom=atom,spin=is,res_id=ib)) then
+         InResonancePeak = .true.
+      endif
    endif
 !
-   Grid => getGrid(id)
-   n = 0
-   do ia = 1, getLocalNumSpecies(id)
-      if (atom < 0 .or. ia == atom) then
-         dos_r_jl => getDOS(spin=is,site=id,atom=ia)
-         if (rad_derivative) then
-            der_dos_r_jl => getDOSDerivative(spin=is,site=id,atom=ia)
-         endif
-         iend = size(dos_r_jl,1); jmax_dos = size(dos_r_jl,2)
-         if (isASAPotential()) then
-            dos(ia) = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
-                                                jmax_dos, 2, dos_r_jl, dos_mt(ia), truncated=.false. )
-            dos_mt(ia) = dos(ia)
-!           ==========================================================
-!           Another way to calculate the ASA DOS is using getRadialIntegration
-!           ----------------------------------------------------------
-!           dos_mt(ia) = sfac*getRadialIntegration(id, Grid%jmt, dos_r_jl(:,1))/Y0
-!           dos(ia) = dos_mt(ia)
-!           ==========================================================
-            dos_out(ia) = ZERO
-         else
-!           ----------------------------------------------------------
-            dos(ia) = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
-                                                jmax_dos, 2, dos_r_jl, dos_mt(ia) )
-            dos_mt(ia) = sfac*dos_mt(ia)
-            dos_out(ia) = sfac*getOutsideDOS(spin=is,site=id,atom=ia)
-!           ----------------------------------------------------------
-         endif
+   if (print_dos > 0 .or. .not.InResonancePeak) then ! In case there is no resonance
+                                                    ! states, or print DOS is intended
+      t0 = getTime()
+!     ----------------------------------------------------------------
+      call solveSingleScattering(spin=is,site=id,atom=atom,e=energy,vshift=CZERO)
+!     ----------------------------------------------------------------
+      Timing_SS = Timing_SS + (getTime() - t0)
+      NumCalls_SS = NumCalls_SS + 1
 !
-         do jl = 1, jmax_dos
-            do ir = 1, LastValue(id)%NumRs
-               aux(n+ir) = rmul*sfac*dos_r_jl(ir,jl)
-            enddo
-!           ----------------------------------------------------------
-!           call zcopy(LastValue(id)%NumRs,dos_r_jl(1,jl),1,aux(n+1),1)
-!           ----------------------------------------------------------
-            n = n + LastValue(id)%NumRs
-         enddo
-         if (rad_derivative) then
+      if (getLocalAtomicNumber(id,1) == 0) then
+!        call computeDOS(add_highl_fec=.true.)
+         call computeDOS(spin=is,site=id,atom=atom)
+      else
+         call computeDOS(spin=is,site=id,atom=atom)
+      endif
+!
+      Grid => getGrid(id)
+      n = 0
+      do ia = 1, getLocalNumSpecies(id)
+         if (atom < 0 .or. ia == atom) then
+            dos_r_jl => getDOS(spin=is,site=id,atom=ia)
+            if (rad_derivative) then
+               der_dos_r_jl => getDOSDerivative(spin=is,site=id,atom=ia)
+            endif
+            iend = size(dos_r_jl,1); jmax_dos = size(dos_r_jl,2)
+            if (isASAPotential()) then
+               dos(ia) = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
+                                                   jmax_dos, 2, dos_r_jl, dos_mt(ia), truncated=.false. )
+               dos_mt(ia) = dos(ia)
+!              =======================================================
+!              Another way to calculate the ASA DOS is using getRadialIntegration
+!              -------------------------------------------------------
+!              dos_mt(ia) = sfac*getRadialIntegration(id, Grid%jmt, dos_r_jl(:,1))/Y0
+!              dos(ia) = dos_mt(ia)
+!              =======================================================
+               dos_out(ia) = ZERO
+            else
+!              -------------------------------------------------------
+               dos(ia) = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
+                                                   jmax_dos, 2, dos_r_jl, dos_mt(ia) )
+               dos_mt(ia) = sfac*dos_mt(ia)
+               dos_out(ia) = sfac*getOutsideDOS(spin=is,site=id,atom=ia)
+!              -------------------------------------------------------
+            endif
+!
             do jl = 1, jmax_dos
                do ir = 1, LastValue(id)%NumRs
-                  aux(n+ir) = rmul*sfac*der_dos_r_jl(ir,jl)
+                  aux(n+ir) = rmul*sfac*dos_r_jl(ir,jl)
                enddo
+!              -------------------------------------------------------
+!              call zcopy(LastValue(id)%NumRs,dos_r_jl(1,jl),1,aux(n+1),1)
+!              -------------------------------------------------------
                n = n + LastValue(id)%NumRs
             enddo
+            if (rad_derivative) then
+               do jl = 1, jmax_dos
+                  do ir = 1, LastValue(id)%NumRs
+                     aux(n+ir) = rmul*sfac*der_dos_r_jl(ir,jl)
+                  enddo
+                  n = n + LastValue(id)%NumRs
+               enddo
+            endif
+            aux(n+1) = rmul*dos(ia)
+            aux(n+2) = rmul*dos_mt(ia)
+            aux(n+3) = rmul*dos(ia)*energy
+            aux(n+4) = rmul*dos_out(ia)
+            n = n + 4
          endif
-         aux(n+1) = rmul*dos(ia)
-         aux(n+2) = rmul*dos_mt(ia)
-         aux(n+3) = rmul*dos(ia)*energy
-         aux(n+4) = rmul*dos_out(ia)
-         n = n + 4
-      endif
-   enddo
+      enddo
 !
-!  -------------------------------------------------------------------
-   call computePhaseShift(spin=is,site=id,atom=atom)
-!  -------------------------------------------------------------------
-   kmax_phi = (lmax_phi(id)+1)**2
-   tps = ZERO
-   do ia = 1, getLocalNumSpecies(id)
-      if (atom < 0 .or. ia == atom) then
-         ps => getPhaseShift(spin=is,site=id,atom=ia)
-         do kl = 1, kmax_phi
-            tps(ia) = tps(ia) + ps(kl)
-         enddo
-      endif
-   enddo
+!     ----------------------------------------------------------------
+      call computePhaseShift(spin=is,site=id,atom=atom)
+!     ----------------------------------------------------------------
+      kmax_phi = (lmax_phi(id)+1)**2
+      tps = ZERO
+      do ia = 1, getLocalNumSpecies(id)
+         if (atom < 0 .or. ia == atom) then
+            ps => getPhaseShift(spin=is,site=id,atom=ia)
+            do kl = 1, kmax_phi
+               tps(ia) = tps(ia) + ps(kl)
+            enddo
+         endif
+      enddo
+   endif
 !
    if (print_dos > 0) then
       if (.not.red) then
@@ -2759,6 +2803,54 @@ contains
             enddo
          endif
       endif
+   endif
+!
+!  ===================================================================
+!  In case of info(5) > 0:
+!  info(5) = the number of resonance states with the
+!            width of the resonance peak less than MaxWidth,
+!            which is specified when calling findSMatrixPoles
+!  if NumResonanceStates > 0 and e is in the resonance range, for which
+!            InResonancePeak = .true.
+!  it needs to separate the Lorentzian near the resonance energy from the DOS.
+!  The Lorentzian contribution to the DOS integration is treated separately.
+!  ===================================================================
+   if (InResonancePeak) then  ! In this case, Lorentzian contribution is excluded
+      Grid => getGrid(id)
+      n = 0
+      dos_r_jl => getResonanceStateDensity(site=id,atom=atom,spin=is,rstate=ib, &
+                                           peak_term=.false.,e=real(energy),    &
+                                           NumRs=iend,jmax_rho=jmax_dos)
+      if (rad_derivative) then
+         der_dos_r_jl => getResonanceStateDensity(site=id,atom=atom,spin=is,rstate=ib, &
+                                                  peak_term=.false.,e=real(energy),    &
+                                                  derivative=.true.)
+      endif
+      dos(atom) = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
+                                             jmax_dos, 2, dos_r_jl, dos_mt(atom) )
+      dos_mt(atom) = sfac*dos_mt(atom)
+      do jl = 1, jmax_dos
+         do ir = 1, LastValue(id)%NumRs
+            aux(n+ir) = rmul*sfac*dos_r_jl(ir,jl)
+         enddo
+!        -------------------------------------------------------------
+!        call zcopy(LastValue(id)%NumRs,dos_r_jl(1,jl),1,aux(n+1),1)
+!        -------------------------------------------------------------
+         n = n + LastValue(id)%NumRs
+      enddo
+      if (rad_derivative) then
+         do jl = 1, jmax_dos
+            do ir = 1, LastValue(id)%NumRs
+               aux(n+ir) = rmul*sfac*der_dos_r_jl(ir,jl)
+            enddo
+            n = n + LastValue(id)%NumRs
+         enddo
+      endif
+      aux(n+1) = rmul*dos(atom)
+      aux(n+2) = rmul*dos_mt(atom)
+      aux(n+3) = rmul*dos(atom)*energy
+      aux(n+4) = rmul*dos_out(atom)
+      n = n + 4
    endif
 !
    if (atom < 1) then
@@ -3131,7 +3223,7 @@ contains
    use InputModule, only : getKeyValue
 !
    use ScfDataModule, only : NumSS_IntEs, getAdaptiveIntegrationMethod, &
-                             Contourtype, ErBottom, NumExtraEs
+                             Contourtype, ErBottom, NumExtraEs, pole_step
 !
    use AdaptIntegrationModule, only : setupAdaptMesh, getAdaptIntegration
    use AdaptIntegrationModule, only : getAuxDataAdaptIntegration
@@ -3142,13 +3234,20 @@ contains
 !
    use ContourModule, only : getEPoint, getEWeight, getNumEs
 !
+   use SMatrixPolesModule, only : findSMatrixPoles,             &
+                                  getNumResonanceStates,        &
+                                  getNumBoundStates,            &
+                                  computeResonanceStateDensity, &
+                                  computeBoundStateDensity
+!
    implicit none
 !
    logical, intent(in), optional :: LowerContour, UpperContour 
    logical :: LC, UC, REL !xianglin
 !
-   integer (kind=IntKind) :: id, is, ns, info(4), nm, ie, NumEs, ilc !xianglin
+   integer (kind=IntKind) :: id, is, ns, info(5), nm, ie, NumEs, ilc !xianglin
    integer (kind=IntKind) :: ia, renorm
+   integer (kind=IntKind) :: NumBoundStates
 !
    real (kind=RealKind), intent(in), optional :: Ebegin, Eend
    logical, intent(in), optional :: relativity !xianglin
@@ -3274,7 +3373,7 @@ contains
 !                       Solve the single scattering problem e = (er,ei).
 !                       In this case, the calculated Green function is Z*tau*Z - Z*J
 !                       =======================================================
-                        info(1) = is; info(2) = id; info(3) = -1; info(4) = 0
+                        info(1) = is; info(2) = id; info(3) = -1; info(4) = 0; info(5) = 0
 !                       ----------------------------------------------
                         ssDOS = returnRelSingleSiteDOSinCP(info,EPoint(ie),wk_dos,EWght(ie))
                         if (is_Bxyz) then
@@ -3336,7 +3435,7 @@ contains
 !              do ie = 1, MatrixPoles(id)%NumPoles(ia,1)
 !                 call zeroElectroStruct(ssLastValue(id))
 !                 do ia = 1, ssLastValue(id)%NumSpecies
-!                    info(1) = is; info(2) = id; info(3) = ia; info(4) = 1
+!                    info(1) = is; info(2) = id; info(3) = ia; info(4) = 1; info(5) = 0
 !                    ssDOS = returnRelSingleSiteDOS_pole(info,real(MatrixPoles(id)%Poles(ie,ia,1),RealKind),wk_dos)
 !                    if (is_Bxyz) then
 !                       call calElectroStruct(info,4,wk_dos,ssLastValue(id),.true.)
@@ -3355,7 +3454,7 @@ contains
          do id = 1, LocalNumAtoms
             do ia = 1, ssLastValue(id)%NumSpecies
                do is = 1, 1!n_spin_cant*n_spin_cant
-                  info(1) = is; info(2) = id; info(3) = ia; info(4) = 1
+                  info(1) = is; info(2) = id; info(3) = ia; info(4) = 1; info(5) = 0
                   if (getAdaptiveIntegrationMethod() == 1) then
                      call ErrorHandler('calSingleScatteringIDOS',&
                                        'relativistic AdaptiveIntegration not implemented')
@@ -3427,7 +3526,7 @@ contains
 !              Solve the single scattering problem e = (er,ei).
 !              In this case, the calculated Green function is Z*tau*Z - Z*J
 !              =======================================================
-               info(1) = is; info(2) = id; info(3) = -1; info(4) = 0
+               info(1) = is; info(2) = id; info(3) = -1; info(4) = 0; info(5) = 0
 !              -------------------------------------------------------
                ssDOS = returnSingleSiteDOSinCP(info,EPoint(ie),wk_dos,EWght(ie))
                call calElectroStruct(info,1,wk_dos,pCurrentValue,ss_int=.true.)
@@ -3486,7 +3585,7 @@ contains
 !              Solve the single scattering problem e = (er,ei).
 !              In this case, the calculated Green function is Z*tau*Z - Z*J
 !              =======================================================
-               info(1) = is; info(2) = id; info(3) = -1; info(4) = 0
+               info(1) = is; info(2) = id; info(3) = -1; info(4) = 0; info(5) = 0
 !              -------------------------------------------------------
                ssDOS = returnSingleSiteDOSinCP(info,EPoint(ie),wk_dos,EWght(ie))
                call calElectroStruct(info,1,wk_dos,pCurrentValue,ss_int=.true.)
@@ -3529,19 +3628,43 @@ contains
       e0 = 0.00001d0 ! initial energy slightly above e = 0.
       e0 = min(e0,abs(ebot))
 !
+!     ================================================================
+!     Searching the S-matrix poles in the energy range (ErBotto, 0.0),
+!     in addition to (0.0, etop), allows to find shallow bound states.
+!     ================================================================
+      do id =  1, LocalNumAtoms
+         do is = 1, n_spin_pola
+            do ia = 1, ssLastValue(id)%NumSpecies
+!              -------------------------------------------------------
+!              call findSMatrixPoles(id,ia,is,ErBottom,etop,Delta=pole_step, &
+print *,'ErBottom,etop = ',ErBottom,etop
+               call findSMatrixPoles(id,ia,is,ZERO,etop,Delta=pole_step, &
+                                     MaxResWidth=0.001d0, CheckPoles =.false.)
+print *,'The number of resonance states = ',getNumResonanceStates(id,ia,is)
+               call computeBoundStateDensity(id,ia,is)
+               call computeResonanceStateDensity(id,ia,is)
+!              -------------------------------------------------------
+            enddo
+         enddo
+      enddo
+!
       exc = ZERO
       do id =  1, LocalNumAtoms
          do is = 1, n_spin_pola
             ns = (2*n_spin_cant-1)*is - (n_spin_cant-1)*2  ! ns = 1 or 2, if n_spin_cant = 1
                                                            ! ns = 1 or 4, if n_spin_cant = 2
             do ia = 1, ssLastValue(id)%NumSpecies
-               info(1) = is; info(2) = id; info(3) = ia; info(4) = 1
+               info(1) = is; info(2) = id; info(3) = ia; info(4) = 1; info(5) = getNumResonanceStates(id,ia,is)
+!
 !              -------------------------------------------------------
                ps0 = returnSingleSitePS(info,e0)
 !              -------------------------------------------------------
                if ( node_print_level >= 0) then
                   write(6,'(/,3(a,i2))')'is = ',is,', id = ',id,', ia = ',ia
                   write(6,'(a,f11.8,a)')'Integration over the real energy interval:  [0.001,',etop,']'
+                  if (info(5) > 0) then
+                     write(6,'(a,i5)')'The number of resonance states: ',info(5)
+                  endif
                   write(6,'(a,i5)')'The number of processors employed for parallelizing the DOS calculation: ',NumPEsInEGroup
                   write(6,'(a)')   '=========================================================================================='
                   write(6,'(4x,a)')'Energy    Single_Site_DOS_ws   Single_Site_DOS_mt    DOS_Outside     Total_Phase_Shift'
@@ -3591,6 +3714,17 @@ contains
                IDOS_space = (2/n_spin_pola)*(ps+getVolume(id)*sqrt(etop**3)/(6.0d0*PI))/PI
                IDOS_out = ssIDOS_out(id)%rarray2(ns,ia)
                IDOS_cell = IDOS_space - IDOS_out
+!
+               if (getNumResonanceStates(id,ia,is) > 0) then
+!                 ====================================================
+!                 add the resonance state densities to the
+!                 single site density
+!                 -------------------------------------------------------
+                  ssdos_int = ssdos_int + returnIDOSofResonanceStates(info,wk_dos)
+                  call calElectroStruct(info,1,wk_dos,pCurrentValue)
+                  call addElectroStruct(CONE,pCurrentValue,ssLastValue(id),ns)
+               endif
+!
                scaling_factor = IDOS_cell/ssdos_int
 !              =======================================================
                if ( node_print_level >= 0) then
@@ -3618,6 +3752,17 @@ contains
                   call scaleSpeciesElectroStruct(ia,ns,scaling_factor,ssLastValue(id),eIntegral_only=.false.)
 !                 ----------------------------------------------------
                endif
+!
+               if (getNumBoundStates(id,ia,is) > 0) then
+!                 ====================================================
+!                 add the shallow bound state densities to the
+!                 single site density
+!                 -------------------------------------------------------
+                  ssdos_int = ssdos_int + returnIDOSofBoundStates(info,wk_dos)
+                  call calElectroStruct(info,1,wk_dos,pCurrentValue)
+                  call addElectroStruct(CONE,pCurrentValue,ssLastValue(id),ns)
+               endif
+!
             enddo
 !           ----------------------------------------------------------
             call addElectroStruct(CONE,ssLastValue(id),ssIntegrValue(id),ns)
@@ -3627,6 +3772,94 @@ contains
    endif
 !
    end subroutine calSingleScatteringIDOS
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function returnIDOSofResonanceStates(info,dos_array) result(dos)
+!  ===================================================================
+   use SMatrixPolesModule, only : getResonanceStateDensity
+   use SMatrixPolesModule, only : getResonanceStateEnergy
+!
+   use RadialGridModule, only : getGrid
+!
+   use StepFunctionModule, only : getVolumeIntegration
+!
+   use SSSolverModule, only : getOutsideDOS
+!
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: info(:)
+!
+   real (kind=RealKind) :: dos, dos_mt, sfac
+!
+   complex (kind=CmplxKind), intent(inout), target :: dos_array(:)
+!
+   integer (kind=IntKind) :: is, id, atom, jl, ir, nres, ib
+   integer (kind=IntKind) :: js, n, p0, iend, jmax, kmax, n0, jmax_dos
+!
+   complex (kind=CmplxKind), pointer :: dos_r_jl(:,:)
+   complex (kind=CmplxKind), pointer :: der_dos_r_jl(:,:)
+!
+   type (GridStruct), pointer :: Grid
+!
+   is = info(1); id = info(2); atom = info(3); nres = info(5)
+   sfac= TWO/real(n_spin_pola,kind=RealKind)
+!
+   Grid => getGrid(id)
+   n = 0
+   do ib = 1, nres
+      dos_r_jl => getResonanceStateDensity(site=id,atom=atom,spin=is,rstate=ib, &
+                                           peak_term=.true.,NumRs=iend,jmax_rho=jmax_dos)
+      if (rad_derivative) then
+         der_dos_r_jl => getResonanceStateDensity(site=id,atom=atom,spin=is,rstate=ib, &
+                                                  peak_term=.true.,derivative=.true.)
+      endif
+      dos = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
+                                       jmax_dos, 2, dos_r_jl, dos_mt )
+      dos_mt = sfac*dos_mt
+      do jl = 1, jmax_dos
+         do ir = 1, LastValue(id)%NumRs
+            dos_array(n+ir) = dos_array(n+ir) + sfac*dos_r_jl(ir,jl)
+         enddo
+         n = n + LastValue(id)%NumRs
+      enddo
+      if (rad_derivative) then
+         do jl = 1, jmax_dos
+            do ir = 1, LastValue(id)%NumRs
+               dos_array(n+ir) = dos_array(n+ir) + sfac*der_dos_r_jl(ir,jl)
+            enddo
+            n = n + LastValue(id)%NumRs
+         enddo
+      endif
+      dos_array(n+1) = dos_array(n+1) + dos
+      dos_array(n+2) = dos_array(n+2) + dos_mt
+!     dos_array(n+3) = dos_array(n+3) + dos*energy
+      dos_array(n+3) = dos_array(n+3) + dos*getResonanceStateEnergy(id=id,ia=atom,is=is,ib=ib)
+      dos_array(n+4) = dos_array(n+4) + sfac*getOutsideDOS(spin=is,site=id,atom=atom) ! Questionable?
+      n = n + 4
+   enddo
+!
+   end function returnIDOSofResonanceStates
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function returnIDOSofBoundStates(info,dos_array) result(dos)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: info(:)
+!
+   real (kind=RealKind) :: dos, dos_mt
+!
+   complex (kind=CmplxKind), intent(inout), target :: dos_array(:)
+!
+   dos = ZERO
+!
+   end function returnIDOSofBoundStates
 !  ===================================================================
 !
 !  *******************************************************************
@@ -3658,7 +3891,7 @@ contains
    logical, intent(in), optional :: relativity
    logical :: REL
 !
-   integer (kind=IntKind) :: ie, id, is, js, info(4), ia
+   integer (kind=IntKind) :: ie, id, is, js, info(5), ia
    integer (kind=IntKind) :: e_loc
    integer (kind=IntKind) :: NumEsOnMyProc, NumRedunEs
 !
@@ -3697,7 +3930,7 @@ contains
             call computeRelMST( adjustEnergy(is,EPoint(ie)) )
             do id =1, LocalNumAtoms
                pCurrentValue => LastValue(id) ! Use LastValue space for temporary working space.
-               info(1) = is; info(2) = id; info(3) = -1; info(4) = 0
+               info(1) = is; info(2) = id; info(3) = -1; info(4) = 0; info(5) = 0
                msDOS = returnRelMultipleSiteDOS(info,EPoint(ie),wk_dos,EWght(ie))
                call calElectroStruct(info,n_spin_cant,wk_dos,pCurrentValue)
                if (e_loc <= NumEsOnMyProc - NumRedunEs .or. MyPEinEGroup == 0) then
@@ -3769,7 +4002,7 @@ contains
             endif
             do id = 1, LocalNumAtoms
                pCurrentValue => LastValue(id) ! Use LastValue space for temporary working space.
-               info(1) = is; info(2) = id; info(3) = -1; info(4) = 0
+               info(1) = is; info(2) = id; info(3) = -1; info(4) = 0; info(5) = 0
 !              ----------------------------------------------------------
                msDOS = returnMultipleSiteDOS(info,EPoint(ie),wk_dos,EWght(ie))
                call calElectroStruct(info,n_spin_cant,wk_dos,pCurrentValue)
@@ -3815,7 +4048,7 @@ contains
 !              Check the single site DOS for the real part of the energy
 !              =======================================================
 !!             do js = 1, n_spin_cant
-!!                info(1) = js; info(2) = id; info(3) = -1; info(4) = 1
+!!                info(1) = js; info(2) = id; info(3) = -1; info(4) = 1; info(5) = 0
 !!                ssDOS = returnSingleSiteDOS(info,real(EPoint(ie),kind=RealKind),wk_dos)
 !!                write(6,'(a,i2,a,i2,a,d15.8,a,d15.8)')'is = ',max(is,js),', id = ',id, &
 !!                     ', e = ',real(EPoint(ie),kind=RealKind),' 0.00000000D+00, Single Site DOS = ',ssDOS
@@ -7227,7 +7460,7 @@ contains
    logical :: useIrregularSolution = .false.
    logical :: relativity
 !
-   integer (kind=IntKind) :: id, BadFermiEnergy, is, info(4), ns, ia
+   integer (kind=IntKind) :: id, BadFermiEnergy, is, info(5), ns, ia
    integer (kind=IntKind), parameter :: MaxIterations = 20
    !
    real (kind=RealKind), intent(inout) :: efermi
@@ -7419,7 +7652,7 @@ contains
 !           ----------------------------------------------------------
 !         endif
          do id =  1,LocalNumAtoms
-            info(1) = is; info(2) = id; info(3) = -1; info(4) = 1
+            info(1) = is; info(2) = id; info(3) = -1; info(4) = 1; info(5) = 0
 !           ----------------------------------------------------------
             msDOS = returnRelMultipleSiteDOS(info,eLast,wk_dos)
             call calElectroStruct(info,4,wk_dos,LastValue(id))
@@ -7447,7 +7680,7 @@ contains
             call zeroElectroStruct(ssLastValue(id))
 !           ----------------------------------------------------------
             do is = 1, 1!n_spin_pola*n_spin_pola !major change by xianglin
-               info(1) = is; info(2) = id; info(3) = -1; info(4) = -1
+               info(1) = is; info(2) = id; info(3) = -1; info(4) = -1; info(5) = 0
 !              -------------------------------------------------------
                ssDOS = returnRelSingleSiteDOS(info,efermi,wk_dos)
                call calElectroStruct(info,4,wk_dos,ssLastValue(id))
