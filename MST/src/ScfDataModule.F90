@@ -304,15 +304,16 @@ contains
       lmax_sol_cutoff = -1
    endif
 !
-   if (getKeyValue(tbl_id,'Irregular Solutions (>=0)',ss_irrsol,default_param=.false.) /= 0) then
-      if (getKeyValue(tbl_id,'Irregular Solutions (>=0)',ss_irrsol,default_param=.true.) == 0) then
-         if (ss_irrsol == 0 .and. pot_type /= 3 .and. pot_type /= 5 .and. pot_type /= 6) then
-            ss_irrsol = 1  ! In case of default case and muffin-tin potential, enable irr. sol. calc.
-         endif
-      else
-         call ErrorHandler('initScfData','Input parameter is not found','Irregular Solutions (>=0)')
-      endif
-   endif
+!! if (getKeyValue(tbl_id,'Irregular Solutions (>=0)',ss_irrsol,default_param=.false.) /= 0) then
+!!    if (getKeyValue(tbl_id,'Irregular Solutions (>=0)',ss_irrsol,default_param=.true.) == 0) then
+!!       if (ss_irrsol == 0 .and. pot_type /= 3 .and. pot_type /= 5 .and. pot_type /= 6) then
+!!          ss_irrsol = 1  ! In case of default case and muffin-tin potential, enable irr. sol. calc.
+!!       endif
+!!    else
+!!       call ErrorHandler('initScfData','Input parameter is not found','Irregular Solutions (>=0)')
+!!    endif
+!! endif
+   rstatus = getKeyValue(tbl_id,'Irregular Solutions (>=0)',ss_irrsol)
    if (ss_irrsol==1) then
 !     necessary to account for the boundary conditions of irregular solutions
       ss_solution_method = 1

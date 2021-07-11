@@ -653,7 +653,9 @@ program testSSSolver
 !              A correction term needs to be added to the Krein formula's DOS
 !              due to the DOS outside the atomic cell.
 !              -------------------------------------------------------
-!              t_mat => getTMatrix()
+               t_mat => getTMatrix()
+               call writeMatrix('T-Matrix',t_mat,kmax_kkr,kmax_kkr,1.0d-8)
+!              -------------------------------------------------------
 !
 !              Check different ways of calculting the t-matrix if needed
 !              -------------------------------------------------------
@@ -1249,6 +1251,7 @@ contains
       use KindParamModule, only : IntKind, RealKind, CmplxKind
       use MathParamModule, only : Half, SQRTm1, ONE
       use BesselModule, only : SphericalBessel, SphericalNeumann
+      use BesselModule, only : SphericalHankel
 !
       implicit none
 !
@@ -1260,19 +1263,36 @@ contains
       complex (kind=CmplxKind), intent(in) :: energy
       complex (kind=CmplxKind), intent(out) :: fint(0:lmax)
       complex (kind=CmplxKind) :: bjl(0:lmax+1), bnl(0:lmax+1), x, bhl, bhlp1, bhlm1
-      complex (kind=CmplxKind) :: Ul, Ulp1
+      complex (kind=CmplxKind) :: Ul, Ulp1, shl(0:lmax+1)
 !
       x = rc*sqrt(energy)+SQRTm1*0.00001d0
 !     ----------------------------------------------------------------
       call SphericalBessel(lmax+1,x,bjl)
       call SphericalNeumann(lmax+1,x,bnl)
 !     ----------------------------------------------------------------
-      bhl = bjl(0)+SQRTm1*bnl(0)
-      bhlp1 = bjl(1)+SQRTm1*bnl(1)
+! For large abs(x) >> l, the forward recursive algorithm is more stable
+! And it is better to use the following algorithm to calculate the Hankel
+! function.
+!write(6,'(a,2d15.8)')'x = ',x
+      call SphericalHankel(1,x,shl)
+do l = 1, lmax
+shl(l+1) = (2*l+1)*shl(l)/x - shl(l-1)
+!write(6,'(a,i5,2d15.8,2x,2d15.8)')'l,bjl,bnl = ',l,bjl(l),bnl(l)
+!write(6,'(a,i5,2d15.8)')'l,bjl+i*bnl = ',l,bjl(l)+SQRTm1*bnl(l)
+!write(6,'(a,5x,2d15.8)')'        shl = ',shl(l)
+enddo
+!     bhl = bjl(0)+SQRTm1*bnl(0)
+!     bhlp1 = bjl(1)+SQRTm1*bnl(1)
+      bhl = shl(0)
+      bhlp1 = shl(1)
       do l = 1, lmax
+!write(6,'(a,i5)')'l = ',l
          bhlm1 = bhl
+!write(6,'(a,2d15.8)')'bhl = ',bhl
          bhl = bhlp1
-         bhlp1 = bjl(l+1)+SQRTm1*bnl(l+1)
+!write(6,'(a,2d15.8)')'bhlp1 = ',bhlp1
+!        bhlp1 = bjl(l+1)+SQRTm1*bnl(l+1)
+         bhlp1 = shl(l+1)
 !        fint(l) = ((2*l+1)*bhl*bhlp1/x-bhl**2-bhlp1**2)*HALF
          fint(l) = (bhlm1*bhlp1-bhl**2)*HALF
       enddo

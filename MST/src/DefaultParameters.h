@@ -85,8 +85,8 @@
 !                     =  0: Untruncated potential in solver, Untruncated potential in volume integration
 !                     =  1: Untruncated potential in solver, Truncated potential in volume integration
 !                     =  2: Truncated potential in solver
-   n = n + 1; Keys(n) = 'Irregular Solutions (>=0)';             Values(n) = '0'
-!                     = 0: Solver does not use the IrrSolulions; = 1: Solver does use the IrrSolulions
+   n = n + 1; Keys(n) = 'Irregular Solutions (>=0)';             Values(n) = '1'
+!                     = 0: Solver does NOT USE the IrrSolulions; = 1: Solver does USE the IrrSolulions
    n = n + 1; Keys(n) = 'Pole Search Step (>0.0)';               Values(n) = '0.010'
 !             Note: Defaults to 0.2 for unspecified value, <= 0.0 or > 0.4
    n = n + 1; Keys(n) = 'Solutions Lmax Cutoff';                 Values(n) = '-1'

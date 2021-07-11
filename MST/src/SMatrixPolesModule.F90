@@ -117,7 +117,9 @@ contains
    eGID = getGroupID('Energy Mesh')
    NumPEsInEGroup = getNumPEsInGroup(eGID)
    MyPEinEGroup = getMyPEinGroup(eGID)
-   write(6,'(a,3i5)')'MyPE, MyPEinEGroup, NumPEsInEGroup = ',MyPE,MyPEinEGroup,NumPEsInEGroup
+   if (iprint >= 0) then
+      write(6,'(a,3i5)')'MyPE, MyPEinEGroup, NumPEsInEGroup = ',MyPE,MyPEinEGroup,NumPEsInEGroup
+   endif
 !
    nj3 => getNumK3()
    kj3 => getK3()
@@ -414,14 +416,27 @@ contains
 !
    integer (kind=IntKind), intent(in) :: site, atom, spin
    integer (kind=IntKind), intent(out), optional :: res_id
+   integer (kind=IntKind) :: i, j
 !
    real (kind=RealKind), intent(in) :: e
+   real (kind=RealKind) :: el, er
 !
    logical :: y
 !
-   if (present(res_id)) then
-      res_id = 0
+   y = .false.
+   j = 0
+   LOOP_i: do i = 1, Pole(site)%NumResPoles(spin,atom)
+      el = Pole(site)%ResPoles(i,spin,atom) - HALF*Pole(site)%ResWidth(i,spin,atom)
+      er = Pole(site)%ResPoles(i,spin,atom) + HALF*Pole(site)%ResWidth(i,spin,atom)
+      if (e >= el .and. e <= er) then
+         j = i
+         y = .true.
+         exit LOOP_i
+      endif
+   enddo LOOP_i
 !
+   if (present(res_id)) then
+      res_id = j
    endif
 !
    end function isEnergyInResonanceRange
@@ -500,20 +515,24 @@ contains
    integer (kind=IntKind) :: ib
 !
    write(6,'(3(a,i3))')'Spin index: ',is,',  Site index: ',id,',  Species index: ',ia
-   write(6,'(a,f13.8,a,f13.8,a,i5)')'The Number of bound states found within (',  &
-                                    Pole(id)%ebot(is,ia),', ',ZERO,'): ',Pole(id)%NumBoundPoles(is,ia)
-   do ib = 1, Pole(id)%NumBoundPoles(is,ia)
-      write(6,'(a,i2,5x,a,f20.12)')'Degeneracy = ',Pole(id)%NumBPDegens(ib,is,ia), &
-                                   ', Bound state energy = ',Pole(id)%BoundPoles(ib,is,ia)
-   enddo
-   write(6,'(/,a,f13.8,a,f13.8,a,i5)')'The Number of resonance states found within (',  &
-                                      Pole(id)%ebot(is,ia),', ',Pole(id)%etop(is,ia),'): ', &
-                                      Pole(id)%NumResPoles(is,ia)
-   do ib = 1, Pole(id)%NumResPoles(is,ia)
-      write(6,'(a,i2,5x,a,f20.12,a,f20.12)')'Degeneracy = ',Pole(id)%NumRPDegens(ib,is,ia), &
-                                            ', Resonance state energy = ',Pole(id)%ResPoles(ib,is,ia), &
-                                            ', Width = ',Pole(id)%ResWidth(ib,is,ia)
-   enddo
+   if (Pole(id)%ebot(is,ia) < -TEN2m8) then
+      write(6,'(a,f13.8,a,f13.8,a,i5)')'The Number of bound states found within (',  &
+                                       Pole(id)%ebot(is,ia),', ',ZERO,'): ',Pole(id)%NumBoundPoles(is,ia)
+      do ib = 1, Pole(id)%NumBoundPoles(is,ia)
+         write(6,'(a,i2,5x,a,f20.12)')'Degeneracy = ',Pole(id)%NumBPDegens(ib,is,ia), &
+                                      ', Bound state energy = ',Pole(id)%BoundPoles(ib,is,ia)
+      enddo
+   endif
+   if (Pole(id)%etop(is,ia) > TEN2m8) then
+      write(6,'(/,a,f13.8,a,f13.8,a,i5)')'The Number of resonance states found within (',  &
+                                         Pole(id)%ebot(is,ia),', ',Pole(id)%etop(is,ia),'): ', &
+                                         Pole(id)%NumResPoles(is,ia)
+      do ib = 1, Pole(id)%NumResPoles(is,ia)
+         write(6,'(a,i2,5x,a,f20.12,a,f20.12)')'Degeneracy = ',Pole(id)%NumRPDegens(ib,is,ia), &
+                                               ', Resonance state energy = ',Pole(id)%ResPoles(ib,is,ia), &
+                                               ', Width = ',Pole(id)%ResWidth(ib,is,ia)
+      enddo
+   endif
 !
    end subroutine printSMatrixPoleInfo
 !  ===================================================================
@@ -658,6 +677,8 @@ contains
                                      solveLinearEquation, getEigenVector,     &
                                      getEigenMatrix
 !
+   use WriteMatrixModule,  only : writeMatrix
+!
    implicit none
 !
    integer (kind=IntKind), intent(in) :: is, id, ia
@@ -776,6 +797,7 @@ contains
    do iw = 1, MyNumWindows
       w0 = eb + (iw+MyPEInEGroup*MyNumWindows-1)*WindowWidth
       e0 = w0 + (HALF)*WindowWidth
+!     write(6,'(a,i3,a,f6.3,a,f6.3,a)')'Window:',iw,'  (',w0,',',w0+WindowWidth,')'
       if (isZeroInterval) then
          e0 = ZERO
       else if ((abs(e0) < Ten2m6 .or. abs(e0-de) < Ten2m6 .or. abs(e0+de) < Ten2m6)) then
@@ -794,7 +816,7 @@ contains
 !        -------------------------------------------------------------
          call solveSingleScattering(is, id, ce0, CZERO, atom=ia)
 !        -------------------------------------------------------------
-         jost_mat => getJostMatrix()
+         jost_mat => getJostMatrix(spin=is,site=id,atom=ia)
 !        -------------------------------------------------------------
          call zcopy(kmax_kkr*kmax_kkr,jost_mat,1,s0,1)
 !        -------------------------------------------------------------
@@ -805,7 +827,7 @@ contains
       call solveSingleScattering(is, id, e, CZERO, atom=ia)
 !     call solveSingleScattering(is, id, ce0, -cde, atom=ia)
 !     ----------------------------------------------------------------
-      jost_mat => getJostMatrix()
+      jost_mat => getJostMatrix(spin=is,site=id,atom=ia)
 !     ----------------------------------------------------------------
       call zcopy(kmax_kkr*kmax_kkr,jost_mat,1,s2,1)
 !     ----------------------------------------------------------------
@@ -815,7 +837,7 @@ contains
       call solveSingleScattering(is, id, e, CZERO, atom=ia)
 !     call solveSingleScattering(is, id, ce0, cde, atom=ia)
 !     ----------------------------------------------------------------
-      jost_mat => getJostMatrix()
+      jost_mat => getJostMatrix(spin=is,site=id,atom=ia)
 !     ----------------------------------------------------------------
       call zcopy(kmax_kkr*kmax_kkr,jost_mat,1,s1,1)
 !     ----------------------------------------------------------------
