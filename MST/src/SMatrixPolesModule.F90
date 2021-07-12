@@ -404,7 +404,9 @@ contains
    real (kind=RealKind) :: e
 !
    e = Pole(id)%ResPoles(ib,is,ia)
-   hw = Pole(id)%ResWidth(ib,is,ia)
+   if (present(hw)) then
+      hw = Pole(id)%ResWidth(ib,is,ia)
+   endif
 !
    end function getResonanceStateEnergy
 !  ===================================================================
@@ -753,8 +755,8 @@ contains
 !     de = FOURTH*(et-eb)
       de = HALF*(et-eb)
    else
-      NumWindows = int((et-eb)/WindowWidth)
-      NumWindows = NumWindows - mod(NumWindows,4)
+      NumWindows = ceiling((et-eb)/WindowWidth)
+!     NumWindows = NumWindows - mod(NumWindows,4)
       if (NumWindows < NumPEsInEGroup) then
          NumWindows = NumPEsInEGroup
          MyNumWindows = 1
@@ -762,13 +764,17 @@ contains
          NumWindows = ceiling(NumWindows/real(NumPEsInEGroup))*NumPEsInEGroup
          MyNumWindows = NumWindows/NumPEsInEGroup
       endif
-      WindowWidth = (et-eb)/real(NumWindows,kind=RealKind)
-!     de = Delta
-      de = WindowWidth/4.0d0
+!     WindowWidth = (et-eb)/real(NumWindows,kind=RealKind)
+      if (present(Delta)) then
+         de = Delta
+      else
+         de = WindowWidth/4.0d0
+      endif
    endif
 !
    de2 = de*TWO; dede2 = de*de*TWO
    cde = de
+!  write(6,'(a,2d15.8,i5)')'de,win,nw = ',de,WindowWidth,NumWindows
 !
    s0 => aliasArray2_c(wspace0,kmax_kkr,kmax_kkr)
    s1 => aliasArray2_c(wspace1,kmax_kkr,kmax_kkr)
@@ -943,9 +949,10 @@ contains
                   nr = nr + 1
 !                 Pole(id)%ResPoles(nr,is,ia) = pe
 !                 Pole(id)%ResWidth(nr,is,ia) = w
-                  rpe(nr) = cmplx(pe,aimag(sqrt(pv(ie)))**2)
+                  rpe(nr) = cmplx(pe,aimag(sqrt(pv(ie)))**2,kind=CmplxKind)
                   rpdeg(nr) = 1
-!write(6,'(a,2d15.8,a,2d15.8)')'Pole = ',pv(ie)+e0,', kappa = ',sqrt(pv(ie)+e0)
+! write(6,'(a,2f15.12,a,2f15.12)')'Pole = ',pv(ie)+e0,', kappa = ',sqrt(pv(ie)+e0)
+! write(6,'(a,2f15.12)')          'rpe  = ',rpe(nr)
 !                 ----------------------------------------------------
                   call zcopy(kmax_kkr*kmax_kkr,em,1,rmat(1,nr),1)
 !                 ----------------------------------------------------
