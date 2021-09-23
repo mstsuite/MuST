@@ -3234,9 +3234,11 @@ contains
 !
    use SMatrixPolesModule, only : findSMatrixPoles,             &
                                   getNumResonanceStates,        &
+                                  getResonanceStateEnergy,      &
                                   getNumBoundStates,            &
                                   computeResonanceStateDensity, &
-                                  computeBoundStateDensity
+                                  computeBoundStateDensity,     &
+                                  printSMatrixPoleInfo
 !
    implicit none
 !
@@ -3244,13 +3246,13 @@ contains
    logical :: LC, UC, REL !xianglin
 !
    integer (kind=IntKind) :: id, is, ns, info(5), nm, ie, NumEs, ilc !xianglin
-   integer (kind=IntKind) :: ia, renorm
+   integer (kind=IntKind) :: ia, renorm, ib
    integer (kind=IntKind) :: NumBoundStates
 !
    real (kind=RealKind), intent(in), optional :: Ebegin, Eend
    logical, intent(in), optional :: relativity !xianglin
 !
-   real (kind=RealKind) :: ssdos_int, IDOS_cell, ps, peak_pos, e0, ps0, ssDOS
+   real (kind=RealKind) :: ssdos_int, IDOS_cell, ps, peak_pos, e0, ps0, ssDOS, width
    real (kind=RealKind) :: ebot, etop, er, ei, scaling_factor, IDOS_space, IDOS_out
    real (kind=RealKind), allocatable :: xg(:), wg(:)
 !
@@ -3634,14 +3636,15 @@ contains
          do is = 1, n_spin_pola
             do ia = 1, ssLastValue(id)%NumSpecies
 !              -------------------------------------------------------
-!              call findSMatrixPoles(id,ia,is,ErBottom,etop,Delta=pole_step, &
-print *,'ErBottom,etop = ',ErBottom,etop
-               call findSMatrixPoles(id,ia,is,ZERO,etop,Delta=pole_step, &
-                                     MaxResWidth=0.001d0, CheckPoles =.false.)
-print *,'The number of resonance states = ',getNumResonanceStates(id,ia,is)
+               call findSMatrixPoles(id,ia,is,ErBottom,etop,Delta=pole_step, &
+                                     MaxResWidth=0.020d0, CheckPoles =.false.)
                call computeBoundStateDensity(id,ia,is)
                call computeResonanceStateDensity(id,ia,is)
-!              -------------------------------------------------------
+               if (node_print_level >= 0) then
+!                 ----------------------------------------------------
+                  call printSMatrixPoleInfo(id,ia,is)
+!                 ----------------------------------------------------
+               endif
             enddo
          enddo
       enddo
@@ -3657,12 +3660,18 @@ print *,'The number of resonance states = ',getNumResonanceStates(id,ia,is)
 !              -------------------------------------------------------
                ps0 = returnSingleSitePS(info,e0)
 !              -------------------------------------------------------
-               if ( node_print_level >= 0) then
+               if (node_print_level >= 0) then
                   write(6,'(/,3(a,i2))')'is = ',is,', id = ',id,', ia = ',ia
                   write(6,'(a,f11.8,a)')'Integration over the real energy interval:  [0.001,',etop,']'
-                  if (info(5) > 0) then
-                     write(6,'(a,i5)')'The number of resonance states: ',info(5)
-                  endif
+!                 if (info(5) > 0) then
+!                    write(6,'(a,i5)')'The number of resonance states: ',info(5)
+!                    er = getResonanceStateEnergy(id,ia,is,1,width)
+!                    write(6,'(a,f15.12,a,f15.12)')'Resonance state energy:',er,', width:',width
+!                    do ib = 2, info(5)
+!                       er = getResonanceStateEnergy(id,ia,is,ib,width)
+!                       write(6,'(23x,f10.5,a,f10.5)')er,', width:',width
+!                    enddo
+!                 endif
                   write(6,'(a,i5)')'The number of processors employed for parallelizing the DOS calculation: ',NumPEsInEGroup
                   write(6,'(a)')   '=========================================================================================='
                   write(6,'(4x,a)')'Energy    Single_Site_DOS_ws   Single_Site_DOS_mt    DOS_Outside     Total_Phase_Shift'

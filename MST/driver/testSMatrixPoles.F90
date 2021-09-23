@@ -11,6 +11,7 @@ program testSMatrixPoles
    use SystemModule, only : getNumAtoms, getAtomPosition, getAtomicNumber
 !
    use ScfDataModule, only : n_spin_pola, n_spin_cant
+   use ScfDataModule, only : ErBottom, ErTop, EiBottom, EiTop, Temperature
    use ScfDataModule, only : istop, EvBottom, isNonRelativisticCore
    use ScfDataModule, only : ngaussr, ngaussq
    use ScfDataModule, only : pole_step
@@ -207,7 +208,7 @@ program testSMatrixPoles
 !           if (etop > ZERO) then
 !              etop = -TEN2m6
 !           endif
-            etop = Efermi
+            etop = Efermi; ebot = ErBottom
 !           ---------------------------------------------------------
             call findSMatrixPoles(id,ia,is,ebot,etop,Delta=pole_step, &
                                   MaxResWidth = 0.02d0,               &
@@ -257,7 +258,6 @@ contains
    subroutine initializeModules()
 !  ===================================================================
    use PublicTypeDefinitionsModule, only : GridStruct
-   use ScfDataModule, only : ErBottom, ErTop, EiBottom, EiTop, Temperature
    use ScfDataModule, only : isNonRelativisticValence
    use ScfDataModule, only : isScalarRelativisticValence
    use ScfDataModule, only : getSingleSiteSolverMethod
