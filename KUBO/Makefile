@@ -257,21 +257,4 @@ p3dfft:
 	@cd $(EXTERN_LIB_PATH) && make "ARCH_FILE=$(ARCH_FILE)" p3dfft
 
 install:
-	ln -fs $(ODIR)/assk $(PREFIX)/bin/$(SUFFIX)/assk; \
-ln -fs $(ODIR)/bireft $(PREFIX)/bin/$(SUFFIX)/bireft; \
-ln -fs $(ODIR)/cart2direct $(PREFIX)/bin/$(SUFFIX)/cart2direct; \
-ln -fs $(ODIR)/charge $(PREFIX)/bin/$(SUFFIX)/charge; \
-ln -fs $(ODIR)/chgaver $(PREFIX)/bin/$(SUFFIX)/chgaver; \
-ln -fs $(ODIR)/eosfit $(PREFIX)/bin/$(SUFFIX)/eosfit; \
-ln -fs $(ODIR)/extrpot $(PREFIX)/bin/$(SUFFIX)/extrpot; \
-ln -fs $(ODIR)/findBoundStates $(PREFIX)/bin/$(SUFFIX)/findBoundStates; \
-ln -fs $(ODIR)/findResonance $(PREFIX)/bin/$(SUFFIX)/findResonance; \
-ln -fs $(ODIR)/genap $(PREFIX)/bin/$(SUFFIX)/genap; \
-ln -fs $(ODIR)/measureVoronoi $(PREFIX)/bin/$(SUFFIX)/measureVoronoi; \
-ln -fs $(ODIR)/$(EXEC_NAME) $(PREFIX)/bin/$(SUFFIX)/$(EXEC_NAME); \
-ln -fs $(ODIR)/murn $(PREFIX)/bin/$(SUFFIX)/murn; \
-ln -fs $(ODIR)/newa $(PREFIX)/bin/$(SUFFIX)/newa; \
-ln -fs $(ODIR)/newss $(PREFIX)/bin/$(SUFFIX)/newss; \
-ln -fs $(ODIR)/setEvec $(PREFIX)/bin/$(SUFFIX)/setEvec; \
-ln -fs $(ODIR)/slice $(PREFIX)/bin/$(SUFFIX)/slice; \
-ln -fs $(ODIR)/ssk $(PREFIX)/bin/$(SUFFIX)/ssk
+	ln -fs $(ODIR)/kubo $(TOP_DIR)/../bin/kubo; 
