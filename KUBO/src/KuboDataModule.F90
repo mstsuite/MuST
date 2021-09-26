@@ -8,6 +8,7 @@ public :: initKuboData,                 &
           useStepFunctionForSigma,     &
           useCubicSymmetryForSigma,    &
           includeVertexCorrections,    &
+          printTildeMatrices,          &
           printKuboData
 !
 public
@@ -17,6 +18,7 @@ public
    integer (kind=IntKind), private :: use_sf = 1
    integer (kind=IntKind), private :: use_csymm = 1
    integer (kind=IntKind), private :: is_ef_rp = 0
+   integer (kind=IntKind), private :: print_tilde = 0
    integer (kind=IntKind), private :: vertex_corr = 1
    real (kind=RealKind), private :: imag_part = 0.001
    real (kind=RealKind), private :: sigma_real_part = 0.5
@@ -47,6 +49,7 @@ contains
    rstatus = getKeyValue(tbl_id,'Integrate Upto Muffin Tin', use_sf)
    rstatus = getKeyValue(tbl_id,'Use Cubic Symmetry', use_csymm)
    rstatus = getKeyValue(tbl_id,'Vertex Corrections', vertex_corr)
+   rstatus = getKeyValue(tbl_id,'Print Tilde Matrices', print_tilde)
 
    end subroutine initKuboData
 !  ===================================================================
@@ -173,4 +176,23 @@ contains
 
    end function getFermiEnergyRealPart
 !  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function printTildeMatrices() result(print_mat)
+!  ===================================================================
+   implicit none
+
+   logical :: print_mat
+
+   if (print_tilde == 1) then
+     print_mat = .true.
+   else if (print_tilde == 0) then
+     print_mat = .false.
+   else
+     call ErrorHandler('printTildeMatrices', \
+             'Incorrect Value (choose 0 or 1)', print_mat)
+   endif
+
+   end function printTildeMatrices
+!  ==================================================================
 end module KuboDataModule
