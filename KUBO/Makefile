@@ -18,7 +18,7 @@ ifndef EXTERN_LIB_PATH
 endif
 
 ifneq (,$(wildcard ./architecture.h))
-   MST = 1
+   KUBO = 1
    include architecture.h
    ARCH_FILE = $(TOP_DIR)/architecture.h
 else
