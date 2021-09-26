@@ -38,12 +38,13 @@ program kubo
                             getStandardOutputLevel, isOutputAtomBased
 
    use KuboDataModule, only : initKuboData, includeVertexCorrections, endKuboData
+   use KuboDataModule, only : printTildeMatrices
  
    use ScfDataModule, only : n_spin_pola, n_spin_cant 
    use ScfDataModule, only : ngaussr, ngaussq, isRelativisticValence
    use ScfDataModule, only : initScfData, endScfData, isLSMS, getPotentialTypeParam
    use ScfDataModule, only : NumEs, ContourType, eGridType
-   use ScfDataModule, only : inputpath, Temperature
+   use ScfDataModule, only : Temperature
    use ScfDataModule, only : istop, NumKMeshs, kGenScheme, Kdiv, Symmetrize
    use ScfDataModule, only : isKKRCPA, getSingleSiteSolverType
 
@@ -112,6 +113,10 @@ program kubo
    use SSSolverModule, only : initSSSolver, endSSSolver
    use MSSolverModule, only : initMSSolver, endMSSolver
    use ConductivityModule, only : initConductivity, calConductivity, endConductivity
+   use ConductivityModule, only : sigma, sigmatilde, sigmatilde2, sigmatilde3, sigmatilde4
+
+   use WriteMatrixModule, only : writeMatrix
+   use MatrixInverseModule, only : MtxInv_LU
 
 !  ===================================================================
    implicit none
@@ -121,20 +126,17 @@ program kubo
    logical :: vc = .true.
 
    character (len=80) :: info_table, info_path
-   character (len=160) :: itname, cmd
-   character (len=12) :: anm
+   character (len=160) :: itname
    character (len=8)  :: exec_date
    character (len=10) :: exec_time
    character (len=200) :: FileName
-   character (len=50) :: StorageKey
 !
    integer (kind=IntKind) :: MyPE, NumPEs
-   integer (kind=IntKind) :: funit_sysmov, en_movie
    integer (kind=IntKind) :: def_id, info_id
-   integer (kind=IntKind) :: lmax_max, lmax_kkr_max, jmax_pot
+   integer (kind=IntKind) :: lmax_max, lmax_kkr_max
    integer (kind=IntKind) :: lmax_rho_max, lmax_pot_max, lmax_gaunt
    integer (kind=IntKind) :: GlobalNumAtoms, LocalNumAtoms
-   integer (kind=IntKind) :: i, ig, id, n, na, ne, nk
+   integer (kind=IntKind) :: i, j, k, ig, id, n, na, ne, nk
    integer (kind=IntKind) :: ndivin, ndivout, nmult
    integer (kind=IntKind) :: node_print_level
    integer (kind=IntKind), pointer :: AtomicNumber(:)
@@ -148,14 +150,13 @@ program kubo
    integer (kind=IntKind), allocatable :: lmax_green(:)
    integer (kind=IntKind), allocatable :: lmax_mad(:)
    integer (kind=IntKind), allocatable :: ngr(:), ngt(:)
-   integer (kind=IntKind) :: NumMix(1)
    integer (kind=IntKind) :: MaxVal_Integer(2)
-   integer (kind=IntKind) :: ng_uniform(3)
 !
-   real (kind=RealKind) :: Efermi, t0, t1, t2, t3, t_inp, t_outp
+   real (kind=RealKind) :: Efermi, t0, t2, t3, t_inp, t_outp
    real (kind=RealKind) :: rmt, rinsc, rend, rws, hin, rmt_grid, rc
    real (kind=RealKind) :: bravais(3,3)
    real (kind=RealKind), pointer :: AtomPosition(:,:)
+   real (kind=RealKind), allocatable :: final_sigma(:,:,:)
    real (kind=RealKind), allocatable :: LocalAtomPosi(:,:)
    real (kind=RealKind), allocatable :: LocalEvec(:,:)
    real (kind=RealKind), allocatable :: radius(:)
@@ -163,9 +164,6 @@ program kubo
    real (kind=RealKind), parameter :: xstart = -.1113096740000D+02
 !  real (kind=RealKind), parameter :: xstart = -.913096740000D+01
 
-!  ===================================================================
-!  Mixing quantity
-!  ===================================================================
    interface
 !
 !      subroutine setupLizNeighbor(print_level,isScreened)
@@ -274,6 +272,9 @@ program kubo
 
    t_inp = t_inp + fetchStoredTime()
 
+   allocate(final_sigma(3,3,n_spin_pola))
+   final_sigma = 0
+
    bravais(1:3,1:3)=getBravaisLattice()
 !
    GlobalNumAtoms = getNumAtoms()
@@ -291,7 +292,6 @@ program kubo
 !  -------------------------------------------------------------------
    call initLattice(bravais)
 !  -------------------------------------------------------------------
-   print *, NumKMeshs, kGenScheme, Kdiv, Symmetrize, bravais
    call initBZone(NumKMeshs,kGenScheme,Kdiv,Symmetrize,bravais, &
                         GlobalNumAtoms,AtomPosition,AtomicNumber,istop,-MyPE)
 !  -------------------------------------------------------------------
@@ -620,7 +620,6 @@ program kubo
    if (node_print_level >= 0) then
      write(6,'(/,a,f12.8)')' Fermi energy read from the potential:',Efermi
    endif
-!  call ErrorHandler('kubo', 'Debug stop')
    call initSSSolver(LocalNumAtoms, getLocalNumSpecies, getLocalAtomicNumber, &
                      lmax_kkr, lmax_phi, lmax_pot, lmax_step, lmax_green, &
                      n_spin_pola, n_spin_cant, 0,   &
@@ -636,18 +635,76 @@ program kubo
            n_spin_pola, n_spin_cant, 0, istop, atom_print_level, vc)
 
    call calConductivity(Efermi, LocalNumAtoms, n_spin_pola)
+  
+   do i = 1, 3
+     do j = 1, 3
+       do k = 1, n_spin_pola
+         final_sigma(i, j, k) = (2.30384174*real(sigma(i, j, k)))/100.0
+       enddo
+     enddo
+   enddo  
+   
+   do k = 1, n_spin_pola
+     call MtxInv_LU(final_sigma(:,:,k), 3)
+   enddo
 
-!  ==================================================================
-   call date_and_time(exec_date,exec_time)
    if (node_print_level >= 0) then
-     write(6,'(/,12a)')'Execution ends at ',                         &
-           exec_time(1:2),':',exec_time(3:4),':',exec_time(5:6),', ', &
-           exec_date(5:6),'-',exec_date(7:8),'-',exec_date(1:4)
-     write(6,'(80(''-''))')
-     write(6,'(a)')'End of a successful run......!'
+     if (n_spin_pola == 1) then
+       write(6,'(5x,a)')'                                                        '
+       write(6,'(5x,a)')'********************************************************'
+       write(6,'(5x,a)')'--------------------------------------------------------'
+       write(6,'(5x,a)')'             RESISTIVITY TENSOR (muOhm-cm)          '
+       write(6,'(5x,a)')'--------------------------------------------------------'
+       write(6,'(3x,f10.5,14x,f10.5,14x,f10.5)') final_sigma(1,1,1),final_sigma(1,2,1),final_sigma(1,3,1)
+       write(6,'(3x,f10.5,14x,f10.5,14x,f10.5)') final_sigma(2,1,1),final_sigma(2,2,1),final_sigma(2,3,1)
+       write(6,'(3x,f10.5,14x,f10.5,14x,f10.5)') final_sigma(3,1,1),final_sigma(3,2,1),final_sigma(3,3,1)
+       write(6,'(5x,a)')'********************************************************'
+     else if (n_spin_pola == 2) then
+       write(6,'(5x,a)')'                                                        '
+       write(6,'(5x,a)')'********************************************************'
+       write(6,'(5x,a)')'--------------------------------------------------------'
+       write(6,'(/,a,/)')'       RESISTIVITY TENSOR  (SPIN UP) (muOhm-cm)            '
+       write(6,'(5x,a)')'--------------------------------------------------------'
+       write(6,'(3x,f10.5,15x,f10.5,14x,f10.5)') final_sigma(1,1,1),final_sigma(1,2,1),final_sigma(1,3,1)
+       write(6,'(3x,f10.5,15x,f10.5,14x,f10.5)') final_sigma(2,1,1),final_sigma(2,2,1),final_sigma(2,3,1)
+       write(6,'(3x,f10.5,15x,f10.5,14x,f10.5)') final_sigma(3,1,1),final_sigma(3,2,1),final_sigma(3,3,1)
+       write(6,'(5x,a)')'--------------------------------------------------------'
+       write(6,'(/,a,/)')'      RESISTIVITY TENSOR  (SPIN DOWN) (muOhm-cm)          '
+       write(6,'(5x,a)')'--------------------------------------------------------'
+       write(6,'(3x,f10.5,14x,f10.5,14x,f10.5)') final_sigma(1,1,2),final_sigma(1,2,2),final_sigma(1,3,2)
+       write(6,'(3x,f10.5,14x,f10.5,14x,f10.5)') final_sigma(2,1,2),final_sigma(2,2,2),final_sigma(2,3,2)
+       write(6,'(3x,f10.5,14x,f10.5,14x,f10.5)') final_sigma(3,1,2),final_sigma(3,2,2),final_sigma(3,3,2)
+       write(6,'(5x,a)')'********************************************************'
+     endif
    endif
+
+   if (printTildeMatrices() .and. node_print_level >= 0) then
+     write(6,'(a)')'                                       '
+     write(6,'(a)')'******************************************************************************'
+     write(6,'(a)')' Raw conductivity matrices (complex), in Atomic Units, printed for debug purposes'
+     write(6,'(a)')' i,j indices represent direction and k represents the spin index                '
+     write(6,'(a)')' To see the meaning of sigma-tilde(2,3,4), refer to Phys. Rev. B 31, 3260 (1985)'
+     write(6,'(a)')'******************************************************************************'
+     write(6,'(a)')'                                       '
+     call writeMatrix('sigma', sigma, 3, 3, n_spin_pola)
+     call writeMatrix('sigma-tilde1', sigmatilde, 3, 3, n_spin_pola)
+     call writeMatrix('sigma-tilde2', sigmatilde2, 3, 3, n_spin_pola)
+     call writeMatrix('sigma-tilde3', sigmatilde3, 3, 3, n_spin_pola)
+     call writeMatrix('sigma-tilde4', sigmatilde4, 3, 3, n_spin_pola)
+   endif
+
+   if (node_print_level >= 0) then
+      write(6,*) " Run Ending! "
+      call FlushFile(6)
+   endif
+
+   nullify(AtomPosition,AtomicNumber)
+   deallocate( GlobalIndex, LocalAtomPosi, atom_print_level )
+   deallocate( lmax_kkr, lmax_phi, lmax_pot, lmax_rho, lmax_green, lmax_mad)
+   deallocate( lmax_step, lmax_tmp , final_sigma)
 !
    call endConductivity()
+   call endInput()
    call endMadelung()
    call endPotential()
    call endStepFunction()
@@ -675,7 +732,17 @@ program kubo
    call endKuboData()
    call endBZone()
    call endIBZRotation()
+
+!  ==================================================================
+   call date_and_time(exec_date,exec_time)
+   if (node_print_level >= 0) then
+     write(6,'(/,12a)')'Execution ends at ',                         &
+           exec_time(1:2),':',exec_time(3:4),':',exec_time(5:6),', ', &
+           exec_date(5:6),'-',exec_date(7:8),'-',exec_date(1:4)
+     write(6,'(80(''-''))')
+     write(6,'(a)')'End of a successful run......!'
+   endif
+
    call endOutput()
-   call endInput()
 !
 end program kubo
