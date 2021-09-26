@@ -13,6 +13,13 @@ public :: initConductivity,        &
           computeCPAConductivity, &
           calConductivity
 !
+!  Conductivity data stored here
+!  --------------------------------------------------------------------
+   complex (kind=CmplxKind), allocatable, public :: sigmatilde(:,:,:), sigmatilde2(:,:,:), &
+                                          sigmatilde3(:,:,:), sigmatilde4(:,:,:)
+
+   complex (kind=CmplxKind), allocatable, public :: sigma(:,:,:)
+!  ---------------------------------------------------------------------
 
 private
    integer (kind=IntKind) :: LocalNumAtoms
@@ -38,13 +45,6 @@ private
    complex (kind=CmplxKind), allocatable :: iden(:,:)
    complex (kind=CmplxKind), allocatable :: wmatSRO(:,:,:)
    complex (kind=CmplxKind), allocatable :: vcSRO(:,:,:)
-!  Conductivity data stored here
-!  --------------------------------------------------------------------
-   complex (kind=CmplxKind), allocatable :: sigmatilde(:,:,:), sigmatilde2(:,:,:), &
-                                          sigmatilde3(:,:,:), sigmatilde4(:,:,:)
-
-   complex (kind=CmplxKind), allocatable :: sigma(:,:,:)
-!  ---------------------------------------------------------------------
 
    integer (kind=IntKind) :: NumPEsInGroup, MyPEinGroup, kGID
    logical :: Initialized = .false.
@@ -997,10 +997,9 @@ contains
    integer (kind=IntKind), intent(in) :: LocalNumAtoms, n_spin_pola
    integer (kind=IntKind) :: id, is, pot_type, dirnum, MyPE
    real (kind=RealKind), intent(in) :: efermi
-   real (kind=RealKind) :: delta, ti, tf
+   real (kind=RealKind) :: delta
    complex (kind=CmplxKind) :: eval
 
-   call cpu_time(ti)
    MyPE = getMyPE()
    delta = getFermiEnergyImagPart()
    pot_type = useStepFunctionForSigma()
@@ -1056,18 +1055,10 @@ contains
        endif
      enddo
    enddo
-
-!  Print calculated results to output file
-!  --------------------------------------------------------------------
-   if (MyPE == 0) then
-     call writeMatrix('sigma', sigma, 3, 3, n_spin_pola)
-     call writeMatrix('sigmatilde', sigmatilde, 3, 3, n_spin_pola)
-     call writeMatrix('sigmatilde2', sigmatilde2, 3, 3, n_spin_pola)
-     call writeMatrix('sigmatilde3', sigmatilde3, 3, 3, n_spin_pola)
-     call writeMatrix('sigmatilde4', sigmatilde4, 3, 3, n_spin_pola)
-!  --------------------------------------------------------------------
-     call cpu_time(tf)
-     write(*,*) "Time: ", tf-ti, " seconds"
+   
+   if (useCubicSymmetryForSigma()) then
+     sigma(2,2,:) = sigma(1,1,:)
+     sigma(3,3,:) = sigma(1,1,:)
    endif
 
    end subroutine calConductivity
