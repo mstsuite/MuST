@@ -86,7 +86,7 @@ contains
    include '../lib/arrayTools.F90'
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine initCurrentMatrixModule(energy, num_atoms, lmaxkkr, lmaxphi, lmaxgreen,  &
+   subroutine initCurrentMatrixModule(num_atoms, lmaxkkr, lmaxphi, lmaxgreen,  &
                               pola, cant, rel, istop, iprint, mode, vc)
 !  ===================================================================
    use RadialGridModule, only : getNumRmesh, getMaxNumRmesh
@@ -109,7 +109,6 @@ contains
    integer (kind=IntKind), intent(in) :: iprint(num_atoms)
    integer (kind=IntKind), intent(in) :: mode
    
-   complex (kind=CmplxKind), intent(in) :: energy
    logical, intent(in) :: vc
 
    integer (kind=LongIntKind) :: wspace_size, gspace_size

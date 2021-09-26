@@ -95,6 +95,7 @@ Modules_2 = \
 ../../MST/bin/GFMethodModule.o
 
 Modules_Kubo = \
+KuboDataModule.o \
 CurrentMatrixModule.o \
 ConductivityModule.o
 
@@ -160,7 +161,7 @@ Routines = \
 all: $(ODIR)/../../MST/bin/preproc print_version $(ODIR)/$(EXEC_NAME)
 
 print_version:
-	cd $(TOP_DIR) && ./src/get_svn.sh ./src/print_version_include.h
+	cd $(TOP_DIR) && ../MST/src/get_svn.sh ./src/print_version_include.h
 	rm -f $(ODIR)/print_version.o
 
 $(ODIR)/preproc: preproc.o

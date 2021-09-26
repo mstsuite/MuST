@@ -54,7 +54,7 @@ contains
    include '../lib/arrayTools.F90'
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine initConductivity(energy, num_atoms, lmaxkkr, lmaxphi, lmaxgreen,  &
+   subroutine initConductivity(num_atoms, lmaxkkr, lmaxphi, lmaxgreen,  &
                               pola, cant, rel, istop, iprint, vc)
 !  ===================================================================
    use RadialGridModule, only : getNumRmesh, getMaxNumRmesh
@@ -75,7 +75,6 @@ contains
    character (len=*), intent(in) :: istop
    integer (kind=IntKind), intent(in) :: iprint(num_atoms)
    
-   complex (kind=CmplxKind), intent(in) :: energy
    logical, intent(in) :: vc
 
    integer (kind=IntKind) :: i, lmax_max, jmax, iend, kmax, NumSpecies, NumPolyhedra
@@ -177,7 +176,7 @@ contains
    enddo
 
 !  -------------------------------------------------------------------
-   call initCurrentMatrixModule(energy, num_atoms, lmaxkkr, lmaxphi, &
+   call initCurrentMatrixModule(num_atoms, lmaxkkr, lmaxphi, &
            lmaxgreen, pola, cant, rel, istop, iprint, mode, vc)
 !  -------------------------------------------------------------------
 
@@ -982,13 +981,12 @@ contains
 !  ===================================================================
    
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calConductivity(LocalNumAtoms, n_spin_pola)
+   subroutine calConductivity(efermi, LocalNumAtoms, n_spin_pola)
 !  ===================================================================
 
    use SSSolverModule, only : solveSingleScattering
-   use ScfDataModule, only : getFermiEnergyImagPart, isFermiEnergyRealPart, &
+   use KuboDataModule, only : getFermiEnergyImagPart, isFermiEnergyRealPart, &
      useStepFunctionForSigma, useCubicSymmetryForSigma, getFermiEnergyRealPart
-   use ValenceDensityModule, only : getFermiEnergy
    use WriteMatrixModule, only : writeMatrix
    use CrystalMatrixModule, only : calCrystalMatrix, retrieveTauSRO
    use CPAMediumModule, only : computeCPAMedium, populateBigTCPA, getSingleSiteMatrix
@@ -998,7 +996,8 @@ contains
 
    integer (kind=IntKind), intent(in) :: LocalNumAtoms, n_spin_pola
    integer (kind=IntKind) :: id, is, pot_type, dirnum, MyPE
-   real (kind=RealKind) :: delta, efermi, ti, tf
+   real (kind=RealKind), intent(in) :: efermi
+   real (kind=RealKind) :: delta, ti, tf
    complex (kind=CmplxKind) :: eval
 
    call cpu_time(ti)
@@ -1012,7 +1011,6 @@ contains
      dirnum = 3
    endif
 
-   efermi = getFermiEnergy()
    if (isFermiEnergyRealPart()) then
      eval = getFermiEnergyRealPart() + SQRTm1*delta
    else
@@ -1062,11 +1060,11 @@ contains
 !  Print calculated results to output file
 !  --------------------------------------------------------------------
    if (MyPE == 0) then
-     call writeMatrix('sigma', sigma, dirnum, dirnum, n_spin_pola)
-     call writeMatrix('sigmatilde', sigmatilde, dirnum, dirnum, n_spin_pola)
-     call writeMatrix('sigmatilde2', sigmatilde2, dirnum, dirnum, n_spin_pola)
-     call writeMatrix('sigmatilde3', sigmatilde3, dirnum, dirnum, n_spin_pola)
-     call writeMatrix('sigmatilde4', sigmatilde4, dirnum, dirnum, n_spin_pola)
+     call writeMatrix('sigma', sigma, 3, 3, n_spin_pola)
+     call writeMatrix('sigmatilde', sigmatilde, 3, 3, n_spin_pola)
+     call writeMatrix('sigmatilde2', sigmatilde2, 3, 3, n_spin_pola)
+     call writeMatrix('sigmatilde3', sigmatilde3, 3, 3, n_spin_pola)
+     call writeMatrix('sigmatilde4', sigmatilde4, 3, 3, n_spin_pola)
 !  --------------------------------------------------------------------
      call cpu_time(tf)
      write(*,*) "Time: ", tf-ti, " seconds"
