@@ -8,7 +8,9 @@ public :: initQuadraticMatrix,    &
           solveLinearEquation,    &  ! Solve    s1*delta+s2*delta^2 = 0 equation
           getEigenValue,          &
           getEigenVector,         &
-          getEigenMatrix,         &
+          getAuxiliaryMatrix,     &
+          getResidualMatrix,      &
+          isQuadraticMatrixInitialized,&
           endQuadraticMatrix
 !
           interface getEigenValue
@@ -18,6 +20,7 @@ public :: initQuadraticMatrix,    &
 private
    logical :: isGeneral
    logical :: isLinear
+   logical :: isInitialized = .false.
 !
    integer (kind=IntKind) :: ndim, ndim2
    integer (kind=IntKind), allocatable :: ipiv(:)
@@ -27,7 +30,8 @@ private
    complex (kind=CmplxKind), allocatable :: tw(:), a2m(:,:), S1inv(:,:), S2inv(:,:)
    complex (kind=CmplxKind), allocatable, target :: EigenVectorR(:), EigenValue(:)
    complex (kind=CmplxKind), allocatable, target :: EigenVectorL(:), EVLL(:)
-   complex (kind=CmplxKind), allocatable, target :: EigenMatrix(:,:)
+   complex (kind=CmplxKind), allocatable, target :: AuxiliaryMatrix(:,:)
+   complex (kind=CmplxKind), allocatable, target :: ResidualMatrix(:,:)
 !
    integer (kind=IntKind) :: LWORK, LWMAX
    real (kind=RealKind), allocatable :: RWORK(:)
@@ -49,9 +53,9 @@ contains
       isGeneral = .false.
    endif
 !
-   if (isGen) then
+   if (isGeneral) then
       call WarningHandler('initQuadraticMatrix','isGenral scheme is enabled!', &
-                          'It needs to check the algebra for SubEigenMatrix')
+                          'It needs to check the algebra for getResidualMatrix')
    endif
 !
    ndim = n
@@ -66,7 +70,8 @@ contains
    allocate(qm(ndim2,ndim2), rm(ndim2,ndim2), S1inv(ndim,ndim))
    allocate(EigenVectorR(ndim2*ndim2), EigenValue(ndim2))
    allocate(EigenVectorL(ndim2*ndim2), Qmatrix(ndim2,ndim2), EVLL(ndim))
-   allocate(EigenMatrix(ndim,ndim))
+   allocate(AuxiliaryMatrix(ndim,ndim))
+   allocate(ResidualMatrix(ndim,ndim))
 !
    isLinear = .false.
 !
@@ -79,6 +84,8 @@ contains
    endif
    allocate(RWORK0(8*ndim))
 !
+   isInitialized = .true.
+!
    end subroutine initQuadraticMatrix
 !  ===================================================================
 !
@@ -90,12 +97,29 @@ contains
    implicit   none
 !
    deallocate(am, a2m, dm, S1inv, S2inv, ipiv, tw, Qmatrix)
-   deallocate(qm, rm, EigenVectorR, EigenValue, EigenVectorL, EVLL, EigenMatrix)
+   deallocate(qm, rm, EigenVectorR, EigenValue, EigenVectorL, EVLL)
+   deallocate(AuxiliaryMatrix, ResidualMatrix)
    deallocate(CWORK, RWORK, RWORK0)
 !
    isLinear = .false.
 !
+   isInitialized = .false.
+!
    end subroutine endQuadraticMatrix
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isQuadraticMatrixInitialized() result(y)
+!  ===================================================================
+   implicit   none
+!
+   logical :: y
+!
+   y = isInitialized
+!
+   end function isQuadraticMatrixInitialized
 !  ===================================================================
 !
 !  *******************************************************************
@@ -472,10 +496,11 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getEigenMatrix(i) result(a)
+   function getResidualMatrix(i) result(a)
 !  ===================================================================
 !
 !  Returns: a = vr((n-1)*ndim+1:n*ndim,i) * vl(i,(m-1)*ndim+1:m*ndim)
+!                                         * S2^{-1}
 !
 !  Here: vr = EigenVectorR is the right-side eigenvector
 !        vl = EigenVectorL is the left-side eigenvector
@@ -490,7 +515,7 @@ contains
    complex (kind=CmplxKind) :: c
 !
    if (i < 1 .or. i > ndim2 .or. (isLinear .and. i > ndim)) then
-      call ErrorHandler('getSubEigenMatrix','Invalid eigenvector index',i)
+      call ErrorHandler('getResidualMatrix','Invalid eigenvector index',i)
    endif
 !
    if (isLinear) then
@@ -507,12 +532,75 @@ contains
          c = c + EigenVectorL(k0+j)*S2inv(j,k)  ! Multiplied by S2^{-1}
       enddo
       do j = 1, ndim
-         EigenMatrix(j,k) = EigenVectorR(m0+j)*c
+         ResidualMatrix(j,k) = EigenVectorR(m0+j)*c
       enddo
    enddo
 !
-   a => EigenMatrix
+   a => ResidualMatrix
 !
-   end function getEigenMatrix
+   end function getResidualMatrix
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getAuxiliaryMatrix(n,DegenTol) result(a)
+!  ===================================================================
+!
+!  Returns: a = sum_j vr((n-1)*ndim+1:n*ndim,j) * vl(j,(m-1)*ndim+1:m*ndim)
+!               j<>i                            / (ei - ej)
+!
+!  Here: vr = EigenVectorR is the right-side eigenvector
+!        vl = EigenVectorL is the left-side eigenvector
+!  *******************************************************************
+   implicit   none
+!
+   integer (kind=IntKind), intent(in) :: n
+!
+   real (kind=RealKind), intent(in) :: DegenTol
+!
+   integer (kind=IntKind) :: i, j, k, k0, m0, n0, n02, nv
+!
+   complex (kind=CmplxKind), pointer :: a(:,:)
+   complex (kind=CmplxKind) :: c, de
+!
+   if (n < 1 .or. n > ndim2 .or. (isLinear .and. n > ndim)) then
+      call ErrorHandler('getAuxiliaryMatrix','Invalid eigenvector index',i)
+   endif
+!
+   if (isLinear) then
+      nv = ndim
+   else
+      nv = ndim2
+   endif
+!
+   AuxiliaryMatrix = CZERO
+   do i = 1, nv
+      de = EigenValue(n) - EigenValue(i)
+      if (abs(de) > DegenTol) then
+!        de = real(EigenValue(n),kind=RealKind) - EigenValue(i)
+         if (isLinear) then
+            m0 = (i-1)*ndim
+            k0 = m0
+         else
+            m0 = (i-1)*ndim2
+            k0 = m0 + ndim
+         endif
+!
+         do k = 1, ndim
+            c = CZERO
+            do j = 1, ndim
+               c = c + EigenVectorL(k0+j)*S2inv(j,k)  ! Multiplied by S2^{-1}
+            enddo
+            do j = 1, ndim
+               AuxiliaryMatrix(j,k) = AuxiliaryMatrix(j,k) + EigenVectorR(m0+j)*c/de
+            enddo
+         enddo
+      endif
+   enddo
+!
+   a => AuxiliaryMatrix
+!
+   end function getAuxiliaryMatrix
 !  ===================================================================
 end module QuadraticMatrixModule

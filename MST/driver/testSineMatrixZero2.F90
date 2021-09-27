@@ -1,4 +1,4 @@
-program testSineMatrixPole
+program testSineMatrixZero
    use KindParamModule, only : IntKind, RealKind, CmplxKind
 !
    use MathParamModule, only : ZERO, TEN2m8, TEN2m6, TEN2m3, FIVE
@@ -125,11 +125,11 @@ program testSineMatrixPole
    integer (kind=IntKind), allocatable :: lmax_tmp(:)
    integer (kind=IntKind), allocatable :: ngr(:), ngt(:)
    integer (kind=IntKind), allocatable :: GlobalIndex(:)
-   integer (kind=IntKind), allocatable :: NumPoles(:,:)
+   integer (kind=IntKind), allocatable :: NumZeros(:,:)
 !
    real (kind=RealKind), allocatable :: AtomPosition(:,:)
    real (kind=RealKind), pointer :: bravais(:,:)
-   real (kind=RealKind), allocatable :: Poles(:,:,:)
+   real (kind=RealKind), allocatable :: Zeros(:,:,:)
    real (kind=RealKind), allocatable :: evec(:,:)
 !
    real (kind=RealKind) :: Efermi
@@ -265,7 +265,7 @@ program testSineMatrixPole
 !     ----------------------------------------------------------------
    else
 !     ----------------------------------------------------------------
-      call ErrorHandler('testSineMatrixPole','Bravais vector data does not exist')
+      call ErrorHandler('testSineMatrixZero','Bravais vector data does not exist')
 !     ----------------------------------------------------------------
    endif
 !
@@ -350,23 +350,23 @@ program testSineMatrixPole
 !  call plotSinDet(ErBottom, Efermi, 1000,                   &
 !                  LocalNumAtoms, n_spin_pola, lmax_kkr)
 !  -------------------------------------------------------------------
-   allocate( NumPoles(LocalNumAtoms,n_spin_pola) )
-   allocate( Poles((lmax_kkr_max+2)**2,LocalNumAtoms,n_spin_pola) )
+   allocate( NumZeros(LocalNumAtoms,n_spin_pola) )
+   allocate( Zeros((lmax_kkr_max+2)**2,LocalNumAtoms,n_spin_pola) )
 !  if(ErBottom < -ZeroIntHalfWidth) then
 !     t1 = getTime()
 !     -------------------------------------------------------------------
-!     call calQuadraticPoles(LocalNumAtoms,lmax_kkr,lmax_phi,            &
+!     call calQuadraticZeros(LocalNumAtoms,lmax_kkr,lmax_phi,            &
 !                            n_spin_pola,ErBottom,-ZeroIntHalfWidth,     &
-!                            (lmax_kkr_max+1)**2,NumPoles,Poles)
+!                            (lmax_kkr_max+1)**2,NumZeros,Zeros)
 !     -------------------------------------------------------------------
 !     write(6,'(/,a,f12.5,a,/)') 'Quadratic technique time: ',getTime() - t1,' sec.'
 !     do is = 1,n_spin_pola
 !        do id = 1,LocalNumAtoms
 !           write(6,'(a,i3,a,i3)')'Spin index: ',is,',  Atom index: ',id
 !           write(6,'(a,f13.8,a,f13.8,a,i5)')'The Number of poles found within (',ErBottom,', ', &
-!                                             -ZeroIntHalfWidth,'): ',NumPoles(id,is)
-!           do i = 1, NumPoles(id,is)
-!              write(6,'(f20.12)')Poles(i,id,is)
+!                                             -ZeroIntHalfWidth,'): ',NumZeros(id,is)
+!           do i = 1, NumZeros(id,is)
+!              write(6,'(f20.12)')Zeros(i,id,is)
 !           enddo
 !        enddo
 !     enddo
@@ -375,10 +375,10 @@ program testSineMatrixPole
 !  if (ErBottom <= ZeroIntHalfWidth) then
 !     t1 = getTime()
 !     -------------------------------------------------------------------
-!     call calQuadraticPoles(LocalNumAtoms,lmax_kkr,lmax_phi,            &
+!     call calQuadraticZeros(LocalNumAtoms,lmax_kkr,lmax_phi,            &
 !                            n_spin_pola,-ZeroIntHalfWidth,              &
 !                            ZeroIntHalfWidth,(lmax_kkr_max+1)**2,       &
-!                            NumPoles,Poles,.true.)
+!                            NumZeros,Zeros,.true.)
 !     -------------------------------------------------------------------
 !     write(6,'(/,a,f12.5,a,/)') 'Quadratic technique time: ',getTime() - t1,' sec.'
 !     do is = 1,n_spin_pola
@@ -386,18 +386,18 @@ program testSineMatrixPole
 !           write(6,'(a,i3,a,i3)')'Spin index: ',is,',  Atom index: ',id
 !           write(6,'(a,f13.8,a,f13.8,a,i5)')'The Number of poles found within (',  &
 !                                             -ZeroIntHalfWidth,', ',               &
-!                                             ZeroIntHalfWidth,'): ',NumPoles(id,is)
-!           do i = 1, NumPoles(id,is)
-!              write(6,'(f20.12)')Poles(i,id,is)
+!                                             ZeroIntHalfWidth,'): ',NumZeros(id,is)
+!           do i = 1, NumZeros(id,is)
+!              write(6,'(f20.12)')Zeros(i,id,is)
 !           enddo
 !        enddo
 !     enddo
 !
 !     t1 = getTime()
 !     -------------------------------------------------------------------
-!     call calQuadraticPoles(LocalNumAtoms,lmax_kkr,lmax_phi,            &
+!     call calQuadraticZeros(LocalNumAtoms,lmax_kkr,lmax_phi,            &
 !                            n_spin_pola,ZeroIntHalfWidth,Efermi,        &
-!                            (lmax_kkr_max+1)**2,NumPoles,Poles)
+!                            (lmax_kkr_max+1)**2,NumZeros,Zeros)
 !     -------------------------------------------------------------------
 !     write(6,'(/,a,f12.5,a,/)') 'Quadratic technique time: ',getTime() - t1,' sec.'
 !     do is = 1,n_spin_pola
@@ -405,18 +405,18 @@ program testSineMatrixPole
 !           write(6,'(a,i3,a,i3)')'Spin index: ',is,',  Atom index: ',id
 !           write(6,'(a,f13.8,a,f13.8,a,i5)')'The Number of poles found within (',  &
 !                                            ZeroIntHalfWidth,', ',                 &
-!                                            Efermi,'): ',NumPoles(id,is)
-!           do i = 1, NumPoles(id,is)
-!              write(6,'(f20.12)')Poles(i,id,is)
+!                                            Efermi,'): ',NumZeros(id,is)
+!           do i = 1, NumZeros(id,is)
+!              write(6,'(f20.12)')Zeros(i,id,is)
 !           enddo
 !        enddo
 !     enddo
 !  else
 !     t1 = getTime()
 !     -------------------------------------------------------------------
-!     call calQuadraticPoles(LocalNumAtoms,lmax_kkr,lmax_phi,            &
+!     call calQuadraticZeros(LocalNumAtoms,lmax_kkr,lmax_phi,            &
 !                            n_spin_pola,ErBottom,Efermi,                &
-!                            (lmax_kkr_max+1)**2,NumPoles,Poles)
+!                            (lmax_kkr_max+1)**2,NumZeros,Zeros)
 !     -------------------------------------------------------------------
 !     write(6,'(/,a,f12.5,a,/)') 'Quadratic technique time: ',getTime() - t1,' sec.'
 !     do is = 1,n_spin_pola
@@ -424,31 +424,31 @@ program testSineMatrixPole
 !           write(6,'(a,i3,a,i3)')'Spin index: ',is,',  Atom index: ',id
 !           write(6,'(a,f13.8,a,f13.8,a,i5)')'The Number of poles found within (',  &
 !                                            ErBottom,', ',                 &
-!                                            Efermi,'): ',NumPoles(id,is)
-!           do i = 1, NumPoles(id,is)
-!              write(6,'(f20.12)')Poles(i,id,is)
+!                                            Efermi,'): ',NumZeros(id,is)
+!           do i = 1, NumZeros(id,is)
+!              write(6,'(f20.12)')Zeros(i,id,is)
 !           enddo
 !        enddo
 !     enddo
 !  endif
    t1 = getTime()
 !  -------------------------------------------------------------------
-!  call calQuadraticPoles2(LocalNumAtoms,lmax_kkr,lmax_phi,            &
+!  call calQuadraticZeros2(LocalNumAtoms,lmax_kkr,lmax_phi,            &
 !                         n_spin_pola,ZeroIntHalfWidth,Efermi)
 !  -------------------------------------------------------------------
    write(6,'(/,a,f12.5,a,/)') 'Quadratic technique time: ',getTime() - t1,' sec.'
 !
 !  -------------------------------------------------------------------
-!  call calGoldenPoles(LocalNumAtoms,lmax_kkr,n_spin_pola,            &
+!  call calGoldenZeros(LocalNumAtoms,lmax_kkr,n_spin_pola,            &
 !                      ZeroIntHalfWidth,Efermi)
 !  -------------------------------------------------------------------
 !
    t1 = getTime()
 !  -------------------------------------------------------------------
-   call calMinPoles(LocalNumAtoms,lmax_kkr,n_spin_pola,               &
+   call calMinZeros(LocalNumAtoms,lmax_kkr,n_spin_pola,               &
                     ErBottom,-ZeroIntHalfWidth)
 !  -------------------------------------------------------------------
-   call calMinPoles(LocalNumAtoms,lmax_kkr,n_spin_pola,               &
+   call calMinZeros(LocalNumAtoms,lmax_kkr,n_spin_pola,               &
                     ZeroIntHalfWidth,Efermi)
 !  -------------------------------------------------------------------
    write(6,'(/,a,f12.5,a,/)') 'Minimization technique time: ',getTime() - t1,' sec.'
@@ -458,7 +458,7 @@ program testSineMatrixPole
 !  ===================================================================
    deallocate( atom_print_level )
    deallocate( AtomPosition,AtomicNumber,lmax_kkr,lmax_phi,lmax_rho,lmax_pot )
-   deallocate( lmax_step, GlobalIndex, Poles, evec )
+   deallocate( lmax_step, GlobalIndex, Zeros, evec )
 !
    if (node_print_level >= 0) then
       write(6,*) " Run Ending! "
@@ -500,11 +500,11 @@ program testSineMatrixPole
    else
       stop
    endif
-end program testSineMatrixPole
+end program testSineMatrixZero
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calQuadraticPoles(LocalNumAtoms,lkkr,lphi,              &
-                                n_spin_pola,eb,et,ldp,NumPoles,Poles, &
+   subroutine calQuadraticZeros(LocalNumAtoms,lkkr,lphi,              &
+                                n_spin_pola,eb,et,ldp,NumZeros,Zeros, &
                                 isZeroInterval)
 !  ===================================================================
    use KindParamModule, only : IntKind, RealKind, CmplxKind
@@ -528,7 +528,7 @@ end program testSineMatrixPole
    integer (kind=IntKind), intent(in) :: lkkr(1:LocalNumAtoms)
    integer (kind=IntKind), intent(in) :: lphi(1:LocalNumAtoms)
    integer (kind=IntKind), intent(in) :: n_spin_pola,ldp
-   integer (kind=IntKind), intent(out) :: NumPoles(LocalNumAtoms,n_spin_pola)
+   integer (kind=IntKind), intent(out) :: NumZeros(LocalNumAtoms,n_spin_pola)
 !
    integer (kind=IntKind) :: id, ie, is, iw, n, kmax_kkr, NumWindows, info
    integer (kind=IntKind) :: i, j, l, m, kl, lp, mp, klp, nv
@@ -540,7 +540,7 @@ end program testSineMatrixPole
    real (kind=RealKind), parameter :: WindowWidth = 4.05*Delta
    real (kind=RealKind), intent(in) :: eb, et
    real (kind=RealKind) :: e0, de, de2, dede2, pe, w0
-   real (kind=RealKind), intent(out) :: Poles(2*ldp,LocalNumAtoms,n_spin_pola)
+   real (kind=RealKind), intent(out) :: Zeros(2*ldp,LocalNumAtoms,n_spin_pola)
 !
    complex (kind=CmplxKind) :: e, kappa, a2l, a2lp
    complex (kind=CmplxKind), pointer :: sin_mat(:,:)
@@ -549,7 +549,7 @@ end program testSineMatrixPole
    complex (kind=CmplxKind), pointer :: pv(:)
 !
    if (eb > et) then
-      call ErrorHandler('calQuadraticPoles','eb > et',eb,et)
+      call ErrorHandler('calQuadraticZeros','eb > et',eb,et)
    endif
 !
    if(.not.present(isZeroInterval)) isZeroInterval = .false.
@@ -752,13 +752,13 @@ end program testSineMatrixPole
                   if (pe >= w0 .and. pe <= w0+WindowWidth              &
                       .and. abs(pe) > Ten2m8) then
                      n = n + 1
-                     Poles(n,id,is) = pe
-!                    write(6,'(4x,a,e20.12)')'Pole Found:',pe
+                     Zeros(n,id,is) = pe
+!                    write(6,'(4x,a,e20.12)')'Zero Found:',pe
                   endif
                endif
             enddo
          enddo
-         NumPoles(id,is) = n
+         NumZeros(id,is) = n
       enddo
    enddo
 !
@@ -778,11 +778,11 @@ end program testSineMatrixPole
    write(6,*)'OK1'
    call FlushFile(6)
 !
-   end subroutine calQuadraticPoles
+   end subroutine calQuadraticZeros
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calQuadraticPoles2(LocalNumAtoms,lkkr,lphi,              &
+   subroutine calQuadraticZeros2(LocalNumAtoms,lkkr,lphi,              &
                                 n_spin_pola,eb,et)
 !  ===================================================================
    use KindParamModule, only : IntKind, RealKind, CmplxKind
@@ -841,7 +841,7 @@ end program testSineMatrixPole
    end interface
 !
    if (eb > et) then
-      call ErrorHandler('calQuadraticPoles2','eb > et',eb,et)
+      call ErrorHandler('calQuadraticZeros2','eb > et',eb,et)
    endif
 !
    de = Delta
@@ -998,7 +998,7 @@ end program testSineMatrixPole
                if(abs(e0-e0new) < TEN2m6) exit
                e0 = e0new
             enddo
-            call calGoldenPoles(LocalNumAtoms,lkkr,n_spin_pola,       &
+            call calGoldenZeros(LocalNumAtoms,lkkr,n_spin_pola,       &
                                 e0-GoldenWidth,e0+GoldenWidth)
          enddo
       enddo
@@ -1009,7 +1009,7 @@ end program testSineMatrixPole
 !
    deallocate( s0,s1,s2,sT,sTs,ScalingFactors )
 !
-   end subroutine calQuadraticPoles2
+   end subroutine calQuadraticZeros2
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -1243,7 +1243,7 @@ end program testSineMatrixPole
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calGoldenPoles(LocalNumAtoms,lkkr,n_spin_pola,eb,et)
+   subroutine calGoldenZeros(LocalNumAtoms,lkkr,n_spin_pola,eb,et)
 !  ===================================================================
    use KindParamModule, only : IntKind, RealKind, CmplxKind
 !
@@ -1296,7 +1296,7 @@ end program testSineMatrixPole
    end interface
 !
    if (eb > et) then
-      call ErrorHandler('calGoldenPoles','eb > et',eb,et)
+      call ErrorHandler('calGoldenZeros','eb > et',eb,et)
    endif
 !
    WindowWidth = (et-eb)/NumWindows
@@ -1312,7 +1312,7 @@ end program testSineMatrixPole
    call calScalingFactors(ScalingFactors,kmax_kkr)
    sfac2inv = ONE/(ScalingFactors(1)*ScalingFactors(1))
 !
-   write(6,*)'calGoldenPoles::'
+   write(6,*)'calGoldenZeros::'
    do is = 1,n_spin_pola
       do id = 1,LocalNumAtoms
          if ((lkkr(id)+1)**2 /= kmax_kkr) then
@@ -1491,11 +1491,11 @@ end program testSineMatrixPole
    deallocate( s0,sT,sTs,ScalingFactors )
    deallocate(s0diag, s1diag, s2diag, s3diag)
 !
-   end subroutine calGoldenPoles
+   end subroutine calGoldenZeros
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calMinPoles(LocalNumAtoms,lkkr,n_spin_pola,ebot,etop)
+   subroutine calMinZeros(LocalNumAtoms,lkkr,n_spin_pola,ebot,etop)
 !  ===================================================================
    use KindParamModule, only : IntKind, RealKind
 !
@@ -1518,7 +1518,7 @@ end program testSineMatrixPole
    real (kind=RealKind), allocatable :: MaxValues(:), MinValues(:)
 !
    if (ebot > etop) then
-      call ErrorHandler('calMinPoles','eb > et',ebot,etop)
+      call ErrorHandler('calMinZeros','eb > et',ebot,etop)
    endif
 !
    et = etop
@@ -1530,7 +1530,7 @@ end program testSineMatrixPole
       if(et > -TEN2m6) et = -TEN2m6
       if(eb > -TEN2m6) eb = -TEN2m6-eStep
    else
-      call ErrorHandler('calManPoles','eb and et opposite sign',  &
+      call ErrorHandler('calManZeros','eb and et opposite sign',  &
                         eb,et)
    endif
 !
@@ -1553,7 +1553,7 @@ end program testSineMatrixPole
             allocate(MinChannels(kmax_kkr), MinValues(kmax_kkr))
          endif
 !
-         write(6,'(a,e20.12,a,e20.12,a)')'calMinPoles:: Energy range = (', &
+         write(6,'(a,e20.12,a,e20.12,a)')'calMinZeros:: Energy range = (', &
                                        eb,',',et,')'
          write(6,'(2(4x,a,i3))')'Atom:',id,'Spin:',is
 !        -------------------------------------------------------------
@@ -1568,7 +1568,7 @@ end program testSineMatrixPole
                             MinValues, numMin, numMax)
 !        -------------------------------------------------------------
 !
-         write(6,'(8x,a,i4)')'Num Poles Found:',numMin
+         write(6,'(8x,a,i4)')'Num Zeros Found:',numMin
          do ic = 1, numMax
             kl = MinChannels(ic)
             if(kl == 0) cycle
@@ -1580,7 +1580,7 @@ end program testSineMatrixPole
 !
    deallocate(MaxChannels, MaxValues, MinChannels, MinValues)
 !
-   end subroutine calMinPoles
+   end subroutine calMinZeros
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc

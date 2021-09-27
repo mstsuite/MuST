@@ -16,6 +16,8 @@ program testSMatrixPoles
    use ScfDataModule, only : ngaussr, ngaussq
    use ScfDataModule, only : pole_step
 !
+   use InputModule, only : getKeyValue
+!
    use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies
 !
    use MathParamModule, only : ZERO, TEN2m8, TEN2m6, THIRD, HALF, ONE, TWO, PI, FIVE, PI2, PI4, &  
@@ -91,7 +93,7 @@ program testSMatrixPoles
    integer (kind=IntKind) :: kmax_kkr, kmax_kkr_max, jmax_rho_max
    integer (kind=IntKind) :: id, ig, is, ia, i, ib, jl, l, m, numc
    integer (kind=IntKind) :: RelativisticFlag
-   integer (kind=IntKind) :: node_print_level
+   integer (kind=IntKind) :: node_print_level, rstatus
 !
    integer (kind=IntKind), allocatable :: atom_print_level(:)
    integer (kind=IntKind), allocatable :: GlobalIndex(:)
@@ -109,7 +111,7 @@ program testSMatrixPoles
    real (kind=RealKind), pointer :: bravais(:,:)
    real (kind=RealKind), pointer :: r_mesh(:)
    real (kind=RealKind), allocatable :: AtomPosition(:,:)
-   real (kind=RealKind) :: t0, t1, t2, ebot, etop, rfac, Efermi
+   real (kind=RealKind) :: t0, t1, t2, ebot, etop, rfac, Efermi, resonance_width
    real (kind=RealKind), pointer :: ec(:)
 !
    real (kind=RealKind), parameter :: ZeroIntHalfWidth = TEN2m6
@@ -198,6 +200,8 @@ program testSMatrixPoles
                          lmax_kkr,lmax_rho,iprint=0)
 !  -------------------------------------------------------------------
 !
+   rstatus = getKeyValue(1,'Resonance State Max Width (>0.0)',resonance_width)
+!
    t1 = getTime()
    do id = 1,LocalNumAtoms
       do ia = 1, getLocalNumSpecies(id)
@@ -211,7 +215,7 @@ program testSMatrixPoles
             etop = Efermi; ebot = ErBottom
 !           ---------------------------------------------------------
             call findSMatrixPoles(id,ia,is,ebot,etop,Delta=pole_step, &
-                                  MaxResWidth = 0.02d0,               &
+                                  MaxResWidth = resonance_width,      &
                                   CheckPoles =.false.)
 !           ---------------------------------------------------------
             call computeBoundStateDensity(id,ia,is)

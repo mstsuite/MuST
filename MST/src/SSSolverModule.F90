@@ -6790,7 +6790,7 @@ use MPPModule, only : MyPE, syncAllPEs
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine computeGF0(spin,site,atom)
+   subroutine computeGF0(spin,site,atom,noIrrTerm)
 !  ===================================================================
    use SystemSymmetryModule, only : getSymmetryFlags
 !
@@ -6804,6 +6804,9 @@ use MPPModule, only : MyPE, syncAllPEs
    integer (kind=IntKind) :: kmax_green_loc, kmax_kkr_loc, kmax_phi_loc
    integer (kind=IntKind), pointer :: green_flags(:)
 !
+   logical, intent(in), optional :: noIrrTerm
+   logical :: withIrrTerm
+!
    complex (kind=CmplxKind) :: cmat, cfac
    complex (kind=CmplxKind), pointer :: green(:,:)
    complex (kind=CmplxKind), pointer :: der_green(:,:)
@@ -6816,7 +6819,13 @@ use MPPModule, only : MyPE, syncAllPEs
    complex (kind=CmplxKind), pointer :: mat(:,:), sin_t(:,:), sin_mat(:,:)
    complex (kind=CmplxKind), pointer :: p1c(:)
 !
-   if (IrrSolType /= 'H' .and. IrrSolType /= 'h') then
+   if ( present(noIrrTerm) ) then
+      withIrrTerm = .not. noIrrTerm
+   else
+      withIrrTerm = .true.
+   endif
+!
+   if (withIrrTerm .and. IrrSolType /= 'H' .and. IrrSolType /= 'h') then
       call ErrorHandler('computeGF0',                  &
               'Green function is not yet implemented for this bounday condition',IrrSolType)
    endif
@@ -6875,9 +6884,12 @@ use MPPModule, only : MyPE, syncAllPEs
    kmax_green_loc = Scatter(id)%kmax_green
    kmax_kkr_loc = Scatter(id)%kmax_kkr
    kmax_phi_loc = Scatter(id)%kmax_phi
-   sin_t => aliasArray2_c(wks_mtx1,kmax_phi,kmax_kkr)
-   mat => aliasArray2_c(wks_mtx2,kmax_kkr,kmax_phi)
    nr = Scatter(id)%numrs_cs
+!
+   if (withIrrTerm) then
+      sin_t => aliasArray2_c(wks_mtx1,kmax_phi,kmax_kkr)
+      mat => aliasArray2_c(wks_mtx2,kmax_kkr,kmax_phi)
+   endif
 !
    LOOP_ic: do ic = 1, Scatter(id)%NumSpecies
       if (present(atom)) then
@@ -6886,34 +6898,45 @@ use MPPModule, only : MyPE, syncAllPEs
          endif
       endif
       wfr_reg => Scatter(id)%Solutions(ic,is)%reg_sol
-      wfr_irr => Scatter(id)%Solutions(ic,is)%irr_sol
+      if (withIrrTerm) then
+         wfr_irr => Scatter(id)%Solutions(ic,is)%irr_sol
+      else
+         wfr_irr => Scatter(id)%Solutions(ic,is)%reg_sol
+      endif
       green => Scatter(id)%Solutions(ic,is)%green
       green = CZERO
       if (rad_deriv) then
          der_wfr_reg => Scatter(id)%Solutions(ic,is)%reg_dsol
-         der_wfr_irr => Scatter(id)%Solutions(ic,is)%irr_dsol
+         if (withIrrTerm) then
+            der_wfr_irr => Scatter(id)%Solutions(ic,is)%irr_dsol
+         else
+            der_wfr_irr => Scatter(id)%Solutions(ic,is)%reg_dsol
+         endif
          der_green => Scatter(id)%Solutions(ic,is)%der_green
          der_green = CZERO
       endif
 !
 !     ================================================================
-!     compute [i*S - C]^{-1} 
+!     compute [i*S - C]^{-1} if withIrrTerm is true
 !     ================================================================
-      sin_mat => Scatter(id)%Solutions(ic,is)%sin_mat
-      do kl = 1,kmax_kkr
-         m = mofk(kl)
-         do klp = 1,kmax_phi
-            mp = mofk(klp)
-            sin_t(klp,kl) = m1m(m+mp)*sin_mat(klp-2*mp,kl-2*m)
+      if (withIrrTerm) then
+         sin_mat => Scatter(id)%Solutions(ic,is)%sin_mat
+         do kl = 1,kmax_kkr
+            m = mofk(kl)
+            do klp = 1,kmax_phi
+               mp = mofk(klp)
+               sin_t(klp,kl) = m1m(m+mp)*sin_mat(klp-2*mp,kl-2*m)
+            enddo
          enddo
-      enddo
-      OmegaHat_mat => Scatter(id)%Solutions(ic,is)%OmegaHat_mat
-!     ----------------------------------------------------------------
-      call zgemm( 'n', 't', kmax_kkr, kmax_phi, kmax_kkr, CONE,       &
-                  OmegaHat_mat, kmax_kkr, sin_t, kmax_phi, CZERO, mat, kmax_kkr)
-!     ----------------------------------------------------------------
+         OmegaHat_mat => Scatter(id)%Solutions(ic,is)%OmegaHat_mat
+!        -------------------------------------------------------------
+         call zgemm( 'n', 't', kmax_kkr, kmax_phi, kmax_kkr, CONE,       &
+                     OmegaHat_mat, kmax_kkr, sin_t, kmax_phi, CZERO, mat, kmax_kkr)
+!        -------------------------------------------------------------
+      else
+         mat => Scatter(id)%Solutions(ic,is)%OmegaHat_mat
+      endif
 !
-!     if ( SphericalSolver .or. isSphPotZeroOutsideRmt ) then
       if (isSphericalSolverOn) then
          do kl1 = 1, kmax_kkr_loc
             do i = 1, nj3(kl1,kl1)
@@ -6939,14 +6962,6 @@ use MPPModule, only : MyPE, syncAllPEs
             q_tmp => aliasArray2_c(wks_qlhat,Scatter(id)%numrs,kmax_phi_loc)
          endif
          do kl2 = 1, kmax_kkr_loc
-!!          p_tmp = CZERO
-!!          do kl1 = 1, kmax_kkr_loc
-!!             do kl1p = 1, kmax_phi_loc
-!!                do ir = 1, nr
-!!                   p_tmp(ir,kl1p) = p_tmp(ir,kl1p) + mat(kl1,kl2)*wfr_reg(ir,kl1p,kl1)
-!!                enddo
-!!             enddo
-!!          enddo
 !           ----------------------------------------------------------
             call zgemv('n',Scatter(id)%numrs*kmax_phi_loc,kmax_kkr_loc, &
                        CONE,wfr_reg,Scatter(id)%numrs*kmax_phi_loc,     &
@@ -6985,7 +7000,13 @@ use MPPModule, only : MyPE, syncAllPEs
          enddo
          nullify( p_tmp, q_tmp )
       endif
-      cfac = -SQRTm1*kappa
+!
+      if (withIrrTerm) then
+         cfac = -SQRTm1*kappa
+      else
+         cfac = kappa
+      endif
+!
       green = cfac*green
       if (rad_deriv) then
          der_green = cfac*der_green
