@@ -34,10 +34,6 @@ public :: initScfData,                 &
           isEmbeddedCluster,           &
           isKKRCPASRO,                 &
           isSROSCF,                    &
-          isConductivity,              &
-          useStepFunctionForSigma,     &
-          useCubicSymmetryForSigma,    &
-          includeVertexCorrections,    &
           isScreenKKR_LSMS,            &
           isSingleSite,                &
           isFrozenCore,                &
@@ -206,14 +202,6 @@ public
    real (kind=RealKind), private :: cvm_params(2)
    integer (kind=IntKind), private :: is_cvm = 0
 
-!  Conductivity Parameters
-   integer (kind=IntKind), private :: do_sigma = 0
-   integer (kind=IntKind), private :: use_sf = 1
-   integer (kind=IntKind), private :: use_csymm = 1
-   integer (kind=IntKind), private :: is_ef_rp = 0
-   integer (kind=IntKind), private :: vertex_corr = 1
-   real (kind=RealKind), private :: imag_part = 0.001
-   real (kind=RealKind), private :: sigma_real_part = 0.5
 !
 contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -513,14 +501,6 @@ contains
       call ErrorHandler('initScfData','Invalid efermi_mix_switch value',efermi_mix_switch)
    endif
 !
-   rstatus = getKeyValue(tbl_id,'Conductivity Calculation',do_sigma)
-   rstatus = getKeyValue(tbl_id,'Fermi Energy Imaginary Part',imag_part)
-   rstatus = getKeyValue(tbl_id,'Use Different Fermi Energy', is_ef_rp)
-   rstatus = getKeyValue(tbl_id,'Fermi Energy Real Part', sigma_real_part)
-   rstatus = getKeyValue(tbl_id,'Integrate Upto Muffin Tin', use_sf)
-   rstatus = getKeyValue(tbl_id,'Use Cubic Symmetry', use_csymm)
-   rstatus = getKeyValue(tbl_id,'Vertex Corrections', vertex_corr)
-
    end subroutine initScfData
 !  ===================================================================
 !
@@ -888,69 +868,6 @@ contains
    md = sro_scf
 
    end function isSROSCF
-!  ===================================================================
-!
-!  *******************************************************************
-!
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function isConductivity() result(md)
-!  ===================================================================
-   implicit none 
-   logical :: md
-!
-   if (do_sigma == 1) then
-      md = .true.
-   else
-      md = .false.
-   endif
-   end function isConductivity
-!  ===================================================================
-!
-!  *******************************************************************
-!
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function useStepFunctionForSigma() result(md)
-!  ===================================================================
-   implicit none
-   integer (kind=IntKind) :: md
-
-   md = use_sf
-   
-   end function useStepFunctionForSigma
-!  ===================================================================
-!
-!  *******************************************************************
-!
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function useCubicSymmetryForSigma() result(md)
-!  ===================================================================
-   implicit none
-   logical :: md
-
-   if (use_csymm == 0) then
-     md = .false.
-   else
-     md = .true.
-   endif
-   
-   end function useCubicSymmetryForSigma
-!  ===================================================================
-!
-!  *******************************************************************
-!
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function includeVertexCorrections() result(md)
-!  ===================================================================
-   implicit none
-   logical :: md
-
-   if (vertex_corr == 0) then
-     md = .false.
-   else
-     md = .true.
-   endif
-
-   end function includeVertexCorrections
 !  ===================================================================
 !
 !  *******************************************************************
@@ -1796,62 +1713,5 @@ contains
    mixing_switch = efermi_mix_switch
 !
    end function getMixingParamForFermiEnergy
-!  ===================================================================
-!
-!  *******************************************************************
-!  
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
-   function getFermiEnergyImagPart() result(del)
-!  ===================================================================
-   implicit none
-
-   real (kind=RealKind) :: del
-
-   if (.not. isConductivity()) then
-     call ErrorHandler('getFermiEnergyImagPart', 'You are not doing a &
-                     conductivity calculation')
-   endif
-   del = imag_part
-
-   end function getFermiEnergyImagPart
-!  ===================================================================
-!
-!  *******************************************************************
-!  
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
-   function isFermiEnergyRealPart() result(use_ef_rp)
-!  ===================================================================
-   implicit none
-
-   logical :: use_ef_rp
-
-   if (.not. isConductivity()) then
-     call ErrorHandler('getFermiEnergyImagPart', 'Choose SCF type option &
-                 6 for conductivity calculation')
-   endif
-
-   if (is_ef_rp == 0) then
-     use_ef_rp = .false.
-   else if (is_ef_rp == 1) then
-     use_ef_rp = .true.
-   endif   
-
-   end function isFermiEnergyRealPart
-!  ===================================================================
-!  
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
-   function getFermiEnergyRealPart() result(alt_ef)
-!  ===================================================================
-   implicit none
-
-   real (kind=RealKind) :: alt_ef
-
-   if (.not. isConductivity()) then
-     call ErrorHandler('getFermiEnergyImagPart', 'Choose SCF type option &
-                 6 for conductivity calculation')
-   endif
-   alt_ef = sigma_real_part
-
-   end function getFermiEnergyRealPart
 !  ===================================================================
 end module ScfDataModule

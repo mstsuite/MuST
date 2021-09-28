@@ -803,8 +803,6 @@ contains
    use RelSSSolverModule, only : SingleDiracScattering, computeRelSingleSiteDOS !xianglin
 !
    use MSSolverModule, only : initMSSolver, endMSSolver
-   use ConductivityModule, only : initConductivity, calConductivity, &
-                       endConductivity
    use ScfDataModule, only : includeVertexCorrections
    use RelMSSolverModule, only : initRelMSSolver, endRelMSSolver, computeRelMST, getRelMSDOS !xianglin
 !
@@ -821,7 +819,7 @@ contains
 !
    use ValenceDensityModule, only : getFermiEnergy
 !
-   use ScfDataModule, only : ErBottom, ErTop, isConductivity !xianglin 
+   use ScfDataModule, only : ErBottom, ErTop !xianglin 
 !
    implicit none
 !
@@ -850,7 +848,6 @@ contains
    call FlushFile(6)
 #endif
 !
-   vc = includeVertexCorrections()
    zvaltss = ZERO
    do id = 1,LocalNumAtoms
       do ia = 1, getLocalNumSpecies(id)
@@ -918,18 +915,7 @@ contains
                         lmax_kkr, lmax_phi, lmax_green, posi,            &
                         n_spin_pola, n_spin_cant, RelativisticFlag,      &
                         stop_routine, print_level, derivative=rad_derivative)
-      if (isConductivity()) then
-        call initConductivity(temp_en, LocalNumAtoms, lmax_kkr, lmax_phi, lmax_green, &
-               n_spin_pola, n_spin_cant, RelativisticFlag,stop_routine, print_level, vc)
-      endif
 !  -------------------------------------------------------------------
-   endif
-
-   if (isConductivity()) then
-     call calConductivity(LocalNumAtoms, n_spin_pola)
-     call endConductivity()
-     call StopHandler('calValenceStates', 'Conductivity Successfully Calculated', &
-                           force_to_print=.true.)
    endif
 !
    chempot = getFermiEnergy()
