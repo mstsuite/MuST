@@ -26,6 +26,8 @@ lsms/: contains LSMS and WL-LSMS codes targeted to extreme performance on petasc
 
 MST/: contains MST packages targeted to physics development and capabilities, e.g. FP/MT KKR/LSMS/KKR-CPA, etc.
 
+KUBO/: contains KUBO package for first-principles electrical conductivity calculation
+
 Potentials/: contains the starting potential for selected elements.
 
 Tutorials/: contains hands-on exercises and training materials.
