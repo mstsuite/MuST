@@ -375,7 +375,6 @@ contains
                    checkFreeElectronPoles, getFreeElectronPoleFactor
    use WriteMatrixModule,  only : writeMatrix
    use MatrixModule, only : computeUAUtc, setupUnitMatrix
-   use CrystalMatrixModule, only : calCrystalMatrix, setupSSMatrixBuf, computeMatrixBand
    use SystemModule, only : getLmaxKKR
    use CurrentMatrixModule, only : getLindex
 
@@ -419,8 +418,6 @@ contains
  
 !  ===================================================================
 !  Exchange single site scattering matrix among processes.
-!  -------------------------------------------------------------------
-!  call setupSSMatrixBuf(getSingleScatteringMatrix,method,site_config)
 !  -------------------------------------------------------------------
 !
    kGID = getGroupID('K-Mesh')
