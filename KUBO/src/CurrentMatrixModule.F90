@@ -11,6 +11,7 @@ public :: initCurrentMatrixModule, &
           calfx, &
           callsize, &
           kdelta, &
+          getLindex, &
           populateClebschGordanTable, & 
           getClebschGordanCoefficient, &
           calSFsum, &
@@ -457,6 +458,18 @@ contains
    endif
    
    end function kdelta
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getLindex(i) result(lval)
+!  ===================================================================
+
+   integer (kind=IntKind), intent(in) :: i
+   integer (kind=IntKind) :: lval
+
+   lval = lofk(i)
+
+   end function getLindex
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
