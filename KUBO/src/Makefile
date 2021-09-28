@@ -97,6 +97,7 @@ Modules_2 = \
 Modules_Kubo = \
 KuboDataModule.o \
 CurrentMatrixModule.o \
+CPAConductivityModule.o \
 ConductivityModule.o
 
 Routines = \
