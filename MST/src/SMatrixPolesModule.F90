@@ -30,8 +30,11 @@ public :: initSMatrixPoles,          &
           computeBoundStateDensity,  &
           getBoundStateDensity,      &
           getBoundStateChargeInCell, &
-          computeResonanceStateDensity,  &
-          getResonanceStateDensity,      &
+          computeResonanceStateDensity, & ! compute the density arising from the
+                                          ! Lorenzian state
+          getIntegratedResStateDensity, & ! Returns the Lorenzian state density
+          getResidualResStateDensity,   & ! Returns the residual density at
+                                          ! an energy in the resonance region
           printSMatrixPoleInfo,      &
           printBoundStateDensity,    &
           isSMatrixPolesInitialized
@@ -49,12 +52,27 @@ private
    integer (kind=IntKind), pointer :: nj3(:,:), kj3(:,:,:)
 !
    integer (kind=IntKind), parameter :: MaxNumBoundStates = 10
+   integer (kind=IntKind), parameter :: MaxNumResonanceStates = 5
 !
    real (kind=RealKind), pointer :: cgnt(:,:,:)
    real (kind=RealKind), allocatable :: gaunt(:,:,:)
 !
+   real (kind=RealKind), parameter :: degen_tol = TEN2m6
+!
    complex (kind=CmplxKind), allocatable, target :: wspace0(:), wspace1(:), wspace2(:), wspace3(:)
-   complex (kind=CmplxKind), allocatable, target :: wspace4(:)
+   complex (kind=CmplxKind), allocatable, target :: wspace4(:), wspace5(:), wspace6(:)
+!
+   type PoleDensityStruct
+      integer (kind=IntKind) :: NumDegens
+      real (kind=RealKind) :: PoleE
+      real (kind=RealKind) :: PoleWidth
+      real (kind=RealKind) :: Qvp
+      real (kind=RealKind) :: Qmt
+      complex (kind=CmplxKind), allocatable :: ResidualMat(:)
+      complex (kind=CmplxKind), allocatable :: AuxiliaryMat(:)
+      complex (kind=CmplxKind), allocatable :: Density(:)
+      complex (kind=CmplxKind), allocatable :: Deriv_Density(:)
+   end type PoleDensityStruct
 !
    type PoleStruct
       integer (kind=IntKind) :: NumSpecies
@@ -62,25 +80,20 @@ private
       integer (kind=IntKind) :: kmax_kkr
       integer (kind=IntKind) :: jmax_rho
       integer (kind=IntKind), allocatable :: NumBoundPoles(:,:)
-      integer (kind=IntKind), allocatable :: NumBPDegens(:,:,:)
       integer (kind=IntKind), allocatable :: NumResPoles(:,:)
-      integer (kind=IntKind), allocatable :: NumRPDegens(:,:,:)
+      integer (kind=IntKind), allocatable :: BoundSI(:,:,:)
+      integer (kind=IntKind), allocatable :: ResSI(:,:,:)
 !
       real (kind=RealKind), allocatable :: ebot(:,:)
       real (kind=RealKind), allocatable :: etop(:,:)
-      real (kind=RealKind), allocatable :: BoundPoles(:,:,:)
-      real (kind=RealKind), allocatable :: ResPoles(:,:,:)
-      real (kind=RealKind), allocatable :: ResWidth(:,:,:)
-      real (kind=RealKind), allocatable :: Qvp(:,:,:)
-      real (kind=RealKind), allocatable :: Qmt(:,:,:)
 !
-      complex (kind=CmplxKind), allocatable :: BmatResidual(:,:,:,:)
-      complex (kind=CmplxKind), allocatable :: RmatResidual(:,:,:,:)
-      complex (kind=CmplxKind), allocatable :: Density(:,:,:)
-      complex (kind=CmplxKind), allocatable :: Deriv_Density(:,:,:)
+      type (PoleDensityStruct), allocatable :: BoundState(:,:,:)
+      type (PoleDensityStruct), allocatable :: ResState(:,:,:)
    end type PoleStruct
 !
    type (PoleStruct), allocatable :: Pole(:)
+!
+   real (kind=RealKind) :: ResWidth
 !
 contains
 !
@@ -93,7 +106,8 @@ contains
 !
    use RadialGridModule, only : getMaxNumRmesh
 !
-   use QuadraticMatrixModule, only : initQuadraticMatrix
+   use QuadraticMatrixModule, only : initQuadraticMatrix, &
+                                     isQuadraticMatrixInitialized
 !
    use IntegerFactorsModule, only : initIntegerFactors,               &
                                     isIntegerFactorsInitialized
@@ -164,41 +178,37 @@ contains
    allocate( wspace2(MaxNumRs*kmax_kkr_max*kmax_kkr_max) )
    allocate( wspace3(MaxNumRs*kmax_kkr_max*kmax_kkr_max) )
    allocate( wspace4(MaxNumRs*kmax_kkr_max*kmax_kkr_max) )
+   allocate( wspace5(MaxNumRs*jmax_rho_max) )
+   allocate( wspace6(MaxNumRs*jmax_rho_max) )
 !
    do id = 1, LocalNumAtoms
       n = Pole(id)%NumSpecies
-      allocate( Pole(id)%NumBoundPoles(n_spin_pola,n) );            Pole(id)%NumBoundPoles = 0
-      allocate( Pole(id)%NumBPDegens(kmax_kkr_max,n_spin_pola,n) ); Pole(id)%NumBPDegens = 0
-      allocate( Pole(id)%NumResPoles(n_spin_pola,n) );              Pole(id)%NumResPoles = 0
-      allocate( Pole(id)%NumRPDegens(kmax_kkr_max,n_spin_pola,n) ); Pole(id)%NumRPDegens = 0
+      allocate( Pole(id)%NumBoundPoles(n_spin_pola,n) ); Pole(id)%NumBoundPoles = 0
+      allocate( Pole(id)%NumResPoles(n_spin_pola,n) );   Pole(id)%NumResPoles = 0
 !
-      allocate( Pole(id)%BoundPoles(kmax_kkr_max,n_spin_pola,n) )
-      allocate( Pole(id)%ResPoles(kmax_kkr_max,n_spin_pola,n) )
-      allocate( Pole(id)%ResWidth(kmax_kkr_max,n_spin_pola,n) )
-      allocate( Pole(id)%BmatResidual(kmax_kkr_max*kmax_kkr_max,kmax_kkr_max,n_spin_pola,n) )
-      allocate( Pole(id)%RmatResidual(kmax_kkr_max*kmax_kkr_max,kmax_kkr_max,n_spin_pola,n) )
-      allocate( Pole(id)%Density(MaxNumRs*jmax_rho_max*MaxNumBoundStates,n_spin_pola,n) )
-      allocate( Pole(id)%Deriv_Density(MaxNumRs*jmax_rho_max*MaxNumBoundStates,n_spin_pola,n) )
-      Pole(id)%Density = CZERO
-      Pole(id)%Deriv_Density = CZERO
+      allocate( Pole(id)%BoundState(MaxNumBoundStates,n_spin_pola,n) )
+      allocate( Pole(id)%ResState(MaxNumResonanceStates,n_spin_pola,n) )
+!
+      allocate( Pole(id)%BoundSI(MaxNumBoundStates,n_spin_pola,n) )
+      allocate( Pole(id)%ResSI(MaxNumResonanceStates,n_spin_pola,n) )
 !
       allocate( Pole(id)%ebot(n_spin_pola,n), Pole(id)%etop(n_spin_pola,n) )
-      allocate( Pole(id)%Qvp(MaxNumBoundStates,n_spin_pola,n) )
-      allocate( Pole(id)%Qmt(MaxNumBoundStates,n_spin_pola,n) )
       Pole(id)%ebot = ZERO
       Pole(id)%etop = ZERO
-      Pole(id)%Qvp = ZERO
-      Pole(id)%Qmt = ZERO
    enddo
 !
-!  -------------------------------------------------------------------
-   call initQuadraticMatrix(kmax_kkr_max,isGeneral)
-!  -------------------------------------------------------------------
+   if (.not.isQuadraticMatrixInitialized()) then
+!     ----------------------------------------------------------------
+      call initQuadraticMatrix(kmax_kkr_max,isGeneral)
+!     ----------------------------------------------------------------
+   endif
    if (.not.isIntegerFactorsInitialized()) then
 !     ----------------------------------------------------------------
       call initIntegerFactors(lmax_max)
 !     ----------------------------------------------------------------
    endif
+!
+   ResWidth = 0.001d0
 !
    isInitialized = .true.
 !
@@ -208,11 +218,12 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine endSMatrixPoles()
 !  ===================================================================
-   use QuadraticMatrixModule, only : endQuadraticMatrix
+   use QuadraticMatrixModule, only : endQuadraticMatrix, &
+                                     isQuadraticMatrixInitialized
 !
    implicit none
 !
-   integer (kind=IntKind) :: id
+   integer (kind=IntKind) :: id, ib, ia, is
 !
    deallocate( gaunt )
    deallocate( wspace0 )
@@ -220,27 +231,33 @@ contains
    deallocate( wspace2 )
    deallocate( wspace3 )
    deallocate( wspace4 )
+   deallocate( wspace5 )
+   deallocate( wspace6 )
 !
    do id = 1, LocalNumAtoms
-      deallocate( Pole(id)%NumBoundPoles )
-      deallocate( Pole(id)%NumBPDegens )
-      deallocate( Pole(id)%NumResPoles )
-      deallocate( Pole(id)%NumRPDegens )
-      deallocate( Pole(id)%BoundPoles )
-      deallocate( Pole(id)%ResPoles )
-      deallocate( Pole(id)%ResWidth )
-      deallocate( Pole(id)%BmatResidual )
-      deallocate( Pole(id)%RmatResidual )
-      deallocate( Pole(id)%Density )
-      deallocate( Pole(id)%Deriv_Density )
+      do ia = 1, Pole(id)%NumSpecies
+         do is = 1, n_spin_pola
+            do ib = 1, Pole(id)%NumBoundPoles(is,ia)
+               call finalizePoleDensity(Pole(id)%BoundState(ib,is,ia))
+            enddo
+            do ib = 1, Pole(id)%NumResPoles(is,ia)
+               call finalizePoleDensity(Pole(id)%ResState(ib,is,ia))
+            enddo
+         enddo
+      enddo
       deallocate( Pole(id)%ebot, Pole(id)%etop )
-      deallocate( Pole(id)%Qvp, Pole(id)%Qmt )
+      deallocate( Pole(id)%NumBoundPoles )
+      deallocate( Pole(id)%NumResPoles )
+      deallocate( Pole(id)%BoundSI )
+      deallocate( Pole(id)%ResSI )
    enddo
    deallocate(Pole)
 !
-!  -------------------------------------------------------------------
-   call endQuadraticMatrix()
-!  -------------------------------------------------------------------
+   if (isQuadraticMatrixInitialized()) then
+!     ----------------------------------------------------------------
+      call endQuadraticMatrix()
+!     ----------------------------------------------------------------
+   endif
 !
    isInitialized = .false.
 !
@@ -273,64 +290,113 @@ contains
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getNumBoundStateDegen(id,ia,is,ib) result(n)
+   function getNumBoundStateDegen(id,ia,is,ibs,sorted) result(n)
 !  ===================================================================
    implicit none
 !
-   integer (kind=IntKind), intent(in) :: ib, is, id, ia
-   integer (kind=IntKind) :: n
+   integer (kind=IntKind), intent(in) :: ibs, is, id, ia
+   logical, optional, intent(in) :: sorted
+   integer (kind=IntKind) :: n, ib, NumBPs
 !
-   n = Pole(id)%NumBPDegens(ib,is,ia)
+   NumBPs = Pole(id)%NumBoundPoles(is,ia)
+   if (NumBPs < 1) then
+      n = 0
+      return
+   else if (ibs < 1 .or. ibs > NumBPs) then
+      call ErrorHandler('getNumBoundStateDegen','Invalid bound state index',ibs)
+   endif
+!
+   ib = ibs
+   if (present(sorted)) then
+      if (sorted) then
+         ib = Pole(id)%BoundSI(ibs,is,ia)
+      endif
+   endif
+!
+   n = Pole(id)%BoundState(ib,is,ia)%NumDegens
 !
    end function getNumBoundStateDegen
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getBoundStateEnergy(id,ia,is,ib) result(e)
+   function getBoundStateEnergy(id,ia,is,ibs,sorted) result(e)
 !  ===================================================================
    implicit none
 !
-   integer (kind=IntKind), intent(in) :: is, id, ib, ia
+   integer (kind=IntKind), intent(in) :: is, id, ibs, ia
+   logical, optional, intent(in) :: sorted
+   integer (kind=IntKind) :: ib, NumBPs
 !
    real (kind=RealKind) :: e
 !
-   e = Pole(id)%BoundPoles(ib,is,ia)
+   NumBPs = Pole(id)%NumBoundPoles(is,ia)
+   if (NumBPs < 1) then
+      e = ZERO
+      return
+   else if (ibs < 1 .or. ibs > NumBPs) then
+      call ErrorHandler('getBoundStateEnergy','Invalid bound state index',ibs)
+   endif
+!
+   ib = ibs
+   if (present(sorted)) then
+      if (sorted) then
+         ib = Pole(id)%BoundSI(ibs,is,ia)
+      endif
+   endif
+!
+   e = Pole(id)%BoundState(ib,is,ia)%PoleE
 !
    end function getBoundStateEnergy
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getBoundStateChargeInCell(id,ia,is,ib,qmt) result(qvp)
+   function getBoundStateChargeInCell(id,ia,is,ibs,qmt,sorted) result(qvp)
 !  ===================================================================
    implicit none
 !
-   integer (kind=IntKind), intent(in) :: is, id, ib, ia
+   integer (kind=IntKind), intent(in) :: is, id, ibs, ia
+   logical, optional, intent(in) :: sorted
    real (kind=RealKind), intent(out), optional :: qmt
 !
+   integer (kind=IntKind) :: ib, NumBPs
    real (kind=RealKind) :: qvp
 !
-   qvp = Pole(id)%Qvp(ib,is,ia)
+   NumBPs = Pole(id)%NumBoundPoles(is,ia)
+   if (NumBPs < 1) then
+      qvp = ZERO
+      return
+   else if (ibs < 1 .or. ibs > NumBPs) then
+      call ErrorHandler('getBoundStateChargeInCell','Invalid bound state index',ibs)
+   endif
+!
+   ib = ibs
+   if (present(sorted)) then
+      if (sorted) then
+         ib = Pole(id)%BoundSI(ibs,is,ia)
+      endif
+   endif
+!
+   qvp = Pole(id)%BoundState(ib,is,ia)%Qvp
 !
    if (present(qmt)) then
-      qmt = Pole(id)%Qmt(ib,is,ia)
+      qmt = Pole(id)%BoundState(ib,is,ia)%Qmt
    endif
 !
    end function getBoundStateChargeInCell
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getBoundStateDensity(id,ia,is,ib,NumRs,jmax_rho,derivative) result(p)
+   function getBoundStateDensity(id,ia,is,ibs,NumRs,jmax_rho,derivative,sorted) result(p)
 !  ===================================================================
    implicit none
 !
-   integer (kind=IntKind), intent(in) :: id, ia, is, ib
+   integer (kind=IntKind), intent(in) :: id, ia, is, ibs
    integer (kind=IntKind), intent(out), optional :: NumRs, jmax_rho
+   logical, optional, intent(in) :: sorted
    integer (kind=IntKind) :: NumBPs
+   integer (kind=IntKind) :: ib
 !
-   logical, intent(in), optional :: derivative
-   logical :: deriv_den
-!
-   complex (kind=CmplxKind), pointer :: Bdensity(:,:,:)
+   complex (kind=CmplxKind), intent(out), optional, pointer :: derivative(:,:)
    complex (kind=CmplxKind), pointer :: p(:,:)
 !
    if (present(NumRs)) then
@@ -345,24 +411,24 @@ contains
    if (NumBPs < 1) then
       nullify(p)
       return
-   else if (ib < 1 .or. ib > NumBPs) then
-      call ErrorHandler('getBoundStateDensity','Invalid bound state index',ib)
+   else if (ibs < 1 .or. ibs > NumBPs) then
+      call ErrorHandler('getBoundStateDensity','Invalid bound state index',ibs)
+   endif
+!
+   ib = ibs
+   if (present(sorted)) then
+      if (sorted) then
+         ib = Pole(id)%BoundSI(ibs,is,ia)
+      endif
    endif
 !
    if (present(derivative)) then
-      deriv_den = derivative
-   else
-      deriv_den = .false.
+      derivative => aliasArray2_c(Pole(id)%BoundState(ib,is,ia)%Deriv_Density, &
+                                  Pole(id)%NumRs,Pole(id)%jmax_rho)
    endif
 !
-   if (deriv_den) then
-      Bdensity => aliasArray3_c(Pole(id)%Deriv_Density(:,is,ia),   &
-                                Pole(id)%NumRs,Pole(id)%jmax_rho,NumBPs)
-   else
-      Bdensity => aliasArray3_c(Pole(id)%Density(:,is,ia),         &
-                                Pole(id)%NumRs,Pole(id)%jmax_rho,NumBPs)
-   endif
-   p => Bdensity(:,:,ib)
+   p => aliasArray2_c(Pole(id)%BoundState(ib,is,ia)%Density,          &
+                      Pole(id)%NumRs,Pole(id)%jmax_rho)
 !
    end function getBoundStateDensity
 !  ===================================================================
@@ -381,43 +447,77 @@ contains
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getNumResonanceStateDegen(id,ia,is,ib) result(n)
+   function getNumResonanceStateDegen(id,ia,is,ibs,sorted) result(n)
 !  ===================================================================
    implicit none
 !
-   integer (kind=IntKind), intent(in) :: ib, is, id, ia
-   integer (kind=IntKind) :: n
+   integer (kind=IntKind), intent(in) :: ibs, is, id, ia
+   logical, optional, intent(in) :: sorted
+   integer (kind=IntKind) :: n, ib, NumRPs
 !
-   n = Pole(id)%NumRPDegens(ib,is,ia)
+   NumRPs = Pole(id)%NumResPoles(is,ia)
+   if (NumRPs < 1) then
+      n = 0
+      return
+   else if (ibs < 1 .or. ibs > NumRPs) then
+      call ErrorHandler('getNumResonanceStateDegen','Invalid resonance state index',ibs)
+   endif
+!
+   ib = ibs
+   if (present(sorted)) then
+      if (sorted) then
+         ib = Pole(id)%ResSI(ibs,is,ia)
+      endif
+   endif
+!
+   n = Pole(id)%ResState(ib,is,ia)%NumDegens
 !
    end function getNumResonanceStateDegen
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getResonanceStateEnergy(id,ia,is,ib,hw) result(e)
+   function getResonanceStateEnergy(id,ia,is,ibs,hw,sorted) result(e)
 !  ===================================================================
    implicit none
 !
-   integer (kind=IntKind), intent(in) :: ib, is, id, ia
+   integer (kind=IntKind), intent(in) :: ibs, is, id, ia
+   logical, optional, intent(in) :: sorted
+   integer (kind=IntKind) :: ib, NumRPs
 !
-   real (kind=RealKind), optional :: hw ! Half width
+   real (kind=RealKind), optional, intent(out) :: hw ! Half width
    real (kind=RealKind) :: e
 !
-   e = Pole(id)%ResPoles(ib,is,ia)
+   NumRPs = Pole(id)%NumResPoles(is,ia)
+   if (NumRPs < 1) then
+      e = ZERO
+      return
+   else if (ibs < 1 .or. ibs > NumRPs) then
+      call ErrorHandler('getResonanceStateEnergy','Invalid resonance state index',ibs)
+   endif
+!
+   ib = ibs
+   if (present(sorted)) then
+      if (sorted) then
+         ib = Pole(id)%ResSI(ibs,is,ia)
+      endif
+   endif
+!
+   e = Pole(id)%ResState(ib,is,ia)%PoleE
    if (present(hw)) then
-      hw = Pole(id)%ResWidth(ib,is,ia)
+      hw = Pole(id)%ResState(ib,is,ia)%PoleWidth
    endif
 !
    end function getResonanceStateEnergy
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function isEnergyInResonanceRange(e,site,atom,spin,res_id) result(y)
+   function isEnergyInResonanceRange(e,site,atom,spin,res_id,sorted) result(y)
 !  ===================================================================
    implicit none
 !
    integer (kind=IntKind), intent(in) :: site, atom, spin
    integer (kind=IntKind), intent(out), optional :: res_id
+   logical, optional, intent(in) :: sorted
    integer (kind=IntKind) :: i, j
 !
    real (kind=RealKind), intent(in) :: e
@@ -428,8 +528,10 @@ contains
    y = .false.
    j = 0
    LOOP_i: do i = 1, Pole(site)%NumResPoles(spin,atom)
-      el = Pole(site)%ResPoles(i,spin,atom) - HALF*Pole(site)%ResWidth(i,spin,atom)
-      er = Pole(site)%ResPoles(i,spin,atom) + HALF*Pole(site)%ResWidth(i,spin,atom)
+!     el = Pole(site)%ResState(i,spin,atom)%PoleE - HALF*Pole(site)%ResState(i,spin,atom)%PoleWidth
+      el = Pole(site)%ResState(i,spin,atom)%PoleE - HALF*ResWidth
+!     er = Pole(site)%ResState(i,spin,atom)%PoleE + HALF*Pole(site)%ResState(i,spin,atom)%PoleWidth
+      er = Pole(site)%ResState(i,spin,atom)%PoleE + HALF*ResWidth
       if (e >= el .and. e <= er) then
          j = i
          y = .true.
@@ -439,39 +541,34 @@ contains
 !
    if (present(res_id)) then
       res_id = j
+      if (present(sorted)) then
+         if (sorted) then
+            res_id = Pole(site)%ResSI(j,spin,atom)
+         endif
+      endif
    endif
 !
    end function isEnergyInResonanceRange
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine computeResonanceStateDensity(site,atom,spin)
-!  ===================================================================
-   implicit none
-!
-   integer (kind=IntKind), intent(in) :: site, spin, atom
-!
-!
-   end subroutine computeResonanceStateDensity
+   function getIntegratedResStateDensity(site,atom,spin,rstate,       &
+                                         NumRs,jmax_rho,derivative,sorted) result(p)
 !  ===================================================================
 !
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getResonanceStateDensity(site,atom,spin,rstate,peak_term,e, &
-                                     NumRs,jmax_rho,derivative) result(p)
-!  ===================================================================
+!  Note: This function returns the integrated Lorenzian density, which is
+!        the density of the resonance compotent (usually for l > 1)
+!        integrated over the resonance energy.
+!
+!  *******************************************************************
    implicit none
 !
    integer (kind=IntKind), intent(in) :: site, atom, spin, rstate
    integer (kind=IntKind), intent(out), optional :: NumRs, jmax_rho
-   integer (kind=IntKind) :: NumRPs
+   integer (kind=IntKind) :: ib
+   logical, optional, intent(in) :: sorted
 !
-   logical, intent(in) :: peak_term
-   logical, intent(in), optional :: derivative
-   logical :: deriv_den
-!
-   real (kind=RealKind), intent(in), optional :: e
-!
-   complex (kind=CmplxKind), pointer :: Rdensity(:,:,:)
+   complex (kind=CmplxKind), intent(out), optional, pointer :: derivative(:,:)
    complex (kind=CmplxKind), pointer :: p(:,:)
 !
    if (present(NumRs)) then
@@ -482,30 +579,89 @@ contains
       jmax_rho = Pole(site)%jmax_rho
    endif
 !
-   NumRPs = Pole(site)%NumResPoles(spin,atom)
-   if (NumRPs < 1) then
+   if (Pole(site)%NumResPoles(spin,atom) < 1) then
       nullify(p)
       return
-   else if (rstate < 1 .or. rstate > NumRPs) then
-      call ErrorHandler('getBoundStateDensity','Invalid resonance state index',rstate)
+   else if (rstate < 1 .or. rstate > Pole(site)%NumResPoles(spin,atom)) then
+      call ErrorHandler('getIntegratedResStateDensity',               &
+                        'Invalid resonance state index',rstate)
+   endif
+!
+   ib = rstate
+   if (present(sorted)) then
+      if (sorted) then
+         ib = Pole(site)%ResSI(rstate,spin,atom)
+      endif
    endif
 !
    if (present(derivative)) then
-      deriv_den = derivative
-   else
-      deriv_den = .false.
+      derivative => aliasArray2_c(Pole(site)%ResState(ib,spin,atom)%Deriv_Density,   &
+                                  Pole(site)%NumRs,Pole(site)%jmax_rho)
    endif
 !
-   if (deriv_den) then
-      Rdensity => aliasArray3_c(Pole(site)%Deriv_Density(:,spin,atom),   &
-                                Pole(site)%NumRs,Pole(site)%jmax_rho,NumRPs)
-   else
-      Rdensity => aliasArray3_c(Pole(site)%Density(:,spin,atom),         &
-                                Pole(site)%NumRs,Pole(site)%jmax_rho,NumRPs)
-   endif
-   p => Rdensity(:,:,rstate)
+   p => aliasArray2_c(Pole(site)%ResState(ib,spin,atom)%Density,      &
+                      Pole(site)%NumRs,Pole(site)%jmax_rho)
 !
-   end function getResonanceStateDensity
+   end function getIntegratedResStateDensity
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getResidualResStateDensity(site,atom,spin,rstate,e,       &
+                                       NumRs,jmax_rho,derivative,sorted) result(p)
+!  ===================================================================
+!
+!  Note: This function returns the residual density, which is the density
+!        excluding the resonance component, for an energy e in the resonance
+!        region.
+!
+!  *******************************************************************
+!
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: site, atom, spin, rstate
+   integer (kind=IntKind), intent(out), optional :: NumRs, jmax_rho
+   integer (kind=IntKind) :: ib
+   logical, optional, intent(in) :: sorted
+!
+   complex (kind=CmplxKind), intent(out), optional, pointer :: derivative(:,:)
+   complex (kind=CmplxKind), pointer :: p(:,:)
+!
+   real (kind=RealKind), intent(in) :: e
+!
+   if (present(NumRs)) then
+       NumRs = Pole(site)%NumRs
+   endif
+!
+   if (present(jmax_rho)) then
+      jmax_rho = Pole(site)%jmax_rho
+   endif
+!
+   if (Pole(site)%NumResPoles(spin,atom) < 1) then
+      nullify(p)
+      return
+   else if (rstate < 1 .or. rstate > Pole(site)%NumResPoles(spin,atom)) then
+      call ErrorHandler('getResidualResStateDensity',                 &
+                        'Invalid resonance state index',rstate)
+   endif
+!
+   ib = rstate
+   if (present(sorted)) then
+      if (sorted) then
+         ib = Pole(site)%ResSI(rstate,spin,atom)
+      endif
+   endif
+!
+!  -------------------------------------------------------------------
+   call computeResidualRSDensity(site,atom,spin,ib,e)
+!  -------------------------------------------------------------------
+!
+   if (present(derivative)) then
+      derivative => aliasArray2_c(wspace6,Pole(site)%NumRs,Pole(site)%jmax_rho)
+   endif
+!
+   p => aliasArray2_c(wspace5,Pole(site)%NumRs,Pole(site)%jmax_rho)
+!
+   end function getResidualResStateDensity
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -514,25 +670,28 @@ contains
    implicit none
 !
    integer (kind=IntKind), intent(in) :: is, id, ia
-   integer (kind=IntKind) :: ib
+   integer (kind=IntKind) :: ib, ibs
 !
-   write(6,'(3(a,i3))')'Spin index: ',is,',  Site index: ',id,',  Species index: ',ia
+   write(6,'(/,3(a,i3))')'Spin index: ',is,',  Site index: ',id,',  Species index: ',ia
    if (Pole(id)%ebot(is,ia) < -TEN2m8) then
       write(6,'(a,f13.8,a,f13.8,a,i5)')'The Number of bound states found within (',  &
                                        Pole(id)%ebot(is,ia),', ',ZERO,'): ',Pole(id)%NumBoundPoles(is,ia)
-      do ib = 1, Pole(id)%NumBoundPoles(is,ia)
-         write(6,'(a,i2,5x,a,f20.12)')'Degeneracy = ',Pole(id)%NumBPDegens(ib,is,ia), &
-                                      ', Bound state energy = ',Pole(id)%BoundPoles(ib,is,ia)
+      do ibs = 1, Pole(id)%NumBoundPoles(is,ia)
+         ib = Pole(id)%BoundSI(ibs,is,ia)
+         write(6,'(a,i2,5x,a,f20.12)')'Degeneracy = ',Pole(id)%BoundState(ib,is,ia)%NumDegens, &
+                                      ', Bound state energy = ',Pole(id)%BoundState(ib,is,ia)%PoleE
       enddo
    endif
    if (Pole(id)%etop(is,ia) > TEN2m8) then
-      write(6,'(/,a,f13.8,a,f13.8,a,i5)')'The Number of resonance states found within (',  &
-                                         Pole(id)%ebot(is,ia),', ',Pole(id)%etop(is,ia),'): ', &
-                                         Pole(id)%NumResPoles(is,ia)
-      do ib = 1, Pole(id)%NumResPoles(is,ia)
-         write(6,'(a,i2,5x,a,f20.12,a,f20.12)')'Degeneracy = ',Pole(id)%NumRPDegens(ib,is,ia), &
-                                               ', Resonance state energy = ',Pole(id)%ResPoles(ib,is,ia), &
-                                               ', Width = ',Pole(id)%ResWidth(ib,is,ia)
+      write(6,'(a,f13.8,a,f13.8,a,i5)')'The Number of resonance states found within (',      &
+                                       Pole(id)%ebot(is,ia),', ',Pole(id)%etop(is,ia),'): ', &
+                                       Pole(id)%NumResPoles(is,ia)
+      write(6,'(a,f13.8)')'The width threshold for a resonance state = ',ResWidth
+      do ibs = 1, Pole(id)%NumResPoles(is,ia)
+         ib = Pole(id)%ResSI(ibs,is,ia)
+         write(6,'(a,i2,5x,a,f20.12,a,f20.12)')'Degeneracy = ',Pole(id)%ResState(ib,is,ia)%NumDegens,           &
+                                               ', Resonance state energy = ',Pole(id)%ResState(ib,is,ia)%PoleE, &
+                                               ', Width = ',Pole(id)%ResState(ib,is,ia)%PoleWidth
       enddo
    endif
 !
@@ -557,7 +716,7 @@ contains
    implicit none
 !
    integer (kind=IntKind), intent(in) :: is, id, ia
-   integer (kind=IntKind) :: ib, ir, jl, jmax_rho, kmax_rho, NumRs, occ, NumBPs
+   integer (kind=IntKind) :: ib, ibs, ir, jl, jmax_rho, kmax_rho, NumRs, occ, NumBPs
 !
    real (kind=RealKind) :: rfac, q_VP, q_mt, deg
    real (kind=RealKind), pointer :: r_mesh(:)
@@ -571,7 +730,7 @@ contains
    character (len=8) :: app_string
    character (len=50) :: file_name
 !
-   complex (kind=CmplxKind), pointer :: Bdensity(:,:,:)
+   complex (kind=CmplxKind), pointer :: Bdensity(:,:)
 !
    Grid => getGrid(id)
    r_mesh => Grid%r_mesh
@@ -587,7 +746,6 @@ contains
    else if (NumRs < 1) then
       call ErrorHandler('printBoundStateDensity','Invalid NumRs',NumRs)
    endif
-   Bdensity => aliasArray3_c(Pole(id)%Density(:,is,ia),NumRs,jmax_rho,NumBPs)
    allocate(rho0(NumRs))
 !
    write(6,'(/,a)')'*********************************************'
@@ -598,16 +756,18 @@ contains
       '=============================================================',&
       '     energy       Degeneracy    Occupancy     q_VP      q_MT ',&
       '-------------------------------------------------------------'
-   do ib = 1, NumBPs
+   do ibs = 1, NumBPs
+      ib = Pole(id)%BoundSI(ibs,is,ia)
 !     ================================================================
-!     Note: BmatResidual already contains a summation of the
+!     Note: ResidualMat already contains a summation of the
 !           contributions from the degenerate poles.
 !     ================================================================
-      occ = (3-n_spin_pola)*Pole(id)%NumBPDegens(ib,is,ia)
-      deg = real(Pole(id)%NumBPDegens(ib,is,ia),kind=RealKind)
-      q_VP=getVolumeIntegration(id,NumRs,r_mesh,kmax_rho,jmax_rho,0,Bdensity(:,:,ib),q_MT)
+      occ = (3-n_spin_pola)*Pole(id)%BoundState(ib,is,ia)%NumDegens
+      deg = real(Pole(id)%BoundState(ib,is,ia)%NumDegens,kind=RealKind)
+      Bdensity => aliasArray2_c(Pole(id)%BoundState(ib,is,ia)%Density,NumRs,jmax_rho)
+      q_VP=getVolumeIntegration(id,NumRs,r_mesh,kmax_rho,jmax_rho,0,Bdensity,q_MT)
       write(6,'(f15.8,4x,i5,8x,i5,4x,2f10.5)')                        &
-            Pole(id)%BoundPoles(ib,is,ia),Pole(id)%NumBPDegens(ib,is,ia),occ,q_VP/deg,q_MT/deg
+         Pole(id)%BoundState(ib,is,ia)%PoleE,Pole(id)%BoundState(ib,is,ia)%NumDegens,occ,q_VP/deg,q_MT/deg
       if (id < 10 .and. ib < 10) then
          write(app_string,'(a,i1,a,i1,a,i1)')'a',id,'s',is,'e',ib
       else if (id >= 10 .and. ib < 10) then
@@ -629,7 +789,7 @@ contains
 !     ================================================================
       rfac = Y0/deg
       do ir = 1, NumRs
-         rho0(ir) = real(Bdensity(ir,1,ib),kind=RealKind)*rfac
+         rho0(ir) = real(Bdensity(ir,1),kind=RealKind)*rfac
       enddo
       file_name = 'BndState_'//trim(state_string)//trim(app_string)//'Sph'
 !     ----------------------------------------------------------------
@@ -642,7 +802,7 @@ contains
       do jl = 1, jmax_rho
          non_zero = .false.
          LOOP_ir: do ir = 1, NumRs
-            if (abs(Bdensity(ir,jl,ib)) > TEN2m6) then
+            if (abs(Bdensity(ir,jl)) > TEN2m6) then
                non_zero = .true.
                exit LOOP_ir
             endif
@@ -657,7 +817,7 @@ contains
             endif
             file_name = 'BndState_'//trim(state_string)//trim(app_string)//jl_string
 !           ----------------------------------------------------------
-            call writeFunction(file_name,NumRs,r_mesh,Bdensity(:,jl,ib))
+            call writeFunction(file_name,NumRs,r_mesh,Bdensity(:,jl))
 !           ----------------------------------------------------------
          endif
       enddo
@@ -673,11 +833,12 @@ contains
    subroutine findSMatrixPoles(id,ia,is,eb,et,Delta,MaxResWidth,CheckPoles,PanelOnZero)
 !  ===================================================================
    use SSSolverModule, only : solveSingleScattering, getJostMatrix
+   use SSSolverModule, only : getSolutionRmeshSize
 !
    use QuadraticMatrixModule, only : initQuadraticMatrix, endQuadraticMatrix
    use QuadraticMatrixModule, only : solveQuadraticEquation, getEigenValue,   &
                                      solveLinearEquation, getEigenVector,     &
-                                     getEigenMatrix
+                                     getResidualMatrix, getAuxiliaryMatrix
 !
    use WriteMatrixModule,  only : writeMatrix
 !
@@ -694,13 +855,15 @@ contains
 !
    integer (kind=IntKind) :: ie, iw, kmax_kkr, NumWindows, info
    integer (kind=IntKind) :: i, j, l, m, kl, lp, mp, klp, nv, nb, nr, je, ip
-   integer (kind=IntKind) :: MyNumWindows, nbr(2), nb0, nr0, ib, ir
+   integer (kind=IntKind) :: MyNumWindows, nb0, nr0, ib, ir
    integer (kind=IntKind) :: bpdeg(kmax_kkr_max), rpdeg(kmax_kkr_max), degens(kmax_kkr_max)
+   integer (kind=IntKind), allocatable :: nbr(:,:)
 !
    logical :: isZeroInterval = .false.
    logical :: chkpole = .false.
+   logical :: found
 !
-   real (kind=RealKind) :: WindowWidth, ResWidth
+   real (kind=RealKind) :: WindowWidth
    real (kind=RealKind) :: e0, de, de2, dede2, pe, w0, err, w
 !
    real (kind=RealKind) :: bpe(kmax_kkr_max), ebr(kmax_kkr_max), bpe_prev, rpe_prev
@@ -709,12 +872,15 @@ contains
    complex (kind=CmplxKind), pointer :: jost_mat(:,:)
    complex (kind=CmplxKind), pointer :: s0(:,:), s1(:,:), s2(:,:)
    complex (kind=CmplxKind), pointer :: sm(:,:)
-   complex (kind=CmplxKind), pointer :: pv(:), evr(:), evl(:), em(:,:)
+   complex (kind=CmplxKind), pointer :: pv(:), evr(:), evl(:), em(:,:), am(:,:)
    complex (kind=CmplxKind) :: vt(kmax_kkr_max), diag(kmax_kkr_max)
    complex (kind=CmplxKind) :: rpe(kmax_kkr_max)
    complex (kind=CmplxKind) :: erc(kmax_kkr_max)
    complex (kind=CmplxKind) :: bmat(kmax_kkr_max*kmax_kkr_max,kmax_kkr_max)
+   complex (kind=CmplxKind) :: brmat(kmax_kkr_max*kmax_kkr_max,kmax_kkr_max)
    complex (kind=CMplxKind) :: rmat(kmax_kkr_max*kmax_kkr_max,kmax_kkr_max)
+   complex (kind=CMplxKind) :: amat(kmax_kkr_max*kmax_kkr_max,kmax_kkr_max)
+   complex (kind=CMplxKind) :: camat(kmax_kkr_max*kmax_kkr_max,kmax_kkr_max)
 !
    if (eb > et) then
       call ErrorHandler('findSMatrixPoles','eb > et',eb,et)
@@ -728,8 +894,6 @@ contains
 !
    if (present(MaxResWidth)) then
       ResWidth = abs(MaxResWidth)
-   else
-      ResWidth = 1.0d20
    endif
 !
    kmax_kkr = Pole(id)%kmax_kkr
@@ -780,9 +944,6 @@ contains
    s1 => aliasArray2_c(wspace1,kmax_kkr,kmax_kkr)
    s2 => aliasArray2_c(wspace2,kmax_kkr,kmax_kkr)
    sm => aliasArray2_c(wspace3,kmax_kkr,kmax_kkr)
-!
-   Pole(id)%NumBoundPoles(is,ia) = 0; Pole(id)%NumBPDegens(:,is,ia) = 0
-   Pole(id)%NumResPoles(is,ia) = 0; Pole(id)%NumRPDegens(:,is,ia) = 0
 !
 !  ===================================================================
 !  Hopefully, QuadraticMatrixModule could be updated in the future
@@ -911,30 +1072,48 @@ contains
             pe = real(pv(ie),kind=RealKind) + e0
             if (pe >= w0 .and. pe <= w0+WindowWidth) then
 !              -------------------------------------------------------
-               em => getEigenMatrix(ie) ! em is the residule matrix of
-                                        ! integrating sm^{-1} around its eigenvalue
+               em => getResidualMatrix(ie) ! em is the residule matrix of
+                                           ! integrating sm^{-1} around its eigenvalue
 !              -------------------------------------------------------
                if (size(em,1) /= kmax_kkr) then
                   call ErrorHandler('findSMatrixPoles','inconsistent matrix size',size(em,1),kmax_kkr)
                endif
-               if (abs(pe-bpe_prev) > TEN2m6) then
+               found = .false.
+               do i = 1, nb
+                  if (abs(pe-bpe(i)) < degen_tol) then
+                     found = .true.
+                     bpdeg(i) = bpdeg(i) + 1
+!                    -------------------------------------------------
+                     call zaxpy(kmax_kkr*kmax_kkr,CONE,em,1,bmat(1,i),1)
+!                    -------------------------------------------------
+                     exit
+                  endif
+               enddo
+               if (.not.found) then
                   nb = nb + 1
-!                 Pole(id)%BoundPoles(nb,is,ia) = pe
                   bpe(nb) = pe
                   bpdeg(nb) = 1
-!write(6,'(a,2d15.8,a,2d15.8)')'Pole = ',pv(ie)+e0,', kappa = ',sqrt(pv(ie)+e0)
 !                 ----------------------------------------------------
                   call zcopy(kmax_kkr*kmax_kkr,em,1,bmat(1,nb),1)
 !                 ----------------------------------------------------
-                  bpe_prev = pe
-               else if (nb == 0) then
-                  call ErrorHandler('findSMatrixPoles','bound state pe = ZERO',pe)
-               else ! In degeneracy case, em is added to bmat of the same energy
-                  bpdeg(nb) = bpdeg(nb) + 1
-!                 ----------------------------------------------------
-                  call zaxpy(kmax_kkr*kmax_kkr,CONE,em,1,bmat(1,nb),1)
-!                 ----------------------------------------------------
                endif
+    !          if (abs(pe-bpe_prev) > degen_tol) then
+    !             nb = nb + 1
+    !             bpe(nb) = pe
+    !             bpdeg(nb) = 1
+!write(6,'(a,2d15.8,a,2d15.8)')'Pole = ',pv(ie)+e0,', kappa = ',sqrt(pv(ie)+e0)
+!                 ----------------------------------------------------
+    !             call zcopy(kmax_kkr*kmax_kkr,em,1,bmat(1,nb),1)
+!                 ----------------------------------------------------
+    !             bpe_prev = pe
+    !          else if (nb == 0) then
+    !             call ErrorHandler('findSMatrixPoles','bound state pe = ZERO',pe)
+    !          else ! In degeneracy case, em is added to bmat of the same energy
+    !             bpdeg(nb) = bpdeg(nb) + 1
+!                 ----------------------------------------------------
+    !             call zaxpy(kmax_kkr*kmax_kkr,CONE,em,1,bmat(1,nb),1)
+!                 ----------------------------------------------------
+    !          endif
 !write(6,'(a,3i4,a,f12.8)')'MyPEinEGroup,nb,deg,pe = ',MyPEinEGroup,nb,bpdeg(nb),', ',pe
             endif
          else if (aimag(sqrt(pv(ie)+e0)) < ZERO) then  ! Resonance states
@@ -942,29 +1121,55 @@ contains
             w = aimag(sqrt(pv(ie)))**2
             if (pe >= w0 .and. pe <= w0+WindowWidth .and. pe > ZERO .and. TWO*w <= ResWidth) then
 !              -------------------------------------------------------
-               em => getEigenMatrix(ie) ! em is the residule matrix of
-                                        ! integrating sm^{-1} around its eigenvalue
+               em => getResidualMatrix(ie) ! em is the residule matrix of
+                                           ! integrating sm^{-1} around its eigenvalue
 !              -------------------------------------------------------
-               if (abs(pe-rpe_prev) > TEN2m6) then
+               found = .false.
+               do i = 1, nr
+                  if (abs(pe-real(rpe(i),kind=RealKind)) < degen_tol) then
+                     found = .true.
+                     rpdeg(nr) = rpdeg(nr) + 1
+!                    -------------------------------------------------
+                     call zaxpy(kmax_kkr*kmax_kkr,CONE,em,1,rmat(1,i),1)
+!                    -------------------------------------------------
+                     exit
+                  endif
+               enddo
+               if (.not.found) then
                   nr = nr + 1
-!                 Pole(id)%ResPoles(nr,is,ia) = pe
-!                 Pole(id)%ResWidth(nr,is,ia) = w
                   rpe(nr) = cmplx(pe,aimag(sqrt(pv(ie)))**2,kind=CmplxKind)
                   rpdeg(nr) = 1
-! write(6,'(a,2f15.12,a,2f15.12)')'Pole = ',pv(ie)+e0,', kappa = ',sqrt(pv(ie)+e0)
-! write(6,'(a,2f15.12)')          'rpe  = ',rpe(nr)
 !                 ----------------------------------------------------
                   call zcopy(kmax_kkr*kmax_kkr,em,1,rmat(1,nr),1)
 !                 ----------------------------------------------------
-                  rpe_prev = pe
-               else if (nr == 0) then
-                  call ErrorHandler('findSMatrixPoles','resonance state pe = ZERO',pe)
-               else
-                  rpdeg(nr) = rpdeg(nr) + 1
+                  am => getAuxiliaryMatrix(ie,degen_tol)
 !                 ----------------------------------------------------
-                  call zaxpy(kmax_kkr*kmax_kkr,CONE,em,1,rmat(1,nr),1)
+                  call zcopy(kmax_kkr*kmax_kkr,am,1,amat(1,nr),1)
 !                 ----------------------------------------------------
                endif
+     !         if (abs(pe-rpe_prev) > degen_tol) then
+     !            nr = nr + 1
+     !            rpe(nr) = cmplx(pe,aimag(sqrt(pv(ie)))**2,kind=CmplxKind)
+     !            rpdeg(nr) = 1
+! write(6,'(a,2f15.12,a,2f15.12)')'Pole = ',pv(ie)+e0,', kappa = ',sqrt(pv(ie)+e0)
+! write(6,'(a,2f15.12)')          'rpe  = ',rpe(nr)
+!                 ----------------------------------------------------
+     !            call zcopy(kmax_kkr*kmax_kkr,em,1,rmat(1,nr),1)
+!                 ----------------------------------------------------
+     !            rpe_prev = pe
+!
+     !            am => getAuxiliaryMatrix(ie,degen_tol)
+!                 ----------------------------------------------------
+     !            call zcopy(kmax_kkr*kmax_kkr,am,1,amat(1,nr),1)
+!                 ----------------------------------------------------
+     !         else if (nr == 0) then
+     !            call ErrorHandler('findSMatrixPoles','resonance state pe = ZERO',pe)
+     !         else ! Add contribution from the degenerate state......
+     !            rpdeg(nr) = rpdeg(nr) + 1
+!    !            ----------------------------------------------------
+     !            call zaxpy(kmax_kkr*kmax_kkr,CONE,em,1,rmat(1,nr),1)
+!    !            ----------------------------------------------------
+     !         endif
             endif
          endif
       enddo
@@ -972,7 +1177,6 @@ contains
 !
    if (chkpole) then
       do je = 1, nb
-!        e0 = Pole(id)%BoundPoles(je,is,ia)
          e0 = bpe(je)
          do ie = -10, 10
             e = e0 + ie*0.001d0
@@ -984,7 +1188,6 @@ contains
          write(6,'(/)')
       enddo
       do je = 1, nr
-!        e0 = Pole(id)%ResPoles(je,is,ia)
          e0 = rpe(je)
          do ie = -10, 10
             e = e0 + ie*0.001d0
@@ -997,92 +1200,189 @@ contains
       enddo
    endif
 !
-   ebr = ZERO; erc = CZERO
+   allocate(nbr(2,NumPEsInEGroup))
+   nbr = 0
+   nbr(1,MyPEinEGroup+1) = nb
+   nbr(2,MyPEinEGroup+1) = nr
+!  -------------------------------------------------------------------
+   call GlobalSumInGroup(eGID,nbr,2,NumPEsInEGroup)
+!  -------------------------------------------------------------------
+   Pole(id)%NumBoundPoles(is,ia) = 0
+   Pole(id)%NumResPoles(is,ia) = 0
    do ip = 1, NumPEsInEGroup
-      if (MyPEinEGroup == ip-1) then
-         nbr(1) = nb
-         nbr(2) = nr
-      endif
-      call bcastMessageInGroup(eGID,nbr,2,ip-1)
-      if (nbr(1) > 0) then
-         nb0 = Pole(id)%NumBoundPoles(is,ia)
-         if (MyPEinEGroup == ip-1) then
-            ebr(1:nbr(1)) = bpe(1:nbr(1))
-!           ----------------------------------------------------------
-!           call zcopy(kmax_kkr_max*kmax_kkr_max*kmax_kkr_max,bmat,1,brmat,1)
-!           do ib = 1, nbr(1)
-!              -------------------------------------------------------
-!              call zcopy(kmax_kkr_max*kmax_kkr_max,bmat(1,ib),1,Pole(id)%BmatResidual(1,nb0+ib,is,ia),1)
-!              -------------------------------------------------------
-!           enddo
-!           ----------------------------------------------------------
-            call zcopy(kmax_kkr_max*kmax_kkr_max*nbr(1),bmat,1,Pole(id)%BmatResidual(1,nb0+1,is,ia),1)
-!           ----------------------------------------------------------
-            degens(1:nbr(1)) = bpdeg(1:nbr(1))
-         endif
-!        -------------------------------------------------------------
-         call bcastMessageInGroup(eGID,ebr,nbr(1),ip-1)
-!        call bcastMessageInGroup(eGID,brmat,kmax_kkr_max*kmax_kkr_max,kmax_kkr_max,ip-1)
-         call bcastMessageInGroup(eGID,degens,nbr(1),ip-1)
-!        -------------------------------------------------------------
-         do ib = 1, nbr(1)
-            Pole(id)%BoundPoles(nb0+ib,is,ia) = ebr(ib)
-            Pole(id)%NumBPDegens(nb0+ib,is,ia) = degens(ib)
-!           ----------------------------------------------------------
-!           call zcopy(kmax_kkr*kmax_kkr,brmat(1,ib),1,          &
-!                      Pole(id)%BmatResidual(1,nb0+ib,is,ia),1)
-!           ----------------------------------------------------------
-         enddo
-!        -------------------------------------------------------------
-         call bcastMessageInGroup(eGID,Pole(id)%BmatResidual(1:,nb0+1:,is,ia),&
-                                  kmax_kkr_max*kmax_kkr_max,nbr(1),ip-1)
-!        -------------------------------------------------------------
-      endif
-      if (nbr(2) > 0) then
-         nr0 = Pole(id)%NumResPoles(is,ia)
-         if (MyPEinEGroup == ip-1) then
-            erc(1:nbr(2)) = rpe(1:nbr(2))
-!           ----------------------------------------------------------
-!           call zcopy(kmax_kkr_max*kmax_kkr_max*kmax_kkr_max,rmat,1,brmat,1)
-            call zcopy(kmax_kkr_max*kmax_kkr_max*nbr(2),rmat,1,Pole(id)%RmatResidual(1,nr0+1,is,ia),1)
-!           ----------------------------------------------------------
-            degens(1:nbr(2)) = rpdeg(1:nbr(2))
-         endif
-!        -------------------------------------------------------------
-         call bcastMessageInGroup(eGID,erc,nbr(2),ip-1)
-!        call bcastMessageInGroup(eGID,brmat,kmax_kkr_max*kmax_kkr_max,nbr(2),ip-1)
-         call bcastMessageInGroup(eGID,degens,nbr(2),ip-1)
-!        -------------------------------------------------------------
-         do ir = 1, nbr(2)
-            Pole(id)%ResPoles(nr0+ir,is,ia) = real(erc(ir),kind=RealKind)
-            Pole(id)%ResWidth(nr0+ir,is,ia) = TWO*aimag(erc(ir))
-            Pole(id)%NumRPDegens(nr0+ir,is,ia) = degens(ir)
-!           ----------------------------------------------------------
-!           call zcopy(kmax_kkr*kmax_kkr,brmat(1,ir),1,          &
-!                      Pole(id)%RmatResidual(1,nr0+ir,is,ia),1)
-!           ----------------------------------------------------------
-         enddo
-!        -------------------------------------------------------------
-         call bcastMessageInGroup(eGID,Pole(id)%RmatResidual(1:,nr0+1:,is,ia),&
-                                  kmax_kkr_max*kmax_kkr_max,nbr(2),ip-1)
-!        -------------------------------------------------------------
-      endif
-      Pole(id)%NumBoundPoles(is,ia) = Pole(id)%NumBoundPoles(is,ia) + nbr(1)
-      Pole(id)%NumResPoles(is,ia) = Pole(id)%NumResPoles(is,ia) + nbr(2)
+      Pole(id)%NumBoundPoles(is,ia) = Pole(id)%NumBoundPoles(is,ia) + nbr(1,ip)
+      Pole(id)%NumResPoles(is,ia) = Pole(id)%NumResPoles(is,ia) + nbr(2,ip)
+   enddo
+   if (Pole(id)%NumBoundPoles(is,ia) > MaxNumBoundStates) then
+      call ErrorHandler('findSMatrixPoles','NumBoundPoles > MaxNumBoundStates', &
+                        Pole(id)%NumBoundPoles(is,ia), MaxNumBoundStates)
+   endif
+   if (Pole(id)%NumResPoles(is,ia) > MaxNumResonanceStates) then
+      call ErrorHandler('findSMatrixPoles','NumResPoles > MaxNumResonanceStates', &
+                        Pole(id)%NumResPoles(is,ia), MaxNumResonanceStates)
+   endif
+!
+   do ib = 1, Pole(id)%NumBoundPoles(is,ia)
+      call initializePoleDensity(Pole(id)%BoundState(ib,is,ia),aux=.false.)
    enddo
 !
-   nullify(pv, evl, evr, em)
+   do ib = 1, Pole(id)%NumResPoles(is,ia)
+      call initializePoleDensity(Pole(id)%ResState(ib,is,ia),aux=.true.)
+   enddo
+!
+   ebr = ZERO; erc = CZERO
+   nb0 = 0; nr0 = 0
+   do ip = 1, NumPEsInEGroup
+      if (nbr(1,ip) > 0) then
+         if (MyPEinEGroup == ip-1) then
+            ebr(1:nbr(1,ip)) = bpe(1:nbr(1,ip))
+!           ----------------------------------------------------------
+            call zcopy(kmax_kkr_max*kmax_kkr_max*nbr(1,ip),bmat,1,brmat,1)
+!           ----------------------------------------------------------
+            degens(1:nbr(1,ip)) = bpdeg(1:nbr(1,ip))
+         endif
+!        -------------------------------------------------------------
+         call bcastMessageInGroup(eGID,ebr,nbr(1,ip),ip-1)
+         call bcastMessageInGroup(eGID,degens,nbr(1,ip),ip-1)
+         call bcastMessageInGroup(eGID,brmat,kmax_kkr_max*kmax_kkr_max,nbr(1,ip),ip-1)
+!        -------------------------------------------------------------
+         do ib = 1, nbr(1,ip)
+            Pole(id)%BoundState(nb0+ib,is,ia)%PoleE = ebr(ib)
+            Pole(id)%BoundState(nb0+ib,is,ia)%NumDegens = degens(ib)
+!           ----------------------------------------------------------
+            call zcopy(kmax_kkr*kmax_kkr,brmat(1,ib),1,               &
+                       Pole(id)%BoundState(nb0+ib,is,ia)%ResidualMat,1)
+!           ----------------------------------------------------------
+         enddo
+         nb0 = nb0 + nbr(1,ip)
+      endif
+!
+      if (nbr(2,ip) > 0) then
+         if (MyPEinEGroup == ip-1) then
+            erc(1:nbr(2,ip)) = rpe(1:nbr(2,ip))
+!           ----------------------------------------------------------
+            call zcopy(kmax_kkr_max*kmax_kkr_max*nbr(2,ip),rmat,1,brmat,1)
+!           ----------------------------------------------------------
+            degens(1:nbr(2,ip)) = rpdeg(1:nbr(2,ip))
+!           ----------------------------------------------------------
+            call zcopy(kmax_kkr_max*kmax_kkr_max*nbr(2,ip),amat,1,camat,1)
+!           ----------------------------------------------------------
+         endif
+!        -------------------------------------------------------------
+         call bcastMessageInGroup(eGID,erc,nbr(2,ip),ip-1)
+         call bcastMessageInGroup(eGID,degens,nbr(2,ip),ip-1)
+         call bcastMessageInGroup(eGID,brmat,kmax_kkr_max*kmax_kkr_max,nbr(2,ip),ip-1)
+         call bcastMessageInGroup(eGID,camat,kmax_kkr_max*kmax_kkr_max,nbr(2,ip),ip-1)
+!        -------------------------------------------------------------
+         do ir = 1, nbr(2,ip)
+            Pole(id)%ResState(nr0+ir,is,ia)%PoleE = real(erc(ir),kind=RealKind)
+            Pole(id)%ResState(nr0+ir,is,ia)%PoleWidth = TWO*aimag(erc(ir))
+            Pole(id)%ResState(nr0+ir,is,ia)%NumDegens = degens(ir)
+!           ----------------------------------------------------------
+            call zcopy(kmax_kkr*kmax_kkr,brmat(1,ir),1,               &
+                       Pole(id)%ResState(nr0+ir,is,ia)%ResidualMat,1)
+!           ----------------------------------------------------------
+            call zcopy(kmax_kkr*kmax_kkr,camat(1,ir),1,               &
+                       Pole(id)%ResState(nr0+ir,is,ia)%AuxiliaryMat,1)
+!           ----------------------------------------------------------
+         enddo
+         nr0 = nr0 + nbr(2,ip)
+      endif
+   enddo
+!
+   Pole(id)%NumRs = getSolutionRmeshSize()
+!
+!  -------------------------------------------------------------------
+   call sortPoleStates(Pole(id)%NumBoundPoles(is,ia),                 &
+                       Pole(id)%BoundState(:,is,ia),                  &
+                       Pole(id)%BoundSI(:,is,ia)) 
+   call sortPoleStates(Pole(id)%NumResPoles(is,ia),                   &
+                       Pole(id)%ResState(:,is,ia),                    &
+                       Pole(id)%ResSI(:,is,ia)) 
+!  -------------------------------------------------------------------
+!
+   deallocate(nbr)
+   nullify(pv, evl, evr, em, am)
    nullify(s0, s1, s2, sm)
 !
    end subroutine findSMatrixPoles
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine initializePoleDensity(pd,aux)
+!  ===================================================================
+   implicit none
+!
+   type (PoleDensityStruct), intent(inout) :: pd
+!
+   logical, intent(in) :: aux
+!
+   pd%NumDegens = 0
+   pd%PoleE = ZERO
+   pd%PoleWidth = ZERO
+   pd%Qvp = ZERO
+   pd%Qmt = ZERO
+!
+   if ( .not.allocated(pd%ResidualMat) ) then
+      allocate( pd%ResidualMat(kmax_kkr_max*kmax_kkr_max) )
+   endif
+   pd%ResidualMat = CZERO
+!
+   if (aux) then
+      if ( .not.allocated(pd%AuxiliaryMat) ) then
+         allocate( pd%AuxiliaryMat(kmax_kkr_max*kmax_kkr_max) )
+      endif
+      pd%AuxiliaryMat = CZERO
+   endif 
+!
+   if ( .not.allocated(pd%Density) ) then
+      allocate( pd%Density(MaxNumRs*jmax_rho_max) )
+   endif
+   pd%Density = CZERO
+!
+   if ( .not.allocated(pd%Deriv_Density) ) then
+      allocate( pd%Deriv_Density(MaxNumRs*jmax_rho_max) )
+   endif
+   pd%Deriv_Density = CZERO
+!
+   end subroutine initializePoleDensity
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine finalizePoleDensity(pd)
+!  ===================================================================
+   implicit none
+!
+   type (PoleDensityStruct), intent(inout) :: pd
+!
+   if ( allocated(pd%ResidualMat) ) then
+      deallocate( pd%ResidualMat )
+   endif
+!
+   if ( allocated(pd%AuxiliaryMat) ) then
+      deallocate( pd%AuxiliaryMat )
+   endif
+!
+   if ( allocated(pd%Density) ) then
+      deallocate( pd%Density )
+   endif
+!
+   if ( allocated(pd%Deriv_Density) ) then
+      deallocate( pd%Deriv_Density )
+   endif
+!
+   end subroutine finalizePoleDensity
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine computeBoundStateDensity(id,ia,is)
 !  ===================================================================
+!  Note: The density associated with the bound state pole includes the 
+!        degeneracy of the pole, since the residual matrix has already
+!        been multiplied by the number of degeneracies.
+!  *******************************************************************
    use SSSolverModule, only : solveSingleScattering, getSineMatrix
-   use SSSolverModule, only : getRegSolution, getSolutionRmeshSize
-   use SSSolverModule, only : getRegSolutionDerivative
+   use SSSolverModule, only : getRegSolution, getRegSolutionDerivative
 !  use SSSolverModule, only : getJostInvMatrix, getOmegaHatMatrix
 !  use SSSolverModule, only : computeDOS, getDOS
 !
@@ -1093,6 +1393,7 @@ contains
    use PublicTypeDefinitionsModule, only : GridStruct
 !
    use IBZRotationModule, only : symmetrizeMatrix
+   use IBZRotationModule, only : symmetrizeMatrix
 !
    use IntegerFactorsModule, only : lofj, mofj, kofj, lofk, mofk, bofk, m1m
 !
@@ -1102,14 +1403,14 @@ contains
 !
    integer (kind=IntKind), intent(in) :: id, is, ia
 !
-   integer (kind=IntKind) :: ie, ib, info
+   integer (kind=IntKind) :: ie, ib, info, ip
    integer (kind=IntKind) :: kmax_kkr, jmax_rho, kmax_rho, NumRs, NumBPs
    integer (kind=IntKind) :: kl, klp, klp_bar, kl1, kl2, kl3, kl3_bar, m3, mp, ir, jl3
 !
    real (kind=RealKind), pointer :: r_mesh(:)
 !
-   complex (kind=CmplxKind), pointer :: Bdensity(:,:,:)
-   complex (kind=CmplxKind), pointer :: Deriv_Bdensity(:,:,:)
+   complex (kind=CmplxKind), pointer :: Bdensity(:,:)
+   complex (kind=CmplxKind), pointer :: Deriv_Bdensity(:,:)
    complex (kind=CmplxKind), pointer :: sine_mat(:,:), smat_inv(:,:), BSinv(:,:)
    complex (kind=CmplxKind), pointer :: PhiLr(:,:,:), DerPhiLr(:,:,:)
    complex (kind=CmplxKind), pointer :: BPhiLr(:,:,:), DerBPhiLr(:,:,:), PPr(:,:,:)
@@ -1124,23 +1425,17 @@ contains
    kmax_kkr = Pole(id)%kmax_kkr
    jmax_rho = Pole(id)%jmax_rho
    kmax_rho = kofj(jmax_rho)
-   NumRs = getSolutionRmeshSize()
-   Pole(id)%NumRs = NumRs
+   NumRs = Pole(id)%NumRs
    NumBPs = Pole(id)%NumBoundPoles(is,ia)
 !
-   if (NumBPs > 0) then
-      Bdensity => aliasArray3_c(Pole(id)%Density(:,is,ia),NumRs,jmax_rho,NumBPs)
-      Deriv_Bdensity => aliasArray3_c(Pole(id)%Deriv_Density(:,is,ia),NumRs,jmax_rho,NumBPs)
-   else
+   if (NumBPs < 1) then
       return
    endif
 !
 !  ===================================================================
-!  Note: Bdensity stores the density multiplied the number of degeneracies
+!  Note: Bdensity stores the density multiplied by the number of degeneracies
 !        of the bound state.
 !  ===================================================================
-   Bdensity = CZERO
-   Deriv_Bdensity = CZERO
    smat_inv => aliasArray2_c(wspace0,kmax_kkr,kmax_kkr)
    BSinv => aliasArray2_c(wspace1,kmax_kkr,kmax_kkr)
 !
@@ -1150,8 +1445,15 @@ contains
    PPr => aliasArray3_c(wspace3,NumRs,kmax_kkr,kmax_kkr)
    DerBPhiLr => aliasArray3_c(wspace4,NumRs,kmax_kkr,kmax_kkr)
 !
+   do ib = 1, NumBPs
+      Pole(id)%BoundState(ib,is,ia)%Density = CZERO
+      Pole(id)%BoundState(ib,is,ia)%Deriv_Density = CZERO
+   enddo
+!
    do ib = MyPEinEGroup+1, NumBPs, NumPEsInEGroup
-      e = Pole(id)%BoundPoles(ib,is,ia)
+      Bdensity => aliasArray2_c(Pole(id)%BoundState(ib,is,ia)%Density,NumRs,jmax_rho)
+      Deriv_Bdensity => aliasArray2_c(Pole(id)%BoundState(ib,is,ia)%Deriv_Density,NumRs,jmax_rho)
+      e = Pole(id)%BoundState(ib,is,ia)%PoleE
       kappa = sqrt(e)
       cfac0 = HALF*kappa
 !     ----------------------------------------------------------------
@@ -1166,10 +1468,10 @@ contains
 !     ----------------------------------------------------------------
 !
 !     ===================================================================
-!     calculate BmatResidual*sine_mat^{-T*} and store the result in BSinv
+!     calculate ResidualMat*sine_mat^{-T*} and store the result in BSinv
 !     ----------------------------------------------------------------
       call zgemm('n','n',kmax_kkr,kmax_kkr,kmax_kkr,CONE,             &
-                 Pole(id)%BmatResidual(1,ib,is,ia),kmax_kkr,smat_inv,kmax_kkr, &
+                 Pole(id)%BoundState(ib,is,ia)%ResidualMat,kmax_kkr,smat_inv,kmax_kkr, &
                  CZERO,BSinv,kmax_kkr)
 !     ----------------------------------------------------------------
       call symmetrizeMatrix(BSinv,kmax_kkr)
@@ -1204,7 +1506,7 @@ contains
                cfac1 = cfac0*gaunt(kl1,kl2,kl3)
                cfac2 = cfac0*m1m(m3)*gaunt(kl1,kl2,kl3_bar)
                do ir = 1, NumRs
-                  Bdensity(ir,jl3,ib) = Bdensity(ir,jl3,ib)           &
+                  Bdensity(ir,jl3) = Bdensity(ir,jl3)           &
                                       + cfac1*PPr(ir,kl1,kl2) + conjg(cfac2*PPr(ir,kl1,kl2))
 !+ cfac1*PPr(ir,kl1,kl2) - conjg(cfac2*PPr(ir,kl1,kl2))
                enddo
@@ -1241,7 +1543,7 @@ contains
                cfac1 = cfac0*gaunt(kl1,kl2,kl3)
                cfac2 = cfac0*m1m(m3)*gaunt(kl1,kl2,kl3_bar)
                do ir = 1, NumRs
-                  Deriv_Bdensity(ir,jl3,ib) = Deriv_Bdensity(ir,jl3,ib)  &
+                  Deriv_Bdensity(ir,jl3) = Deriv_Bdensity(ir,jl3)  &
                                             + cfac1*PPr(ir,kl1,kl2) + conjg(cfac2*PPr(ir,kl1,kl2))
 !+ cfac1*PPr(ir,kl1,kl2) - conjg(cfac2*PPr(ir,kl1,kl2))
                enddo
@@ -1254,38 +1556,27 @@ contains
 !     ================================================================
       do jl3 = 1, jmax_rho
          do ir = 1, NumRs
-            Bdensity(ir,jl3,ib) = Bdensity(ir,jl3,ib)/r_mesh(ir)**2
+            Bdensity(ir,jl3) = Bdensity(ir,jl3)/r_mesh(ir)**2
          enddo
          do ir = 1, NumRs
-            Deriv_Bdensity(ir,jl3,ib) = Deriv_Bdensity(ir,jl3,ib)/r_mesh(ir)**2
+            Deriv_Bdensity(ir,jl3) = Deriv_Bdensity(ir,jl3)/r_mesh(ir)**2
          enddo
       enddo
-!
-!call computeDOS()
-!dos_r_jl => getDOS()
-!do jl3 = 1, jmax_rho
-!non_zero = .false.
-!LOOP_ir_3: do ir = 1, Grid%jend
-!if (abs(dos_r_jl(ir,jl3)) > TEN2m6) then
-!non_zero = .true.
-!exit LOOP_ir_3
-!endif
-!enddo LOOP_ir_3
-!if (non_zero) then
-!write(6,'(a,3i5)')'None zero dos_r_jl component: ib,lp,mp = ',ib,lofj(jl3),mofj(jl3)
-!write(6,'(a,2d15.8,2x,2d15.8)')'den,dos = ',Bdensity(1000,jl3,ib),dos_r_jl(1000,jl3)
-!endif
-!enddo
    enddo
-!  ------------------------------------------------------------------
-   call GlobalSumInGroup(eGID,Bdensity,NumRs,jmax_rho,NumBPs)
-   call GlobalSumInGroup(eGID,Deriv_Bdensity,NumRs,jmax_rho,NumBPs)
-!  ------------------------------------------------------------------
 !
    do ib = 1, NumBPs
-      Pole(id)%Qvp(ib,is,ia) = getVolumeIntegration(id,NumRs,r_mesh,kmax_rho,    &
-                                                    jmax_rho,0,Bdensity(:,:,ib), &
-                                                    Pole(id)%Qmt(ib,is,ia))
+      ip = mod(ib-1,NumPEsInEGroup)
+!     ---------------------------------------------------------------
+      call bcastMessageInGroup(eGID,Pole(id)%BoundState(ib,is,ia)%Density,NumRs*jmax_rho,ip)
+      call bcastMessageInGroup(eGID,Pole(id)%BoundState(ib,is,ia)%Deriv_Density,NumRs*jmax_rho,ip)
+!     ---------------------------------------------------------------
+      Bdensity => aliasArray2_c(Pole(id)%BoundState(ib,is,ia)%Density,NumRs,jmax_rho)
+      Pole(id)%BoundState(ib,is,ia)%Qvp = getVolumeIntegration(id,NumRs,r_mesh,kmax_rho,   &
+                                                               jmax_rho,0,Bdensity,        &
+                                                               Pole(id)%BoundState(ib,is,ia)%Qmt)
+      if (print_level >= 0) then
+         write(6,'(a,f12.6)')'In computeBoundStateDensity: Qvp = ',Pole(id)%BoundState(ib,is,ia)%Qvp
+      endif
    enddo
 !
    nullify(sine_mat, BSinv, smat_inv, Grid, r_mesh)
@@ -1293,6 +1584,404 @@ contains
    nullify(Bdensity, Deriv_Bdensity)
 !
    end subroutine computeBoundStateDensity
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine computeResonanceStateDensity(id,ia,is)
+!  ===================================================================
+!  Note: The density associated with the resonance state pole includes the 
+!        degeneracy of the pole, since the residual matrix has already
+!        been multiplied by the number of degeneracies.
+!  *******************************************************************
+   use SSSolverModule, only : solveSingleScattering, getSineMatrix
+   use SSSolverModule, only : getRegSolution, getRegSolutionDerivative
+!  use SSSolverModule, only : getJostInvMatrix, getOmegaHatMatrix
+!  use SSSolverModule, only : computeDOS, getDOS
+!
+   use RadialGridModule, only : getGrid
+!
+   use MatrixModule, only : computeAStarTInv
+!
+   use PublicTypeDefinitionsModule, only : GridStruct
+!
+   use IBZRotationModule, only : symmetrizeMatrix
+!
+   use IntegerFactorsModule, only : lofj, mofj, kofj, lofk, mofk, bofk, m1m
+!
+   use StepFunctionModule, only : getVolumeIntegration
+!
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: id, is, ia
+!
+   integer (kind=IntKind) :: ie, ib, info, ip
+   integer (kind=IntKind) :: kmax_kkr, jmax_rho, kmax_rho, NumRs, NumResPs
+   integer (kind=IntKind) :: kl, klp, klp_bar, kl1, kl2, kl3, kl3_bar, m3, mp, ir, jl3
+!
+   real (kind=RealKind), pointer :: r_mesh(:)
+!
+   complex (kind=CmplxKind), pointer :: Bdensity(:,:)
+   complex (kind=CmplxKind), pointer :: Deriv_Bdensity(:,:)
+   complex (kind=CmplxKind), pointer :: sine_mat(:,:), smat_inv(:,:), BSinv(:,:)
+   complex (kind=CmplxKind), pointer :: PhiLr(:,:,:), DerPhiLr(:,:,:)
+   complex (kind=CmplxKind), pointer :: BPhiLr(:,:,:), DerBPhiLr(:,:,:), PPr(:,:,:)
+!  complex (kind=CmplxKind), pointer :: dos_r_jl(:,:)
+   complex (kind=CmplxKind) :: e, cfac, cfac0, cfac1, cfac2, kappa
+!
+   type (GridStruct), pointer :: Grid
+!
+   logical :: non_zero
+!
+   kmax_kkr = Pole(id)%kmax_kkr
+   jmax_rho = Pole(id)%jmax_rho
+   kmax_rho = kofj(jmax_rho)
+   NumRs = Pole(id)%NumRs
+   NumResPs = Pole(id)%NumResPoles(is,ia)
+!
+   if (NumResPs < 1) then
+      return
+   endif
+!
+!  ===================================================================
+!  Note: Bdensity stores the density multiplied by the number of degeneracies
+!        of the resonance state.
+!  ===================================================================
+   smat_inv => aliasArray2_c(wspace0,kmax_kkr,kmax_kkr)
+   BSinv => aliasArray2_c(wspace1,kmax_kkr,kmax_kkr)
+!
+   Grid => getGrid(id)
+   r_mesh => Grid%r_mesh
+   BPhiLr => aliasArray3_c(wspace2,NumRs,kmax_kkr,kmax_kkr)
+   PPr => aliasArray3_c(wspace3,NumRs,kmax_kkr,kmax_kkr)
+   DerBPhiLr => aliasArray3_c(wspace4,NumRs,kmax_kkr,kmax_kkr)
+!
+   do ib = 1, NumResPs
+      Pole(id)%ResState(ib,is,ia)%Density = CZERO
+      Pole(id)%ResState(ib,is,ia)%Deriv_Density = CZERO
+   enddo
+!
+   do ib = MyPEinEGroup+1, NumResPs, NumPEsInEGroup
+      Bdensity => aliasArray2_c(Pole(id)%ResState(ib,is,ia)%Density,NumRs,jmax_rho)
+      Deriv_Bdensity => aliasArray2_c(Pole(id)%ResState(ib,is,ia)%Deriv_Density,NumRs,jmax_rho)
+      e = Pole(id)%ResState(ib,is,ia)%PoleE
+      kappa = sqrt(e)
+      cfac0 = HALF*kappa
+!     ----------------------------------------------------------------
+      call solveSingleScattering(is, id, e, CZERO, atom=ia)
+!     ----------------------------------------------------------------
+      sine_mat => getSineMatrix()
+!     ================================================================
+!     calculate sine_mat^(-T*) and store the result in smat_inv
+!     ----------------------------------------------------------------
+      call computeAStarTInv(sine_mat,kmax_kkr,kmax_kkr,smat_inv)
+!     ----------------------------------------------------------------
+!
+!     ===================================================================
+!     calculate ResidualMat*sine_mat^{-T*} and store the result in BSinv
+!     ----------------------------------------------------------------
+      call zgemm('n','n',kmax_kkr,kmax_kkr,kmax_kkr,CONE,             &
+                 Pole(id)%ResState(ib,is,ia)%ResidualMat,kmax_kkr,smat_inv,kmax_kkr, &
+                 CZERO,BSinv,kmax_kkr)
+!     ----------------------------------------------------------------
+      call symmetrizeMatrix(BSinv,kmax_kkr)
+!     ----------------------------------------------------------------
+!
+      PhiLr => getRegSolution()
+!     ----------------------------------------------------------------
+      call zgemm('n','n',NumRs*kmax_kkr,kmax_kkr,kmax_kkr,CONE,          &
+                 PhiLr,NumRs*kmax_kkr,BSinv,kmax_kkr,                    &
+                 CZERO,BPhiLr,NumRs*kmax_kkr)
+!     ----------------------------------------------------------------
+      PPr = CZERO
+      do klp = 1, kmax_kkr
+         mp = mofk(klp)
+         klp_bar = bofk(klp)
+         cfac = m1m(mp)
+         do kl2 = 1, kmax_kkr
+            do kl1 = 1, kmax_kkr
+               do ir = 1, NumRs
+                  PPr(ir,kl1,kl2) = PPr(ir,kl1,kl2) + cfac*BPhiLr(ir,kl1,klp)*PhiLr(ir,kl2,klp_bar)
+               enddo
+            enddo
+         enddo
+      enddo
+      do jl3 = 1, jmax_rho
+         m3 = mofj(jl3)
+         kl3 = kofj(jl3)
+         kl3_bar = bofk(kl3)
+         do kl2 = 1, kmax_kkr
+            do kl1 = 1, kmax_kkr
+               cfac1 = cfac0*gaunt(kl1,kl2,kl3)
+               cfac2 = cfac0*m1m(m3)*gaunt(kl1,kl2,kl3_bar)
+               do ir = 1, NumRs
+                  Bdensity(ir,jl3) = Bdensity(ir,jl3)           &
+                                      + cfac1*PPr(ir,kl1,kl2) + conjg(cfac2*PPr(ir,kl1,kl2))
+               enddo
+            enddo
+         enddo
+      enddo
+!
+      DerPhiLr => getRegSolutionDerivative()
+!     ----------------------------------------------------------------
+      call zgemm('n','n',NumRs*kmax_kkr,kmax_kkr,kmax_kkr,CONE,       &
+                 DerPhiLr,NumRs*kmax_kkr,BSinv,kmax_kkr,              &
+                 CZERO,DerBPhiLr,NumRs*kmax_kkr)
+!     ----------------------------------------------------------------
+      PPr = CZERO
+      do klp = 1, kmax_kkr
+         mp = mofk(klp)
+         klp_bar = bofk(klp)
+         cfac = m1m(mp)
+         do kl2 = 1, kmax_kkr
+            do kl1 = 1, kmax_kkr
+               do ir = 1, NumRs
+                  PPr(ir,kl1,kl2) = PPr(ir,kl1,kl2) + cfac*DerBPhiLr(ir,kl1,klp)*PhiLr(ir,kl2,klp_bar) &
+                                                    + cfac*BPhiLr(ir,kl1,klp)*DerPhiLr(ir,kl2,klp_bar)
+               enddo
+            enddo
+         enddo
+      enddo
+      do jl3 = 1, jmax_rho
+         m3 = mofj(jl3)
+         kl3 = kofj(jl3)
+         kl3_bar = bofk(kl3)
+         do kl2 = 1, kmax_kkr
+            do kl1 = 1, kmax_kkr
+               cfac1 = cfac0*gaunt(kl1,kl2,kl3)
+               cfac2 = cfac0*m1m(m3)*gaunt(kl1,kl2,kl3_bar)
+               do ir = 1, NumRs
+                  Deriv_Bdensity(ir,jl3) = Deriv_Bdensity(ir,jl3)  &
+                                            + cfac1*PPr(ir,kl1,kl2) + conjg(cfac2*PPr(ir,kl1,kl2))
+               enddo
+            enddo
+         enddo
+      enddo
+!
+!     ================================================================
+!     Get rid of r^2 from Bdensity and Deriv_Bdensity
+!     ================================================================
+   !  do jl3 = 1, jmax_rho
+   !     do ir = 1, NumRs
+   !        Bdensity(ir,jl3) = Bdensity(ir,jl3)/r_mesh(ir)**2
+   !     enddo
+   !     do ir = 1, NumRs
+   !        Deriv_Bdensity(ir,jl3) = Deriv_Bdensity(ir,jl3)/r_mesh(ir)**2
+   !     enddo
+   !  enddo
+   enddo
+!
+   do ib = 1, NumResPs
+      ip = mod(ib-1,NumPEsInEGroup)
+!     ---------------------------------------------------------------
+      call bcastMessageInGroup(eGID,Pole(id)%ResState(ib,is,ia)%Density,NumRs*jmax_rho,ip)
+      call bcastMessageInGroup(eGID,Pole(id)%ResState(ib,is,ia)%Deriv_Density,NumRs*jmax_rho,ip)
+!     ---------------------------------------------------------------
+      Bdensity => aliasArray2_c(Pole(id)%ResState(ib,is,ia)%Density,NumRs,jmax_rho)
+      Pole(id)%ResState(ib,is,ia)%Qvp = getVolumeIntegration(id,NumRs,r_mesh,kmax_rho,   &
+                                                             jmax_rho,2,Bdensity,        &
+                                                             Pole(id)%ResState(ib,is,ia)%Qmt)
+      if (print_level >= 0) then
+         write(6,'(a,f12.6)')'In computeResonanceStateDensity: Qvp = ',Pole(id)%ResState(ib,is,ia)%Qvp
+      endif
+   enddo
+!
+   nullify(sine_mat, BSinv, smat_inv, Grid, r_mesh)
+   nullify(BPhiLr, PhiLr, DerBPhiLr, DerPhiLr, PPr)
+   nullify(Bdensity, Deriv_Bdensity)
+!
+   end subroutine computeResonanceStateDensity
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine computeResidualRSDensity(id,ia,is,ib,e)
+!  ===================================================================
+   use MathParamModule, only : SQRTm1, PI
+!
+   use SSSolverModule, only : solveSingleScattering, getSineMatrix
+   use SSSolverModule, only : getRegSolution, getRegSolutionDerivative
+!  use SSSolverModule, only : getJostInvMatrix, getOmegaHatMatrix
+!  use SSSolverModule, only : computeDOS, getDOS
+!
+   use RadialGridModule, only : getGrid
+!
+   use MatrixModule, only : computeAStarTInv
+!
+   use PublicTypeDefinitionsModule, only : GridStruct
+!
+   use IBZRotationModule, only : symmetrizeMatrix
+!
+   use IntegerFactorsModule, only : lofj, mofj, kofj, lofk, mofk, bofk, m1m
+!
+   use StepFunctionModule, only : getVolumeIntegration
+!
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: id, is, ia, ib
+!
+   integer (kind=IntKind) :: ie, info, ip
+   integer (kind=IntKind) :: kmax_kkr, jmax_rho, kmax_rho, NumRs, NumResPs
+   integer (kind=IntKind) :: kl, klp, klp_bar, kl1, kl2, kl3, kl3_bar, m3, mp, ir, jl3
+!
+   real (kind=RealKind), pointer :: r_mesh(:)
+!
+   real (kind=RealKind), intent(in) :: e
+!
+   complex (kind=CmplxKind), pointer :: Bdensity(:,:)
+   complex (kind=CmplxKind), pointer :: Deriv_Bdensity(:,:)
+   complex (kind=CmplxKind), pointer :: sine_mat(:,:), smat_inv(:,:), BSinv(:,:)
+   complex (kind=CmplxKind), pointer :: PhiLr(:,:,:), DerPhiLr(:,:,:)
+   complex (kind=CmplxKind), pointer :: BPhiLr(:,:,:), DerBPhiLr(:,:,:), PPr(:,:,:)
+!  complex (kind=CmplxKind), pointer :: dos_r_jl(:,:)
+   complex (kind=CmplxKind) :: cfac, cfac0, cfac1, cfac2, kappa, ec
+!
+   type (GridStruct), pointer :: Grid
+!
+   logical :: non_zero
+!
+   if (ib < 1 .or. ib > Pole(id)%NumResPoles(is,ia)) then
+      call ErrorHandler('computeResidualRSDensity','ib is out of range',ib, &
+                        Pole(id)%NumResPoles(is,ia))
+   endif
+!
+   kmax_kkr = Pole(id)%kmax_kkr
+   jmax_rho = Pole(id)%jmax_rho
+   kmax_rho = kofj(jmax_rho)
+   NumRs = Pole(id)%NumRs
+!
+   wspace5 = CZERO; wspace6 = CZERO
+   Bdensity => aliasArray2_c(wspace5,NumRs,jmax_rho)
+   Deriv_Bdensity => aliasArray2_c(wspace6,NumRs,jmax_rho)
+!
+!  ===================================================================
+!  Note: Bdensity stores the density multiplied by the number of degeneracies
+!        of the bound state.
+!  ===================================================================
+   smat_inv => aliasArray2_c(wspace0,kmax_kkr,kmax_kkr)
+   BSinv => aliasArray2_c(wspace1,kmax_kkr,kmax_kkr)
+!
+   Grid => getGrid(id)
+   r_mesh => Grid%r_mesh
+   BPhiLr => aliasArray3_c(wspace2,NumRs,kmax_kkr,kmax_kkr)
+   PPr => aliasArray3_c(wspace3,NumRs,kmax_kkr,kmax_kkr)
+   DerBPhiLr => aliasArray3_c(wspace4,NumRs,kmax_kkr,kmax_kkr)
+!
+   ec = e
+   kappa = sqrt(ec)
+   cfac0 = HALF*kappa*SQRTm1/PI
+!  -------------------------------------------------------------------
+   call solveSingleScattering(is, id, ec, CZERO, atom=ia)
+!  -------------------------------------------------------------------
+   sine_mat => getSineMatrix()
+!  ===================================================================
+!  calculate sine_mat^(-T*) and store the result in smat_inv
+!  -------------------------------------------------------------------
+   call computeAStarTInv(sine_mat,kmax_kkr,kmax_kkr,smat_inv)
+!  -------------------------------------------------------------------
+!
+!  ======================================================================
+!  calculate AuxiliaryMat*sine_mat^{-T*} and store the result in BSinv
+!  -------------------------------------------------------------------
+   call zgemm('n','n',kmax_kkr,kmax_kkr,kmax_kkr,CONE,             &
+              Pole(id)%ResState(ib,is,ia)%AuxiliaryMat,kmax_kkr,smat_inv,kmax_kkr, &
+              CZERO,BSinv,kmax_kkr)
+!  -------------------------------------------------------------------
+   call symmetrizeMatrix(BSinv,kmax_kkr)
+!  -------------------------------------------------------------------
+!
+   PhiLr => getRegSolution()
+!  -------------------------------------------------------------------
+   call zgemm('n','n',NumRs*kmax_kkr,kmax_kkr,kmax_kkr,CONE,          &
+              PhiLr,NumRs*kmax_kkr,BSinv,kmax_kkr,                    &
+              CZERO,BPhiLr,NumRs*kmax_kkr)
+!  -------------------------------------------------------------------
+   PPr = CZERO
+   do klp = 1, kmax_kkr
+      mp = mofk(klp)
+      klp_bar = bofk(klp)
+      cfac = m1m(mp)
+      do kl2 = 1, kmax_kkr
+         do kl1 = 1, kmax_kkr
+            do ir = 1, NumRs
+               PPr(ir,kl1,kl2) = PPr(ir,kl1,kl2) + cfac*BPhiLr(ir,kl1,klp)*PhiLr(ir,kl2,klp_bar)
+            enddo
+         enddo
+      enddo
+   enddo
+   do jl3 = 1, jmax_rho
+      m3 = mofj(jl3)
+      kl3 = kofj(jl3)
+      kl3_bar = bofk(kl3)
+      do kl2 = 1, kmax_kkr
+         do kl1 = 1, kmax_kkr
+            cfac1 = cfac0*gaunt(kl1,kl2,kl3)
+            cfac2 = cfac0*m1m(m3)*gaunt(kl1,kl2,kl3_bar)
+            do ir = 1, NumRs
+               Bdensity(ir,jl3) = Bdensity(ir,jl3)           &
+                                   + cfac1*PPr(ir,kl1,kl2) + conjg(cfac2*PPr(ir,kl1,kl2))
+            enddo
+         enddo
+      enddo
+   enddo
+!
+   DerPhiLr => getRegSolutionDerivative()
+!  -------------------------------------------------------------------
+   call zgemm('n','n',NumRs*kmax_kkr,kmax_kkr,kmax_kkr,CONE,       &
+              DerPhiLr,NumRs*kmax_kkr,BSinv,kmax_kkr,              &
+              CZERO,DerBPhiLr,NumRs*kmax_kkr)
+!  -------------------------------------------------------------------
+   PPr = CZERO
+   do klp = 1, kmax_kkr
+      mp = mofk(klp)
+      klp_bar = bofk(klp)
+      cfac = m1m(mp)
+      do kl2 = 1, kmax_kkr
+         do kl1 = 1, kmax_kkr
+            do ir = 1, NumRs
+               PPr(ir,kl1,kl2) = PPr(ir,kl1,kl2) + cfac*DerBPhiLr(ir,kl1,klp)*PhiLr(ir,kl2,klp_bar) &
+                                                 + cfac*BPhiLr(ir,kl1,klp)*DerPhiLr(ir,kl2,klp_bar)
+            enddo
+         enddo
+      enddo
+   enddo
+   do jl3 = 1, jmax_rho
+      m3 = mofj(jl3)
+      kl3 = kofj(jl3)
+      kl3_bar = bofk(kl3)
+      do kl2 = 1, kmax_kkr
+         do kl1 = 1, kmax_kkr
+            cfac1 = cfac0*gaunt(kl1,kl2,kl3)
+            cfac2 = cfac0*m1m(m3)*gaunt(kl1,kl2,kl3_bar)
+            do ir = 1, NumRs
+               Deriv_Bdensity(ir,jl3) = Deriv_Bdensity(ir,jl3)  &
+                                         + cfac1*PPr(ir,kl1,kl2) + conjg(cfac2*PPr(ir,kl1,kl2))
+            enddo
+         enddo
+      enddo
+   enddo
+!
+!  ===================================================================
+!  Get rid of r^2 from Bdensity and Deriv_Bdensity
+!  ===================================================================
+!  do jl3 = 1, jmax_rho
+!     do ir = 1, NumRs
+!        Bdensity(ir,jl3) = Bdensity(ir,jl3)/r_mesh(ir)**2
+!     enddo
+!     do ir = 1, NumRs
+!        Deriv_Bdensity(ir,jl3) = Deriv_Bdensity(ir,jl3)/r_mesh(ir)**2
+!     enddo
+!  enddo
+!
+   ip = mod(ib-1,NumPEsInEGroup)
+!  ------------------------------------------------------------------
+   call bcastMessageInGroup(eGID,Bdensity,NumRs,jmax_rho,ip)
+   call bcastMessageInGroup(eGID,Deriv_Bdensity,NumRs,jmax_rho,ip)
+!  ------------------------------------------------------------------
+!
+   nullify(sine_mat, BSinv, smat_inv, Grid, r_mesh)
+   nullify(BPhiLr, PhiLr, DerBPhiLr, DerPhiLr, PPr)
+   nullify(Bdensity, Deriv_Bdensity)
+!
+   end subroutine computeResidualRSDensity
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -1324,5 +2013,87 @@ contains
    enddo
 !
    end subroutine calcDet
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine sortPoleStates(np,ps,idx)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: np
+   integer (kind=IntKind), intent(out) :: idx(np)
+   integer (kind=IntKind) :: i, j, ki, kj
+!
+   type (PoleDensityStruct), intent(in) :: ps(np)
+!
+   do i = 1, np
+      idx(i) = i
+   enddo
+!
+   do j = 1, np-1
+      kj = idx(j)
+      do i = j+1, np
+         ki = idx(i)
+         if (ps(ki)%PoleE < ps(kj)%PoleE) then
+            idx(i) = kj
+            kj = ki
+         endif
+      enddo
+      idx(j) = kj
+   enddo
+!
+   end subroutine sortPoleStates
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine swapPoleStates(p1,p2)
+!  ===================================================================
+   implicit none
+!
+   type (PoleDensityStruct), intent(inout) :: p1, p2
+!
+   integer (kind=IntKind) :: n
+!
+   real (kind=RealKind) :: r
+   real (kind=RealKind) :: mat(kmax_kkr_max*kmax_kkr_max)
+   real (kind=RealKind) :: dm(MaxNumRs*jmax_rho_max)
+!
+   n = p1%NumDegens
+   p1%NumDegens = p2%NumDegens
+   p2%NumDegens = n
+!
+   r = p1%PoleE
+   p1%PoleE = p2%PoleE
+   p2%PoleE = r
+!
+   r = p1%PoleWidth
+   p1%PoleWidth = p2%PoleWidth
+   p2%PoleWidth = r
+!
+   r = p1%Qvp
+   p1%Qvp = p2%Qvp
+   p2%Qvp = r
+!
+   r = p1%Qmt
+   p1%Qmt = p2%Qmt
+   p2%Qmt = r
+!
+   mat = p1%ResidualMat
+   p1%ResidualMat = p2%ResidualMat
+   p2%ResidualMat = mat
+!
+   mat = p1%AuxiliaryMat
+   p1%AuxiliaryMat = p2%AuxiliaryMat
+   p2%AuxiliaryMat = mat
+!
+   dm = p1%Density
+   p1%Density = p2%Density
+   p2%Density = dm
+!
+   dm = p1%Deriv_Density
+   p1%Deriv_Density = p2%Deriv_Density
+   p2%Deriv_Density = dm
+!
+   end subroutine swapPoleStates
 !  ===================================================================
 end module SMatrixPolesModule

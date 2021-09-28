@@ -1890,8 +1890,8 @@ contains
                   fsem = CZERO; dfsem = CZERO
                   nb = getNumBoundStates(id,ia,is)
                   do ib = 1, nb
-                     fden => getBoundStateDensity(id,ia,is,ib,NumRs=nr,jmax_rho=jmax_rho)
-                     dfden => getBoundStateDensity(id,ia,is,ib,derivative=.true.)
+                     fden => getBoundStateDensity(id,ia,is,ib,NumRs=nr,jmax_rho=jmax_rho,derivative=dfden)
+!                    dfden => getBoundStateDensity(id,ia,is,ib,derivative=.true.)
                      if (norm2inf == 0) then
                         norm_fac = getNumBoundStateDegen(id,ia,is,ib)/getBoundStateChargeInCell(id,ia,is,ib)
                      else

@@ -60,6 +60,7 @@ RelScattererModule.o \
 RelSSSolverModule.o \
 SCPolesModule.o \
 SMatrixPolesModule.o \
+SineMatrixZerosModule.o \
 KreinModule.o \
 CoreStatesModule.o \
 Uniform3DGridModule.o \

@@ -1,7 +1,7 @@
 Procedure to run newa for generating atomic potential
-1. ./newa
+1. MuST/bin/newa
 2. Following the on-line instructions to enter data
 
 Procedure to run newss for generating single site atomic potential
-1. ./newss
+1. MuST/bin/newss
 2. Following the on-line instructions to enter data
