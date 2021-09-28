@@ -549,7 +549,7 @@ end program findResonance
    use QuadraticMatrixModule, only : initQuadraticMatrix, endQuadraticMatrix, &
                                      solveQuadraticEquation, getEigenValue,   &
                                      solveLinearEquation, getEigenVector,     &
-                                     getEigenMatrix
+                                     getResidualMatrix
 !
    implicit none
 !
@@ -751,8 +751,8 @@ end program findResonance
                      nb = nb + 1
                      BoundPoles(nb,id,is) = pe
 !write(6,'(a,2d15.8,a,2d15.8)')'Pole = ',pv(ie)+e0,', kappa = ',sqrt(pv(ie)+e0)
-                     em => getEigenMatrix(ie) ! em is the residule matrix of
-                                              ! integrating sm^{-1} around its eigenvalue
+                     em => getResidualMatrix(ie) ! em is the residule matrix of
+                                                 ! integrating sm^{-1} around its eigenvalue
                   endif
                else if (aimag(sqrt(pv(ie)+e0)) < ZERO) then  ! Resonance states
                   pe = real(pv(ie),kind=RealKind) + e0
@@ -762,8 +762,8 @@ end program findResonance
 !                    ResWidth(nr,id,is) = aimag(sqrt(pv(ie)))**2
                      ResWidth(nr,id,is) = TWO*aimag(sqrt(pv(ie)))**2
 !write(6,'(a,2f15.12,a,2f15.12)')'Pole = ',pv(ie)+e0,', kappa = ',sqrt(pv(ie)+e0)
-                     em => getEigenMatrix(ie) ! em is the residule matrix of
-                                              ! integrating sm^{-1} around its eigenvalue
+                     em => getResidualMatrix(ie) ! em is the residule matrix of
+                                                 ! integrating sm^{-1} around its eigenvalue
                   endif
                endif
             enddo

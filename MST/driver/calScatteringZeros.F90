@@ -1,5 +1,5 @@
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calScatteringPoles(LocalNumAtoms,lkkr,lphi,             &
+   subroutine calScatteringZeros(LocalNumAtoms,lkkr,lphi,             &
                                  n_spin_pola,n_spin_cant,e0,e1,ei,nstep)
 !  ===================================================================
    use KindParamModule, only : IntKind, RealKind, CmplxKind
@@ -37,15 +37,15 @@
    complex (kind=CmplxKind), pointer :: sin_mat(:,:)
    complex (kind=CmplxKind), allocatable :: SinU(:,:)
 !
-   type PolesStruct
+   type ZerosStruct
       integer (kind=IntKind) :: sgnS
       real (kind=RealKind) :: step_e
       complex (kind=CmplxKind) :: energy
-      type (PolesStruct), pointer :: next
-   end type PolesStruct
+      type (ZerosStruct), pointer :: next
+   end type ZerosStruct
 !
-   type (PolesStruct), allocatable, target :: Poles(:,:)
-   type (PolesStruct), pointer :: pPoles, pP_prev
+   type (ZerosStruct), allocatable, target :: Zeros(:,:)
+   type (ZerosStruct), pointer :: pZeros, pP_prev
 !
    step_e = (e1-e0)/real(nstep,kind=RealKind)
    num_e = nstep + 1
@@ -54,11 +54,11 @@
    kmax_kkr = (lkkr0+1)**2
    allocate( SinU(1:kmax_kkr,1:kmax_kkr) )
    allocate( indx(1:kmax_kkr) )
-   allocate( Poles(LocalNumAtoms,n_spin_pola-n_spin_cant+1), num_EP(LocalNumAtoms,n_spin_pola-n_spin_cant+1) )
+   allocate( Zeros(LocalNumAtoms,n_spin_pola-n_spin_cant+1), num_EP(LocalNumAtoms,n_spin_pola-n_spin_cant+1) )
 !
    open(unit=11,file='SineMatrixDiag.dat',status='unknown',form='formatted')
 !
-   write(11,'(a,$)') " #Poles   ReE    ImE     Re[Det]      Im[Det] "
+   write(11,'(a,$)') " #Zeros   ReE    ImE     Re[Det]      Im[Det] "
    do l = 1,kmax_kkr
       char_lm(1:3) = "ReL"
       write(char_lm(4:6),'(i3)') offset_lm + l
@@ -77,8 +77,8 @@
 !     do id = 1,LocalNumAtoms
       do id = 1,1               ! we run only for the 1st atom
          num_ep(id,is) = 0
-         pPoles => Poles(id,is)
-         nullify( pPoles%next )
+         pZeros => Zeros(id,is)
+         nullify( pZeros%next )
          if (lkkr(id) /= lkkr0) then
             kmax_kkr = (lkkr(id)+1)**2
             lkkr0 = lkkr(id)
@@ -145,11 +145,11 @@
                sgnS_prev = sgnS
             else if ( sgnS/=sgnS_prev ) then
                num_ep(id,is) = num_ep(id,is)+1
-               pPoles%energy = e
-               pPoles%sgnS = sgnS
-               allocate(pPoles%next)
-               pPoles => pPoles%next
-               nullify( pPoles%next )
+               pZeros%energy = e
+               pZeros%sgnS = sgnS
+               allocate(pZeros%next)
+               pZeros => pZeros%next
+               nullify( pZeros%next )
                sgnS_prev = sgnS
             endif
 !
@@ -180,11 +180,11 @@
          enddo
 !
          if ( num_ep(id,is)/=0) then
-            pPoles => Poles(id,is)
+            pZeros => Zeros(id,is)
             step_e = step_e*TWO
             do ie = 1,num_EP(id,is)
                step_eh = step_e/TWO
-               e = pPoles%energy
+               e = pZeros%energy
                e_tmp = e - step_eh
                zoomDone = 0
                nullify(sin_mat)
@@ -236,7 +236,7 @@
                   sgn = ONE
                   sgnS = sign(sgn,real(det,kind=RealKind))
                   step_eh = step_eh/TWO
-                  if ( sgnS == pPoles%sgnS) then
+                  if ( sgnS == pZeros%sgnS) then
                      e_tmp = e_tmp - step_eh
 !
                      write(6,'(a,3(2x,2d17.8))') " Refine Root  - :",e_tmp, step_eh
@@ -250,20 +250,20 @@
                      zoomDone = 1
                   endif
                enddo
-               pPoles%energy = e_tmp
-               if ( sgnS == pPoles%sgnS ) then
-                  pPoles%step_e = step_eh
+               pZeros%energy = e_tmp
+               if ( sgnS == pZeros%sgnS ) then
+                  pZeros%step_e = step_eh
                else
-                  pPoles%step_e = -step_eh
+                  pZeros%step_e = -step_eh
                endif
-               pPoles%sgnS = sgnS
+               pZeros%sgnS = sgnS
                if ( ie/=num_ep(id,is) ) then
-                  pPoles => pPoles%next
+                  pZeros => pZeros%next
                else
-                  pP_prev => pPoles
-                  pPoles => pPoles%next
+                  pP_prev => pZeros
+                  pZeros => pZeros%next
                   nullify( pP_prev%next )
-                  deallocate(pPoles)
+                  deallocate(pZeros)
                endif
             enddo
          endif
@@ -272,22 +272,22 @@
 !
    do is = 1 ,n_spin_pola-n_spin_cant+1
       do id = 1,LocalNumAtoms
-         pPoles => Poles(id,is)%next
+         pZeros => Zeros(id,is)%next
          if ( num_Ep(id,is) /=0 ) then
             do ie = 2,num_EP(id,is)
-               pP_prev => pPoles%next
-               nullify(pPoles%next)
-               deallocate(pPoles)
-               pPoles => pP_prev
+               pP_prev => pZeros%next
+               nullify(pZeros%next)
+               deallocate(pZeros)
+               pZeros => pP_prev
             enddo
          endif
-         nullify( Poles(id,is)%next )
+         nullify( Zeros(id,is)%next )
       enddo
    enddo
 !
    close(unit=11)
-   deallocate( Poles, num_EP )
+   deallocate( Zeros, num_EP )
    deallocate( SinU, indx )
 !
-   end subroutine calScatteringPoles
+   end subroutine calScatteringZeros
 !  ===================================================================

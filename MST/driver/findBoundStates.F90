@@ -762,7 +762,7 @@ end program findBoundStates
    use QuadraticMatrixModule, only : initQuadraticMatrix, endQuadraticMatrix, &
                                      solveQuadraticEquation, getEigenValue,   &
                                      solveLinearEquation, getEigenVector,     &
-                                     getEigenMatrix
+                                     getResidualMatrix
 !
    implicit none
 !
@@ -990,8 +990,8 @@ print *,'NumWindows = ',NumWindows
                   pe = real(pv(ie),kind=RealKind) + e0
                   if (pe >= w0 .and. pe <= w0+WindowWidth) then
 !                    -------------------------------------------------
-                     em => getEigenMatrix(ie) ! em is the residule matrix of
-                                              ! integrating sm^{-1} around its eigenvalue
+                     em => getResidualMatrix(ie) ! em is the residule matrix of
+                                                 ! integrating sm^{-1} around its eigenvalue
 !                    -------------------------------------------------
                      if (size(em,1) /= kmax_kkr) then
                         call ErrorHandler('calQuadraticPoles','inconsistent matrix size',size(em,1),kmax_kkr)
@@ -1020,8 +1020,8 @@ print *,'NumWindows = ',NumWindows
                   pe = real(pv(ie),kind=RealKind) + e0
                   if (pe >= w0 .and. pe <= w0+WindowWidth .and. pe > ZERO) then
 !                    -------------------------------------------------
-                     em => getEigenMatrix(ie) ! em is the residule matrix of
-                                              ! integrating sm^{-1} around its eigenvalue
+                     em => getResidualMatrix(ie) ! em is the residule matrix of
+                                                 ! integrating sm^{-1} around its eigenvalue
 !                    -------------------------------------------------
                      if (abs(pe-rpe_prev) > TEN2m6) then
                         nr = nr + 1

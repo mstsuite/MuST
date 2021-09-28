@@ -39,6 +39,7 @@ BASE_ROUTINES = readInputs.o startProcess.o finishProcess.o setupRadGridAndCell.
 SRC_OBJS =  \
 $(ODIR)/PublicTypeDefinitionsModule.o \
 $(ODIR)/PublicParamDefinitionsModule.o \
+$(ODIR)/AdaptIntegrationModule.o \
 $(ODIR)/AtomModule.o \
 $(ODIR)/Atom2ProcModule.o \
 $(ODIR)/buildSendTable.o \
@@ -94,6 +95,7 @@ $(ODIR)/TestPotentialModule.o \
 $(ODIR)/TriangleModule.o \
 $(ODIR)/calNicholsonPoles.o \
 $(ODIR)/polyfermi.o \
+$(ODIR)/SineMatrixZerosModule.o \
 $(ODIR)/SMatrixPolesModule.o \
 $(ODIR)/VPI_main.o
 
@@ -114,8 +116,8 @@ TEST_CASES = $(ODIR)/testStrConst \
              $(ODIR)/ft_p \
              $(ODIR)/pav \
              $(ODIR)/testParallelFFT \
-             $(ODIR)/testSineMatrixPole \
-             $(ODIR)/testSineMatrixPole2 \
+             $(ODIR)/testSineMatrixZero \
+             $(ODIR)/testSineMatrixZero2 \
              $(ODIR)/findResonance \
              $(ODIR)/testPZGETRI \
              $(ODIR)/testStepFunc \
@@ -141,7 +143,8 @@ TEST_CASES = $(ODIR)/testStrConst \
              $(ODIR)/testResonanceStates \
              $(ODIR)/testPolyFermi \
              $(ODIR)/testBandStructure \
-             $(ODIR)/testExchCorr
+             $(ODIR)/testExchCorr \
+             $(ODIR)/testAdaptiveIntegration
 
 TEST_CASES_O = $(ODIR)/testStrConst.o \
                $(ODIR)/tst_SurfElements.o \
@@ -156,8 +159,8 @@ TEST_CASES_O = $(ODIR)/testStrConst.o \
                $(ODIR)/testMadelung.o \
                $(ODIR)/madpot.o \
                $(ODIR)/pav.o \
-               $(ODIR)/testSineMatrixPole.o \
-               $(ODIR)/testSineMatrixPole2.o \
+               $(ODIR)/testSineMatrixZero.o \
+               $(ODIR)/testSineMatrixZero2.o \
                $(ODIR)/findResonance.o \
                $(ODIR)/testPZGETRI.o \
                $(ODIR)/testStepFunc.o \
@@ -256,11 +259,11 @@ $(ODIR)/testParallelFFT: inc_fftw testParallelFFT.o $(ODIR)/Uniform3DGridModule.
 $(SRC_OBJS)  $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 	rm -f fftw3f.h
 
-$(ODIR)/testSineMatrixPole: testSineMatrixPole.o calScatteringPoles.o
-	$(LD) -o $(ODIR)/testSineMatrixPole testSineMatrixPole.o $(ODIR)/calScatteringPoles.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
+$(ODIR)/testSineMatrixZero: testSineMatrixZero.o calScatteringZeros.o $(ODIR)/SineMatrixZerosModule.o
+	$(LD) -o $(ODIR)/testSineMatrixZero testSineMatrixZero.o $(ODIR)/calScatteringZeros.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
-$(ODIR)/testSineMatrixPole2: testSineMatrixPole2.o calScatteringPoles.o
-	$(LD) -o $(ODIR)/testSineMatrixPole2 testSineMatrixPole2.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
+$(ODIR)/testSineMatrixZero2: testSineMatrixZero2.o calScatteringZeros.o
+	$(LD) -o $(ODIR)/testSineMatrixZero2 testSineMatrixZero2.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/findResonance:  findResonance.o
 	$(LD) -o $(ODIR)/findResonance findResonance.o $(ODIR)/SCPolesModule.o \
@@ -286,7 +289,7 @@ $(ODIR)/ssk: SingleSiteKrein.o
 $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/assk: AdaptIntegrationModule.o adaptiveSSK.o 
-	$(LD) -o $(ODIR)/assk $(ODIR)/adaptiveSSK.o $(ODIR)/AdaptIntegrationModule.o \
+	$(LD) -o $(ODIR)/assk $(ODIR)/adaptiveSSK.o \
 $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/testBlockInverse: testBlockInverse.o
@@ -339,6 +342,9 @@ $(ODIR)/testSMatrixPoles: testSMatrixPoles.o $(SRC_OBJS)
 
 $(ODIR)/testResonanceStates: testResonanceStates.o $(SRC_OBJS)
 	$(LD) -o $(ODIR)/testResonanceStates testResonanceStates.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
+
+$(ODIR)/testAdaptiveIntegration: testAdaptiveIntegration.o $(SRC_OBJS)
+	$(LD) -o $(ODIR)/testAdaptiveIntegration testAdaptiveIntegration.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/testPolyFermi: testPolyFermi.o $(SRC_OBJS)
 	$(LD) -o $(ODIR)/testPolyFermi testPolyFermi.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
