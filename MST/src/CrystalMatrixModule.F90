@@ -1680,7 +1680,7 @@ contains
 !
    integer (kind=IntKind), intent(in) :: site_config(:)
    integer (kind=IntKind), intent(in), optional :: gindex, jindex, nindex
-   logical, optional, intent(in) :: use_sro, use_sigma
+   logical, optional, intent(in) :: use_sro
 !
    integer (kind=IntKind) :: i, j, ig, np, ni, nj, kl, klp, is, js, ns
    integer (kind=IntKind) :: kmaxj, kmaxj_ns, t0size, temp
@@ -1865,7 +1865,7 @@ contains
 !
    integer (kind=IntKind), intent(in) :: method
    integer (kind=IntKind), intent(in), optional :: fixed_g, fixed_l
-   logical, optional, intent(in) :: use_sro, use_sigma
+   logical, optional, intent(in) :: use_sro
 !
    integer (kind=IntKind) :: kmaxj, kmaxj_ns, kmaxi, kmaxi_ns, t0size
    integer (kind=IntKind) :: j, nj, ni, i, is, ig, nc, kl, klp, n, nr

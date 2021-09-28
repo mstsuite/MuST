@@ -803,7 +803,6 @@ contains
    use RelSSSolverModule, only : SingleDiracScattering, computeRelSingleSiteDOS !xianglin
 !
    use MSSolverModule, only : initMSSolver, endMSSolver
-   use ScfDataModule, only : includeVertexCorrections
    use RelMSSolverModule, only : initRelMSSolver, endRelMSSolver, computeRelMST, getRelMSDOS !xianglin
 !
 !  use RelScattererModule, only : initRelScatterer, endRelScatterer !xianglin
