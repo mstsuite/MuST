@@ -34,9 +34,6 @@ public :: initScfData,                 &
           isEmbeddedCluster,           &
           isKKRCPASRO,                 &
           isSROSCF,                    &
-          isConductivity,              &
-          useStepFunctionForSigma,     &
-          useCubicSymmetryForSigma,    &
           isScreenKKR_LSMS,            &
           isSingleSite,                &
           isFrozenCore,                &
@@ -61,6 +58,8 @@ public :: initScfData,                 &
           getPoleSearchStep,           &
           retreiveEffectiveMediumParams,   &
           isNextNearestSRO,            &
+          isManualNeighborChoice,      &
+          getManualNumNeighbor,        &
           retrieveSROParams,           &
           getMixingParamForFermiEnergy, &
           printScfData
@@ -148,7 +147,6 @@ public
    integer (kind=IntKind), parameter, private :: KKRCPA = 3
    integer (kind=IntKind), parameter, private :: EmbeddedCluster = 4
    integer (kind=IntKind), parameter, private :: KKRCPASRO = 5
-   integer (kind=IntKind), parameter, private :: CPAConductivity = 6
 !
    integer (kind=IntKind), private :: read_emesh = 0
    integer (kind=IntKind), private :: read_kmesh = 0
@@ -191,6 +189,8 @@ public
    integer (kind=IntKind), private :: SRO_max_iter = 5
    integer (kind=IntKind), private :: sro_param_num = 0
    integer (kind=IntKind), private :: next_nearest
+   integer (kind=IntKind), private :: set_neighbors = 0
+   integer (kind=IntKind), private :: num_neighbors
    integer (kind=IntKind), private :: sro_scf = 0
    real (kind=RealKind), private, allocatable :: sro_params(:)
    real (kind=RealKind), private, allocatable :: sro_params_nn(:)
@@ -202,13 +202,6 @@ public
    real (kind=RealKind), private :: cvm_params(2)
    integer (kind=IntKind), private :: is_cvm = 0
 
-!  Conductivity Parameters
-   integer (kind=IntKind), private :: do_sigma = 0
-   integer (kind=IntKind), private :: use_sf = 1
-   integer (kind=IntKind), private :: use_csymm = 1
-   integer (kind=IntKind), private :: is_ef_rp = 0
-   real (kind=RealKind), private :: imag_part = 0.001
-   real (kind=RealKind), private :: sigma_real_part = 0.5
 !
 contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -458,6 +451,8 @@ contains
       call ErrorHandler('initScfData','Number of SRO Parameters not found')
    endif
 
+   rstatus = getKeyValue(tbl_id, 'Neighbor Choice', set_neighbors)
+   rstatus = getKeyValue(tbl_id, 'Set Number of Neighbors', num_neighbors)
    rstatus = getKeyValue(tbl_id, 'SCF Mode', sro_scf)
    rstatus = getKeyValue(tbl_id, 'SRO Medium Mixing Scheme', SRO_mix_type)
    rstatus = getKeyValue(tbl_id, 'SRO Medium T-matrix Tol (> 0)', SRO_tol)
@@ -506,13 +501,6 @@ contains
       call ErrorHandler('initScfData','Invalid efermi_mix_switch value',efermi_mix_switch)
    endif
 !
-   rstatus = getKeyValue(tbl_id,'Conductivity Calculation',do_sigma)
-   rstatus = getKeyValue(tbl_id,'Fermi Energy Imaginary Part',imag_part)
-   rstatus = getKeyValue(tbl_id,'Use Different Fermi Energy', is_ef_rp)
-   rstatus = getKeyValue(tbl_id,'Fermi Energy Real Part', sigma_real_part)
-   rstatus = getKeyValue(tbl_id,'Integrate Upto Muffin Tin', use_sf)
-   rstatus = getKeyValue(tbl_id,'Use Cubic Symmetry', use_csymm)
-
    end subroutine initScfData
 !  ===================================================================
 !
@@ -758,8 +746,6 @@ contains
       write(fu,'(a)')'# MST Method        : KKRCPA'
    else if ( scf_method == 5) then
       write(fu,'(a)')'# MST Method        : KKRCPASRO'
-   else if ( scf_method == 6) then
-      write(fu,'(a)')'# MST Method        : CPA Conductivity'
    endif
    if ( nspin==1 ) then
       write(fu,'(a,i3)')'# Spin Parameter    : Non-magnetic -',nspin
@@ -882,52 +868,6 @@ contains
    md = sro_scf
 
    end function isSROSCF
-!  ===================================================================
-!
-!  *******************************************************************
-!
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function isConductivity() result(md)
-!  ===================================================================
-   implicit none 
-   logical :: md
-!
-   if (do_sigma == 1) then
-      md = .true.
-   else
-      md = .false.
-   endif
-   end function isConductivity
-!  ===================================================================
-!
-!  *******************************************************************
-!
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function useStepFunctionForSigma() result(md)
-!  ===================================================================
-   implicit none
-   integer (kind=IntKind) :: md
-
-   md = use_sf
-   
-   end function useStepFunctionForSigma
-!  ===================================================================
-!
-!  *******************************************************************
-!
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function useCubicSymmetryForSigma() result(md)
-!  ===================================================================
-   implicit none
-   logical :: md
-
-   if (use_csymm == 0) then
-     md = .false.
-   else
-     md = .true.
-   endif
-   
-   end function useCubicSymmetryForSigma
 !  ===================================================================
 !
 !  *******************************************************************
@@ -1669,6 +1609,42 @@ contains
 !
 !  *******************************************************************
 !
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc   
+   function isManualNeighborChoice()  result(md)
+!  ===================================================================
+   implicit none
+  
+   logical :: md
+
+   if (set_neighbors == 1) then
+     md = .true.
+   else
+     md = .false.
+   endif   
+
+   end function isManualNeighborChoice
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getManualNumNeighbor() result(num_neigh)
+!  ===================================================================
+   implicit none
+
+   integer (kind=IntKind) :: num_neigh
+
+   if (set_neighbors == 1) then
+     num_neigh = num_neighbors
+   else
+     call ErrorHandler('getManualNumNeighbor', 'Neighbor Type is not Manual!')
+   endif
+
+   end function getManualNumNeighbor
+!  ===================================================================
+!
+!  *******************************************************************
+!
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function isNextNearestSRO() result(nn)
 !  ===================================================================
@@ -1737,62 +1713,5 @@ contains
    mixing_switch = efermi_mix_switch
 !
    end function getMixingParamForFermiEnergy
-!  ===================================================================
-!
-!  *******************************************************************
-!  
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
-   function getFermiEnergyImagPart() result(del)
-!  ===================================================================
-   implicit none
-
-   real (kind=RealKind) :: del
-
-   if (.not. isConductivity()) then
-     call ErrorHandler('getFermiEnergyImagPart', 'Choose SCF type option &
-                 6 for conductivity calculation')
-   endif
-   del = imag_part
-
-   end function getFermiEnergyImagPart
-!  ===================================================================
-!
-!  *******************************************************************
-!  
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
-   function isFermiEnergyRealPart() result(use_ef_rp)
-!  ===================================================================
-   implicit none
-
-   logical :: use_ef_rp
-
-   if (.not. isConductivity()) then
-     call ErrorHandler('getFermiEnergyImagPart', 'Choose SCF type option &
-                 6 for conductivity calculation')
-   endif
-
-   if (is_ef_rp == 0) then
-     use_ef_rp = .false.
-   else if (is_ef_rp == 1) then
-     use_ef_rp = .true.
-   endif   
-
-   end function isFermiEnergyRealPart
-!  ===================================================================
-!  
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
-   function getFermiEnergyRealPart() result(alt_ef)
-!  ===================================================================
-   implicit none
-
-   real (kind=RealKind) :: alt_ef
-
-   if (.not. isConductivity()) then
-     call ErrorHandler('getFermiEnergyImagPart', 'Choose SCF type option &
-                 6 for conductivity calculation')
-   endif
-   alt_ef = sigma_real_part
-
-   end function getFermiEnergyRealPart
 !  ===================================================================
 end module ScfDataModule

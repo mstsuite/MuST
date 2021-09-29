@@ -18,7 +18,7 @@ public :: initChargeScreeningModule,     &
 private
   integer (kind=IntKind) :: GlobalNumSites, LocalNumSites
   integer (kind=IntKind) :: NumSpecies
-  integer (kind=IntKind) :: NumSROShells = 2 ! Assume upto 2 neighboring shells
+  integer (kind=IntKind) :: NumSROShells = 1 ! Temporary, right now we want only nearest neighbor screening
 
   type ChargeCorrectionData
       real (kind=RealKind) :: fs_radius
@@ -63,8 +63,8 @@ contains
       NumSpecies = getLocalNumSpecies(i)
       allocate(scr(i)%vmt1_corr(getLocalNumSpecies(i)))
       scr(i)%fs_radius = getShellRadius(i,1)
-!     scr(i)%ss_radius = getLatticeConstant()
-      scr(i)%ss_radius = getShellRadius(i,2)
+      scr(i)%ss_radius = getLatticeConstant()
+!     scr(i)%ss_radius = getShellRadius(i,2)
       scr(i)%echarge = ZERO
       do j = 1, getLocalNumSpecies(i)
          scr(i)%vmt1_corr(j) = ZERO
@@ -135,7 +135,7 @@ contains
       do ia = 1, getLocalNumSpecies(na)
         lig = global_table_line(j) + ia
         qtemp = getLocalAtomicNumber(j, ia) - Q_Table(lig)
-        if (isKKRCPASRO()) then
+        if (isKKRCPASRO() .and. 1 == 2) then
            scr(na)%vmt1_corr(ia) = ZERO
            do ns = 1, NumSROShells
               avq = ZERO
@@ -203,7 +203,7 @@ contains
       do ia = 1, getLocalNumSpecies(na)
         lig = global_table_line(j) + ia
         qtemp = getLocalAtomicNumber(j, ia) - Q_Table(lig)
-        if (isKKRCPASRO()) then
+        if (isKKRCPASRO() .and. 1 == 2) then
            uc = ZERO
            do ns = 1, NumSROShells
               avq = ZERO

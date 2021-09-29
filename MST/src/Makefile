@@ -89,7 +89,6 @@ CrystalMatrixModule.o \
 AccelerateCPAModule.o \
 EmbeddedClusterModule.o \
 CPAMediumModule.o \
-ConductivityModule.o \
 BandStructureModule.o \
 MSSolverModule.o \
 RelMSSolverModule.o \

@@ -828,7 +828,6 @@ contains
    use RelSSSolverModule, only : SingleDiracScattering, computeRelSingleSiteDOS !xianglin
 !
    use MSSolverModule, only : initMSSolver, endMSSolver
-   use ConductivityModule, only : initConductivity, calCPAConductivity
    use RelMSSolverModule, only : initRelMSSolver, endRelMSSolver, computeRelMST, getRelMSDOS !xianglin
 !
 !  use RelScattererModule, only : initRelScatterer, endRelScatterer !xianglin
@@ -844,8 +843,7 @@ contains
 !
    use ValenceDensityModule, only : getFermiEnergy
 !
-   use ScfDataModule, only : ErBottom, ErTop, isConductivity, & !xianglin 
-                 useStepFunctionForSigma, getFermiEnergyImagPart
+   use ScfDataModule, only : ErBottom, ErTop !xianglin 
 !
    implicit none
 !
@@ -855,6 +853,7 @@ contains
    real (kind=RealKind), allocatable :: local_density_matrix(:,:,:)
 !
    logical, optional, intent(in) :: PartialDensity_Ef
+   logical :: vc
    logical :: isBxyz(LocalNumAtoms) !xianglin
    complex (kind=CmplxKind) :: energy !xianglin
    complex (kind=CmplxKind) :: temp_en
@@ -940,23 +939,7 @@ contains
                         lmax_kkr, lmax_phi, lmax_green, posi,            &
                         n_spin_pola, n_spin_cant, RelativisticFlag,      &
                         stop_routine, print_level, derivative=rad_derivative)
-      if (isConductivity()) then
-        call initConductivity(temp_en, LocalNumAtoms, lmax_kkr, lmax_phi, lmax_green, &
-               n_spin_pola, n_spin_cant, RelativisticFlag,stop_routine, print_level)
-      endif
 !  -------------------------------------------------------------------
-   endif
-
-   if (isConductivity()) then
-     delta = getFermiEnergyImagPart()
-     pot_type = useStepFunctionForSigma()
-     do id = 1, LocalNumAtoms
-       do is = 1, n_spin_pola
-         call calCPAConductivity(id, is, delta, pot_type, n_spin_pola)
-       enddo
-     enddo
-     call StopHandler('calValenceStates', 'Conductivity Successfully Calculated', &
-                           force_to_print=.true.)
    endif
 !
    chempot = getFermiEnergy()

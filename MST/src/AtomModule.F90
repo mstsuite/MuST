@@ -499,7 +499,7 @@ contains
    rstatus = getKeyIndexValue(info_id,'Lmax-Charge Den',              &
                               ind_lmax_rho,lmax_rho(1:GlobalNumAtoms),GlobalNumAtoms)
 !
-   if (.not.isKKRCPASRO() .and. .not.isKKRCPA()) then
+   if (.not.isKKRCPA()) then
       if (getKeyValue(info_id,'Default LIZ # Neighbors',nmax_liz(0)) /= 0) then
          call ErrorHandler('initAtom','Default LIZ # Neighbors is missing from input')
       endif

@@ -48,11 +48,15 @@ exit 1; fi
 "SUFFIX=$(SUFFIX)"
 	@cd MST; ln -fs ../architecture/$(ArchName) architecture.h; make "MST=1" "EXTERN_LIB_PATH=$(MuST_PATH)/external" "ArchName=$(ArchName)" \
 "SUFFIX=$(SUFFIX)"
+	@cd KUBO; ln -fs ../architecture/$(ArchName) architecture.h; make "KUBO=1" "EXTERN_LIB_PATH=$(MuST_PATH)/external" "ArchName=$(ArchName)" \
+"SUFFIX=$(SUFFIX)"
+	
 
 install:
 	$(eval SUFFIX := "$(shell tail -n 1 bin/.SUFFIX)")
 	cd lsms; make "PREFIX=$(MuST_PATH)" "SUFFIX=$(SUFFIX)" install
 	cd MST; make "PREFIX=$(MuST_PATH)" "SUFFIX=$(SUFFIX)" install
+	cd KUBO; make "PREFIX=$(MuST_PATH)" "SUFFIX=$(SUFFIX)" install
 	@echo
 	@echo '----------------------------------------------------------------------------------------------'
 	@echo '*** Generic links pointing to the generated executables are created under ./bin directory *** '

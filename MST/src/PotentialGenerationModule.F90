@@ -245,7 +245,7 @@ contains
    use AtomModule, only : getLocalNumSpecies
    use AtomModule, only : getLocalAtomPosition
 !
-   use ScfDataModule, only : isChargeSymm
+   use ScfDataModule, only : isChargeSymm, isChargeCorr
 !
    use InputModule, only : getKeyValue
 !
@@ -715,9 +715,12 @@ contains
    isFirstExchg = .true.
 
 !  Initialize the Charge Screening Module
-!  --------------------------------------------------
-   call initChargeScreeningModule(nlocal, num_atoms)
-!  --------------------------------------------------
+   if (isChargeCorr()) then
+!    --------------------------------------------------
+     call initChargeScreeningModule(nlocal, num_atoms)
+!    --------------------------------------------------
+   endif
+   
    nullify(global_table_line)
 
    end subroutine initPotentialGeneration
@@ -736,6 +739,7 @@ contains
    use ParallelFFTModule, only : endParallelFFT
 !
    use ChargeScreeningModule, only : endChargeScreeningModule
+   use ScfDataModule, only : isChargeCorr  
 !
    implicit none
 !
@@ -806,9 +810,11 @@ contains
    Initialized = .false.
    EmptyTable = .true.
    isChargeSymmOn = .false.
-!  -----------------------------------------
-   call endChargeScreeningModule()
-!  -----------------------------------------
+   if (isChargeCorr()) then
+!    -----------------------------------------
+     call endChargeScreeningModule()
+!    -----------------------------------------
+   endif
 
    end subroutine endPotentialGeneration
 !  ===================================================================

@@ -1,31 +1,35 @@
-module ConductivityModule
+module CurrentMatrixModule
    use KindParamModule, only : IntKind, QuadRealKind, QuadCmplxKind, RealKind, CmplxKind, LongIntKind
    use MathParamModule, only : PI, ZERO, CZERO, CONE, TEN2m6, TEN2m7, TEN2m8, HALF, SQRTm1
    use ErrorHandlerModule, only : ErrorHandler, WarningHandler, StopHandler
    use PublicTypeDefinitionsModule, only : NeighborStruct
    use NeighborModule, only : getNeighbor, sortNeighbors
 
-public :: initConductivity,        &
+public :: initCurrentMatrixModule, &
+          endCurrentMatrixModule,  &
           calculateClebschGordanCoefficient, &
           calfx, &
           callsize, &
           kdelta, &
+          getLindex, &
           populateClebschGordanTable, & 
           getClebschGordanCoefficient, &
           calSFsum, &
           calJxFromPhiLrIntegral, &
+          calCurrentMatrix, &
           RadialIntegral, &
           calJyzFromJx, &
-          calJtilde, &
-          calSigmaTildeCPA0, &
-          calCPAConductivity, & 
+          calJtildeCPA, &
+          cal1DCurrentMatrix, &
+          getJMatrix1D, &
+          getJMatrix
 !
 
 private
    integer (kind=IntKind) :: LocalNumAtoms
    integer (kind=IntKind) :: n_spin_pola
    integer (kind=IntKind) :: n_spin_cant
-   integer (kind=IntKind) :: mode, master_size
+   integer (kind=IntKind) :: master_size
 
    integer (kind=IntKind), allocatable :: print_instruction(:)
    integer (kind=IntKind), allocatable :: lmax_kkr(:)
@@ -39,7 +43,8 @@ private
                              lmax_sigma, lmax_sigma_2, lmax_cg
    integer (kind=IntKind) :: kmax_phi_max, kmax_green_max, iend_max, &
                              kmax_sigma, kmax_sigma_2, kmax_max, kmax_cg
-   integer (kind=IntKind) :: NumSpecies
+   integer (kind=IntKind) :: NumSpecies, NumClusterSize
+   logical :: vertex_corr
 
    type CGCoeff
       integer (kind=IntKind) :: lsize
@@ -58,7 +63,7 @@ private
    complex (kind=CmplxKind), allocatable :: iden(:,:)
    complex (kind=CmplxKind) :: ep1(3), em1(3), e0(3)
 
-!  Conductivity data stored here
+!  Current data stored here
 !  --------------------------------------------------------------------
    complex (kind=CmplxKind), allocatable, target :: jspace(:,:,:,:,:,:),  &
        jspace2(:,:,:,:,:,:), jspace3(:,:,:,:,:,:), jspace4(:,:,:,:,:,:)
@@ -66,10 +71,10 @@ private
    complex (kind=CmplxKind), allocatable, target :: jtspace(:,:,:,:,:,:), &
        jtspace2(:,:,:,:,:,:), jtspace3(:,:,:,:,:,:), jtspace4(:,:,:,:,:,:)
 
-   complex (kind=CmplxKind), allocatable :: sigmatilde(:,:,:), sigmatilde2(:,:,:), &
-                                          sigmatilde3(:,:,:), sigmatilde4(:,:,:)
+!  Re-shaped tilde-matrices for conductivity calculation
+   complex (kind=CmplxKind), allocatable, target :: Jtk(:,:,:,:,:), &
+       Jtk2(:,:,:,:,:), Jtk3(:,:,:,:,:), Jtk4(:,:,:,:,:)
 
-   complex (kind=CmplxKind), allocatable :: sigma(:,:,:)
 !  ---------------------------------------------------------------------
    complex (kind=CmplxKind), pointer :: gaunt(:,:,:)
    complex (kind=CmplxKind), allocatable :: store_space(:)
@@ -82,17 +87,17 @@ contains
    include '../lib/arrayTools.F90'
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine initConductivity(energy, num_atoms, lmaxkkr, lmaxphi, lmaxgreen,  &
-                              pola, cant, rel, istop, iprint)
+   subroutine initCurrentMatrixModule(num_atoms, lmaxkkr, lmaxphi, lmaxgreen,  &
+                              pola, cant, rel, istop, iprint, mode, vc)
 !  ===================================================================
    use RadialGridModule, only : getNumRmesh, getMaxNumRmesh
    use AtomModule, only : getLocalNumSpecies
    use PolyhedraModule, only : getNumPolyhedra
    use WriteMatrixModule, only : writeMatrix
    use ScfDataModule, only : isKKR, isLSMS, isKKRCPA, isKKRCPASRO
-
    use GauntFactorsModule, only : initGauntFactors, endGauntFactors
    use GauntFactorsModule, only : getK3, getNumK3, getGauntFactor
+   use SROModule, only : getNeighSize
 
    integer (kind=IntKind), intent(in) :: num_atoms
    integer (kind=IntKind), intent(in) :: lmaxkkr(num_atoms)
@@ -103,12 +108,13 @@ contains
    integer (kind=IntKind), intent(in) :: rel
    character (len=*), intent(in) :: istop
    integer (kind=IntKind), intent(in) :: iprint(num_atoms)
+   integer (kind=IntKind), intent(in) :: mode
    
-   complex (kind=CmplxKind), intent(in) :: energy
+   logical, intent(in) :: vc
 
    integer (kind=LongIntKind) :: wspace_size, gspace_size
    integer (kind=IntKind) :: i, lmax_max, jmax, iend, kmax, NumSpecies, NumPolyhedra
-   integer (kind=IntKind) :: lmax, kl, jl, m, n, l, j, jsize
+   integer (kind=IntKind) :: lmax, kl, jl, m, n, l, j, jsize, sro_size
    integer (kind=IntKind) :: klp1, klp2, i3, klg
    integer (kind=IntKind), pointer :: nj3(:,:), kj3(:,:,:)
 
@@ -116,24 +122,15 @@ contains
    
    complex (kind=CmplxKind) :: tmp
 
+   vertex_corr = vc
    LocalNumAtoms = num_atoms
    n_spin_pola = pola
    n_spin_cant = cant
    NumPolyhedra = getNumPolyhedra()
- 
-   if (isKKR()) then
-      mode = 1
-   else if (isLSMS()) then
-      mode = 2
-   else if (isKKRCPA()) then
-      mode = 3
-   else if (isKKRCPASRO()) then
-      mode = 4
-   endif
-
-   if (mode == 1 .or. mode == 2) then
-     call ErrorHandler('initConductivity', &
-            'Conductivity for KKR/LSMS not yet implemented')
+   
+   if (mode == 4) then
+   ! SRO has only been tested for single sublattice calculations.
+     NumClusterSize = getNeighSize(1)
    endif
 
    allocate( print_instruction(LocalNumAtoms) ) 
@@ -201,26 +198,32 @@ contains
    jspace3(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
    jspace4(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3)) 
    
-   if (mode == 3 .or. mode == 4) then
-     allocate(jtspace(jsize, jsize, &
+   allocate(jtspace(jsize, jsize, &
              LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
-     jtspace2(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
-     jtspace3(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
-     jtspace4(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3))
-     jtspace = CZERO; jtspace2 = CZERO; jtspace3 = CZERO; jtspace4 = CZERO
-   endif 
+   jtspace2(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+   jtspace3(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+   jtspace4(jsize, jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3))
+   jtspace = CZERO; jtspace2 = CZERO; jtspace3 = CZERO; jtspace4 = CZERO
+   if (mode == 3) then
+     allocate(Jtk(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+       Jtk2(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+       Jtk3(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+       Jtk4(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3))
+   else if (mode == 4) then
+     sro_size = NumClusterSize*jsize
+     allocate(Jtk(sro_size*sro_size, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+       Jtk2(sro_size*sro_size, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+       Jtk3(sro_size*sro_size, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
+       Jtk4(sro_size*sro_size, LocalNumAtoms, NumSpecies, n_spin_pola, 3))
+   endif
+   Jtk = CZERO; Jtk2 = CZERO; Jtk3 = CZERO; Jtk4 = CZERO
 
    allocate(iden(jsize, jsize))
-   allocate(sigmatilde(3, 3, n_spin_pola), sigmatilde2(3, 3, n_spin_pola), sigmatilde3(3, 3, n_spin_pola),  &
-    sigmatilde4(3, 3, n_spin_pola), sigma(3, 3, n_spin_pola))
 
    cgspace = ZERO
    l3space = 0
    jspace = CZERO; jspace2 = CZERO; jspace3 = CZERO; jspace4 = CZERO
    iden = CZERO
-   sigmatilde = CZERO; sigmatilde2 = CZERO
-   sigmatilde3 = CZERO; sigmatilde4 = CZERO
-   sigma = CZERO
 
    do i = 1, jsize
       iden(i, i) = CONE
@@ -300,17 +303,18 @@ contains
 
    Initialized = .true.
 
-   end subroutine initConductivity
+   end subroutine initCurrentMatrixModule
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine endConductivity()
+   subroutine endCurrentMatrixModule()
 !  ===================================================================
 
    integer (kind=IntKind) :: L_1, L_2
 
    deallocate(jspace, jspace2, jspace3, jspace4)
    deallocate(jtspace, jtspace2, jtspace3, jtspace4)
+   deallocate(Jtk, Jtk2, Jtk3, Jtk4)
 
    do L_1 = 1, kmax_cg
      do L_2 = 1, kmax_cg
@@ -322,10 +326,9 @@ contains
    deallocate(print_instruction, lmax_kkr, lmax_phi, kmax_kkr, kmax_phi, &
    lofk, mofk, jofk, m1m, lofj, mofj, num_species, iden)  
    deallocate(cgspace, l3space, gspacep)
-   deallocate(store_space)
    nullify(gaunt)
 
-   end subroutine endConductivity
+   end subroutine endCurrentMatrixModule
 !  ===================================================================
    
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -455,6 +458,18 @@ contains
    endif
    
    end function kdelta
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getLindex(i) result(lval)
+!  ===================================================================
+
+   integer (kind=IntKind), intent(in) :: i
+   integer (kind=IntKind) :: lval
+
+   lval = lofk(i)
+
+   end function getLindex
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -894,7 +909,7 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calJxFromPhiLrIntegral(global_energy, iend, is, qterm1, qterm2, mt)
+   subroutine calJxFromPhiLrIntegral(n, ic, global_energy, iend, is, qterm1, qterm2, mt)
 !  ===================================================================
    use MatrixInverseModule, only : MtxInv_LU
    use WriteMatrixModule, only : writeMatrix
@@ -921,82 +936,76 @@ contains
    sine_transpose = CZERO
 
     
-   do n = 1, LocalNumAtoms
-      do ic = 1, num_species(n)
-        sine_tmp => getSineMatrix(spin=is,site=n,atom=ic)
-        sine_mat = sine_tmp(1:calsize, 1:calsize)
-!       -------------------------------------------------------
-        call MtxInv_LU(sine_mat, calsize)
-!       -------------------------------------------------------
-        call zgemm('T', 'n', calsize, calsize, calsize, CONE, sine_mat, &
-          calsize, iden, calsize, CZERO, sine_transpose, calsize)
-!       -------------------------------------------------------
-        do dir = 1, 1
-          Dplus = CZERO
-          Dminus = CZERO
-          temp = CZERO
-          temp2 = CZERO
-          if (mt == 0) then
-            do gL1 = 1, calsize
-              do gL2 = 1, calsize
-                do gK1 = gL1, gL1
-                  do gK2 = gL2, gL2
-                    do gL = 1, kmax_sigma_2
-                      Dplus(gL1, gL2) = Dplus(gL1, gL2) + &
-                       RadialIntegral(iend,n,ic,is,gL1,gL2,gL,gK1,gK2,1,0,qterm2,mt)  &
-                      -RadialIntegral(iend,n,ic,is,gL1,gL2,gL,gK1,gK2,1,1,qterm2,mt)
-                      surf = CZERO
-                      do gL6 = 1, kmax_sigma
-                        surf = surf + calSurfaceTerm(iend,n,ic,is,gL1,gL2,gL,gL6,gK1,&
-                         gK2,1,qterm2,qterm1)
-                      enddo
-                      Dplus(gL1, gL2) = Dplus(gL1, gL2) + surf
-                    enddo
-                  enddo
-                enddo
-              enddo
-            enddo
-          else if (mt == 1) then
-            do gL1 = 1, calsize
-              do gL2 = 1, calsize
-                do gK1 = gL1, gL1
-                  do gK2 = gL2, gL2
-                    Dplus(gL1, gL2) = Dplus(gL1,gL2) + &
-                     RadialIntegral(iend,n,ic,is,gL1,gL2,0,gK1,gK2,1,0,qterm2,mt) &
-                    -RadialIntegral(iend,n,ic,is,gL1,gL2,0,gK1,gK2,1,1,qterm2,mt)
-                  enddo
-                enddo
-              enddo
-            enddo
-          endif
-!         ------------------------------------------------------------------
-          call zgemm('n', 'n', calsize, calsize, calsize, -2.0*sqrt(2.0)*SQRTm1, &
-               Dplus, calsize, sine_mat, calsize, CZERO, &
-               temp, calsize)
-!         ------------------------------------------------------------------
-          call zgemm('n', 'n', calsize, calsize, calsize, global_energy, &
-              sine_transpose, calsize, temp, calsize, CZERO, &
-              jspace(1:calsize,1:calsize,n,ic,is,dir), calsize)
-!         ------------------------------------------------------------------
-        enddo
-!       ---------------------------------------------------------------------
-        call calJyzFromJx(n, ic, is, calsize)
-!       --------------------------------------------------------------------
-      enddo
+   sine_tmp => getSineMatrix(spin=is,site=n,atom=ic)
+   sine_mat = sine_tmp(1:calsize, 1:calsize)
+!  -------------------------------------------------------
+   call MtxInv_LU(sine_mat, calsize)
+!  -------------------------------------------------------
+   call zgemm('T', 'n', calsize, calsize, calsize, CONE, sine_mat, &
+        calsize, iden, calsize, CZERO, sine_transpose, calsize)
+!  -------------------------------------------------------
+   do dir = 1, 1
+      Dplus = CZERO
+      Dminus = CZERO
+      temp = CZERO
+      temp2 = CZERO
+      if (mt == 0) then
+         do gL1 = 1, calsize
+           do gL2 = 1, calsize
+             do gK1 = gL1, gL1
+               do gK2 = gL2, gL2
+                 do gL = 1, kmax_sigma_2
+                   Dplus(gL1, gL2) = Dplus(gL1, gL2) + &
+                     RadialIntegral(iend,n,ic,is,gL1,gL2,gL,gK1,gK2,1,0,qterm2,mt)  &
+                    -RadialIntegral(iend,n,ic,is,gL1,gL2,gL,gK1,gK2,1,1,qterm2,mt)
+                   surf = CZERO
+                   do gL6 = 1, kmax_sigma
+                     surf = surf + calSurfaceTerm(iend,n,ic,is,gL1,gL2,gL,gL6,gK1,&
+                        gK2,1,qterm2,qterm1)
+                   enddo
+                   Dplus(gL1, gL2) = Dplus(gL1, gL2) + surf
+                 enddo
+               enddo
+             enddo
+           enddo
+         enddo
+      else if (mt == 1) then
+         do gL1 = 1, calsize
+           do gL2 = 1, calsize
+             do gK1 = gL1, gL1
+               do gK2 = gL2, gL2
+                 Dplus(gL1, gL2) = Dplus(gL1,gL2) + &
+                   RadialIntegral(iend,n,ic,is,gL1,gL2,0,gK1,gK2,1,0,qterm2,mt) &
+                  -RadialIntegral(iend,n,ic,is,gL1,gL2,0,gK1,gK2,1,1,qterm2,mt)
+               enddo
+             enddo
+           enddo
+         enddo
+      endif
+!     ------------------------------------------------------------------
+      call zgemm('n', 'n', calsize, calsize, calsize, -2.0*sqrt(2.0)*SQRTm1, &
+           Dplus, calsize, sine_mat, calsize, CZERO, temp, calsize)
+!     ------------------------------------------------------------------
+      call zgemm('n', 'n', calsize, calsize, calsize, global_energy, &
+           sine_transpose, calsize, temp, calsize, CZERO, &
+           jspace(1:calsize,1:calsize,n,ic,is,dir), calsize)
+!     ------------------------------------------------------------------
    enddo
 
    end subroutine calJxFromPhiLrIntegral
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calJyzFromJx(n, ic, is, calsize)
+   subroutine calJyzFromJx(n, ic, is)
 !  ===================================================================
 
    use WriteMatrixModule, only : writeMatrix
 
-   integer (kind=IntKind), intent(in) :: n, ic, is, calsize
-   integer (kind=IntKind) :: dir, gL, gLp, gLpp, lpp, mpp, lp, mp, l, m
+   integer (kind=IntKind), intent(in) :: n, ic, is
+   integer (kind=IntKind) :: dir, gL, gLp, gLpp, lpp, &
+                      mpp, lp, mp, l, m, calsize
    
+   calsize = master_size
    do gLp = 1, calsize
      mp = mofk(gLp)
      do gL = 1, calsize
@@ -1033,7 +1042,7 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calJtilde(n, ic, is, dir)
+   subroutine calJtildeCPA(n, ic, is)
 !  ===================================================================
    use SSSolverModule, only : getScatteringMatrix
    use CPAMediumModule, only : getSingleSiteTmat, getCPAMatrix
@@ -1042,8 +1051,8 @@ contains
    use MatrixModule, only : computeAprojB
    use WriteMatrixModule, only : writeMatrix
 
-   integer (kind=IntKind), intent(in) :: n, ic, is, dir
-   integer (kind=IntKind) :: dsize, i
+   integer (kind=IntKind), intent(in) :: n, ic, is
+   integer (kind=IntKind) :: dsize, i, dir
    complex (kind=CmplxKind), pointer :: t_ctemp(:,:), t_atemp(:,:), tau_ctemp(:,:)
    complex (kind=CmplxKind), allocatable :: t_c(:,:), t_a(:,:), tau_c(:,:) 
    complex (kind=CmplxKind), allocatable :: t_cc(:,:), t_ac(:,:), tau_cc(:,:)
@@ -1054,11 +1063,7 @@ contains
 
    t_atemp => getScatteringMatrix('TInv-Matrix', spin=is, site=n, atom=ic)
    t_ctemp => getSingleSiteTmat('TInv-Matrix', spin=is, site=n, atom=0)
-   if (mode == 3) then
-     tau_ctemp => getCPAMatrix('Tau',site=n,atom=0)
-   else if (mode == 4) then
-     tau_ctemp => getSROMatrix('tau11',n,1)
-   endif
+   tau_ctemp => getCPAMatrix('Tau',site=n,atom=0)
 
    dsize = master_size
 
@@ -1110,238 +1115,184 @@ contains
 !  call writeMatrix('D1', D1, dsize, dsize)
 !  call writeMatrix('Dt', Dt, dsize, dsize)
 !  call writeMatrix('Dt1', Dt1, dsize, dsize)
+   do dir = 1, 3
+     temp = CZERO; temp2 = CZERO; temp3 = CZERO; temp4 = CZERO
+!    Calculating Jtilde(E_F + id, E_F + id)
+!    -----------------------------------------------------------------
+     call zgemm('n', 'n', dsize, dsize, dsize, CONE, jspace(:,:,n,ic,is,dir), &
+       dsize, D, dsize, CZERO, temp, dsize)
+!    -----------------------------------------------------------------
+     call zgemm('n', 'n', dsize, dsize, dsize, CONE, Dt, dsize, &
+       temp, dsize, CZERO, jtspace(:,:,n,ic,is,dir), dsize)
+!    -----------------------------------------------------------------
 
-   temp = CZERO; temp2 = CZERO
-!  Calculating Jtilde(E_F + id, E_F + id)
-!  -----------------------------------------------------------------
-   call zgemm('n', 'n', dsize, dsize, dsize, CONE, jspace(:,:,n,ic,is,dir), &
-      dsize, D, dsize, CZERO, temp, dsize)
-!  -----------------------------------------------------------------
-   call zgemm('n', 'n', dsize, dsize, dsize, CONE, Dt, dsize, &
-      temp, dsize, CZERO, jtspace(:,:,n,ic,is,dir), dsize)
-!  -----------------------------------------------------------------
+!    Calculating Jtilde(E_F + id, E_F - id) 
+!    -----------------------------------------------------------------
+     call zgemm('n', 'n', dsize, dsize, dsize, CONE, jspace2(:,:,n,ic,is,dir), &
+       dsize, D1, dsize, CZERO, temp2, dsize)
+!    -----------------------------------------------------------------
+     call zgemm('n', 'n', dsize, dsize, dsize, CONE, Dt, dsize, &
+       temp2, dsize, CZERO, jtspace2(:,:,n,ic,is,dir), dsize)
+!    -----------------------------------------------------------------
 
-!  Calculating Jtilde(E_F + id, E_F - id) 
-!  -----------------------------------------------------------------
-   call zgemm('n', 'n', dsize, dsize, dsize, CONE, jspace2(:,:,n,ic,is,dir), &
-      dsize, D1, dsize, CZERO, temp2, dsize)
-!  -----------------------------------------------------------------
-   call zgemm('n', 'n', dsize, dsize, dsize, CONE, Dt, dsize, &
-      temp2, dsize, CZERO, jtspace2(:,:,n,ic,is,dir), dsize)
-!  -----------------------------------------------------------------
+!    Calculating Jtilde(E_F - id, E_F + id)
+!    -----------------------------------------------------------------
+     call zgemm('n', 'n', dsize, dsize, dsize, CONE, jspace3(:,:,n,ic,is,dir), &
+       dsize, D, dsize, CZERO, temp3, dsize)
+!    -----------------------------------------------------------------
+     call zgemm('n', 'n', dsize, dsize, dsize, CONE, Dt1, dsize, &
+       temp3, dsize, CZERO, jtspace3(:,:,n,ic,is,dir), dsize)
+!    -----------------------------------------------------------------
 
-!  Calculating Jtilde(E_F - id, E_F + id)
-!  -----------------------------------------------------------------
-   call zgemm('n', 'n', dsize, dsize, dsize, CONE, jspace3(:,:,n,ic,is,dir), &
-      dsize, D, dsize, CZERO, temp3, dsize)
-!  -----------------------------------------------------------------
-   call zgemm('n', 'n', dsize, dsize, dsize, CONE, Dt1, dsize, &
-      temp3, dsize, CZERO, jtspace3(:,:,n,ic,is,dir), dsize)
-!  -----------------------------------------------------------------
+!    Calculating Jtilde(E_F - id, E_F - id)
+!    -----------------------------------------------------------------
+     call zgemm('n', 'n', dsize, dsize, dsize, CONE, jspace4(:,:,n,ic,is,dir), &
+       dsize, D1, dsize, CZERO, temp4, dsize)
+!    -----------------------------------------------------------------
+     call zgemm('n', 'n', dsize, dsize, dsize, CONE, Dt1, dsize, &
+       temp4, dsize, CZERO, jtspace4(:,:,n,ic,is,dir), dsize)
+!    -----------------------------------------------------------------
 
-!  Calculating Jtilde(E_F - id, E_F - id)
-!  -----------------------------------------------------------------
-   call zgemm('n', 'n', dsize, dsize, dsize, CONE, jspace4(:,:,n,ic,is,dir), &
-      dsize, D1, dsize, CZERO, temp4, dsize)
-!  -----------------------------------------------------------------
-   call zgemm('n', 'n', dsize, dsize, dsize, CONE, Dt1, dsize, &
-      temp4, dsize, CZERO, jtspace4(:,:,n,ic,is,dir), dsize)
-!  -----------------------------------------------------------------
-
-   if (dir == 1) then
-!    call writeMatrix('Jtx', jtspace(:,:,n,ic,is,1), dsize, dsize)
-!    call writeMatrix('Jtx_2', jtspace2(:,:,n,ic,is,1), dsize, dsize)
-!    call writeMatrix('Jtx_3', jtspace3(:,:,n,ic,is,1), dsize, dsize)
-!    call writeMatrix('Jtx_4', jtspace4(:,:,n,ic,is,1), dsize, dsize)
-   endif
-
-   end subroutine calJtilde
-!  ===================================================================
-
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function calSigmaTildeCPA0(n, dir1, dir2, is, rmt, caltype) result(sigma0)
-!  =================================================================== 
-!
-!  Calculates sigma_tilde0(z_1, z_2) at z_1 = z_2 = e_F + i*delta
-!  Can do calculation for both single site CPA and supercell case
-!
-   use PolyhedraModule, only : getVolume
-   use CPAMediumModule, only : getCPAMatrix
-   use SROModule, only : getSROMatrix
-   use AtomModule, only : getLocalSpeciesContent, getLocalNumSpecies
-   use SystemVolumeModule, only : getAtomicVPVolume
-   use WriteMatrixModule, only : writeMatrix
-
-   integer (kind=IntKind), intent(in) :: n, dir1, dir2, is, caltype
-   real (kind=RealKind), intent(in) :: rmt
-   integer (kind=IntKind) :: ic, ic1, dsize, L, num_species
-   real (kind=RealKind) :: Omega, c_a, c_b, coeff
-   complex (kind=CmplxKind), pointer :: tau_ctemp(:,:)
-   complex (kind=CmplxKind), allocatable :: tau_c(:,:), tau_cc(:,:)
-   complex (kind=CmplxKind), allocatable :: temp1(:,:), temp2(:,:), & 
-                                  temp3(:,:), temp4(:,:)
-
-   complex (kind=CmplxKind) :: sigma0
-
-   if (mode == 3) then
-     tau_ctemp => getCPAMatrix('Tau',site=n,atom=0)
-   else if (mode == 4) then
-     tau_ctemp => getSROMatrix('tau11',n,1)
-   endif
-
-   dsize = master_size
-
-   allocate(temp1(dsize, dsize), temp2(dsize, dsize), &
-    temp3(dsize, dsize), temp4(dsize, dsize), &
-    tau_cc(dsize, dsize), tau_c(dsize, dsize))
-   temp1 = CZERO; temp2 = CZERO; temp3 = CZERO; temp4 = CZERO
-
-   Omega = getAtomicVPVolume(n)
-   tau_c = tau_ctemp(1:dsize, 1:dsize)
-   tau_cc = conjg(tau_c)
-   num_species = getLocalNumSpecies(n)
-   sigma0 = CZERO
-
-   do ic = 1, num_species
-    do ic1 = 1, num_species
-     c_a = getLocalSpeciesContent(n, ic)
-     c_b = getLocalSpeciesContent(n, ic1)
-     coeff = -(c_a*c_b)/(PI*Omega)
-     if (caltype == 1) then
-       temp4 = jspace(:,:,n,ic,is,dir2) - jtspace(:,:,n,ic1,is,dir2)
-!      ---------------------------------------------------------------------
-!      call zaxpy(dsize*dsize, -CONE, jtspace(:,:,1,ic1,is,dir2),1,temp4,1)
-!      ---------------------------------------------------------------------
-       call zgemm('N', 'n', dsize, dsize, dsize, CONE, temp4, &
-         dsize, tau_c, dsize, CZERO, temp1, dsize)
-!      ---------------------------------------------------------------------
-       call zgemm('N', 'n', dsize, dsize, dsize, CONE, tau_c, dsize,  &
-         temp1, dsize, CZERO, temp2, dsize)
-!      ---------------------------------------------------------------------
-       call zgemm('N', 'n', dsize, dsize, dsize, CONE, jtspace(:,:,n,ic,is,dir1), &
-         dsize, temp2, dsize, CZERO, temp3, dsize)
-!      ----------------------------------------------------------------------
-       do L = 1, dsize
-         sigma0 = sigma0 + coeff*temp3(L,L)
-       enddo
-
-     else if (caltype == 2) then
-       temp4 = jspace2(:,:,n,ic,is,dir2) - jtspace2(:,:,n,ic1,is,dir2)
-!      ---------------------------------------------------------------------
-!      call zaxpy(dsize*dsize, -CONE, jtspace2(:,:,1,ic1,is,dir2),1,temp4,1)
-!      ---------------------------------------------------------------------
-       call zgemm('N', 'n', dsize, dsize, dsize, CONE, temp4, &
-         dsize, tau_cc, dsize, CZERO, temp1, dsize)
-!      ---------------------------------------------------------------------
-       call zgemm('N', 'n', dsize, dsize, dsize, CONE, tau_c, dsize,  &
-         temp1, dsize, CZERO, temp2, dsize)
-!      ---------------------------------------------------------------------
-       call zgemm('N', 'n', dsize, dsize, dsize, CONE, jtspace3(:,:,n,ic,is,dir1), &
-         dsize, temp2, dsize, CZERO, temp3, dsize)
-!      ----------------------------------------------------------------------
-       do L = 1, dsize
-         sigma0 = sigma0 + coeff*temp3(L,L)
-       enddo
-     
-     else if (caltype == 3) then
-       temp4 = jspace3(:,:,n,ic,is,dir2) - jtspace3(:,:,n,ic1,is,dir2)
-!      ---------------------------------------------------------------------
-!      call zaxpy(dsize*dsize, -CONE, jtspace3(:,:,1,ic1,is,dir2),1,temp4,1)
-!      ---------------------------------------------------------------------
-       call zgemm('N', 'n', dsize, dsize, dsize, CONE, temp4, &
-         dsize, tau_c, dsize, CZERO, temp1, dsize)
-!      ---------------------------------------------------------------------
-       call zgemm('N', 'n', dsize, dsize, dsize, CONE, tau_cc, dsize,  &
-         temp1, dsize, CZERO, temp2, dsize)
-!      ---------------------------------------------------------------------
-       call zgemm('N', 'n', dsize, dsize, dsize, CONE, jtspace2(:,:,n,ic,is,dir1), &
-         dsize, temp2, dsize, CZERO, temp3, dsize)
-!      ----------------------------------------------------------------------
-       do L = 1, dsize
-         sigma0 = sigma0 + coeff*temp3(L,L)
-       enddo
-    
-     else if (caltype == 4) then
-       temp4 = jspace4(:,:,n,ic,is,dir2) - jtspace4(:,:,n,ic1,is,dir2)
-!      ---------------------------------------------------------------------
-!      call zaxpy(dsize*dsize, -CONE, jtspace4(:,:,1,ic1,is,dir2),1,temp4,1)
-!      ---------------------------------------------------------------------
-       call zgemm('N', 'n', dsize, dsize, dsize, CONE, temp4, &
-         dsize, tau_cc, dsize, CZERO, temp1, dsize)
-!      ---------------------------------------------------------------------
-       call zgemm('N', 'n', dsize, dsize, dsize, CONE, tau_cc, dsize,  &
-         temp1, dsize, CZERO, temp2, dsize)
-!      ---------------------------------------------------------------------
-       call zgemm('N', 'n', dsize, dsize, dsize, CONE, jtspace4(:,:,n,ic,is,dir1), &
-         dsize, temp2, dsize, CZERO, temp3, dsize)
-!      ----------------------------------------------------------------------
-       do L = 1, dsize
-         sigma0 = sigma0 + coeff*temp3(L,L)
-       enddo
-     else
-       call ErrorHandler('calSigmaTildeCPA0', 'Incorrect caltype (choose from 1-4)', caltype)
+     if (dir == 1) then
+!      call writeMatrix('Jtx', jtspace(:,:,n,1,is,1), dsize, dsize)
+!      call writeMatrix('Jtx_2', jtspace2(:,:,n,ic,is,1), dsize, dsize)
+!      call writeMatrix('Jtx_3', jtspace3(:,:,n,ic,is,1), dsize, dsize)
+!      call writeMatrix('Jtx_4', jtspace4(:,:,n,ic,is,1), dsize, dsize)
      endif
-    enddo
    enddo
 
-   end function calSigmaTildeCPA0
+   end subroutine calJtildeCPA
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calCPAConductivity(n, is, delta, pot_type, n_spin_pola)
+   subroutine cal1DCurrentMatrixCPA(n, ic, is)
 !  ===================================================================
 
-   use CPAMediumModule, only : computeCPAMedium, getCPAMatrix, getSingleSiteTmat
-   use RadialGridModule, only : getRmesh, getRadialGridRadius
+   integer (kind=IntKind), intent(in) :: n, ic, is
+   integer (kind=IntKind) :: dir, L, L1, L2
+
+   do dir = 1, 3
+     do L2 = 1, kmax_kkr_max
+       do L1 = 1, kmax_kkr_max
+         L = kmax_kkr_max*(L1 - 1) + L2
+         Jtk(L, n, ic, is, dir) = jtspace(L1, L2, n, ic, is, dir)
+         Jtk2(L, n, ic, is, dir) = jtspace2(L1, L2, n, ic, is, dir)
+         Jtk3(L, n, ic, is, dir) = jtspace3(L1, L2, n, ic, is, dir)
+         Jtk4(L, n, ic, is, dir) = jtspace4(L1, L2, n, ic, is, dir)
+       enddo
+     enddo
+   enddo
+   
+   end subroutine cal1DCurrentMatrixCPA
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine cal1DCurrentMatrixSRO(n, ic, is)
+!  ===================================================================
+
+   use SSSolverModule, only : getScatteringMatrix
+   use CPAMediumModule, only : getSingleSiteTmat, getCPAMatrix
+   use SROModule, only : getSROMatrix
+   use MatrixModule, only : computeAprojB
    use WriteMatrixModule, only : writeMatrix
-   use ValenceDensityModule, only : getFermiEnergy
-   use SSSolverModule, only : solveSingleScattering, getRegSolution, getSolutionRmeshSize
+
+   integer (kind=IntKind), intent(in) :: n, ic, is
+
+   integer (kind=IntKind) :: dir, l, m, L1, L4, Lp, Lpp, K1, C1, CK1, i, j
+   complex (kind=CmplxKind), pointer :: Tc(:,:), Ta(:,:), tauc(:,:)
+   complex (kind=CmplxKind) :: Tcc(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize), Tac(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize), taucc(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize), tdiff(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize), tdiffc(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize)
+   complex (kind=CmplxKind) :: Dt(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize), Dt1(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize), D(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize), D1(kmax_kkr_max*NumClusterSize, &
+     kmax_kkr_max*NumClusterSize)
+   tdiff = CZERO; tdiffc = CZERO
+   Tcc = CZERO; Tac = CZERO; taucc = CZERO
+   Dt = CZERO; Dt1 = CZERO; D = CZERO; D1 = CZERO
+
+   Tc => getSROMatrix('blk-tinv', n=n, ic=0, is=is)
+   Ta => getSROMatrix('blk-tinv', n=n, ic=ic, is=is)
+   tauc => getSROMatrix('blk-tau', n=n, ic=0, is=is)
+   
+!  Constructing negatives
+   Tcc = conjg(Tc); Tac = conjg(Ta)
+   tdiff = Ta - Tc; tdiffc = Tac - Tcc
+
+   do L4 = 1, kmax_kkr_max
+     do L1 = 1, kmax_kkr_max
+       do l = 1, NumClusterSize
+         do m = 1, NumClusterSize
+           Lp = kmax_kkr_max*(l - 1) + L1
+           Lpp = kmax_kkr_max*(m - 1) + L4
+           taucc(Lp, Lpp) = (-1.0)**(lofk(L1) - lofk(L4)) * conjg(tauc(Lpp, Lp))
+         enddo
+       enddo
+     enddo
+   enddo
+
+!  Constructing D matrices   
+   call computeAprojB('N', kmax_kkr_max*NumClusterSize, tdiff, tauc, Dt)
+   call computeAprojB('N', kmax_kkr_max*NumClusterSize, tdiffc, taucc, Dt1)
+   call computeAprojB('N', kmax_kkr_max*NumClusterSize, tauc, tdiff, D)
+   call computeAprojB('N', kmax_kkr_max*NumClusterSize, taucc, tdiffc, D1)
+
+!  Constructing 1D current matrix
+   do dir = 1, 3
+     do l = 1, NumClusterSize
+       do m = 1, NumClusterSize 
+         do L1 = 1, kmax_kkr_max
+           do L4 = 1, kmax_kkr_max
+             CK1 = (kmax_kkr_max**2)*(NumClusterSize*(l - 1) + m - 1) + kmax_kkr_max*(L1 - 1) + L4
+               i = kmax_kkr_max*(l - 1) + L1
+               j = kmax_kkr_max*(m - 1) + L4
+             do Lp = 1, kmax_kkr_max
+               do Lpp = 1, kmax_kkr_max
+                 Jtk(CK1,n,ic,is,dir) = Jtk(CK1,n,ic,is,dir) + &
+                                Dt(i,Lp)*jspace(Lp,Lpp,n,ic,is,dir)*D(Lpp,j)
+                 Jtk2(CK1,n,ic,is,dir) = Jtk2(CK1,n,ic,is,dir) + &
+                                Dt(i,Lp)*jspace2(Lp,Lpp,n,ic,is,dir)*D1(Lpp,j)
+                 Jtk3(CK1,n,ic,is,dir) = Jtk3(CK1,n,ic,is,dir) + &
+                                Dt1(i,Lp)*jspace3(Lp,Lpp,n,ic,is,dir)*D(Lpp,j)
+                 Jtk4(CK1,n,ic,is,dir) = Jtk4(CK1,n,ic,is,dir) + &
+                                Dt1(i,Lp)*jspace4(Lp,Lpp,n,ic,is,dir)*D1(Lpp,j)
+               enddo
+             enddo
+           enddo
+         enddo
+       enddo
+     enddo
+   enddo
+
+   end subroutine cal1DCurrentMatrixSRO
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine calCurrentMatrix(n, is, eval, pot_type, mode)
+!  ===================================================================
+
+   use RadialGridModule, only : getRmesh, getRadialGridRadius
    use StepFunctionModule, only : interpolateStepFunction, getRadialStepFunction
-   use CrystalMatrixModule, only : calSigmaIntegralCPA
-   use AtomModule, only : getLocalNumSpecies, getLocalSpeciesContent
-   use SystemVolumeModule, only : getAtomicVPVolume
-   use ScfDataModule, only : isFermiEnergyRealPart, getFermiEnergyRealPart, &
-                            useCubicSymmetryForSigma
 
-   integer (kind=IntKind), intent(in) :: n, is, pot_type, n_spin_pola
-   real (kind=RealKind), intent(in) :: delta
+   integer (kind=IntKind), intent(in) :: n, is, pot_type, mode
+   complex (kind=CmplxKind), intent(in) :: eval
 
-   integer (kind=IntKind) :: cg 
-   integer (kind=IntKind) :: iend, nspecies, ic, ic1, ic2,  dir, dir1, dirnum
-   real(kind=RealKind) :: efermi, rmt, Omega, c_a, c_b, coeff, a
+   integer (kind=IntKind) :: iend, ic, dir
+   real (kind=RealKind) :: rmt
    real(kind=RealKind), pointer :: radial_grid(:)
-   real(kind=RealKind) :: start, finish
-   complex (kind=CmplxKind) :: jterm, temp, global_energy 
-   complex(kind=CmplxKind), pointer :: phi(:,:,:), tau_test(:,:)
-   complex(kind=CmplxKind), allocatable :: sf_term(:,:,:), sf_single(:,:), sfqsum(:)
-   complex(kind=CmplxKind) :: int_val1, int_val2, int_val3, int_val4
- 
-   call cpu_time(start)
-   if (useCubicSymmetryForSigma()) then
-     dirnum = 1
-   else
-     dirnum = 3
-   endif
+   complex(kind=CmplxKind), allocatable :: sf_term(:,:,:), &
+                               sf_single(:,:), sfqsum(:)
 
-   efermi = getFermiEnergy()
-   if (isFermiEnergyRealPart()) then
-     global_energy = getFermiEnergyRealPart() + SQRTm1*delta
-   else
-     global_energy = efermi + SQRTm1*delta
-   endif
-   
-!  ---------------------------------------------------------------
-   call solveSingleScattering(spin=is,site=n,e=global_energy,vshift=CZERO)
-!  ---------------------------------------------------------------
-   
    rmt = getRadialGridRadius(n, MT=.true., nr=iend)
    radial_grid => getRmesh(n)
-   Omega = getAtomicVPVolume(n)
-   nspecies = getLocalNumSpecies(n)
-   
+
    allocate(sf_term(iend, kmax_sigma_2, kmax_sigma_2), sfqsum(iend), &
      sf_single(iend, jofk(kmax_sigma)))
-   
+
 !  ---------------------------------------------------------------- 
    call interpolateStepFunction(n, iend, radial_grid(1:iend), &
          kmax_sigma_2, kmax_sigma_2, sf_term)
@@ -1349,102 +1300,94 @@ contains
    call getRadialStepFunction(n, 1, iend, radial_grid, &
         lmax_sigma, sf_single)
 !  ----------------------------------------------------------------
-   call calJxFromPhiLrIntegral(global_energy,iend,is,sf_single,sf_term,mt=pot_type)
-!  ----------------------------------------------------------------   
-   if (mode == 3) then
-!    --------------------------------------------------------------
-     call computeCPAMedium(global_energy)
-!    --------------------------------------------------------------
-   else if (mode == 4) then
-!    -------------------------------------------------------------- 
-     call computeCPAMedium(global_energy, do_sro=.true.)
-!    --------------------------------------------------------------
-   endif
 
-   do ic = 1, nspecies
-     do dir = 1, dirnum
+   do ic = 1, num_species(n)
+!     -------------------------------------------------------------
+      call calJxFromPhiLrIntegral(n,ic,eval,iend, &
+           is,sf_single,sf_term,mt=pot_type)
+!     -------------------------------------------------------------
+      call calJyzFromJx(n, ic, is)
+!     -------------------------------------------------------------
+   enddo
+
+   if (mode == 3) then
+     do ic = 1, num_species(n)
 !      ------------------------------------------------------    
-       call calJtilde(n, ic, is, dir)
+       call calJtildeCPA(n, ic, is)
+!      ------------------------------------------------------
+       call cal1DCurrentMatrixCPA(n, ic, is)
 !      ------------------------------------------------------
      enddo
-   enddo
-   
-   do dir = 1, dirnum
-     do dir1 = 1, dirnum
-       int_val1 = CZERO; int_val2 = CZERO
-       int_val3 = CZERO; int_val4 = CZERO
-       do ic1 = 1, nspecies
-         do ic2 = 1, nspecies
-           c_a = getLocalSpeciesContent(n, ic1)
-           c_b = getLocalSpeciesContent(n, ic2)              
-           coeff = -(c_a*c_b)/(PI*Omega)
-           
-           int_val1 = int_val1 + coeff*calSigmaIntegralCPA(n, global_energy, &
-           jtspace(:,:,n,ic1,is,dir), jtspace(:,:,n,ic2,is,dir1), &
-           getSingleSiteTmat,tau_needed=.true.,use_tmat=.true.,caltype=1)
-           
-           int_val2 = int_val2 + coeff*calSigmaIntegralCPA(n, global_energy, &
-           jtspace3(:,:,n,ic1,is,dir), jtspace2(:,:,n,ic2,is,dir1), &
-           getSingleSiteTmat, tau_needed=.true.,use_tmat=.true.,caltype=2)
-           
-           int_val3 = int_val3 + coeff*calSigmaIntegralCPA(n, global_energy, &
-           jtspace2(:,:,n,ic1,is,dir), jtspace3(:,:,n,ic2,is,dir1), &
-           getSingleSiteTmat, tau_needed=.true.,use_tmat=.true.,caltype=3)
-           
-           int_val4 = int_val4 + coeff*calSigmaIntegralCPA(n, global_energy, &
-           jtspace4(:,:,n,ic1,is,dir), jtspace4(:,:,n,ic2,is,dir1), &
-           getSingleSiteTmat, tau_needed=.true.,use_tmat=.true.,caltype=4)
-         enddo
-       enddo
-       sigmatilde(dir,dir1,is) = int_val1 +  &
-              calSigmaTildeCPA0(n, dir, dir1, is, rmt, caltype=1)
-       sigmatilde2(dir,dir1,is) = int_val2 + &
-              calSigmaTildeCPA0(n, dir, dir1, is, rmt, caltype=2)
-       sigmatilde3(dir,dir1,is) = int_val3 + &
-              calSigmaTildeCPA0(n, dir, dir1, is, rmt, caltype=3)
-       sigmatilde4(dir,dir1,is) = int_val4 + &
-              calSigmaTildeCPA0(n, dir, dir1, is, rmt, caltype=4)
-       if (n_spin_pola == 1) then
-         sigmatilde(dir,dir1,is) = 2*sigmatilde(dir,dir1,is)
-         sigmatilde2(dir,dir1,is) = 2*sigmatilde2(dir,dir1,is)
-         sigmatilde3(dir,dir1,is) = 2*sigmatilde3(dir,dir1,is) 
-         sigmatilde4(dir,dir1,is) = 2*sigmatilde4(dir,dir1,is)
-       endif
-       sigma(dir,dir1,is) = 0.25*(sigmatilde(dir,dir1,is) - &
-       sigmatilde2(dir,dir1,is) - sigmatilde3(dir,dir1,is) + &
-       sigmatilde4(dir,dir1,is))
+   else if (mode == 4) then
+   !  Under development
+     do ic = 1, num_species(n)
+!      ------------------------------------------------------
+       call cal1DCurrentMatrixSRO(n, ic, is)
+!      ------------------------------------------------------
      enddo
-   enddo
+   endif
 
-   call writeMatrix('sigma', sigma, dirnum, dirnum, n_spin_pola)
-   call writeMatrix('sigmatilde', sigmatilde, dirnum, dirnum, n_spin_pola)
-   call writeMatrix('sigmatilde2', sigmatilde2, dirnum, dirnum, n_spin_pola)
-   call writeMatrix('sigmatilde3', sigmatilde3, dirnum, dirnum, n_spin_pola)
-   call writeMatrix('sigmatilde4', sigmatilde4, dirnum, dirnum, n_spin_pola)
 
-   call cpu_time(finish)
-   Print *, "Time:", finish-start
-
-   end subroutine calCPAConductivity
+   end subroutine calCurrentMatrix
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getJMatrix(n, ic, is, dir, en_type)  result(Jmat)
+   function getJMatrix1D(n, ic, is, dir, en_type) result(Jmat)
+!  ===================================================================
+
+   integer (kind=IntKind), intent(in) :: n, ic, is, dir, en_type
+   complex (kind=CmplxKind), pointer :: Jmat(:) 
+ 
+   if (en_type == 1) then
+     Jmat => Jtk(:,n,ic,is,dir)
+   else if (en_type == 2) then
+     Jmat => Jtk2(:,n,ic,is,dir)
+   else if (en_type == 3) then
+     Jmat => Jtk3(:,n,ic,is,dir)
+   else if (en_type == 4) then
+     Jmat => Jtk4(:,n,ic,is,dir)
+   else
+     call ErrorHandler('getJMatrix','Incorrect energy type (1-4)', en_type)
+   endif
+
+   end function getJMatrix1D
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getJMatrix(n, ic, is, dir, en_type, tilde)  result(Jmat)
 !  ===================================================================
   
-   integer (kind=IntKind), intent(in) :: n, ic, is, dir, en_type
+   integer (kind=IntKind), intent(in) :: n, ic, is, dir, en_type, tilde
    complex (kind=CmplxKind), pointer :: Jmat(:,:)
 
-   if (en_type == 1) then
-     Jmat => jspace(:,:,n,ic,is,dir)
-   else if (en_type == 2) then
-     Jmat => jspace2(:,:,n,ic,is,dir)
-   else if (en_type == 3) then
-     Jmat => jspace3(:,:,n,ic,is,dir)
+   if (tilde == 0) then
+     if (en_type == 1) then
+       Jmat => jspace(:,:,n,ic,is,dir)
+     else if (en_type == 2) then
+       Jmat => jspace2(:,:,n,ic,is,dir)
+     else if (en_type == 3) then
+       Jmat => jspace3(:,:,n,ic,is,dir)
+     else if (en_type == 4) then
+       Jmat => jspace4(:,:,n,ic,is,dir)
+     else
+       call ErrorHandler('getJMatrix','Incorrect energy type (1-4)', en_type)
+     endif
+   else if (tilde == 1) then
+     if (en_type == 1) then
+       Jmat => jtspace(:,:,n,ic,is,dir)
+     else if (en_type == 2) then
+       Jmat => jtspace2(:,:,n,ic,is,dir)
+     else if (en_type == 3) then
+       Jmat => jtspace3(:,:,n,ic,is,dir)
+     else if (en_type == 4) then
+       Jmat => jtspace4(:,:,n,ic,is,dir)
+     else
+       call ErrorHandler('getJMatrix','Incorrect energy type (1-4)', en_type)
+     endif
    else
-     Jmat => jspace4(:,:,n,ic,is,dir)
+     call ErrorHandler('getJMatrix','Incorrect value for tilde', tilde)
    endif
 
    end function getJMatrix
 !  ===================================================================
-end module ConductivityModule
+end module CurrentMatrixModule

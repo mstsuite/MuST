@@ -82,8 +82,7 @@ program mst2
    use ScfDataModule, only : isReadKmesh, getKmeshFileName
    use ScfDataModule, only : NumKMeshs, kGenScheme, Kdiv, Symmetrize
    use ScfDataModule, only : isScreenKKR, isKKRCPA, isKKRCPASRO, isLSMS, isScreenKKR_LSMS, &
-                             isKKR, isEmbeddedCluster, isSingleSite, setScfMethod, &
-                             isConductivity
+                             isKKR, isEmbeddedCluster, isSingleSite, setScfMethod
    use ScfDataModule, only : isExchangeParamNeeded
    use ScfDataModule, only : getPotentialTypeParam
    use ScfDataModule, only : isChargeMixing, isPotentialMixing
@@ -761,9 +760,6 @@ program mst2
         write(6,'(/,14x,a,/)')'::::  Embedded-LSMS Electronic Structure Calculation ::::'
      else if ( isSingleSite() ) then
         write(6,'(/,14x,a,/)')'::::  Single Site Electronic Structure Calculation ::::'
-     endif
-     if ( isConductivity() ) then
-        write(6,'(/,14x,a,/)')'::::            Conductivity Calculation           ::::'
      endif
    endif
 !
