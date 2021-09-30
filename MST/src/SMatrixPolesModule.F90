@@ -1392,9 +1392,6 @@ contains
 !
    use PublicTypeDefinitionsModule, only : GridStruct
 !
-   use IBZRotationModule, only : symmetrizeMatrix
-   use IBZRotationModule, only : symmetrizeMatrix
-!
    use IntegerFactorsModule, only : lofj, mofj, kofj, lofk, mofk, bofk, m1m
 !
    use StepFunctionModule, only : getVolumeIntegration
@@ -1473,8 +1470,6 @@ contains
       call zgemm('n','n',kmax_kkr,kmax_kkr,kmax_kkr,CONE,             &
                  Pole(id)%BoundState(ib,is,ia)%ResidualMat,kmax_kkr,smat_inv,kmax_kkr, &
                  CZERO,BSinv,kmax_kkr)
-!     ----------------------------------------------------------------
-      call symmetrizeMatrix(BSinv,kmax_kkr)
 !     ----------------------------------------------------------------
 !call zgemm('n','n',kmax_kkr,kmax_kkr,kmax_kkr,CONE,jost_inv,kmax_kkr,smat_inv,kmax_kkr,CZERO,BSinv,kmax_kkr)
 !
@@ -1604,8 +1599,6 @@ contains
 !
    use PublicTypeDefinitionsModule, only : GridStruct
 !
-   use IBZRotationModule, only : symmetrizeMatrix
-!
    use IntegerFactorsModule, only : lofj, mofj, kofj, lofk, mofk, bofk, m1m
 !
    use StepFunctionModule, only : getVolumeIntegration
@@ -1682,8 +1675,6 @@ contains
       call zgemm('n','n',kmax_kkr,kmax_kkr,kmax_kkr,CONE,             &
                  Pole(id)%ResState(ib,is,ia)%ResidualMat,kmax_kkr,smat_inv,kmax_kkr, &
                  CZERO,BSinv,kmax_kkr)
-!     ----------------------------------------------------------------
-      call symmetrizeMatrix(BSinv,kmax_kkr)
 !     ----------------------------------------------------------------
 !
       PhiLr => getRegSolution()
@@ -1808,8 +1799,6 @@ contains
 !
    use PublicTypeDefinitionsModule, only : GridStruct
 !
-   use IBZRotationModule, only : symmetrizeMatrix
-!
    use IntegerFactorsModule, only : lofj, mofj, kofj, lofk, mofk, bofk, m1m
 !
    use StepFunctionModule, only : getVolumeIntegration
@@ -1884,8 +1873,6 @@ contains
    call zgemm('n','n',kmax_kkr,kmax_kkr,kmax_kkr,CONE,             &
               Pole(id)%ResState(ib,is,ia)%AuxiliaryMat,kmax_kkr,smat_inv,kmax_kkr, &
               CZERO,BSinv,kmax_kkr)
-!  -------------------------------------------------------------------
-   call symmetrizeMatrix(BSinv,kmax_kkr)
 !  -------------------------------------------------------------------
 !
    PhiLr => getRegSolution()

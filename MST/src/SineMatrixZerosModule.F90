@@ -167,10 +167,10 @@ contains
          n = SineZero(id,is)%NumSpecies
          m = SineZero(id,is)%kmax_kkr
          allocate( SineZero(id,is)%NumZeros(n) );    SineZero(id,is)%NumZeros = 0
-         allocate( SineZero(id,is)%ZeroIndex(m,n) ); SineZero(id,is)%ZeroIndex = 0
+         allocate( SineZero(id,is)%ZeroIndex(2*m,n) ); SineZero(id,is)%ZeroIndex = 0
          allocate( SineZero(id,is)%ebot(n) ); SineZero(id,is)%ebot = ZERO
          allocate( SineZero(id,is)%etop(n) ); SineZero(id,is)%etop = ZERO
-         allocate( SineZero(id,is)%ZeroState(m,n) )
+         allocate( SineZero(id,is)%ZeroState(2*m,n) )
       enddo
    enddo
 !
@@ -797,9 +797,6 @@ contains
 !
    use PublicTypeDefinitionsModule, only : GridStruct
 !
-   use IBZRotationModule, only : symmetrizeMatrix
-   use IBZRotationModule, only : symmetrizeMatrix
-!
    use IntegerFactorsModule, only : lofj, mofj, kofj, lofk, mofk, bofk, m1m
 !
    use StepFunctionModule, only : getVolumeIntegration
@@ -876,8 +873,6 @@ contains
 !     ----------------------------------------------------------------
       call zgemm('n','n',kmax_kkr,kmax_kkr,kmax_kkr,CONE,             &
                  jost_inv,kmax_kkr,smr,kmax_kkr,CZERO,BSinv,kmax_kkr)
-!     ----------------------------------------------------------------
-      call symmetrizeMatrix(BSinv,kmax_kkr)
 !     ----------------------------------------------------------------
 !call !zgemm('n','n',kmax_kkr,kmax_kkr,kmax_kkr,CONE,jost_inv,kmax_kkr,smat_inv,kmax_kkr,CZERO,BSinv,kmax_kkr)
 !

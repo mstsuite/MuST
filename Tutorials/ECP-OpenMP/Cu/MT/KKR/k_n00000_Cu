@@ -1,0 +1,12 @@
+Source Code Version           : : v1.6.0                                        
+System Description            : Cu, FCC structure                               
+Number of Atoms in Unit Cell  : 1                                               
+Number of Atomic Species      : 1                                               
+Number of Atoms in Each Type  : 1(Cu)                                           
+Unit Cell Volume (au^3)       : 0.77228944D+02                                  
+Average Atomic Volume (au^3)  : 77.22894                                        
+Energy Offset                 : -3275                                           
+=======================================================================================
+    Iter     Energy      3PV     Efermi   Rms_rho    Rms_pot   Mix  Alg  Alpha 
+---------------------------------------------------------------------------------------
+**       1  -0.773185  -0.08866  0.61427  0.228E-09  0.729E-09  pot  B   0.1000
