@@ -213,7 +213,7 @@
 !                     = 0: Not specified; > 0: Speciflied. Note: rmt < r(j)=exp(j*hout) <= rmax, j=1,2,...,ndivout
    n = n + 1; Keys(n) = 'Default Integer Factor nmult';          Values(n) = '1'
 !                     = 0: Not specified; > 0: Speciflied. Note: r(j) = exp(j*hin), hin = nmult*hout
-   n = n + 1; Keys(n) = 'Default Radial Grid Exponential Step';  Values(n) = '0.0'
+   n = n + 1; Keys(n) = 'Default Radial Grid Exponential Step';  Values(n) = '0.01'
 !                     = 0.0: Not specified; 
 !                     > 0.0: 0.005 - 0.02 is recommended. Note: r(j) = exp(j*hin), here hin is the 
 !                            exponential step. In this case, you may want to leave ndivin unspecified
