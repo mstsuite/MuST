@@ -60,6 +60,7 @@ AppModules = \
 ../../MST/bin/RelSSSolverModule.o \
 ../../MST/bin/SCPolesModule.o \
 ../../MST/bin/SMatrixPolesModule.o \
+../../MST/bin/SineMatrixZerosModule.o \
 ../../MST/bin/KreinModule.o \
 ../../MST/bin/CoreStatesModule.o \
 ../../MST/bin/Uniform3DGridModule.o \
