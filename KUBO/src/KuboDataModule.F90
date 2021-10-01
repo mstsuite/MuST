@@ -189,7 +189,7 @@ contains
    else if (print_tilde == 0) then
      print_mat = .false.
    else
-     call ErrorHandler('printTildeMatrices', \
+     call ErrorHandler('printTildeMatrices', &
              'Incorrect Value (choose 0 or 1)', print_mat)
    endif
 
