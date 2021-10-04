@@ -1728,7 +1728,7 @@ contains
 !  ===================================================================
    use TimerModule, only : getTime
    use MPPModule, only : AllPEs, MyPE, NumPEs
-   use MPPModule, only : packMessage, unpackMessage
+   use MPPModule, only : packMessage, unpackMessage, bcastMessage
    use MPPModule, only : nbsendPackage, recvPackage, waitMessage, syncAllPEs
    use MPPModule, only : GlobalSum, GlobalMin
 !
@@ -1862,6 +1862,17 @@ contains
    integer (kind=IntKind), allocatable :: kcheck_loc(:)
    real (kind=RealKind), allocatable :: wvk_loc(:,:), wvk_remote(:,:)
 !
+   logical, parameter :: parallel_proc = .true.
+   integer (kind=IntKind) :: num_proc, my_proc
+!
+   if (parallel_proc) then
+      my_proc = MyPE
+      num_proc = NumPEs
+   else
+      my_proc = 0
+      num_proc = 1
+   endif
+!
    t0 = getTime()
    iout = ilog
 !  ===================================================================
@@ -1898,7 +1909,7 @@ contains
       if (iq1*iq2*iq3*ncbrav > maxk) then
          call ErrorHandler(sname,'iq1*iq2*iq3*ncbrav > maxk',iq1*iq2*iq3*ncbrav,maxk)
       endif
-      if (NumPEs < 2) then
+      if (num_proc < 2) then
          do i1=1,iq1
             ur1=dble(1 + iqp1 - 2*i1)/dble(2*iq1)
             do i2=1,iq2
@@ -1950,11 +1961,11 @@ contains
          enddo
       else ! Parallel processing
          nq = iq1*iq2*iq3
-         m = mod(nq,NumPEs)
-         n = (nq-m)/NumPEs
-         mp = MyPE*n
+         m = mod(nq,num_proc)
+         n = (nq-m)/num_proc
+         mp = my_proc*n
          allocate(wvk_remote(3,(n+m)*ncbrav))
-         if (MyPE == NumPEs-1) then
+         if (my_proc == num_proc-1) then
             n = n + m
          endif
          allocate(wvk_loc(3,n*ncbrav))
@@ -2002,17 +2013,29 @@ contains
          allocate(kcheck_loc(kcount_loc))
          kcheck_loc = 1
          kcount = 0
-         do pe = 0, NumPEs-1
-            if (pe == MyPE) then
-               if (NumPEs > 1) then
+         do pe = 0, num_proc-1
+            if (pe == my_proc) then
+               if (num_proc > 1) then
+!!!10-4-2021      ====================================================
+!!!10-4-2021      The following lines are commented out due to core dump
+!!!10-4-2021      if the code is built with nvhpc/spectrum-mpi
+!!!10-4-2021      Instead of sending a package, the process sends the two
+!!!10-4-2021      messages separately.
 !                 ----------------------------------------------------
-                  call packMessage(kcount_loc)
+!!!10-4-2021      call packMessage(kcount_loc)
+!!!10-4-2021      if (kcount_loc > 0) then
+!!!10-4-2021         call packMessage(wvk_loc,3,kcount_loc)
+!!!10-4-2021      endif
+!!!10-4-2021      wait_id = nbsendPackage(20001,AllPEs)
+!                 ====================================================
+!!!10-4-2021      The call to "sendPackage" is now replaced by 2 bcast calls
+!                 ----------------------------------------------------
+                  call bcastMessage(kcount_loc,pe)
                   if (kcount_loc > 0) then
-                     call packMessage(wvk_loc,3,kcount_loc)
+                     call bcastMessage(wvk_loc,3,kcount_loc,pe)
                   endif
-                  wait_id = nbsendPackage(20001,AllPEs)
-!                 ----------------------------------------------------
-!                 write(6,'(a,2i5)')      'Snd: MyPE, kcount_loc = ',MyPE,kcount_loc
+!                 ====================================================
+!                 write(6,'(a,2i8)')      'Snd: MyPE, kcount_loc = ',MyPE,kcount_loc
                endif
                if (kcount_loc > 0) then
 !                 ----------------------------------------------------
@@ -2022,20 +2045,32 @@ contains
                endif
             else
 !              write(6,'(a,2i5)')      'Calling recv #1, MyPE = ',MyPE,pe
+!              =======================================================
+!!!10-4-2021   The following lines are commented out due to core dump
+!!!10-4-2021   if the code is built with nvhpc/spectrum-mpi
 !              -------------------------------------------------------
-               call recvPackage(20001,pe)
-               call unpackMessage(kcount_remote)
+!!!10-4-2021   call recvPackage(20001,pe)
+!!!10-4-2021   call unpackMessage(kcount_remote)
 !              -------------------------------------------------------
 !              write(6,'(a,2i5,2x,i8)')'After recv   #1, MyPE = ',MyPE,pe,kcount_remote
+!              =======================================================
+!!!10-4-2021   The call to "recvPackage" is now replaced by 2 bcast calls
+!              -------------------------------------------------------
+               call bcastMessage(kcount_remote,pe)
+!              -------------------------------------------------------
                if (kcount_remote > 0) then
+!                 ====================================================
+!!!10-4-2021      Now replacing unpack with bcast to avoid the core 
+!!!10-4-2021      dump issue with nvhpc/spectrum-mpi
 !                 ----------------------------------------------------
-                  call unpackMessage(wvk_remote,3,kcount_remote)
+!!!10-4-2021      call unpackMessage(wvk_remote,3,kcount_remote)
+                  call bcastMessage(wvk_remote,3,kcount_remote,pe)
 !                 ----------------------------------------------------
                   call dcopy(3*kcount_remote,wvk_remote,1,wvkl(1,kcount+1),1)
 !                 ----------------------------------------------------
                   kcount = kcount + kcount_remote
                endif
-               if (pe < MyPE) then
+               if (pe < my_proc) then
                   do k = 1, kcount_remote
                      do j = 1, kcount_loc
                         if (kcheck_loc(j) == 1) then
@@ -2084,7 +2119,7 @@ contains
 !     integral multiple of a reciprocal-space vector
 !     ================================================================
       iremov = 0
-      do i=MyPE+1,(kcount-1), NumPEs
+      do i=my_proc+1,(kcount-1), num_proc
 !        =============================================================
 !        project wva onto b1,2,3:
 !        =============================================================
@@ -2122,7 +2157,7 @@ contains
             iremov = iremov + 1
          enddo LOOP_j
       enddo
-      if (NumPEs > 1) then
+      if (num_proc > 1) then
 !        -------------------------------------------------------------
          call GlobalMin(kcheck,kcount)
          call GlobalSum(iremov)
