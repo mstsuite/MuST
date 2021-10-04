@@ -168,11 +168,8 @@
 !     ----------------------------------------------------------------
       call printPotentialGeneration()
 !     ----------------------------------------------------------------
-      if ( GlobalNumAtoms <= 64 ) then
-!        -------------------------------------------------------------
-         call printChargeDistribution(iscf,funit,n_spin_cant)
-!        -------------------------------------------------------------
-      endif
+      call printChargeDistribution(iscf,funit,n_spin_cant)
+!     ----------------------------------------------------------------
    endif
 !
    end subroutine printScfResults
