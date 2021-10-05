@@ -25,6 +25,7 @@ public :: initExchCorrFunctional,         &
           isGGAFunctional,                &
           isMGGAFunctional,               &
           isHybridFunctional,             &
+          isHartreeApproximation,         &
           getExchCorrPot,                 &
           getExchCorrEnDen,               &
           calSphExchangeCorrelation,      &
@@ -60,7 +61,7 @@ private
    character (len=50) :: FunctionalName_X
    character (len=50) :: FunctionalName_C
    character (len=50) :: FunctionalName_XC
-   character (len=15) :: FunctionalType
+   character (len=25) :: FunctionalType
    character (len=3), parameter :: GGA = 'GGA'
    character (len=3), parameter :: LDA = 'LDA'
    character (len=10), parameter :: HybridGGA = 'Hybrid GGA'
@@ -68,6 +69,7 @@ private
    character (len=4), parameter :: MGGA = 'MGGA'
    character (len=6), parameter :: UnkownXC = 'Unkown'
    character (len=6), parameter :: Null_String = ' '
+   character (len=21), parameter :: Hartree = 'Hartree Approximation'
 !
    real (kind=RealKind) ::    Vexc_s(2)
    real (kind=RealKind) ::    Eexc_s
@@ -139,6 +141,10 @@ contains
    n_spin_pola = pola
    print_level = iprint
 !
+   nV = 0
+   nE = 0
+   Initialized = .true.
+!
    FunctionalType = Null_String
    FunctionalName_X  = Null_String
    FunctionalName_C  = Null_String
@@ -166,7 +172,7 @@ contains
    if (isNumber(excorr_name)) then
       read(excorr_name,*) LegacyFunctionalID
    else
-      LegacyFunctionalID = -1
+      LegacyFunctionalID = -2
    endif
 !
    if ( LegacyFunctionalID == 0 ) then
@@ -232,7 +238,7 @@ contains
       FunctionalID_C   = 130
       call ErrorHandler( "initExchCorrFunctional", "This functional requires enabling LibXC", LegacyFunctionalID )
 #endif
-   else
+   else if (LegacyFunctionalID == -2) then
 #if defined LIBXC || defined LIBXC5
       call initString(excorr_name,separator="+")
       NumFunctionals = getNumTokens()
@@ -246,8 +252,14 @@ contains
       endif
       call endString()
 #else
-      call ErrorHandler( "initExchCorrFunctional", "Functional ID is invalid or LibXC is required", LegacyFunctionalID )
+      call ErrorHandler( "initExchCorrFunctional", "The functional requires enabling LibXC when buidling the MST code")
 #endif
+   else if (LegacyFunctionalID == -1) then
+      NumFunctionals = 0
+      FunctionalType = Hartree
+      return
+   else
+      call ErrorHandler( "initExchCorrFunctional", "Functional ID is invalid", LegacyFunctionalID )
    endif
 !
 #if defined LIBXC || defined LIBXC5
@@ -492,10 +504,6 @@ contains
    endif
 #endif
 !
-   nV = 0
-   nE = 0
-   Initialized = .true.
-!
    end subroutine initExchCorrFunctional
 !  ===================================================================
 !
@@ -514,22 +522,24 @@ contains
       deallocate( Eexc_v )
    endif
 !
+   if (.not.isHartreeApproximation()) then
+#if defined LIBXC || defined LIBXC5
+      if (ECin1) then
+!        -------------------------------------------------------------
+         call xc_f90_func_end(xc_func_1)
+!        -------------------------------------------------------------
+      else
+!        -------------------------------------------------------------
+         call xc_f90_func_end(xc_func_1)
+!        -------------------------------------------------------------
+         call xc_f90_func_end(xc_func_2)
+!        -------------------------------------------------------------
+      endif
+#endif
+   endif
+!
    nV = 0
    nE = 0
-!
-#if defined LIBXC || defined LIBXC5
-   if (ECin1) then
-!     ----------------------------------------------------------------
-      call xc_f90_func_end(xc_func_1)
-!     ----------------------------------------------------------------
-   else
-!     ----------------------------------------------------------------
-      call xc_f90_func_end(xc_func_1)
-!     ----------------------------------------------------------------
-      call xc_f90_func_end(xc_func_2)
-!     ----------------------------------------------------------------
-   endif
-#endif
 !
    FunctionalName_X  = Null_String
    FunctionalName_C  = Null_String
@@ -676,7 +686,10 @@ contains
                         'magnetic moment density is required')
    endif
 !
-   if (LegacyFunctionalID == 0 .or. LegacyFunctionalID == 1) then
+   if (LegacyFunctionalID == -1) then
+      Vexc_s = ZERO
+      Eexc_s = ZERO
+   else if (LegacyFunctionalID == 0 .or. LegacyFunctionalID == 1) then
       if (n_spin_pola == 1) then
 !        ------------------------------------------------------------
          call calExchCorr_s( rho_den )
@@ -801,7 +814,10 @@ contains
       nV = n_Rpts
    endif
 !
-   if (LegacyFunctionalID == 0 .or. LegacyFunctionalID == 1) then
+   if (LegacyFunctionalID == -1) then
+      Vexc_v = ZERO
+      Eexc_v = ZERO
+   else if (LegacyFunctionalID == 0 .or. LegacyFunctionalID == 1) then
       if (n_spin_pola == 1) then
 !        ------------------------------------------------------------
          call calExchCorr_v( n_Rpts, rho_den )
@@ -934,7 +950,10 @@ contains
                         'magnetic moment density is required')
    endif
 !
-   if (LegacyFunctionalID == 0 .or. LegacyFunctionalID == 1) then
+   if (LegacyFunctionalID == -1) then
+      Vexc_s = ZERO
+      Eexc_s = ZERO
+   else if (LegacyFunctionalID == 0 .or. LegacyFunctionalID == 1) then
       if (n_spin_pola == 1) then
 !        ------------------------------------------------------------
          call calExchCorr_s( rho_den )
@@ -1065,7 +1084,10 @@ contains
       nV = n_Rpts
    endif
 !
-   if (LegacyFunctionalID == 0 .or. LegacyFunctionalID == 1) then
+   if (LegacyFunctionalID == -1) then
+      Eexc_v = ZERO
+      Vexc_v = ZERO
+   else if (LegacyFunctionalID == 0 .or. LegacyFunctionalID == 1) then
       if (n_spin_pola == 1) then
 !        ------------------------------------------------------------
          call calExchCorr_v( n_Rpts, rho_den )
@@ -1510,6 +1532,24 @@ contains
    endif
 !
    end subroutine LDAfunctional
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isHartreeApproximation() result(y)
+!  ===================================================================
+   implicit none
+!
+   logical :: y
+!
+   if (FunctionalType == Hartree) then
+      y = .true.
+   else
+      y = .false.
+   endif
+!
+   end function isHartreeApproximation
 !  ===================================================================
 !
 !  *******************************************************************

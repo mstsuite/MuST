@@ -41,9 +41,10 @@
    character (len=60) :: number_of_cuts = ' '
    character (len=60) :: skey
    character (len=10) :: atom
-   character (len=1) :: dummy
+   character (len=80) :: dummy, stmp
+   character (len=4) :: stars
 !
-   logical :: ElementName, Jump1stLine
+   logical :: ElementName, Jump1stLine, isComment
 !
    integer (kind=IntKind), parameter :: sunit = 5
    integer (kind=IntKind), parameter :: funit = 11
@@ -62,6 +63,7 @@
    real (kind=RealKind), pointer :: AtomPosition(:,:)
    real (kind=RealKind), allocatable :: rdist(:)
    real (kind=RealKind), allocatable :: chg(:), mom(:), mad(:), rcut(:)
+   real (kind=RealKind), allocatable :: e_loc(:)
 !
    real (kind=RealKind) :: CenterX, CenterY, CenterZ
    real (kind=RealKind) :: r, dq, moment, mmt
@@ -162,8 +164,8 @@
 !
    if (position_dat == ' ') then
       stop 'Error: Position data is unknown!'
-   else if (charge_dat == ' ') then
-      stop 'Error: Charge distribution data is unknown'
+   else if (charge_dat == ' ' .and. madelung_dat == ' ') then
+      stop 'Error: Charge distribution data and Madelung potential data are unknown'
    endif
 !
 !  ===================================================================
@@ -214,14 +216,7 @@
    write(6,'(a,f15.8)')'CenterY = ',CenterY
    write(6,'(a,f15.8)')'CenterZ = ',CenterZ
 !
-   open(unit=10,file=charge_dat,status='old')
-   read(10,'(a)')dummy
-   read(10,'(a)')dummy
-   read(10,'(a)')dummy
-   read(10,'(a)')dummy
-!
    allocate( rdist(num_atoms) )
-   allocate( chg(num_atoms), mom(num_atoms), mad(num_atoms) )
 !
    if (shift_x /= ' ') then
       read(shift_x,*)CenterX
@@ -256,7 +251,7 @@
       enddo
    enddo
 !
-   LOOP_i: do i=1,num_atoms
+   do i=1,num_atoms
       rdist(i) = sqrt( (AtomPosition(1,i) - CenterX)**2                &
                       +(AtomPosition(2,i) - CenterY)**2                &
                       +(AtomPosition(3,i) - CenterZ)**2 )
@@ -266,10 +261,7 @@
                   +(AtomPosition(3,i) - CenterZ + bshiftz(j))**2 )
          rdist(i) = min(rdist(i),r)
       enddo
-      read(10,'(46x,3(2x,f9.5))')chg(i),mmt,mom(i)
-   enddo LOOP_i
-!
-   close(10)
+   enddo
 !
    allocate( idx(num_atoms), idx_inv(num_atoms) )
    call HeapSort(num_atoms,rdist,idx)
@@ -277,6 +269,53 @@
       j=idx(i)
       idx_inv(j)=i
    enddo
+!
+   allocate( chg(num_atoms), mom(num_atoms) )
+   open(unit=10,file=charge_dat,status='old')
+!  read(10,'(a)')dummy
+!  read(10,'(a)')dummy
+!  read(10,'(a)')dummy
+!  read(10,'(a)')dummy
+   isComment = .true.
+   do while (isComment)
+      read(10,'(a)')dummy
+      stmp = trim(adjustl(dummy))
+      if (stmp(1:1) == '#' .or. stmp(1:1) == '=' .or. stmp(1:1) == '-' &
+                           .or. stmp(1:4) == 'Atom') then
+         cycle
+      else
+         isComment = .false.
+         read(dummy,'(46x,3(2x,f9.5))')chg(1),mmt,mom(1)
+         exit
+      endif
+   enddo
+   do i=2,num_atoms
+      read(10,'(46x,3(2x,f9.5))')chg(i),mmt,mom(i)
+   enddo
+   close(10)
+!
+   allocate( mad(num_atoms), e_loc(num_atoms) )
+   open(unit=19,file=trim(madelung_dat),form='formatted',status='old')
+   isComment = .true.
+   do while (isComment)
+      read(19,'(a)')dummy
+      stmp = trim(adjustl(dummy))
+      if (stmp(1:1) == '#' .or. stmp(1:1) == '=' .or. stmp(1:1) == '-' &
+                           .or. stmp(1:4) == 'Atom') then
+         cycle
+      else
+         read(dummy,'(48x,f9.5,4x,f14.5)')mad(1),e_loc(1)
+         isComment = .false.
+         exit
+      endif
+   enddo
+!  read(19,'(a)')dummy
+!  read(19,'(a)')dummy
+!  read(19,'(a)')dummy
+   do i = 2, num_atoms
+      read(19,'(48x,f9.5,4x,f14.5)')mad(i),e_loc(i)
+   enddo
+   close(unit=19)
 !
    if (number_of_cuts /= ' ') then
       read(number_of_cuts,*)num_shells
@@ -336,52 +375,55 @@
       open(unit=21,file=sorted_dat,form='formatted',status='unknown')
       write(21,'(66(''=''))')
       write(21,'(a)')                  &
-!     '      Z          Distance(A)      Excess Electron         Moment'
-      '    Atom         Distance(A)      Excess Electron         Moment'
+!     '      Z      Distance(A)      Excess Electron         Moment'
+      '    Atom     Distance(A)      Excess Electron         Moment'
       write(21,'(66(''-''))')
       do i = 1, num_atoms
          j = idx(i)
-!        write(21,'(5x,i3,3(9x,f10.5))')AtomicNumber(j), rdist(i)/anstr2au, &
-         write(21,'(6x,a2,3(9x,f10.5))')getName(AtomicNumber(j)), rdist(i)/anstr2au, &
+!        write(21,'(5x,i3,4x,f10.5,2(9x,f10.5))')AtomicNumber(j), rdist(i)/anstr2au, &
+         write(21,'(6x,a2,4x,f10.5,2(9x,f10.5))')getName(AtomicNumber(j)), rdist(i)/anstr2au, &
                                         chg(j), mom(j)
       enddo
       close(21)
    else
       open(unit=21,file='qmvsr.dat',form='formatted',status='unknown')
       open(unit=22,file='qmvsr_sorted.dat',form='formatted',status='unknown')
-      write(21,'(66(''=''))')
+      write(21,'(76(''=''))')
       write(21,'(a)')                  &
-!     '      Z          Distance(A)      Excess Electron         Moment'
-      '    Atom         Distance(A)      Excess Electron         Moment'
-      write(22,'(66(''=''))')
+!     '      Z      Distance(A)      Excess Electron        Madelung       Local E'
+      '    Atom     Distance(A)      Excess Electron        Madelung       Local E'
+      write(22,'(76(''=''))')
       write(22,'(a)')                  &
-      '    Atom         Distance(A)      Excess Electron         Moment'
-      write(21,'(66(''-''))')
-      write(22,'(66(''-''))')
+      '    Atom     Distance(A)      Excess Electron        Madelung       Local E'
+      write(21,'(76(''-''))')
+      write(22,'(76(''-''))')
+      n = 0
       do i = 1, num_atoms
          j = idx_inv(i)
-         write(21,'(6x,a2,3(9x,f10.5))')getName(AtomicNumber(i)), rdist(j)/anstr2au, &
-                                        chg(i), mom(i)
+         write(21,'(6x,a2,4x,f10.5,2(9x,f10.5),3x,f14.5)')getName(AtomicNumber(i)), rdist(j)/anstr2au, &
+                                                 chg(i), mad(i), e_loc(i)
          j = idx(i)
-         write(22,'(6x,a2,3(9x,f10.5))')getName(AtomicNumber(j)), rdist(i)/anstr2au, &
-                                        chg(j), mom(j)
+         stars = '    '
+         if (i == 1) then
+            stars = '*00*'
+         else
+            if (rdist(i)-rdist(i-1) > 1.0d-6) then
+               n = n + 1
+               if (n < 10) then
+                  write(stars,'(a2,i1,a1)') '*0',n,'*'
+               else
+                  write(stars,'(a1,i2,a1)') '*',n,'*'
+               endif
+            endif
+         endif
+         write(22,'(a,2x,a2,4x,f10.5,2(9x,f10.5),3x,f14.5)')  &
+               stars,getName(AtomicNumber(j)), rdist(i)/anstr2au, chg(j), mad(j), e_loc(j)
       enddo
       close(21)
       close(22)
    endif
 !
-   if (madelung_dat /= ' ' .and. complete_dat /= ' ' .and.       &
-       neighbor_cut /= ' ') then
-      open(unit=19,file=trim(madelung_dat),form='formatted',status='old')
-      read(19,'(a)')dummy
-      read(19,'(a)')dummy
-      read(19,'(a)')dummy
-      read(19,'(a)')dummy
-      do i = 1, num_atoms
-         read(19,'(48x,f9.5)')mad(i)
-      enddo
-      close(unit=19)
-!
+   if (complete_dat /= ' ' .and.  neighbor_cut /= ' ') then
       open(unit=22,file=trim(complete_dat),form='formatted',status='unknown')
       write(22,'(75(''=''))')
       if (num_shells > 1) then
@@ -656,7 +698,7 @@
       close (unit=14)
    endif
 !
-   deallocate( rdist, idx, idx_inv, chg, mom )
+   deallocate( rdist, idx, idx_inv, chg, mom, mad, e_loc )
    deallocate( unlike, rcut )
 !
    call endMPP()

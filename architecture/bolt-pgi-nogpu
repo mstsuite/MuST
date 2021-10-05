@@ -1,5 +1,7 @@
 ifdef MST
 include ../MST/arch/bolt_pgi
+else ifdef KUBO
+include ../MST/arch/bolt_pgi
 else ifdef EXTERNAL
 include ../MST/arch/bolt_pgi
 else

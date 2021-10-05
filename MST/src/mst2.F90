@@ -213,7 +213,8 @@ program mst2
                                         isLDAFunctional,          &
                                         isGGAFunctional,          &
                                         isMGGAFunctional,         &
-                                        isHybridFunctional
+                                        isHybridFunctional,       &
+                                        isHartreeApproximation
 !
    use ConvergenceCheckModule, only : initConvergenceCheck, &
                                       endConvergenceCheck,  &
@@ -1339,6 +1340,10 @@ program mst2
       else if (isMGGAFunctional()) then
          write(6,'(/,2x,a)')'=========================================='
          write(6,'(2x,a)')  'Exchange-Correlation Functional Type: MGGA'
+         write(6,'(2x,a,/)')'=========================================='
+      else if (isHartreeApproximation()) then
+         write(6,'(/,2x,a)')'=========================================='
+         write(6,'(2x,a)')  'This is Hartree approximation calculation.'
          write(6,'(2x,a,/)')'=========================================='
       else
          call ErrorHandler('main','Unknown exchange-correlation functional type')
