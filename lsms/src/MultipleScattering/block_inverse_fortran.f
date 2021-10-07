@@ -141,7 +141,7 @@ c        =============================================================
          write(6,'(''BLOCK_INV:: Using '',a3,'': Block size='',
      &     i4,'', Time='',f10.3,
      >   '' Sec'')')  alg_name,blk_sz(2),time
-         call flush(6)
+!        call flush(6)
       endif
 
       return
