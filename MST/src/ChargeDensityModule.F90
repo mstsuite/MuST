@@ -16,7 +16,7 @@ module ChargeDensityModule
                                        RealType, ComplexType, &
                                        RealMark, ComplexMark
 !
-   use IntegerFactorsModule, only : lofj, mofj
+   use IntegerFactorsModule, only : lofj, mofj, kofj
 !
    use PublicTypeDefinitionsModule, only : GridStruct
 !
@@ -29,6 +29,8 @@ module ChargeDensityModule
    use PolyhedraModule, only : getVolume
 !
    use PotentialTypeModule, only : isASAPotential
+!
+   use TimerModule, only : getTime
 !
 public:: initChargeDensity,         &
          endChargeDensity,          &
@@ -54,7 +56,8 @@ public:: initChargeDensity,         &
          setVPMomSize,              &
          updateTotalDensity,        &
          getChargeDensityAtPoint,   &
-         getMomentDensityAtPoint
+         getMomentDensityAtPoint,   &
+         startLocalTimer, checkLocalTimer, stopLocalTimer
 !
    interface getChargeDensity
       module procedure getChrgDen_L, getChrgDen_Lj
@@ -188,6 +191,9 @@ private
          logical :: t
       end function nocaseCompare
    end interface
+!
+   integer (kind=IntKind) :: n_timer = 0
+   real (kind=RealKind), allocatable :: timer(:)
 !
 contains
 !  ===================================================================
@@ -1199,6 +1205,8 @@ contains
 !
    use CoreStatesModule, only : isFullPotentialSemiCore
 !
+   use MPPModule, only : MyPE
+!
    implicit none
 !
    character(len=*), intent(in) :: densityType
@@ -1210,14 +1218,16 @@ contains
    real (kind=RealKind), intent(in) :: posi(3)
    real (kind=RealKind), intent(in) :: tol_in
    real (kind=RealKind), intent(out), optional :: grad(3)
+   real (kind=RealKind), allocatable :: fa2(:)
 !
    integer (kind=IntKind) :: VP_point
    integer (kind=IntKind) :: jl, ir, is, irp, l, kl, i
    integer (kind=IntKind) :: iend, kmax, nr, jmax
 !
-   real (kind=RealKind) :: rho, err, r, fact, er(3)
+   real (kind=RealKind) :: rho, err, r, fact, er(3), t0
 !
-   complex (kind=CmplxKind) :: rho_in, der_rho_in
+   complex (kind=CmplxKind), allocatable :: rho_in(:)
+   complex (kind=CmplxKind) :: der_rho_in
    complex (kind=CmplxKind), pointer :: ylm(:)
    complex (kind=CmplxKind), pointer :: den_l(:,:)
    complex (kind=CmplxKind), pointer :: grad_ylm(:,:)
@@ -1268,6 +1278,7 @@ contains
       takeGradient = .false.
    endif
 !
+   t0 = getTime()
    nr = p_CDL%NumRPts
    r = sqrt(posi(1)*posi(1)+posi(2)*posi(2)+posi(3)*posi(3))
    if ( r > p_CDL%r_mesh(nr)+TEN2m8 ) then
@@ -1312,7 +1323,11 @@ contains
    if (takeGradient) then
       der_den_l = CZERO
    endif
+   if (n_timer > 0) then
+      timer(1) = timer(1) + (getTime()-t0)
+   endif
 !
+   t0 = getTime()
    if ( present(n_mult) ) then
       if ( n_mult < 1 ) then 
          call ErrorHandler("getChargeDensityAtPoint",'Invalid n_mult',n_mult)
@@ -1540,37 +1555,58 @@ contains
          call ErrorHandler("getChargeDensityAtPoint","Undefined charge type")
       endif
    endif
+   if (n_timer > 1) then
+      timer(2) = timer(2) + (getTime()-t0)
+   endif
+!
+   allocate(fa2(jmax), rho_in(jmax))
+   do jl = 1, jmax
+      if (mofj(jl) == 0) then
+         fa2(jl) = ONE
+      else
+         fa2(jl) = TWO
+      endif
+   enddo
 !
    rho = ZERO
    if (takeGradient) then
       grad = ZERO
    endif
-   do jl = jmax,1,-1
+   t0 = getTime()
+!$omp parallel do private (l, kl, err) reduction (+:rho)
+   do jl = 1, jmax
       l = lofj(jl)
 !     ----------------------------------------------------------------
-      call PolyInterp(n_inter, p_CDL%r_mesh(irp:irp+n_inter-1), &
-                      den_l(1:n_inter,jl), r, rho_in, err)
+      call polint_inline(n_inter, p_CDL%r_mesh(irp:irp+n_inter-1), &
+                         den_l(1:n_inter,jl), r, rho_in(jl), err)
 !     ----------------------------------------------------------------
-      if ( takeGradient ) then
-!        -------------------------------------------------------------
-         call PolyInterp(n_inter, p_CDL%r_mesh(irp:irp+n_inter-1), &
-                         der_den_l(1:n_inter,jl), r, der_rho_in, err)
-!        -------------------------------------------------------------
-      endif
-      kl = (l+1)*(l+1)-l+mofj(jl)
-      if (mofj(jl) == 0) then
-         fact = ONE
-      else
-         fact = TWO
-      endif
-      rho = rho + fact*real(rho_in*ylm(kl),RealKind)
-      if ( takeGradient ) then
-         do i = 1, 3
-            grad(i) = grad(i) + fact*real(der_rho_in*ylm(kl)*er(i)+  &
-                                          rho_in*grad_ylm(kl,i),RealKind)
-         enddo
-      endif
+      kl = kofj(jl)
+      rho = rho + fa2(jl)*real(rho_in(jl)*ylm(kl),RealKind)
    enddo
+!$omp end parallel do
+!
+   if ( takeGradient ) then
+      do jl = jmax,1,-1
+         l = lofj(jl)
+!        -------------------------------------------------------------
+!!       call PolyInterp(n_inter, p_CDL%r_mesh(irp:irp+n_inter-1), &
+!!                       der_den_l(1:n_inter,jl), r, der_rho_in, err)
+         call polint_inline(n_inter, p_CDL%r_mesh(irp:irp+n_inter-1), &
+                            der_den_l(1:n_inter,jl), r, der_rho_in, err)
+!        -------------------------------------------------------------
+         kl = kofj(jl)
+         do i = 1, 3
+            grad(i) = grad(i) + fa2(jl)*real(der_rho_in*ylm(kl)*er(i)+  &
+                                        rho_in(jl)*grad_ylm(kl,i),RealKind)
+         enddo
+      enddo
+   endif
+!
+   if (n_timer > 2) then
+      timer(3) = timer(3) + (getTime()-t0)
+   endif
+!
+   deallocate(rho_in,fa2)
 !
    end function getChargeDensityAtPoint
 !  ===================================================================
@@ -4221,4 +4257,111 @@ contains
    end subroutine printMomentDensity_L
 !  ==================================================================
 !
+!  cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine startLocalTimer(n)
+!  ==================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: n
+!
+   allocate(timer(n))
+   timer = ZERO
+   n_timer = n
+!
+   end subroutine startLocalTimer
+!  ==================================================================
+!
+!  cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine checkLocalTimer(n,t)
+!  ==================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: n
+!
+   real (kind=RealKind), intent(out) :: t(n)
+!
+   t(1:n) = timer(1:n)
+!
+   end subroutine checkLocalTimer
+!  ==================================================================
+!
+!  cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine stopLocalTimer()
+!  ==================================================================
+   implicit none
+!
+   deallocate(timer)
+   n_timer = 0
+!
+   end subroutine stopLocalTimer
+!  ==================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine polint_inline(n,xa,ya,x,y,err)
+!  ===================================================================
+   implicit none
+!  *******************************************************************
+!  Given arrays xa, ya of length n, and given a value x, this routine
+!  returns an interpolation value y and an error estimate dy.
+!  Taken from numerical recipes; Modified by Yang Wang
+!  *******************************************************************
+   integer (kind=IntKind), intent(in) :: n
+   integer (kind=IntKind) :: i, m, ns
+   integer (kind=IntKind), parameter :: nmax=10
+
+   real (kind=RealKind), intent(in) :: x, xa(n)
+   real (kind=RealKind) :: dif, dift, ho, hp
+   real (kind=RealKind), intent(out) :: err
+!
+   complex (kind=CmplxKind), intent(in) :: ya(n)
+   complex (kind=CmplxKind), intent(out) :: y
+   complex (kind=CmplxKind) :: dy, den, w, c(nmax), d(nmax)
+!
+!  n=size(xa)
+!  if (n /= size(ya)) then
+!     call ErrorHandler('polint_c','size(x) <> size(y)',n,size(ya))
+!! if (nmax < n) then
+!!    call ErrorHandler('polint_c','nmax < n',nmax,n)
+!! else if (n < 2) then
+!!    call ErrorHandler('polint_c','n < 2',n)
+!! endif
+
+   ns=1
+   dif=abs(x-xa(1))
+   do i=1,n
+      dift=abs(x-xa(i))
+      if (dift.lt.dif) then
+         ns=i
+         dif=dift
+      endif
+      c(i)=ya(i)
+      d(i)=ya(i)
+   enddo
+
+   y=ya(ns)
+   ns=ns-1
+   do m=1,n-1
+      do i=1,n-m
+         ho=xa(i)-x
+         hp=xa(i+m)-x
+         w=c(i+1)-d(i)
+         den=ho-hp
+!!       if(abs(den).eq.ZERO) then
+!!          call ErrorHandler('POLINT_C','den = 0')
+!!       endif
+         den=w/den
+         d(i)=hp*den
+         c(i)=ho*den
+      enddo
+      if (2*ns.lt.n-m) then
+         dy=c(ns+1)
+      else
+         dy=d(ns)
+         ns=ns-1
+      endif
+      y=y+dy
+   enddo
+   err=abs(dy)
+   end subroutine polint_inline
+!  ===================================================================
 end module ChargeDensityModule

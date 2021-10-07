@@ -1336,8 +1336,10 @@ contains
                         do id = 1, LocalNumAtoms
                            do ia = 1, LastValue(id)%NumSpecies
                               write(6,'(/,''returnRelSingleSiteDOS:   energy ='',2f18.12,'', id ='',i4)')energy,id,ia
-                              write(6,'(''                       Single Site DOS_MT   ='',f18.12)')real(LastValue(id)%dos_mt(js,ia),RealKind)
-                              write(6,'(''                       Single Site DOS_VP   ='',f18.12)')real(LastValue(id)%dos(js,ia),RealKind)
+                              write(6,'(''                       Single Site DOS_MT   ='',f18.12)') &
+                                        real(LastValue(id)%dos_mt(js,ia),RealKind)
+                              write(6,'(''                       Single Site DOS_VP   ='',f18.12)') &
+                                        real(LastValue(id)%dos(js,ia),RealKind)
                            enddo
                         enddo
                      enddo
@@ -4019,7 +4021,8 @@ contains
                            write(6,'(/,a,f8.5,a)')'Performing contour integration, with radius = ',rfac*e_delta, &
                                                    ', around the resonance over the'
                            write(6,'(a,f8.5,a,f8.5,a)')'energy domain: (',e1,',',e2,')'
-                           write(6,'(a)')'=========================================================================================='
+                           write(6,'(a)')&
+                         '=========================================================================================='
                         endif
                         ssDOS = ZERO; wk_dos = CZERO; wk_tmp = CZERO
                         do ie = MyPEinEGroup+1, NumGQPs, NumPEsInEGroup
@@ -4060,20 +4063,23 @@ contains
                            if ( node_print_level >= 0) then
                               write(6,'(/,a)')'Performing Romberg integration around the resonance over the'
                               write(6,'(a,f8.5,a,f8.5,a)')'energy domain: (',e1,',',e2,')'
-                              write(6,'(a)')'=========================================================================================='
+                              write(6,'(a)')&
+                           '=========================================================================================='
                            endif
 !                          -------------------------------------------
                            ssDOS = getRombergIntegration(20,e1,e2,info,returnSingleSiteDOS,err,nm)
 !                          -------------------------------------------
                            if ( node_print_level >= 0) then
-                              write(6,'(/,a,i4,a,d12.5)')'The Romberg integration terminated with ',nm,' mesh points, and error = ',err
+                              write(6,'(/,a,i4,a,d12.5)')'The Romberg integration terminated with ',&
+                                       nm,' mesh points, and error = ',err
                            endif
                         else ! Using Gaussian method to integrate the single site DOS over the domain
                            nm = max(ne,200)
                            if ( node_print_level >= 0) then
                               write(6,'(/,a)')'Performing Gaussian quadrature integration around the resonance over the'
                               write(6,'(a,f8.5,a,f8.5,a)')'energy domain: (',e1,',',e2,')'
-                              write(6,'(a)')'=========================================================================================='
+                              write(6,'(a)')&
+                            '=========================================================================================='
                            endif
 !                          -------------------------------------------
                            ssDOS = getGaussianIntegration(nm,e1,e2,info,returnSingleSiteDOS)
@@ -4091,7 +4097,8 @@ contains
                      endif
                      ssdos_int = ssdos_int + ssDOS*getLocalSpeciesContent(id,ia)
                      if ( node_print_level >= 0) then
-                        write(6,'(a)')'=========================================================================================='
+                        write(6,'(a)')&
+                       '=========================================================================================='
                         write(6,'(a,i4)')'Number of mesh points for the integration: ',nm
                         write(6,'(a,f12.8,/)')'After  adding the resonance contribution, ssdos_int = ',ssdos_int
                      endif
