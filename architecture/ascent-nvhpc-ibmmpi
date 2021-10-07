@@ -2,7 +2,7 @@
 # Acceleration = 1: enable GPU acceleration
 # Acceleration = 0: otherwise
 #=====================================================================
-Acceleration = 1
+Acceleration = 0
 COMPILER_MODULE = nvhpc/21.3
 MODULES = hdf5 essl fftw
 
@@ -26,8 +26,8 @@ FFTW_PATH   = $(OLCF_FFTW_ROOT)
 # P3DFFT_PATH = /gpfs/alpine/proj-shared/mat020/p3dfft-2.7.9/GNU
 P3DFFT_PATH = 
 LUA_PATH    =
-LIBS       += -llapack -lblas -L${OLCF_ESSL_ROOT}/lib64 -lessl -L$(OLCF_CUDA_ROOT)/lib64 -lcudart -lcuda -lcublas
-ADD_LIBS   += -lm -lstdc++
+LIBS       += -lessl -llapack -lblas -L${OLCF_ESSL_ROOT}/lib64 -L$(OLCF_CUDA_ROOT)/lib64 -lcudart -lcuda -lcublas
+ADD_LIBS   += -lm -lstdc++ -pgf90libs
 
 ADD_LIBS   += -L$(LIBXC_PATH)/lib -lxcf90 -lxc
 Use_LibXC   = -DLIBXC5 -I$(LIBXC_PATH)/include
@@ -56,9 +56,10 @@ CPPFLAGS    =
 
 CFLAGS      = -O3
 CXXFLAGS    = -O3 -std=c++14
-FFLAGS      = -O3
-F77FLAGS    = -O3
 OPT_OPENMP  = -fopenmp
+# FFLAGS      = -O3 -Mbounds -traceback -Mchkptr -Mchkstk
+FFLAGS      = -O3 $(OPT_OPENMP)
+F77FLAGS    = -O3 $(OPT_OPENMP)
 
 LD_FLAGS    =
 LD          = $(FC) $(LD_FLAGS)
