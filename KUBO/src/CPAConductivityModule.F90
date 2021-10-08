@@ -273,7 +273,7 @@ contains
      J1avg = J1avg + c_a*J1
      J2avg = J2avg + c_a*J2
    enddo
-   
+  
    do K = 1, dsize**2
      do L1 = 1, dsize
        do L4 = 1, dsize
@@ -283,7 +283,7 @@ contains
        enddo
      enddo
    enddo
-    
+
    end function calSigmaTilde1VC
 !  ===================================================================
 
@@ -343,9 +343,9 @@ contains
    call calChiIntegral(getSingleSiteTmat)
  ! call writeMatrix('chi', X(:,:,1), dsize*dsize, dsize*dsize)
 
-   do L4 = 1, dsize
-     do L3 = 1, dsize
-       do L2 = 1, dsize
+    do L4 = 1, dsize
+      do L3 = 1, dsize
+        do L2 = 1, dsize
          do L1 = 1, dsize
            K1 = dsize*(L1 - 1) + L4
            K2 = dsize*(L2 - 1) + L3
@@ -355,8 +355,8 @@ contains
            X(K1,K2,4) = X(K1,K2,4) - tau_cc(L1,L2)*tau_cc(L3,L4)
          enddo
        enddo
-     enddo
-   enddo
+      enddo
+    enddo
 
    end subroutine calChiMatrixCPA
 !  ===================================================================
@@ -369,7 +369,7 @@ contains
                            getWeightSum
    use ProcMappingModule, only : isKPointOnMyProc, getNumKsOnMyProc,  &
                                  getKPointIndex, getNumRedundantKsOnMyProc
-   use GroupCommModule, only : getGroupID, GlobalSumInGroup, getMyPEinGroup
+   use GroupCommModule, only : getGroupID, GlobalSumInGroup, getMyPEinGroup, getNumPEsInGroup
    use IBZRotationModule, only : getNumIBZRotations, getIBZRotationMatrix
    use StrConstModule, only : getStrConstMatrix, &
                    checkFreeElectronPoles, getFreeElectronPoleFactor
@@ -378,9 +378,11 @@ contains
    use SystemModule, only : getLmaxKKR
    use CurrentMatrixModule, only : getLindex
 
+   LOGICAL :: isHost
+
    integer (kind=IntKind) :: k_loc, k, row, col, MyPEinKGroup, method
    integer (kind=IntKind) :: NumKs, kGID, aGID, NumKsOnMyProc, NumRedunKs
-   integer (kind=IntKind) :: itertmp, t0size
+   integer (kind=IntKind) :: itertmp, t0size, nt
    integer (kind=IntKind) :: ig, i, j, kkrsz, L1, L2, L3, L4, K1, K2
    integer (kind=IntKind) :: nrot, irot
    integer (kind=IntKind) :: site_config(num_atoms)
@@ -405,6 +407,7 @@ contains
       end function getSingleScatteringMatrix
    end interface
 ! 
+   isHost = .false.
    kappa = sqrt(eval)
 
    kkrsz = dsize
@@ -548,13 +551,14 @@ contains
  !   tmb = matmul(tmat, tauk)
      call zgemm('n', 'n', kkrsz, kkrsz, kkrsz, CONE, tmat, kkrsz, &
          tauk, kkrsz, CZERO, tmb, kkrsz)
+
      do j = 1, kkrsz
        do i = 1, kkrsz
          tmbsym(i, j) = ((-1.0)**(getLindex(j) - getLindex(i)))*conjg(tmb(j, i))
        enddo
      enddo
 
-     if (k_loc <= NumKsOnMyProc - NumRedunKs .or. MyPEinKGroup == 0) then
+     if (k_loc <= NumKsOnMyProc - NumRedunKs .or. NumPEinKGroup == 0) then
        if (nrot > 1) then
          do irot = 1, nrot
            w0 = CZERO
@@ -568,12 +572,14 @@ contains
            call computeUAUtc(rotmat,kkrsz,kkrsz,rotmat,kkrsz,CONE, &
                         tmbsym,kkrsz,CONE,w1,kkrsz,WORK)
 !          ----------------------------------------------------------------
+        !$OMP TARGET TEAMS DISTRIBUTE PARALLEL DO SIMD MAP(TO:kkrsz,nrot,wfac,w0,w1) MAP(FROM:X) PRIVATE(K1,K2) COLLAPSE(4)  
            do L4 = 1, kkrsz
              do L3 = 1, kkrsz
                do L2 = 1, kkrsz
                  do L1 = 1, kkrsz
                    K1 = (L1 - 1)*kkrsz + L4
                    K2 = (L2 - 1)*kkrsz + L3
+   !               isHost = omp_is_initial_device()
                    X(K1,K2,1) = X(K1,K2,1) + (1.0/nrot)*wfac*w0(L1,L2)*w0(L3,L4)
                    X(K1,K2,2) = X(K1,K2,2) + (1.0/nrot)*wfac*w0(L1,L2)*w1(L3,L4)
                    X(K1,K2,3) = X(K1,K2,3) + (1.0/nrot)*wfac*w1(L1,L2)*w0(L3,L4)
@@ -582,6 +588,7 @@ contains
                enddo
              enddo
            enddo
+        !$OMP END TARGET TEAMS DISTRIBUTE PARALLEL DO
          enddo
        else
          do L4 = 1, kkrsz
@@ -601,8 +608,13 @@ contains
        endif
      endif
    enddo
-
    call GlobalSumInGroup(kGID,X,kkrsz*kkrsz,kkrsz*kkrsz,4)
+
+!  IF (isHost) THEN
+!    print*, "Target region executed on the host"
+!  ELSE
+!    print*, "Target region executed on the device"
+!  END IF
 
 !  call writeMatrix('chi',X(:,:,1), kkrsz*kkrsz, kkrsz*kkrsz)
 
