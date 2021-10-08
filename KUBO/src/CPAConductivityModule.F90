@@ -558,7 +558,7 @@ contains
        enddo
      enddo
 
-     if (k_loc <= NumKsOnMyProc - NumRedunKs .or. NumPEinKGroup == 0) then
+     if (k_loc <= NumKsOnMyProc - NumRedunKs .or. MyPEinKGroup == 0) then
        if (nrot > 1) then
          do irot = 1, nrot
            w0 = CZERO
