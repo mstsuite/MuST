@@ -694,6 +694,12 @@ program kubo
    endif
 
    if (node_print_level >= 0) then
+      write(6,'(/,80(''=''))')
+      t3 = getTime()-t0
+      t2 = t_inp + t_outp
+      write(6,'(''Time:: Job total including IO :'',f12.5,''Sec'')') t3
+      write(6,'(''       Job total excluding IO :'',f12.5,''Sec'')') t3 - t2
+      write(6,'(80(''-''))')
       write(6,*) " Run Ending! "
       call FlushFile(6)
    endif
