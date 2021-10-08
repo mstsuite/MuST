@@ -56,7 +56,7 @@ CPPFLAGS    =
 
 CFLAGS      = -O3
 CXXFLAGS    = -O3 -std=c++14
-OPT_OPENMP  = -fopenmp
+OPT_OPENMP  = -fopenmp -mp=gpu -Minfo=mp,accel
 # FFLAGS      = -O3 -Mbounds -traceback -Mchkptr -Mchkstk
 FFLAGS      = -O3 $(OPT_OPENMP)
 F77FLAGS    = -O3 $(OPT_OPENMP)
