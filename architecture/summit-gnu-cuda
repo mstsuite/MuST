@@ -25,7 +25,7 @@ LIBXC_PATH  =
 FFTW_PATH   = $(OLCF_FFTW_ROOT)
 # P3DFFT_PATH = /gpfs/alpine/proj-shared/mat020/p3dfft-2.7.9/GNU
 P3DFFT_PATH = 
-LUA_PATH    =
+LUA_PATH    =  /usr/bin/lua
 LIBS       += -L${OLCF_ESSL_ROOT}/lib64 -lessl -L$(OLCF_NETLIB_SCALAPACK_ROOT)/lib -lscalapack -L$(OLCF_CUDA_ROOT)/lib64 -lcudart -lcuda -lcublas
 ADD_LIBS   += -lgfortran -lm -lstdc++
 
@@ -55,8 +55,8 @@ CPPFLAGS    =
 
 CFLAGS      = -O3
 CXXFLAGS    = -O3 -std=c++14
-FFLAGS      = -O3
-F77FLAGS    = -O3
+FFLAGS      = -O3 -fopenmp
+F77FLAGS    = -O3 -fopenmp
 OPT_OPENMP  = -fopenmp
 
 LD_FLAGS    =
