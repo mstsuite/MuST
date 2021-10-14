@@ -146,6 +146,22 @@
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function aliasArray5_l(array,n1,n2,n3,n4,n5)           result(parray)
+!  ===================================================================
+   use KindParamModule, only : IntKind
+   implicit none
+!
+   integer(kind=IntKind), intent(in) :: n1,n2,n3,n4,n5
+   logical, target  :: array(n1,n2,n3,n4,n5)
+!
+   logical, pointer :: parray(:,:,:,:,:)
+!
+   parray => array(1:n1,1:n2,1:n3,1:n4,1:n5)
+!
+   end function aliasArray5_l
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function aliasArray1_i(array,n1)              result(parray)
 !  ===================================================================
    use KindParamModule, only : IntKind
@@ -207,6 +223,22 @@
    parray => array(1:n1,1:n2,1:n3,1:n4)
 !
    end function aliasArray4_i
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function aliasArray5_i(array,n1,n2,n3,n4,n5)       result(parray)
+!  ===================================================================
+   use KindParamModule, only : IntKind
+   implicit none
+!
+   integer(kind=IntKind), intent(in) :: n1,n2,n3,n4,n5
+   integer(kind=IntKind), target  :: array(n1,n2,n3,n4,n5)
+!
+   integer(kind=IntKind), pointer :: parray(:,:,:,:,:)
+!
+   parray => array(1:n1,1:n2,1:n3,1:n4,1:n5)
+!
+   end function aliasArray5_i
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -274,6 +306,22 @@
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function aliasArray5_r(array,n1,n2,n3,n4,n5)    result(parray)
+!  ===================================================================
+   use KindParamModule, only : IntKind, RealKind
+   implicit none
+!
+   integer(kind=IntKind), intent(in) :: n1,n2,n3,n4,n5
+   real(kind=RealKind), target  :: array(n1,n2,n3,n4,n5)
+!
+   real(kind=RealKind), pointer :: parray(:,:,:,:,:)
+!
+   parray => array(1:n1,1:n2,1:n3,1:n4,1:n5)
+!
+   end function aliasArray5_r
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function aliasArray1_c(array,n1)              result(parray)
 !  ===================================================================
    use KindParamModule, only : IntKind, CmplxKind
@@ -335,6 +383,22 @@
    parray => array(1:n1,1:n2,1:n3,1:n4)
 !
    end function aliasArray4_c
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function aliasArray5_c(array,n1,n2,n3,n4,n5)       result(parray)
+!  ===================================================================
+   use KindParamModule, only : IntKind, CmplxKind
+   implicit none
+!
+   integer(kind=IntKind), intent(in) :: n1,n2,n3,n4,n5
+   complex(kind=CmplxKind), target :: array(n1,n2,n3,n4,n5)
+!
+   complex(kind=CmplxKind), pointer :: parray(:,:,:,:,:)
+!
+   parray => array(1:n1,1:n2,1:n3,1:n4,1:n5)
+!
+   end function aliasArray5_c
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -402,4 +466,21 @@
    parray => array(1:n1,1:n2,1:n3,1:n4)
 !
    end function aliasArray4_s
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function aliasArray5_s(array,n1,n2,n3,n4,n5)          result(parray)
+!  ===================================================================
+   use KindParamModule, only : IntKind
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: n1, n2, n3, n4, n5
+!
+   character (len=1), intent(in), target :: array(n1,n2,n3,n4,n5)
+!
+   character (len=1), pointer :: parray(:,:,:,:,:)
+!
+   parray => array(1:n1,1:n2,1:n3,1:n4,1:n5)
+!
+   end function aliasArray5_s
 !  ===================================================================
