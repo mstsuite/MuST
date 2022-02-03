@@ -289,6 +289,10 @@
    n = n + 1; Keys(n) = 'Use Linear Relation';                   Values(n) = '0'
 !                     = 0: DO NOT use the linear q-V relation to determine the charge correction term;
 !                     = 1: Use the linear q-V relation to determine the charge correction term;
+   n = n + 1; Keys(n) = 'Tolerance for setting up polyhedra';    Values(n) = '0.0000005d0'
+!        Note: This is the tolerance value used in setting up atomic polyhedra in the unit cell.
+!              If one gets error message for determining the corners or edges of a polyhedron, it is
+!              likely that this tolerance value needs to be adjusted.
 !  =============================================================================
 !  Additional input parameters can be added to this table using the 
 !  following format:

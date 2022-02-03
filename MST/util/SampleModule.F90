@@ -26,7 +26,7 @@ public :: initSample,        &
    end interface
 !
    integer (kind=IntKind), parameter, public :: MaxAtomTypes = 20
-   integer (kind=IntKind), parameter, public :: MaxShells = 20
+   integer (kind=IntKind), parameter, public :: MaxShells = 100
 !
 private
    character (len=2), target, allocatable :: AtomName(:)
@@ -497,9 +497,9 @@ contains
    integer (kind=IntKind), parameter :: max_shifts = 1
 !
    integer (kind=IntKind) :: ia,ja
-   integer (kind=IntKind) :: jp
-   integer (kind=IntKind) :: i
-   integer (kind=IntKind) :: j
+   integer (kind=IntKind) :: jp, np0, npt
+   integer (kind=IntKind) :: i, i1
+   integer (kind=IntKind) :: j, j1
    integer (kind=IntKind) :: k
    integer (kind=IntKind) :: id
    integer (kind=IntKind) :: n1
@@ -560,7 +560,7 @@ contains
 !  Determine qmin: the square of the distance within which the atom pairs
 !  are counted for the SRO parameters.
 !  Due to the periodic boundary condition effect, we will not counts
-!  the pairs whoe separation is larger than the square root of qmin.
+!  the pairs whose separation is larger than the square root of qmin.
 !  ===================================================================
    qmin=pmin/four-rtol
 !
@@ -596,6 +596,8 @@ contains
             if (NumShell < MaxShells) then
                NumShell=NumShell+1
                sr_pairs(NumShell)%rpair2=r2s
+            else
+               call ErrorHandler('getsrop','NumShell is reaching the upper limit = ',MaxShells)
             endif
          endif
       enddo LOOP_ns
@@ -604,6 +606,12 @@ contains
    if (NumShell < 1) then
       write(6,'(/,5x,a)') "Given the small size of the unit cell sample, the SROP is not calculated ..."
       return
+   else
+      write(6,'(/,2x,a,i5)') 'The number of atomic pair shells in the unit cell = ',NumShell
+      write(6,'(2x,a)')'The square of the shell distance:'
+      do i=1,NumShell      
+         write(6,'(5x,i5,2x,f15.8)')i,sr_pairs(i)%rpair2
+      enddo
    endif
 !
    r2max = ZERO
@@ -623,7 +631,8 @@ contains
       enddo
    enddo
 !
-   do jp=1,NumShell
+   write(6,'(/,2x,a)')'Perform unit cell shifts...'
+   do jp=1,MaxShells
       sr_pairs(jp)%npairs=0
    enddo
    do j=1,NumAtoms-1
@@ -639,13 +648,40 @@ contains
                      cycle LOOP_k
                   endif
                enddo
-               write(6,'(/,a,3f10.5,1f12.5)')'           Rij,rij2 =',      &
+               write(6,'(2x,a,3f10.5,1f12.5)')'Found missing Rij,rij2 =',      &
                      xshift(k)+atom_position_x(i)-atom_position_x(j),      &
                      yshift(k)+atom_position_y(i)-atom_position_y(j),      &
                      zshift(k)+atom_position_z(i)-atom_position_z(j),rij2
+!              =======================================================
+!              Rij2 is not found in the established sr_pairs data. This
+!              may happen for some parculiar unit cell structures where
+!              a unique atomic pair separation distance only appears 
+!              between atoms in two separate unit cells. So we will
+!              add this new shell to sr_pairs data
 !              -------------------------------------------------------
-               call ErrorHandler('getsrop','The Rij is not in the table.')
+!              write(6,'(/,a,d15.8)')'Adding the missing Rij in the shell table. Rij = ',sqrt(rij2)
 !              -------------------------------------------------------
+               np0 = 1
+               LOOP_i1: do i1=1,NumShell      
+                  if (sr_pairs(i1)%rpair2 > rij2) then
+                      do j1=i1,NumShell
+                         r2t = sr_pairs(j1)%rpair2
+                         npt = sr_pairs(j1)%npairs
+                         sr_pairs(j1)%rpair2=rij2
+                         sr_pairs(j1)%npairs=np0
+                         rij2=r2t
+                         np0=npt
+                      enddo
+                      exit LOOP_i1
+                  endif
+               enddo LOOP_i1
+               if (NumShell < MaxShells) then
+                  NumShell=NumShell+1
+                  sr_pairs(NumShell)%rpair2=rij2
+                  sr_pairs(NumShell)%npairs=np0
+               else
+                  call ErrorHandler('getsrop','NumShell is reaching the upper limit = ',MaxShells)
+               endif
             endif
          enddo LOOP_k
       enddo
@@ -676,6 +712,10 @@ contains
                if (rij2 > rtol .and. rij2 < r2max+rtol) then
                   if (abs(sqrt(rij2)-sqrt(sr_pairs(jp)%rpair2)) <= dr_shell) then
                      id = id + 1
+                     if (id > sr_pairs(jp)%npairs) then
+                        write(6,'(a,2x,d15.8)')'id is out of bound happens for rij2 = ',rij2
+                        call ErrorHandler('getsrop','id > sr_pairs(jp)%npairs',id,sr_pairs(jp)%npairs)
+                     endif
                      sr_pairs(jp)%i_of_pair(id)=ia
                      sr_pairs(jp)%j_of_pair(id)=ja
                   endif
@@ -735,7 +775,7 @@ contains
    enddo
    if ( present(lprint) ) then
       if (lprint) then
-         write(6,'(/,a,t70,a,2i8)')' calSROP:: the (max/required) no. of shells and SRO for each shell', &
+         write(6,'(/,2x,a,t70,a,2i8)')'calSROP:: the (max/required) no. of shells and SRO for each shell', &
                '=',NumShell, NumTypes*(NumTypes-1)/2
          write(6,'(/,10x,60(''=''))')
          if (NumTypes == 1) then
@@ -886,8 +926,7 @@ contains
      enddo
    enddo
 
-!   write(6,'(/)')
-   write(6,'('' SROPLACE:: nab corresponding to the input SRO parameters:'')')
+   write(6,'(/,2x,a)')'SROPLACE:: nab corresponding to the input SRO parameters:'
    write(6,'(''            input sro_in, nab_in, sro_best          ='')')
    do ip=1,NumShell
      do isro=1, NumTypes*(NumTypes-1)/2
