@@ -71,7 +71,7 @@
    integer (kind=IntKind) :: real8_size
    integer (kind=IntKind) :: i, n, np, ia, mp, ip
    integer (kind=IntKind) :: present_atom
-   integer (kind=IntKind) :: fp_pos
+   integer (kind=IntKind) :: fp_pos, fp_tmp
    integer (kind=IntKind) :: msg_bytes
    integer (kind=IntKind) :: imsgbuf(20)
    integer (kind=IntKind) :: slen, pad_bytes, size_ldapu, size_nspot
@@ -147,7 +147,10 @@
 !        write(6,'(a,i10)')'#1: fp_pos = ',fp_pos
 !        write(6,'(a,10i6)')'local IMSGBUF(1-10) = ',imsgbuf(1:10)
          call c_fseek(wunit,fp_pos,0)
+!1-30-22 fp_tmp = fp_pos
          call c_write_integer(wunit,imsgbuf,10)
+!1-30-22 write(6,'(a,i5,2x,2i12)')'Write imsgbuf(01:10) => ',present_atom,fp_tmp,fp_tmp+10*integer4_size-1
+!1-30-22 write(6,'(a,i5,2x,10i6)')'Imsgbuf(01:10) => ',present_atom,imsgbuf(1:10)
 !        =============================================================
 !        write out imsgbuf(11:20), if needed, for all alloy elements 
 !        in the system
@@ -155,7 +158,10 @@
          if (imsgbuf(1) < 0) then
             fp_pos=getAlloyTableSize()*integer4_size*10+fp_pos
             call c_fseek(wunit,fp_pos,0)
+!1-30-22 fp_tmp = fp_pos
             call c_write_integer(wunit,imsgbuf(11:20),10)
+!1-30-22 write(6,'(a,i5,2x,2i12)')'Write imsgbuf(11:20) => ',present_atom,fp_tmp,fp_tmp+10*integer4_size-1
+!1-30-22 write(6,'(a,i5,2x,10i6)')'Imsgbuf(11:20) => ',present_atom,imsgbuf(11:20)
             fp_pos=getAlloyTableSize()*integer4_size*20
          else
             fp_pos=getAlloyTableSize()*integer4_size*10
@@ -201,12 +207,20 @@
 !!!      *************************************************************
 !!!      End of the change made on June 13, 2021
 !!!      =============================================================
+!1-30-22 write(6,'(a,2i5)')'present_atom,mp = ',present_atom,mp
+!1-30-22 fp_tmp = fp_pos + msg_bytes*mp
          call c_write_string(wunit,cmsgbuf,imsgbuf(2),slen)
+!1-30-22 write(6,'(a,i5,2x,2i12)')'Write cmsgbuf => ',present_atom,fp_tmp,fp_tmp+slen-1
+!1-30-22 fp_tmp = fp_tmp + slen
 !        -------------------------------------------------------------
 !        write(6,'(a,2i8)')'imsgbuf, slen = ',imsgbuf(2),slen
 !        -------------------------------------------------------------
          call c_write_double(wunit,fmsgbuf,imsgbuf(3))
+!1-30-22 write(6,'(a,i5,2x,2i12)')'Write fmsgbuf => ',present_atom,fp_tmp,fp_tmp+imsgbuf(3)*real8_size-1
+!1-30-22 fp_tmp = fp_tmp + imsgbuf(3)*real8_size
          call c_write_double(wunit,evec,3)
+!1-30-22 write(6,'(a,i5,2x,2i12)')'Write evec    => ',present_atom,fp_tmp,fp_tmp+3*real8_size-1
+!1-30-22 fp_tmp = fp_tmp + 3*real8_size
 !        -------------------------------------------------------------
 !        The following write will take place if imsgbuf(1) < 0.
          if (imsgbuf(13) > 0) then
@@ -216,18 +230,26 @@
                                  n,imsgbuf(13))
             endif
             call c_write_double(wunit,data_ldapu,imsgbuf(13))
+!1-30-22 write(6,'(a,i5,2x,2i12)')'Write ldapu   => ',present_atom,fp_tmp,fp_tmp+imsgbuf(13)*real8_size-1
+!1-30-22 fp_tmp = fp_tmp + imsgbuf(13)*real8_size
          endif
          if (imsgbuf(14) > 0) then
             np = (ia-1)*imsgbuf(14)
             data_nspot => pot_l(np+1:np+imsgbuf(14))
+!1-30-22 write(6,'(a,i8,2x,2d20.13)')'In putpotg, data_nspot = ',2*nr*(jmax_pot-3)*n_spin_pola+2*jmt+5, &
+!1-30-22                                          data_nspot(2*nr*(jmax_pot-3)*n_spin_pola+2*jmt+5),    &
+!1-30-22                                          data_nspot(2*nr*(jmax_pot-3)*n_spin_pola+2*jmt+6)
             call c_write_double(wunit,data_nspot,imsgbuf(14))
+!1-30-22 write(6,'(a,i5,2x,2i12)')'Write nspot   => ',present_atom,fp_tmp,fp_tmp+imsgbuf(14)*real8_size-1
+!1-30-22 fp_tmp = fp_tmp + imsgbuf(14)*real8_size
          endif
 !        =============================================================
       enddo
 !
       num_clients = getNumOutputClients()
+!1-30-22 write(6,'(a,2i5)')'local_id,num_clients = ',local_id,num_clients
       do i = 1, num_clients
-         proc_client = getOutputClient(i)
+         proc_client = getOutputClient(i) ! Note: the process id is in "Unit Cell" group!!!
          present_atom = getGlobalIndex(local_id,proc_client)
          do ia = 1, getNumAlloyElements(present_atom)
 !           ----------------------------------------------------------
@@ -258,6 +280,7 @@
                   size_nspot = imsgbuf(14)
                endif
                data_nspot => wks_nspot
+               data_nspot = ZERO
 !              -------------------------------------------------------
                call recvMessage(data_nspot,imsgbuf(14),23471,proc_client)
 !              -------------------------------------------------------
@@ -505,12 +528,15 @@
       endif
    endif
 !
+   imsgbuf(15) = nr
+!
    if (checkLdaCorrection(local_id,1)) then
       imsgbuf(16) = getNumCorrOrbitals(local_id,ia)
    endif
 !
    if ( imsgbuf(14)>0 ) then
-      if (2*nr*jmax_pot*n_spin_pola /= imsgbuf(14)) then
+!     if (2*nr*jmax_pot*n_spin_pola /= imsgbuf(14)) then
+      if (2*jwsmax*jmax_pot*n_spin_pola /= imsgbuf(14)) then
          call ErrorHandler('setupICFmsgbuf','Inconsistent data size for pot_l', &
                            nr*jmax_pot*n_spin_pola,imsgbuf(14))
       endif

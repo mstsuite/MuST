@@ -488,7 +488,16 @@ contains
          ig = getGlobalIndex(id)
 !!!!!!      Here factor 2 is for complex type taking twice as much space
 !!!!!!      as the real type
-         NonSphPot_DataAccum(ig) = 2*Grid%jend*Potential(id)%jmax*   &
+!!       For now, we use jwsmax, which is the max of jend across the processes,
+!!       instead of Grid%jend to ensure the size of the non-spherical potential 
+!!       data are of the same size for all the atoms to be written to the
+!!       potential file. In the future, we will make NonSphPot_DataAccum unique
+!!       to each atom. In this case, the putpotg and getpotg subroutines need to 
+!!       be modified.
+!!       Here, we also assume that Potential(id)%jmax is the same for all the atoms
+!!       NonSphPot_DataAccum(ig) = 2*Grid%jend*Potential(id)%jmax*   &
+!!                                 NumSpecies(id)*n_spin_pola
+         NonSphPot_DataAccum(ig) = 2*jwsmax*Potential(id)%jmax*   &
                                    NumSpecies(id)*n_spin_pola
       enddo
 !     ---------------------------------------------------------------
@@ -2832,7 +2841,7 @@ contains
    xmt = Grid%xmt
    xstart = Grid%xstart
    evec = getLocalEvec(id,'new')
-   nr = getNumRmesh(id)
+   nr = getNumRmesh(id)  ! returns Grid%jend
    r_mesh => Grid%r_mesh(1:nr)
 !
    do ia = 1, NumSpecies(id)
@@ -2904,6 +2913,9 @@ contains
       enddo
    endif
 !
+!  ===================================================================
+!  Note: nr = Grid%jend = Potential%rsize
+!  ===================================================================
 !  n = nr*Potential(id)%jmax*n_spin_pola
    n = jwsmax*Potential(id)%jmax*n_spin_pola*NumSpecies(id)
    allocate( r_pot_l(2*n) )

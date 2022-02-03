@@ -1041,8 +1041,12 @@ contains
    endif
 
 !
+!  ===================================================================
+!  Average the density/DOS across all the processes for each atom so to
+!  make sure that the calculated density for each atom is the exactly
+!  same on all the processes it is mapped onto.
 !  -------------------------------------------------------------------
-!  call averageElectroStruct(IntegrValue)
+   call averageElectroStruct(IntegrValue)
 !  -------------------------------------------------------------------
 !
 !  ===================================================================
@@ -1588,6 +1592,7 @@ contains
    use ScfDataModule, only : NumEs, ContourType, eGridType, isReadEmesh, getEmeshFileName
    use ScfDataModule, only : isKKR, isKKRCPA, isKKRCPASRO, isSSIrregularSolOn
    use ScfDataModule, only : NumSS_IntEs
+   use ScfDataModule, only : CurrentScfIteration
 !
    use AtomModule, only : getLocalSpeciesContent
 !
@@ -3364,7 +3369,7 @@ contains
 !
    integer (kind=IntKind) :: id, is, ns, info(5), nm, ie, NumEs, ilc !xianglin
    integer (kind=IntKind) :: ia, renorm, ib, jb, kb, ne, rstatus
-   integer (kind=IntKind) :: NumBoundStates
+   integer (kind=IntKind) :: NumBoundStates, nz
    integer (kind=IntKind) :: NumGQPs, nsize
    integer (kind=IntKind), parameter :: MaxGQPs = 200
 !
@@ -3773,12 +3778,30 @@ contains
                   call printSMatrixPoleInfo(id,ia,is)
 !                 ----------------------------------------------------
                endif
+            enddo
+         enddo
+      enddo
 !
-!              -------------------------------------------------------
-               call findSineMatrixZeros(id,ia,is,ErBottom,etop,Delta=pole_step)
-!              -------------------------------------------------------
-               call computeSineZeroDensity(id,ia,is)
-!              -------------------------------------------------------
+      e_delta = ZERO
+      rstatus = getKeyValue(1,'Resonance State Contour Integration Radius (>0.0)',e_delta)
+      if (rstatus /= 0 .or. e_delta < TEN2m6 .or. e_delta > ONE) then
+         call WarningHandler('calSingleScatteringIDOS',   &
+                             'Error in reading Resonance State Contour Integration Radius',e_delta)
+         e_delta = 0.002d0
+      endif
+      do id =  1, LocalNumAtoms
+         do is = 1, n_spin_pola
+            do ia = 1, ssLastValue(id)%NumSpecies
+               nz = 0
+               do ib = 1, getNumResonanceStates(id,ia,is)
+                  er = getResonanceStateEnergy(id,ia,is,ib,w)
+!                 ----------------------------------------------------
+                  call findSineMatrixZeros(id,ia,is,er-e_delta,er+e_delta,Delta=pole_step, &
+                                           AccumulationCounts=nz)
+!                 ----------------------------------------------------
+                  call computeSineZeroDensity(id,ia,is)
+!                 ----------------------------------------------------
+               enddo
                if (node_print_level >= 0) then
 !                 ----------------------------------------------------
                   call printSineMatrixZerosInfo(id,ia,is)
@@ -4320,6 +4343,7 @@ contains
    use ContourModule, only : getEPoint, getEWeight, getNumEs
 !
    use ScfDataModule, only : isLloyd, getLloydMode, ContourType
+   use ScfDataModule, only : CurrentScfIteration
 !
    use PotentialTypeModule, only : isFullPotential
 !
@@ -6251,19 +6275,24 @@ contains
    subroutine averageElectroStruct(eValue)
 !  ===================================================================
    use GroupCommModule, only : GlobalSumInGroup
+   use GroupCommModule, only : getGroupID, getNumPEsInGroup, getMyPEinGroup
 !
    implicit none
 !
    integer (kind=IntKind) :: id, n, ia
+   integer (kind=IntKind) :: NumPEsInEKG, ekGID
 !
    type (ElectroStruct), intent(inout) :: eValue(LocalNumAtoms)
 !
    complex (kind=CmplxKind) :: cfac
 !
-   cfac = CONE/real(NumPEsInEGroup,kind=RealKind)
+   ekGID = getGroupID('E-K Plane')
+   NumPEsInEKG = getNumPEsInGroup(ekGID)
 !
-   n = 0
+   cfac = CONE/real(NumPEsInEKG,kind=RealKind)
+!
    do id = 1, LocalNumAtoms
+      n = 0
       do ia = 1, eValue(id)%NumSpecies
          wk_dos(n+1:n+4) = eValue(id)%dos(1:4,ia)
          wk_dos(n+5:n+8) = eValue(id)%dos_mt(1:4,ia)
@@ -6280,15 +6309,15 @@ contains
             n = n + eValue(id)%size
          endif
       enddo
-   enddo
+!     ----------------------------------------------------------------
+!     call GlobalSumInGroup(ekGID,wk_dos,n)
+!     ----------------------------------------------------------------
+!     wk_dos = cfac*wk_dos
+!     ----------------------------------------------------------------
+      call averageCFuncXProc(ekGID,n,wk_dos)
+!     ----------------------------------------------------------------
 !
-!  -------------------------------------------------------------------
-   call GlobalSumInGroup(eGID,wk_dos,n)
-!  -------------------------------------------------------------------
-   wk_dos = cfac*wk_dos
-!
-   n = 0
-   do id = 1, LocalNumAtoms
+      n = 0
       do ia = 1, eValue(id)%NumSpecies
          eValue(id)%dos(1:4,ia) = wk_dos(n+1:n+4)
          eValue(id)%dos_mt(1:4,ia) = wk_dos(n+5:n+8)

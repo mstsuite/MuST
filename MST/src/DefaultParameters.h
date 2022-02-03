@@ -145,7 +145,7 @@
    n = n + 1; Keys(n) = 'Iterate Fermi energy';                  Values(n) = '0'
 !                     = 1: On; = 0: Off
    n = n + 1; Keys(n) = 'SS Real Axis Int. Method';              Values(n) = '0'
-!                     = 0: Unimesh; = 1: Adaptive; = 2: Uniform
+!                     = 0: Unimesh; = 1: Adaptive; = 2: Uniform; = 3: Gaussian Quadrature; = 4: Romberg Method
    n = n + 1; Keys(n) = 'SS Real Axis Int. Points';              Values(n) = '300'
    n = n + 1; Keys(n) = 'T-matrix inversion (>= 0)';             Values(n) = '2'
    n = n + 1; Keys(n) = 'M-matrix inversion (>= 0)';             Values(n) = '10'

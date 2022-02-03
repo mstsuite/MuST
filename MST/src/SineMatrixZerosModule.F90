@@ -366,7 +366,7 @@ contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine findSineMatrixZeros(id,ia,is,eb,et,Delta,EiBound,       &
-                                  CheckZeros,PanelOnZero)
+                                  CheckZeros,PanelOnZero,AccumulationCounts)
 !  ===================================================================
    use SSSolverModule, only : solveSingleScattering, getSineMatrix
    use SSSolverModule, only : getSolutionRmeshSize
@@ -381,6 +381,7 @@ contains
    implicit none
 !
    integer (kind=IntKind), intent(in) :: is, id, ia
+   integer (kind=IntKind), optional, intent(inout) :: AccumulationCounts
 !
    real (kind=RealKind), intent(in) :: eb, et
    real (kind=RealKind), intent(in), optional :: Delta
@@ -390,7 +391,7 @@ contains
    logical, optional, intent(in) :: PanelOnZero
 !
    integer (kind=IntKind) :: ie, iw, kmax_kkr, jmax_rho, NumWindows, info
-   integer (kind=IntKind) :: i, j, n, nv, nb, je, ip, nb0, ib
+   integer (kind=IntKind) :: i, j, n, nv, nb, je, ip, nb0, ib, nz0
    integer (kind=IntKind) :: MyNumWindows
    integer (kind=IntKind), allocatable :: bpdeg(:), degens(:)
    integer (kind=IntKind), allocatable :: nbr(:)
@@ -419,7 +420,7 @@ contains
    endif
 !
    if (present(Delta)) then
-      WindowWidth = 4.0d0*Delta
+      WindowWidth = 2.0d0*Delta
    else
       WindowWidth = 0.01d0
    endif
@@ -471,7 +472,7 @@ contains
       endif
 !     WindowWidth = (et-eb)/real(NumWindows,kind=RealKind)
       if (present(Delta)) then
-         de = Delta
+         de = HALF*Delta
       else
          de = WindowWidth/4.0d0
       endif
@@ -670,7 +671,12 @@ contains
 !  -------------------------------------------------------------------
    call GlobalSumInGroup(eGID,nbr,NumPEsInEGroup)
 !  -------------------------------------------------------------------
-   SineZero(id,is)%NumZeros(ia) = 0
+   if (present(AccumulationCounts)) then
+      SineZero(id,is)%NumZeros(ia) = AccumulationCounts
+   else
+      SineZero(id,is)%NumZeros(ia) = 0
+   endif
+   nz0 = SineZero(id,is)%NumZeros(ia)
    do ip = 1, NumPEsInEGroup
       SineZero(id,is)%NumZeros(ia) = SineZero(id,is)%NumZeros(ia) + nbr(ip)
    enddo
@@ -679,7 +685,7 @@ contains
                         SineZero(id,is)%NumZeros(ia), 2*SineZero(id,is)%kmax_kkr)
    endif
 !
-   do n = 1, SineZero(id,is)%NumZeros(ia)
+   do n = nz0 + 1, SineZero(id,is)%NumZeros(ia)
       if ( .not.allocated(SineZero(id,is)%ZeroState(n,ia)%ResidualMat) ) then
          allocate( SineZero(id,is)%ZeroState(n,ia)%ResidualMat(kmax_kkr*kmax_kkr) )
       endif
@@ -697,7 +703,7 @@ contains
    enddo
 !
    ebr = ZERO
-   nb0 = 0
+   nb0 = nz0
    do ip = 1, NumPEsInEGroup
       if (nbr(ip) > 0) then
          if (MyPEinEGroup == ip-1) then

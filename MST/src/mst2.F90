@@ -90,7 +90,7 @@ program mst2
    use ScfDataModule, only : isLdaCorrectionNeeded, getUJfile
    use ScfDataModule, only : getSingleSiteSolverType, getDOSrunID
    use ScfDataModule, only : NumSS_IntEs, isSSIrregularSolOn
-   use ScfDataModule, only : isFrozenCore
+   use ScfDataModule, only : isFrozenCore, CurrentScfIteration
 !
    use PotentialTypeModule, only : initPotentialType, endPotentialType,      &
                                    isASAPotential, isMuffinTinPotential,     &
@@ -1491,6 +1491,7 @@ program mst2
       n_write = 0
       ScfConverged = .false.
       SCF_LOOP: do iscf = 1, nscf
+         CurrentScfIteration = iscf
 !
          if (isDOSCalculationOnly) then
 !           ----------------------------------------------------------

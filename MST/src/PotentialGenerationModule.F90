@@ -1210,7 +1210,7 @@ contains
    subroutine computeNewPotential(isMT)
 !  ===================================================================
    use MPPModule, only : MyPE
-   use GroupCommModule, only : GlobalSumInGroup
+   use GroupCommModule, only : GlobalSumInGroup, getGroupID
    use Atom2ProcModule, only : getMaxLocalNumAtoms
    use Atom2ProcModule, only : getLocalIndex, getAtom2ProcInGroup
    use AtomModule, only : getLocalSpeciesContent
@@ -1245,7 +1245,7 @@ contains
    logical :: isMTon = .false.
 !
    integer (kind=IntKind) :: id, ia, ig, ip, is, jl, jmt, ir, nRpts, jend, l, lig
-   integer (kind=IntKind) :: jmax, lmax, kmax, gsize
+   integer (kind=IntKind) :: jmax, lmax, kmax, gsize, nsize, ekGID
    integer (kind=IntKind) :: MaxLocalAtoms
    integer (kind=IntKind), pointer :: flag_jl(:), p_flags(:)
    integer (kind=IntKind), pointer :: global_table_line(:)
@@ -1400,7 +1400,7 @@ contains
       do id = 1,LocalNumAtoms
          nRpts = Potential(id)%n_Rpts
          Potential(id)%potL = CZERO
-         Potential(id)%potr_sph = ZERO
+         r_mesh => Potential(id)%Grid%r_mesh(1:nRpts)
          do ia = 1, Potential(id)%NumSpecies
             do is = 1,n_spin_pola
                do jl = 1,Potential(id)%jmax
@@ -1420,8 +1420,6 @@ contains
                                 Potential(id)%potL_Coulomb(1:nRpts,jl,ia) +  &
                                 Potential(id)%potL_Exch(1:nRpts,jl,is,ia)
                enddo
-!
-               r_mesh => Potential(id)%Grid%r_mesh(1:nRpts)
                if (node_print_level >= 1) then
                   write(6,'(a,4d15.8)')'r,v_til,v_mad,v_pse = ',r_mesh(50),       &
                      real(Potential(id)%potL_Tilda(50,1,ia),kind=RealKind),       &
@@ -1444,6 +1442,22 @@ contains
                      real(Potential(id)%potL_Madelung(nRpts-10,1),kind=RealKind), &
                      real(Potential(id)%potL_Pseudo(nRpts-10,1),kind=RealKind)
                endif
+            enddo
+         enddo
+!
+!        =============================================================
+!        Make sure that all the processes that the current atom mapped
+!        onto have the exact same potential value.
+!        =============================================================
+         ekGID = getGroupID('E-K Plane')
+         nsize = Potential(id)%jend*Potential(id)%jmax*n_spin_pola*Potential(id)%NumSpecies
+!        -------------------------------------------------------------
+         call averageCFuncXProc(ekGID,nsize,Potential(id)%potL)
+!        -------------------------------------------------------------
+!
+         Potential(id)%potr_sph = ZERO
+         do ia = 1, Potential(id)%NumSpecies
+            do is = 1,n_spin_pola
                do ir = 1,nRpts
                   pot_r = real(Potential(id)%potL(ir,1,is,ia),kind=RealKind)
                   Potential(id)%potr_sph(ir,is,ia) = Y0*r_mesh(ir)*pot_r
@@ -3088,7 +3102,7 @@ contains
 !
       write(6,'(/,a)')'  Fitting the qV relation: Vmad = A*dQ + B'
       write(6,'(  a)')'  with the Least Squares Regression.'
-      if (max_shells > 0) then
+      if (max_shells > 1) then
          write(6,'(  a)')'  In the following table, dQ_nn1 = the averaged total charge on the 1st nearest neighbor'
          write(6,'(  a)')'                          dQ_nn2 = the averaged total charge on the 2nd nearest neighbor'
          write(6,'(/,112(''=''))')
@@ -3246,6 +3260,7 @@ contains
    use MathParamModule, only : CZERO, ZERO, PI4, TWO, Y0inv
    use ErrorHandlerModule, only : ErrorHandler
 
+   use MPPModule, only : MyPE
 
    use PotentialModule, only: getPotential, getPotLmax
 !
@@ -3692,7 +3707,7 @@ contains
    comm = getParaFFTCommunicator(MyProc=p,NumProcs=n)
 !  if (comm > -1) then ! For serial FFT, comm = -1.
    if (n > 1) then ! For serial FFT, comm = -1.
-      call setCommunicator(comm,p,n)
+      call setCommunicator(comm,p,n,sync=.true.)
       call GlobalSum(buf,2)
       call resetCommunicator()
    endif
@@ -3914,7 +3929,7 @@ contains
 !  if (comm > -1) then ! For serial FFT, comm = -1.
    if (n > 1) then ! For serial FFT, comm = -1.
 !     ----------------------------------------------------------------
-      call setCommunicator(comm,p,n)
+      call setCommunicator(comm,p,n,sync=.true.)
       call GlobalSum(dfp_buf,3,GlobalNumAtoms)
       call resetCommunicator()
 !     ----------------------------------------------------------------
@@ -5337,7 +5352,7 @@ contains
 !     In this case, w_interp_global is summed across all processors, 
 !     which, in effect, sums over the reciprocal uniform grid points.
 !     ----------------------------------------------------------------
-      call setCommunicator(comm,p,n)
+      call setCommunicator(comm,p,n,sync=.true.)
       call GlobalSum(w_interp_global,nmax,GlobalNumAtoms)
       call resetCommunicator()
 !     ----------------------------------------------------------------

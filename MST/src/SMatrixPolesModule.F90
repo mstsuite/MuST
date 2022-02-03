@@ -8,17 +8,19 @@ module SMatrixPolesModule
    use KindParamModule, only : IntKind, RealKind, CmplxKind
 !
    use MathParamModule, only : ZERO, TEN2m6, HALF, ONE, TWO, CONE,    &
-                               Ten2m8, FOURTH, CZERO, TEN2m7
+                               Ten2m8, FOURTH, CZERO, TEN2m7, TEN2m12, TEN2m10
 !
    use ErrorHandlerModule, only : ErrorHandler, WarningHandler
 !
-   use MPPModule, only : syncAllPEs, MyPE
+   use MPPModule, only : MyPE, syncAllPEs
 !
    use GroupCommModule, only : getGroupID, getNumPEsInGroup, getMyPEInGroup
    use GroupCommModule, only : GlobalSumInGroup, bcastMessageInGroup
+   use GroupCommModule, only : syncAllPEsInGroup
 !
 public :: initSMatrixPoles,          &
           endSMatrixPoles,           &
+          clearSMatrixPoles,         &
           getNumBoundStates,         &
           getNumBoundStateDegen,     &
           getBoundStateEnergy,       &
@@ -131,6 +133,9 @@ contains
    eGID = getGroupID('Energy Mesh')
    NumPEsInEGroup = getNumPEsInGroup(eGID)
    MyPEinEGroup = getMyPEinGroup(eGID)
+!
+!  NumPEsInEGroup = 1; MyPEinEGroup = 0
+!
    if (iprint >= 0) then
       write(6,'(a,3i5)')'MyPE, MyPEinEGroup, NumPEsInEGroup = ',MyPE,MyPEinEGroup,NumPEsInEGroup
    endif
@@ -248,6 +253,8 @@ contains
       deallocate( Pole(id)%ebot, Pole(id)%etop )
       deallocate( Pole(id)%NumBoundPoles )
       deallocate( Pole(id)%NumResPoles )
+      deallocate( Pole(id)%BoundState )
+      deallocate( Pole(id)%ResState )
       deallocate( Pole(id)%BoundSI )
       deallocate( Pole(id)%ResSI )
    enddo
@@ -262,6 +269,37 @@ contains
    isInitialized = .false.
 !
    end subroutine endSMatrixPoles
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine clearSMatrixPoles()
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind) :: id, ib, ia, is
+!
+   do id = 1, LocalNumAtoms
+      do ia = 1, Pole(id)%NumSpecies
+         do is = 1, n_spin_pola
+            do ib = 1, Pole(id)%NumBoundPoles(is,ia)
+               call finalizePoleDensity(Pole(id)%BoundState(ib,is,ia))
+            enddo
+            do ib = 1, Pole(id)%NumResPoles(is,ia)
+               call finalizePoleDensity(Pole(id)%ResState(ib,is,ia))
+            enddo
+         enddo
+      enddo
+      Pole(id)%NumBoundPoles = 0
+      Pole(id)%NumResPoles = 0
+!
+      Pole(id)%BoundSI = 0
+      Pole(id)%ResSI = 0
+!
+      Pole(id)%ebot = ZERO
+      Pole(id)%etop = ZERO
+   enddo
+!
+   end subroutine clearSMatrixPoles
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -842,6 +880,8 @@ contains
 !
    use WriteMatrixModule,  only : writeMatrix
 !
+   use ScfDataModule, only : CurrentScfIteration
+!
    implicit none
 !
    integer (kind=IntKind), intent(in) :: is, id, ia
@@ -884,6 +924,10 @@ contains
 !
    if (eb > et) then
       call ErrorHandler('findSMatrixPoles','eb > et',eb,et)
+   else
+!     ----------------------------------------------------------------
+      call clearSMatrixPoles()
+!     ----------------------------------------------------------------
    endif
 !
    if (present(Delta)) then
@@ -1101,7 +1145,6 @@ contains
     !             nb = nb + 1
     !             bpe(nb) = pe
     !             bpdeg(nb) = 1
-!write(6,'(a,2d15.8,a,2d15.8)')'Pole = ',pv(ie)+e0,', kappa = ',sqrt(pv(ie)+e0)
 !                 ----------------------------------------------------
     !             call zcopy(kmax_kkr*kmax_kkr,em,1,bmat(1,nb),1)
 !                 ----------------------------------------------------
@@ -1114,7 +1157,6 @@ contains
     !             call zaxpy(kmax_kkr*kmax_kkr,CONE,em,1,bmat(1,nb),1)
 !                 ----------------------------------------------------
     !          endif
-!write(6,'(a,3i4,a,f12.8)')'MyPEinEGroup,nb,deg,pe = ',MyPEinEGroup,nb,bpdeg(nb),', ',pe
             endif
          else if (aimag(sqrt(pv(ie)+e0)) < ZERO) then  ! Resonance states
             pe = real(pv(ie),kind=RealKind) + e0
@@ -1151,8 +1193,6 @@ contains
      !            nr = nr + 1
      !            rpe(nr) = cmplx(pe,aimag(sqrt(pv(ie)))**2,kind=CmplxKind)
      !            rpdeg(nr) = 1
-! write(6,'(a,2f15.12,a,2f15.12)')'Pole = ',pv(ie)+e0,', kappa = ',sqrt(pv(ie)+e0)
-! write(6,'(a,2f15.12)')          'rpe  = ',rpe(nr)
 !                 ----------------------------------------------------
      !            call zcopy(kmax_kkr*kmax_kkr,em,1,rmat(1,nr),1)
 !                 ----------------------------------------------------
@@ -1204,9 +1244,11 @@ contains
    nbr = 0
    nbr(1,MyPEinEGroup+1) = nb
    nbr(2,MyPEinEGroup+1) = nr
-!  -------------------------------------------------------------------
-   call GlobalSumInGroup(eGID,nbr,2,NumPEsInEGroup)
-!  -------------------------------------------------------------------
+   if (NumPEsInEGroup > 1) then
+!     ----------------------------------------------------------------
+      call GlobalSumInGroup(eGID,nbr,2,NumPEsInEGroup)
+!     ----------------------------------------------------------------
+   endif
    Pole(id)%NumBoundPoles(is,ia) = 0
    Pole(id)%NumResPoles(is,ia) = 0
    do ip = 1, NumPEsInEGroup
@@ -1241,11 +1283,13 @@ contains
 !           ----------------------------------------------------------
             degens(1:nbr(1,ip)) = bpdeg(1:nbr(1,ip))
          endif
-!        -------------------------------------------------------------
-         call bcastMessageInGroup(eGID,ebr,nbr(1,ip),ip-1)
-         call bcastMessageInGroup(eGID,degens,nbr(1,ip),ip-1)
-         call bcastMessageInGroup(eGID,brmat,kmax_kkr_max*kmax_kkr_max,nbr(1,ip),ip-1)
-!        -------------------------------------------------------------
+         if (NumPEsInEGroup > 1) then
+!           ----------------------------------------------------------
+            call bcastMessageInGroup(eGID,ebr,nbr(1,ip),ip-1)
+            call bcastMessageInGroup(eGID,degens,nbr(1,ip),ip-1)
+            call bcastMessageInGroup(eGID,brmat,kmax_kkr_max*kmax_kkr_max,nbr(1,ip),ip-1)
+!           ----------------------------------------------------------
+         endif
          do ib = 1, nbr(1,ip)
             Pole(id)%BoundState(nb0+ib,is,ia)%PoleE = ebr(ib)
             Pole(id)%BoundState(nb0+ib,is,ia)%NumDegens = degens(ib)
@@ -1268,12 +1312,14 @@ contains
             call zcopy(kmax_kkr_max*kmax_kkr_max*nbr(2,ip),amat,1,camat,1)
 !           ----------------------------------------------------------
          endif
-!        -------------------------------------------------------------
-         call bcastMessageInGroup(eGID,erc,nbr(2,ip),ip-1)
-         call bcastMessageInGroup(eGID,degens,nbr(2,ip),ip-1)
-         call bcastMessageInGroup(eGID,brmat,kmax_kkr_max*kmax_kkr_max,nbr(2,ip),ip-1)
-         call bcastMessageInGroup(eGID,camat,kmax_kkr_max*kmax_kkr_max,nbr(2,ip),ip-1)
-!        -------------------------------------------------------------
+         if (NumPEsInEGroup > 1) then
+!           ----------------------------------------------------------
+            call bcastMessageInGroup(eGID,erc,nbr(2,ip),ip-1)
+            call bcastMessageInGroup(eGID,degens,nbr(2,ip),ip-1)
+            call bcastMessageInGroup(eGID,brmat,kmax_kkr_max*kmax_kkr_max,nbr(2,ip),ip-1)
+            call bcastMessageInGroup(eGID,camat,kmax_kkr_max*kmax_kkr_max,nbr(2,ip),ip-1)
+!           ----------------------------------------------------------
+         endif
          do ir = 1, nbr(2,ip)
             Pole(id)%ResState(nr0+ir,is,ia)%PoleE = real(erc(ir),kind=RealKind)
             Pole(id)%ResState(nr0+ir,is,ia)%PoleWidth = TWO*aimag(erc(ir))
@@ -1396,6 +1442,8 @@ contains
 !
    use StepFunctionModule, only : getVolumeIntegration
 !
+   use ScfDataModule, only : CurrentScfIteration
+!
    implicit none
 !
    integer (kind=IntKind), intent(in) :: id, is, ia
@@ -1457,7 +1505,6 @@ contains
       call solveSingleScattering(is, id, e, CZERO, atom=ia)
 !     ----------------------------------------------------------------
       sine_mat => getSineMatrix()
-!jost_inv => getJostInvMatrix()
 !     ================================================================
 !     calculate sine_mat^(-T*) and store the result in smat_inv
 !     ----------------------------------------------------------------
@@ -1471,7 +1518,6 @@ contains
                  Pole(id)%BoundState(ib,is,ia)%ResidualMat,kmax_kkr,smat_inv,kmax_kkr, &
                  CZERO,BSinv,kmax_kkr)
 !     ----------------------------------------------------------------
-!call zgemm('n','n',kmax_kkr,kmax_kkr,kmax_kkr,CONE,jost_inv,kmax_kkr,smat_inv,kmax_kkr,CZERO,BSinv,kmax_kkr)
 !
       PhiLr => getRegSolution()
 !     ----------------------------------------------------------------
@@ -1558,19 +1604,27 @@ contains
          enddo
       enddo
    enddo
+   if (NumPEsInEGroup > 1) then
+!     ---------------------------------------------------------------
+      call syncAllPEsInGroup(eGID)
+!     ---------------------------------------------------------------
+   endif
 !
    do ib = 1, NumBPs
       ip = mod(ib-1,NumPEsInEGroup)
-!     ---------------------------------------------------------------
-      call bcastMessageInGroup(eGID,Pole(id)%BoundState(ib,is,ia)%Density,NumRs*jmax_rho,ip)
-      call bcastMessageInGroup(eGID,Pole(id)%BoundState(ib,is,ia)%Deriv_Density,NumRs*jmax_rho,ip)
-!     ---------------------------------------------------------------
+      if (NumPEsInEGroup > 1) then
+!        ------------------------------------------------------------
+         call bcastMessageInGroup(eGID,Pole(id)%BoundState(ib,is,ia)%Density,NumRs*jmax_rho,ip)
+         call bcastMessageInGroup(eGID,Pole(id)%BoundState(ib,is,ia)%Deriv_Density,NumRs*jmax_rho,ip)
+!        ------------------------------------------------------------
+      endif
       Bdensity => aliasArray2_c(Pole(id)%BoundState(ib,is,ia)%Density,NumRs,jmax_rho)
       Pole(id)%BoundState(ib,is,ia)%Qvp = getVolumeIntegration(id,NumRs,r_mesh,kmax_rho,   &
                                                                jmax_rho,0,Bdensity,        &
                                                                Pole(id)%BoundState(ib,is,ia)%Qmt)
       if (print_level >= 0) then
-         write(6,'(a,f12.6)')'In computeBoundStateDensity: Qvp = ',Pole(id)%BoundState(ib,is,ia)%Qvp
+         write(6,'(a,f18.13)')'In computeBoundStateDensity: Qmt = ',Pole(id)%BoundState(ib,is,ia)%Qmt
+         write(6,'(a,f18.13)')'In computeBoundStateDensity: Qvp = ',Pole(id)%BoundState(ib,is,ia)%Qvp
       endif
    enddo
 !
@@ -1760,13 +1814,20 @@ contains
    !     enddo
    !  enddo
    enddo
+   if (NumPEsInEGroup > 1) then
+!     ---------------------------------------------------------------
+      call syncAllPEsInGroup(eGID)
+!     ---------------------------------------------------------------
+   endif
 !
    do ib = 1, NumResPs
       ip = mod(ib-1,NumPEsInEGroup)
-!     ---------------------------------------------------------------
-      call bcastMessageInGroup(eGID,Pole(id)%ResState(ib,is,ia)%Density,NumRs*jmax_rho,ip)
-      call bcastMessageInGroup(eGID,Pole(id)%ResState(ib,is,ia)%Deriv_Density,NumRs*jmax_rho,ip)
-!     ---------------------------------------------------------------
+      if (NumPEsInEGroup > 1) then
+!        ------------------------------------------------------------
+         call bcastMessageInGroup(eGID,Pole(id)%ResState(ib,is,ia)%Density,NumRs*jmax_rho,ip)
+         call bcastMessageInGroup(eGID,Pole(id)%ResState(ib,is,ia)%Deriv_Density,NumRs*jmax_rho,ip)
+!        ------------------------------------------------------------
+      endif
       Bdensity => aliasArray2_c(Pole(id)%ResState(ib,is,ia)%Density,NumRs,jmax_rho)
       Pole(id)%ResState(ib,is,ia)%Qvp = getVolumeIntegration(id,NumRs,r_mesh,kmax_rho,   &
                                                              jmax_rho,2,Bdensity,        &
@@ -1959,10 +2020,12 @@ contains
 !  enddo
 !
    ip = mod(ib-1,NumPEsInEGroup)
-!  ------------------------------------------------------------------
-   call bcastMessageInGroup(eGID,Bdensity,NumRs,jmax_rho,ip)
-   call bcastMessageInGroup(eGID,Deriv_Bdensity,NumRs,jmax_rho,ip)
-!  ------------------------------------------------------------------
+   if (NumPEsInEGroup > 1) then
+!     ---------------------------------------------------------------
+      call bcastMessageInGroup(eGID,Bdensity,NumRs,jmax_rho,ip)
+      call bcastMessageInGroup(eGID,Deriv_Bdensity,NumRs,jmax_rho,ip)
+!     ---------------------------------------------------------------
+   endif
 !
    nullify(sine_mat, BSinv, smat_inv, Grid, r_mesh)
    nullify(BPhiLr, PhiLr, DerBPhiLr, DerPhiLr, PPr)
