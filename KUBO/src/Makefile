@@ -22,7 +22,8 @@ BasicRoutines = \
 ../../MST/bin/rdin_old_infotable.o \
 ../../MST/bin/rdin_old_infoevec.o \
 ../../MST/bin/getValueAtPosi.o \
-../../MST/bin/lattice.o
+../../MST/bin/lattice.o \
+../../MST/bin/averageAcrossProcesses.o
 
 AppModules = \
 ../../MST/bin/InputModule.o \
