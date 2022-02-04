@@ -522,7 +522,7 @@ contains
    if (NumPEsInGroup > 1) then
       comm = getGroupCommunicator(GroupID)
 !     ----------------------------------------------------------------
-      call setCommunicator(comm,MyPEinGroup,NumPEsInGroup)
+      call setCommunicator(comm,MyPEinGroup,NumPEsInGroup,sync=.true.)
 !     ----------------------------------------------------------------
       if (MyPEinGroup > 0) then
 !        -------------------------------------------------------------
@@ -607,7 +607,7 @@ contains
 !
    if (ne < n) then
 !     ----------------------------------------------------------------
-      call setCommunicator(comm,MyPEinGroup,NumPEsInGroup)
+      call setCommunicator(comm,MyPEinGroup,NumPEsInGroup,sync=.true.)
 !     ----------------------------------------------------------------
       if (MyPEinGroup == NumPEsInGroup-1) then
          do i = 1, mp

@@ -230,6 +230,7 @@ contains
    use InputModule, only : getKeyValue
 !
    use SMatrixPolesModule, only : initSMatrixPoles
+   use SMatrixPolesModule, only : isSMatrixPolesInitialized
 !
    implicit none
 !
@@ -511,10 +512,12 @@ contains
          allocate(Core(id)%fp_dsemden(Core(id)%rsize,Core(id)%jmax_rho,n_spin_pola,Core(id)%NumSpecies))
          jmax_prod = max(jmax_prod, (lmax_rho(id)+lmax_pot(id)+1)*(lmax_rho(id)+lmax_pot(id)+2)/2)
       enddo
-!     ----------------------------------------------------------------
-      call initSMatrixPoles(LocalNumAtoms,n_spin_pola,LocalNumSpecies,&
-                            lmax_kkr,lmax_rho,iprint)
-!     ----------------------------------------------------------------
+      if (.not.isSMatrixPolesInitialized()) then
+!        -------------------------------------------------------------
+         call initSMatrixPoles(LocalNumAtoms,n_spin_pola,LocalNumSpecies,&
+                               lmax_kkr,lmax_rho,iprint)
+!        -------------------------------------------------------------
+      endif
       allocate(ws_prod(g2last*jmax_prod), ws_den(g2last*jmax_rho))
    else
       do id = 1, LocalNumAtoms
@@ -951,6 +954,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine endCoreStates()
 !  ===================================================================
+   use SMatrixPolesModule, only : isSMatrixPolesInitialized
    use SMatrixPolesModule, only : endSMatrixPoles
 !
    integer (kind=IntKind) :: id
@@ -981,9 +985,11 @@ contains
       deallocate(lmax_kkr, lmax_rho)
       deallocate(lmax_pot, lmax_step, LocalNumSpecies)
       deallocate(ws_prod, ws_den)
-!     ----------------------------------------------------------------
-      call endSMatrixPoles()
-!     ----------------------------------------------------------------
+      if (isSMatrixPolesInitialized()) then
+!        -------------------------------------------------------------
+         call endSMatrixPoles()
+!        -------------------------------------------------------------
+      endif
    endif
    deallocate(Core)
 !
@@ -1617,7 +1623,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine calCoreStates(evb)
 !  ===================================================================
-   use MPPModule, only : syncAllPEs
+   use MPPModule, only : syncAllPEs, MyPE
 !
    use GroupCommModule, only : GlobalMaxInGroup, GlobalSumInGroup
 !
@@ -1661,6 +1667,10 @@ contains
                                   getNumBoundStateDegen,                      &
                                   printSMatrixPoleInfo, printBoundStateDensity
 !
+   use IntegerFactorsModule, only : lofj, mofj
+!
+   use ScfDataModule, only : CurrentScfIteration
+!
    implicit   none
 !
    character (len=13), parameter ::  sname='calCoreStates'
@@ -1677,7 +1687,7 @@ contains
 !
    real (kind=RealKind), optional, intent(out) :: evb
 !
-   logical :: sss_init
+   logical :: sss_init = .false.
 !
    real (kind=RealKind), allocatable :: wrk1(:),wrk2(:)
    real (kind=RealKind), parameter :: tolch=TEN2m5
@@ -1874,6 +1884,27 @@ contains
 !
                fac = 3.0d0-n_spin_pola ! if non-spin-polarized, a factor of 2 is needed.
                ecs => getSemiCoreStates(id,ia,is,numc)
+!
+!=====================================================================
+! By printing out the potential at each iteration, I find that
+! running a 1-atom per unit cell full-potential KKR job on 4 MPI processes (with 4 processes 
+! parallelizing the k-space integration) and 8 MPI processes (with 4 processes
+! parallelizing the k-space integration and 2 processes parallelizing the 
+! energy integration) produces slightly different new potential at each iteration. 
+! It could be caused by the numerical algorithm that is depdendent on the number of processes.
+! We will come to this problem later. -- Jan. 21, 2022.
+!=====================================================================
+if (.false.) then
+fpot => getPotential(id,ia,is)
+do jl = 1, 45
+if (mod(lofj(jl),2) == 0 .and. lofj(jl) /= 2 .and. mod(mofj(jl),4) == 0) then
+do ir = 1, Core(id)%Grid%jend, 40
+write(6,'(a,3i5,2d20.13)')'l,m,ir,fpot = ',lofj(jl),mofj(jl),ir,fpot(ir,jl)
+enddo
+endif
+enddo
+endif
+!=====================================================================
                if (isFP_SemiCore .and. numc > 0) then
                   e1 = ecs(1) - HALF
                   e2 = ecs(numc) + HALF
@@ -2059,7 +2090,6 @@ contains
 !                 ----------------------------------------------------
                   call calIntegration(last2+1,sqrt_r(0:last2),wrk2(0:last2),wrk1(0:last2),3)
 !                 ----------------------------------------------------
-!write(6,'(a,2d15.8)')'Semi core energy and int[rho*v] =',Core(id)%esemv(is,ia),wrk1(last2)*PI8
                   Core(id)%semi_ke(is,ia)=Core(id)%esemv(is,ia)-wrk1(last2)*PI8
                endif
 !              =======================================================
@@ -2077,7 +2107,6 @@ contains
 !                 ----------------------------------------------------
                   call calIntegration(last2+1,sqrt_r(0:last2),wrk2(0:last2),wrk1(0:last2),3)
 !                 ----------------------------------------------------
-!write(6,'(a,2d15.8)')'Deep core energy and int[rho*v] =',Core(id)%ecorv(is,ia),wrk1(last2)*PI8
                   Core(id)%core_ke(is,ia)=Core(id)%ecorv(is,ia)-wrk1(last2)*PI8
                else
 !                 ---------------------------------------------------
@@ -2125,7 +2154,7 @@ contains
       enddo
    enddo
 !
-   if (isFP_SemiCore .and. sss_init) then
+   if (sss_init) then
 !     ----------------------------------------------------------------
       call endSSSolver()
 !     ----------------------------------------------------------------

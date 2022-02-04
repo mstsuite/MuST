@@ -22,7 +22,8 @@ rdin_old_lsms.o \
 rdin_old_infotable.o \
 rdin_old_infoevec.o \
 getValueAtPosi.o \
-lattice.o
+lattice.o \
+averageAcrossProcesses.o
 
 AppModules = \
 InputModule.o \

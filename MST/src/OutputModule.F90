@@ -219,7 +219,7 @@ contains
 !     ----------------------------------------------------------------
       allocate(o_pe(1:num_o_pe), p_lvl(1:num_o_pe))
       read(str_pe,*)o_pe(1:num_o_pe)
-      read(str_lvl,*)p_lvl(1:num_o_pe)
+      read(str_lvl,*)p_lvl(1:num_o_lvl)
       if (o_pe(1) == -1 .and. num_o_pe == 1) then
          CPU_based_print_level = p_lvl(1)
       else

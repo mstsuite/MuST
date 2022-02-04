@@ -78,8 +78,9 @@ p3dfft:
 DIR_NAME="$(shell tar -tzf p3dfft/p3dfft.tar.gz | head -1 | cut -f1 -d"/")" && cd p3dfft && rm -f P3DFFT && tar xfz p3dfft.tar.gz && \
 ln -fs $$DIR_NAME P3DFFT; fi
 	if [ ! -e p3dfft/P3DFFT/$(SUFFIX)/lib/libp3dfft.a ]; then \
-cd p3dfft/P3DFFT && echo $$PWD && ./configure --prefix=$$PWD/$(SUFFIX) --enable-fftw $(P3DFFT_CONFIG_FLAGS) && make clean && \
-make && make -i install; fi
+cd p3dfft/P3DFFT && echo $$PWD && ./configure --prefix=$$PWD/$(SUFFIX) --enable-fftw $(P3DFFT_CONFIG_FLAGS) && make clean; \
+if [ "${MPIFH}" ]; then echo $$PWD && sed -i 's/mpifh/$(MPIFH)/g' ./sample/C/Makefile; fi && \
+echo $$PWD && make && make -i install; fi
 
 clean:
 	if [ -d hdf5/HDF5 ]; then cd hdf5/HDF5; make clean; rm -rf $(SUFFIX)/lib; fi

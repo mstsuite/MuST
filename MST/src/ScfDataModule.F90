@@ -136,6 +136,7 @@ public
    integer (kind=IntKind) :: Lloyd = 0
    integer (kind=IntKind) :: LloydMode = 1
    integer (kind=IntKind) :: TableID
+   integer (kind=IntKind) :: CurrentScfIteration = 0
 !
    integer (kind=IntKind), parameter, private :: readEmesh   = 1
    integer (kind=IntKind), parameter, private :: readKmesh   = 1
@@ -501,6 +502,8 @@ contains
       call ErrorHandler('initScfData','Invalid efermi_mix_switch value',efermi_mix_switch)
    endif
 !
+   CurrentScfIteration = 0
+!
    end subroutine initScfData
 !  ===================================================================
 !
@@ -510,9 +513,12 @@ contains
    subroutine endScfData()
 !  ===================================================================
    implicit none
+!
    if (NumKMeshs > 0) then
       deallocate(Kdiv)
    endif
+   CurrentScfIteration = 0
+!
    end subroutine endScfData
 !  ===================================================================
 !
