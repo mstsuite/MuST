@@ -82,6 +82,5 @@ LD          = $(FC) $(LD_FLAGS)
 #=====================================================================
 HDF5_CONFIG_FLAGS   = --enable-fortran --enable-static-exec CC=$(CC) CXX=$(CXX) FC=$(FC)
 LIBXC_CONFIG_FLAGS  = CC=$(CC) CFLAGS="$(CFLAGS)" FC=$(FC) FFLAGS="$(FFLAGS)"
-# P3DFFT_CONFIG_FLAGS = FC=$(FC) CC=$(CC) LIBS="$(LIBS)" --enable-cray
-P3DFFT_CONFIG_FLAGS = FC=$(FC) CC=$(CC) LIBS="$(LIBS)" CCLD="$(FC)"
+P3DFFT_CONFIG_FLAGS = FC=$(FC) CC=$(CC) LIBS="$(LIBS)" --enable-cray
 FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS)" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)"
