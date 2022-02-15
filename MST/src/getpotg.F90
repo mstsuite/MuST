@@ -595,7 +595,11 @@
 !     ================================================================
 !     nr_old = dsize_nspot/(2*imsgbuf(17,1)*n_spin_pola*num_species)
 !     nr_old = dsize_nspot/(2*imsgbuf(17,1)*n_spin_pola)
-      nr_old = imsgbuf(15,1)
+      if (imsgbuf(15,1) == 0) then ! In case the data were produced by an old version of the code
+         nr_old = dsize_nspot/(2*imsgbuf(17,1)*n_spin_pola)
+      else
+         nr_old = imsgbuf(15,1)
+      endif
       allocate(r_mesh_old(nr_old), c_data_nspot(dsize_nspot/2))
       jmt0=imsgbuf(5,1)
       hh=(xmt-xst)/real(jmt0-1,kind=RealKind) ! Assuming hin = hout

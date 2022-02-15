@@ -20,6 +20,7 @@ public :: initIBZRotation,          &
 private
 !
       logical :: symmetrize = .true.
+      logical :: rel = .false.
 !
       character (len=12) :: lattice_name
 !
@@ -59,13 +60,17 @@ contains
       character (len=*), intent(in) :: latsys
 !
       integer (kind=IntKind), intent(in) :: lmax_in, isym
-      integer (kind=IntKind) :: l
+      integer (kind=IntKind) :: l, nmax
 !
       if (relativistic) then
          l_only = 0
+         rel = .true.
       else
          l_only = 1
+         rel = .false.
       endif
+!
+      NumIBZRotations = 1
 !
       if (isym == 0) then
          symmetrize = .false.
@@ -75,16 +80,23 @@ contains
 !
       lattice_name = latsys
       lmax = lmax_in
-      kkrsz = (lmax+1)**2
+!
+      if (l_only == 0) then
+         kkrsz = 2*(lmax+1)**2
+         nmax = 4*lmax+1  ! I just use this number for now. -Yang @02-15-2022
+      else
+         kkrsz = (lmax+1)**2
+         nmax = 2*lmax+1
+      endif
 !
       if (.not.isIntegerFactorsInitialized()) then
          call initIntegerFactors(lmax)
       endif
 !
-      allocate( fact(0:2*lmax+1) ) ! The upper limit (2*lmax+1) may need to be increased.
       allocate( reflex(kkrsz,kkrsz) )
       allocate( dj(kkrsz,kkrsz,maxrot) )
       allocate( djc(kkrsz,kkrsz,maxrot) )
+      allocate( fact(0:nmax) )
 !
       rot3d = ZERO
       reflex = CZERO
@@ -93,7 +105,7 @@ contains
 !
 !     Set factorials....................................................
       fact(0)=one
-      do l=1,2*lmax+1   ! The upper limit (2*lmax+1) may need to be increased.
+      do l=1,nmax
          fact(l)=fact(l-1)*l
       enddo
 !

@@ -8343,7 +8343,8 @@ contains
 !
    use QuadraticMatrixModule, only : initQuadraticMatrix, endQuadraticMatrix, &
                                      solveQuadraticEquation, getEigenValue,   &
-                                     solveLinearEquation
+                                     solveLinearEquation,                     &
+                                     isQuadraticMatrixInitialized
 !
    implicit none
 !
@@ -8416,6 +8417,9 @@ contains
       allocate( s1(1:kmax_kkr,1:kmax_kkr,1:LocalNumSpecies) )
       allocate( s2(1:kmax_kkr,1:kmax_kkr,1:LocalNumSpecies) )
       allocate( s1p(1:kmax_kkr,1:kmax_kkr,1:LocalNumSpecies) )
+      if (isQuadraticMatrixInitialized()) then
+         call endQuadraticMatrix()
+      endif
       call initQuadraticMatrix(kmax_kkr,isGeneral)
 !
       do is = 1,n_spin
@@ -8516,7 +8520,7 @@ contains
 !              ----------------------------------------------------------
                pv => getEigenValue(nv)
 !              ----------------------------------------------------------
-               if ( node_print_level >= 0) then
+               if ( node_print_level > 0) then
                   write(6,'("calQuadraticPoles: iw",t40,"=", i5,i5)')iw
                endif
                do ie = 1, kmax_kkr*2
@@ -8640,7 +8644,7 @@ contains
 !              ----------------------------------------------------------
                pv => getEigenValue(nv)
 !              ----------------------------------------------------------
-               if ( node_print_level >= 0) then
+               if ( node_print_level > 0) then
                   write(6,'("calQuadraticPoles: iw",t40,"=", i5,i5)')iw
                endif
                do ie = 1, kmax_kkr*2
@@ -8923,7 +8927,7 @@ contains
    !           -------------------------------------------------------
                pv => getEigenValue(nv)
    !           -------------------------------------------------------
-               if ( node_print_level >= 0) then
+               if ( node_print_level > 0) then
                   write(6,'("calQuadraticPoles_cmplx: iw",t40,"=", i5,i5)')iw
                endif
                do ie = 1, kmax_kkr*2
@@ -9051,7 +9055,7 @@ contains
 !              ----------------------------------------------------------
                pv => getEigenValue(nv)
 !              ----------------------------------------------------------
-               if ( node_print_level >= 0) then
+               if ( node_print_level > 0) then
                   write(6,'("calQuadraticPoles_cmplx: iw",t40,"=", i5,i5)')iw
                endif
                do ie = 1, kmax_kkr*2
