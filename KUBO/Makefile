@@ -257,4 +257,4 @@ p3dfft:
 	@cd $(EXTERN_LIB_PATH) && make "ARCH_FILE=$(ARCH_FILE)" p3dfft
 
 install:
-	ln -fs $(ODIR)/kubo $(TOP_DIR)/../bin/kubo; 
+	ln -fs $(ODIR)/kubo $(PREFIX)/bin/$(SUFFIX)/kubo
