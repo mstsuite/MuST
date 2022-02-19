@@ -44,19 +44,21 @@ exit 1; fi
 	@if [ "${SUFFIX_d}" ] && [ ! -d bin/$(SUFFIX_d) ]; then @echo "creating subdirectory $(SUFFIX_d) under bin ..."; mkdir bin/$(SUFFIX_d); fi
 	@if [ "${SUFFIX_d}" ]; then echo $(SUFFIX_d) | tee bin/.SUFFIX; else echo "." | tee bin/.SUFFIX; fi
 	@cd external; ln -fs ../architecture/$(ArchName) architecture.h; make "EXTERNAL=1" "SUFFIX=$(SUFFIX)"
-	@cd lsms; ln -fs ../architecture/$(ArchName) architecture.h; make "EXTERN_LIB_PATH=$(MuST_PATH)/external" "ArchName=$(ArchName)" \
-"SUFFIX=$(SUFFIX)"
 	@cd MST; ln -fs ../architecture/$(ArchName) architecture.h; make "MST=1" "EXTERN_LIB_PATH=$(MuST_PATH)/external" "ArchName=$(ArchName)" \
 "SUFFIX=$(SUFFIX)"
 	@cd KUBO; ln -fs ../architecture/$(ArchName) architecture.h; make "KUBO=1" "EXTERN_LIB_PATH=$(MuST_PATH)/external" "ArchName=$(ArchName)" \
+"SUFFIX=$(SUFFIX)"
+# We temporarily disabled buidling lsms package, since it is not needed at the moment --2/18/2022
+# @cd lsms; ln -fs ../architecture/$(ArchName) architecture.h; make "EXTERN_LIB_PATH=$(MuST_PATH)/external" "ArchName=$(ArchName)" \
 "SUFFIX=$(SUFFIX)"
 	
 
 install:
 	$(eval SUFFIX := "$(shell tail -n 1 bin/.SUFFIX)")
-	cd lsms; make "PREFIX=$(MuST_PATH)" "SUFFIX=$(SUFFIX)" install
 	cd MST; make "PREFIX=$(MuST_PATH)" "SUFFIX=$(SUFFIX)" install
 	cd KUBO; make "PREFIX=$(MuST_PATH)" "SUFFIX=$(SUFFIX)" install
+# We temporarily disabled buidling lsms package, since it is not needed at the moment --2/18/2022
+# cd lsms; make "PREFIX=$(MuST_PATH)" "SUFFIX=$(SUFFIX)" install
 	@echo
 	@echo '----------------------------------------------------------------------------------------------'
 	@echo '*** Generic links pointing to the generated executables are created under ./bin directory *** '
@@ -85,6 +87,7 @@ clean-MST:
 
 distclean:
 	@cd external; make "SUFFIX=$(SUFFIX)" distclean
-	@cd lsms; make "SUFFIX=$(SUFFIX)" distclean
+# We temporarily disabled buidling lsms package, since it is not needed at the moment --2/18/2022
+# @cd lsms; make "SUFFIX=$(SUFFIX)" distclean
 	@cd MST; make "SUFFIX=$(SUFFIX)" distclean
 	rm -rf bin

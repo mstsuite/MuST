@@ -41,7 +41,9 @@ endif
 
 all: $(ERROR_TARGETS) $(ADDITIONAL_TARGETS)
 
-.PHONY: hdf5 lua libxc fftw p3dfft clean distclean
+# .PHONY: hdf5 lua libxc fftw p3dfft clean distclean
+# Since we are not using lsms package for the moment, we temporarily disabled compiling hdf5 and lua --2/18/2022
+.PHONY: libxc fftw p3dfft clean distclean
 
 hdf5:
 	if [ ! -d hdf5/HDF5 ]; then \
