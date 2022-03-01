@@ -126,19 +126,25 @@ private
    type (PolyhedronStruct), allocatable, target :: Polyhedron(:)
 !
    real (kind=RealKind) :: UnitBox(3,3), UnitBoxM(3)
-   real (kind=RealKind), parameter :: TOLERANCE = HALF*TEN2m6
+!  real (kind=RealKind), parameter :: TOLERANCE = HALF*TEN2m6
+!  real (kind=RealKind), parameter :: TOLERANCE = TEN2m8
+   real (kind=RealKind) :: TOLERANCE
 !
 contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine initPolyhedra(n,Box,istop,iprint)
+   subroutine initPolyhedra(n,Box,istop,iprint,tol)
 !  ===================================================================
    implicit none
+!
    character (len=*), intent(in) :: istop
+!
    integer (kind=IntKind), intent(in) :: n
    integer (kind=IntKind), intent(in) :: iprint
    integer (kind=IntKind) :: i
+!
    real (kind=RealKind), intent(in) :: Box(3,3)
+   real (kind=RealKind), intent(in), optional :: tol
 !
    if (n < 1) then
       call ErrorHandler('initPolyhedra','invalid num atoms on my PE',n)
@@ -146,6 +152,16 @@ contains
 !
    stop_routine = istop
    print_level = iprint
+!
+   if (present(tol)) then
+      if (tol < ZERO .or. tol > ONE) then
+         call ErrorHandler('initPolyhedra','invalid tol value',tol)
+      else
+         TOLERANCE = tol
+      endif
+   else
+      TOLERANCE = HALF*TEN2m6
+   endif
 !
    NumLocalPolyhedra = n
    allocate(Polyhedron(n))

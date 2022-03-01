@@ -33,20 +33,25 @@ endif
 ifdef SUFFIX
    ifeq "$(SUFFIX)" "."
       ODIR = $(OODIR)
+      MST_ODIR = $(TOP_DIR)/../MST/bin
    else
       ODIR = $(OODIR)/$(SUFFIX)
+      MST_ODIR = $(TOP_DIR)/../MST/bin/$(SUFFIX)
    endif
 else
    ifdef suffix
       SUFFIX = $(suffix)
       ifeq "$(suffix)" "."
          ODIR = $(OODIR)
+         MST_ODIR = $(TOP_DIR)/../MST/bin
       else
          ODIR = $(OODIR)/$(suffix)
+         MST_ODIR = $(TOP_DIR)/../MST/bin/$(suffix)
       endif
    else
       SUFFIX = "."
       ODIR = $(OODIR)
+      MST_ODIR = $(TOP_DIR)/../MST/bin
    endif
 endif
 
@@ -57,12 +62,12 @@ endif
 ADD_LIBS += $(LIBS)
 
 MST_DIR_LINK = KUBO
-MSTLIB = $(ODIR)/../../MST/bin/libmst.a
-MPPLIB = $(ODIR)/../../MST/bin/libmpp.a
-IOLIB  = $(ODIR)/../../MST/bin/iolib.a
-IODIR  = $(TOP_DIR)../../MST/iolib 
-SLULIB = $(ODIR)/../../MST/bin/slulib.a
-ACCLIB = $(ODIR)/../../MST/bin/libMatAcc.a
+MSTLIB = $(MST_ODIR)/libmst.a
+MPPLIB = $(MST_ODIR)/libmpp.a
+IOLIB  = $(MST_ODIR)/iolib.a
+IODIR  = $(TOP_DIR)/../MST/iolib 
+SLULIB = $(MST_ODIR)/slulib.a
+ACCLIB = $(MST_ODIR)/libMatAcc.a
 
 SuperLU=0
 ifeq "$(SuperLU)" "0"
@@ -195,7 +200,7 @@ main:
 #	if test "$(SuperLU)" = "1"; then cd $(ODIR); \
 #make "FC=$(FC)" "FFLAGSSLU=$(FFLAGS)" "SLULIB=$(SLULIB)" "MPI2INCLUDE_PATH=$(MPI2INCLUDE_PATH)" "SLUPATH=$(SLUPATH)" "PREPROC=$(PREPROC)" \
 #"PREPROC_FFLAGS=$(PREPROC_FFLAGS)" "ODIR=$(ODIR)" "ARCHV=$(ARCHV)" "XLC_I=$(XLC_I)" -f $(TOP_DIR)/slulib/Makefile; fi
-	cd $(ODIR); make "FC=$(FC)" "FFLAGS=$(FFLAGS)" "F77FLAGS=$(F77FLAGS)" "MSTLIB=$(MSTLIB)" \
+	cd $(ODIR); make "MST_ODIR=$(MST_ODIR)" "FC=$(FC)" "FFLAGS=$(FFLAGS)" "F77FLAGS=$(F77FLAGS)" "MSTLIB=$(MSTLIB)" \
 "PREPROC=$(PREPROC)" "PREPROC_FFLAGS=$(PREPROC_FFLAGS)" \
 "CC=$(CC)" "CFLAGS=$(CFLAGS)" "IOLIB=$(IOLIB)" "DSUPERLULIB=$(DSUPERLULIB)" "MPPLIB=$(MPPLIB)" "SLULIB=$(SLULIB)" "SLUPATH=$(SLUPATH)" \
 "ODIR=$(ODIR)" "ADDLIBS=$(ADD_LIBS)" "XLC_I=$(XLC_I)" "LD=$(LD)" "Use_FFTW=$(Use_FFTW)" "FFTW_INC=$(FFTW_INC)" "EXEC_NAME=$(EXEC_NAME)" \
@@ -203,37 +208,8 @@ main:
 	if test -d $(HOME)/bin; then echo "copy the executable $(EXEC_NAME) to $(HOME)/bin"; else mkdir $(HOME)/bin; fi
 	cp $(ODIR)/$(EXEC_NAME) $(HOME)/bin
 
-check: main
-	cd $(ODIR); make "FC=$(FC)" "FFLAGS=$(FFLAGS)" "F77FLAGS=$(F77FLAGS)" "MSTLIB=$(MSTLIB)" "IOLIB=$(IOLIB)" "MPPLIB=$(MPPLIB)" \
-"PREPROC=$(PREPROC)" "ODIR=$(ODIR)" "ADDLIBS=$(ADD_LIBS)" "XLC_I=$(XLC_I)" \
-"PREPROC_FFLAGS=$(PREPROC_FFLAGS)" "Use_FFTW=$(Use_FFTW)" "FFTW_INC=$(FFTW_INC)" "LD=$(LD)" -f $(TOP_DIR)/../MST/driver/Makefile
-
-util: check
-	cd $(ODIR); make "FC=$(FC)" "FFLAGS=$(FFLAGS)" "MPICC=$(MPICC)" "F77FLAGS=$(F77FLAGS)" "MSTLIB=$(MSTLIB)" \
-"PREPROC=$(PREPROC)" "PREPROC_FFLAGS=$(PREPROC_FFLAGS)" \
-"CC=$(CC)" "CFLAGS=$(CFLAGS)" "IOLIB=$(IOLIB)" "MPPLIB=$(MPPLIB)" "ODIR=$(ODIR)" "LD=$(LD)" "ADDLIBS=$(ADD_LIBS)" "XLC_I=$(XLC_I)" \
--f $(TOP_DIR)/../MST/util/Makefile
-
 clear:
-	cd $(ODIR); make "ODIR=$(ODIR)" "MSTLIB=$(MSTLIB)" "EXEC_NAME=$(EXEC_NAME)" clear -f $(TOP_DIR)/lib/Makefile
-	cd $(ODIR); make "ODIR=$(ODIR)" "IOLIB=$(IOLIB)" "EXEC_NAME=$(EXEC_NAME)" clear -f $(TOP_DIR)/lib/Makefile
-	cd $(ODIR); make "ODIR=$(ODIR)" "MPPLIB=$(MPPLIB)" "EXEC_NAME=$(EXEC_NAME)" clear -f $(TOP_DIR)/plib/Makefile 
 	cd $(ODIR); make "ODIR=$(ODIR)" "EXEC_NAME=$(EXEC_NAME)" clear -f $(TOP_DIR)/src/Makefile
-
-clear_slulib:
-	cd $(ODIR); make "ODIR=$(ODIR)" "SLULIB=$(SLULIB)" clear -f $(TOP_DIR)/slulib/Makefile
-
-clear_util:
-	cd $(ODIR); make "ODIR=$(ODIR)" clear -f $(TOP_DIR)/util/Makefile
-
-clean_util:
-	cd $(ODIR); make "ODIR=$(ODIR)" clean -f $(TOP_DIR)/util/Makefile
-
-clear_check:
-	cd $(ODIR); make "ODIR=$(ODIR)" clear -f $(TOP_DIR)/driver/Makefile
-
-clean_check:
-	cd $(ODIR); make "ODIR=$(ODIR)" clean -f $(TOP_DIR)/driver/Makefile
 
 clear_src:
 	cd $(ODIR); make "ODIR=$(ODIR)" "EXEC_NAME=$(EXEC_NAME)" clear -f $(TOP_DIR)/src/Makefile
@@ -257,4 +233,4 @@ p3dfft:
 	@cd $(EXTERN_LIB_PATH) && make "ARCH_FILE=$(ARCH_FILE)" p3dfft
 
 install:
-	ln -fs $(ODIR)/kubo $(TOP_DIR)/../bin/kubo; 
+	ln -fs $(ODIR)/kubo $(PREFIX)/bin/$(SUFFIX)/kubo

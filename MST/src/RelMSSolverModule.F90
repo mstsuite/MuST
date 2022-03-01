@@ -110,7 +110,7 @@ contains
    !
 !   use StrConstModule, only : initStrConst !xianglin
    !
-!   use ClusterMatrixModule, only : initClusterMatrix
+   use ClusterMatrixModule, only : initClusterMatrix
    !
    use CrystalMatrixModule, only : initCrystalMatrix
 
@@ -150,7 +150,7 @@ contains
       isRealSpace=.false.
    else if (isLSMS()) then
 !      call initRSpaceStrConst(lmax_phi_max,istop,-1)
-!      call initClusterMatrix(num_latoms,index,lmaxkkr,lmaxphi,local_posi,cant,rel,istop,iprint)
+       call initClusterMatrix(num_latoms,index,lmaxkkr,lmaxphi,local_posi,cant,rel,istop,iprint)
       isRealSpace=.true.
    else
       call ErrorHandler('initRelMSSolver','unimplemented Non-KKR method is called')
@@ -255,7 +255,7 @@ contains
    !=================================================================
 !   use StrConstModule, only :  endStrConst
 !   use RSpaceStrConstModule, only : endRSpaceStrConst
-!   use ClusterMatrixModule, only : endClusterMatrix
+   use ClusterMatrixModule, only : endClusterMatrix
    use CrystalMatrixModule, only : endCrystalMatrix
 
    implicit none
@@ -272,8 +272,7 @@ contains
    if (isRealSpace) then
 !     ----------------------------------------------------------------
 !      call endRSpaceStrConst()
-      call ErrorHandler('endRelMSSolver',                      &
-                        'Relativistic LSMS has not been implemented yet')
+      call endClusterMatrix()
 !     ----------------------------------------------------------------
    else
 !     ----------------------------------------------------------------
@@ -302,7 +301,8 @@ contains
    !=================================================================
    subroutine computeRelMST(Ek)
    !=================================================================
-   use CrystalMatrixModule, only : calCrystalMatrix,getTau
+   use ClusterMatrixModule, only : calClusterMatrix, getClusterTau => getTau
+   use CrystalMatrixModule, only : calCrystalMatrix, getCrystalTau => getTau
    use RelSSSolverModule, only : SingleDiracScattering, getRelScatteringMatrix
 
    implicit none
@@ -314,10 +314,17 @@ contains
    do id = 1, LocalNumAtoms
       call SingleDiracScattering (id,Ek)
    enddo
-   call calCrystalMatrix(Ek, getRelScatteringMatrix, tau_needed=.true.)
-   !open (102,file="tau_matrix",action="write")
-   !write (102,*) getTau(1,1) 
-   !close (102)
+   if (isRealSpace) then
+      call calClusterMatrix(Ek, getRelScatteringMatrix, tau_needed=.true.)
+   !  open (102,file="tau_matrix",action="write")
+   !  write (102,*) getClusterTau(1,1) 
+   !  close (102)
+   else
+      call calCrystalMatrix(Ek, getRelScatteringMatrix, tau_needed=.true.)
+   !  open (102,file="tau_matrix",action="write")
+   !  write (102,*) getCrystalTau(1,1) 
+   !  close (102)
+   endif
 
    do id = 1, LocalNumAtoms
       call computeRelMSGF_part(id,Ek)
@@ -336,7 +343,7 @@ contains
    !=================================================================
    subroutine computeRelMSGF_part(ia,Ek)
    !=================================================================
-!   use ClusterMatrixModule, only : getClusterKau => getKau
+   use ClusterMatrixModule, only : getClusterKau => getKau
    use CrystalMatrixModule, only : getCrystalKau => getKau
    use RadialGridModule, only : getGrid
    use RelSSSolverModule, only : getRelRegSolutionSine, getRelRegSolutionCosine
@@ -399,7 +406,7 @@ contains
    if (isRealSpace) then
       call ErrorHandler('computeRelMSGF_part',                      &
                         'Relativistic LSMS not implemented yet')
-!      kau00 => getClusterKau(ia)   ! Kau00 = kappa**2 * S^{-1} * [Tau00 - t_matrix] * S^{-1*}
+      kau00 => getClusterKau(ia)   ! Kau00 = kappa**2 * S^{-1} * [Tau00 - t_matrix] * S^{-1*}
    else
       kau00 => getCrystalKau(ia)   ! Kau00 = kappa**2 * S^{-1} * [Tau00 - t_matrix] * S^{-1*}
    endif

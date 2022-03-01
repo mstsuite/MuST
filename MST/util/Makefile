@@ -59,10 +59,10 @@ UTILITIES_O = $(ODIR)/measureVoronoi.o \
               $(ODIR)/newa.o \
               $(ODIR)/slice.o \
               $(ODIR)/extrpot.o \
-              $(ODIR)/murn.o \
+              $(ODIR)/murn_new.o \
               $(ODIR)/eosfit.o \
               $(ODIR)/SampleModule.o \
-              $(ODIR)/genap.o \
+              $(ODIR)/generateAtomPosition.o \
               $(ODIR)/setEvec.o \
               $(ODIR)/cart2direct.o \
               $(ODIR)/bireft.o \

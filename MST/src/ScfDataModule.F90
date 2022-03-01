@@ -385,6 +385,20 @@ contains
       call ErrorHandler('initScfData','invalid nspin',nspin)
    endif
 !
+!  ===================================================================
+!  The IBZ integration and rotation needs to be carefully tested in the
+!  relativistic case.
+!  For now, we enforce full-BZ integration in the relativistic case.
+!  This limitation will be lifted after a full test.
+!    -- Yang @ 02-15-2022
+!  ===================================================================
+   if (nrelv == 2) then
+      call WarningHandler('initScfData',                              &
+              'In relativistic case, the IBZ integration/rotation needs to be checked and is disabled for now.')
+      Symmetrize = 0
+   endif
+!  ===================================================================
+!
    if (i_vdif < 1 .or. i_vdif > 2) then
       call WarningHandler('initScfData','Unknown interstitial spin index', &
                           i_vdif)

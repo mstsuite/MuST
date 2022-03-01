@@ -1393,7 +1393,7 @@ contains
          use KindParamModule, only : IntKind, RealKind
          integer (kind=IntKind), intent(in) :: ind, n, imax
          integer (kind=IntKind), intent(out) :: iex
-         real (kind=RealKind), intent(in) :: xi, x(*), y(*)
+         real (kind=RealKind), intent(in) :: xi, x(:), y(:)
          real (kind=RealKind) :: lag
       end function
    end interface
@@ -1403,8 +1403,8 @@ contains
          use KindParamModule, only : IntKind, RealKind, CmplxKind
          integer (kind=IntKind), intent(in) :: ind, n, imax
          integer (kind=IntKind), intent(out) :: iex
-         real (kind=RealKind), intent(in) :: xi, x(*)
-         complex (kind=CmplxKind), intent(in) :: y(*)
+         real (kind=RealKind), intent(in) :: xi, x(:)
+         complex (kind=CmplxKind), intent(in) :: y(:)
          complex (kind=CmplxKind) :: lag
       end function
    end interface

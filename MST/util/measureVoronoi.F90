@@ -6,6 +6,8 @@ program measureVoronoi
 !
    use GroupCommModule, only : getGroupID
 !
+   use InputModule, only : getKeyValue
+!
    use SystemModule, only : getNumAtoms, getAtomPosition
 !
    use ErrorHandlerModule, only : ErrorHandler
@@ -28,7 +30,7 @@ program measureVoronoi
 !
    real (kind=RealKind), allocatable :: AtomPosition(:,:)
    real (kind=RealKind), pointer :: Bravais(:,:)
-   real (kind=RealKind) :: skewness
+   real (kind=RealKind) :: skewness, tol
 !
 !  -------------------------------------------------------------------
    call StartUp()
@@ -53,9 +55,15 @@ program measureVoronoi
 !
    NumLocalAtoms = getLocalNumAtoms()
 !
-!  -------------------------------------------------------------------
-   call initPolyhedra(NumLocalAtoms,Bravais,'main',0)
-!  -------------------------------------------------------------------
+   if (getKeyValue(1,'Tolerance for setting up polyhedra',tol) == 0) then
+!     ----------------------------------------------------------------
+      call initPolyhedra(NumLocalAtoms,Bravais,'main',0,tol)
+!     ----------------------------------------------------------------
+   else
+!     ----------------------------------------------------------------
+      call initPolyhedra(NumLocalAtoms,Bravais,'main',0)
+!     ----------------------------------------------------------------
+   endif
 !
    do i=1,NumLocalAtoms
       ig = getGlobalIndex(i)
@@ -97,6 +105,8 @@ end program measureVoronoi
 !
    use ErrorHandlerModule, only : ErrorHandler
 !
+   use TimerModule, only : initTimer
+!
    use DataServiceCenterModule, only : initDataServiceCenter
 !
    use InputModule, only : initInput
@@ -122,6 +132,7 @@ end program measureVoronoi
    integer (kind=IntKind) :: def_id, info_id, n
 !
 !  -------------------------------------------------------------------
+   call initTimer()
    call initMPP()
    call initGroupComm()
    call initDataServiceCenter()

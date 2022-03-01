@@ -142,7 +142,10 @@ ACCEL_OPT += -c
 F77FLAGS = $(FFLAGS)
 
 UNAME_S := $(shell uname -s)
-ifneq (,$(wildcard /usr/include/rpc/xdr.h))
+ifdef XDR_INCLUDE
+   CFLAGS += $(XDR_INCLUDE)
+   ADD_LIBS += $(XDR_LIB)
+else ifneq (,$(wildcard /usr/include/rpc/xdr.h))
    CFLAGS += -I/usr/include/rpc
 else ifneq (,$(wildcard /usr/include/tirpc/rpc/xdr.h))
    CFLAGS += -I/usr/include/tirpc -I/usr/include/tirpc/rpc

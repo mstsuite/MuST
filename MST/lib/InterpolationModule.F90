@@ -595,7 +595,8 @@ contains
 !
    dr=r(ip1)-r(i)
    if(dr == ZERO) then
-      call ErrorHandler('FIT','degenerate grid')
+      write(6,'(a,2i5)')'i, ip1 = ',i,ip1
+      call ErrorHandler('FIT','degenerate grid',r(i),r(ip1))
    endif
    drv=f(ip1)-f(i)
    c(3)=drv/dr

@@ -440,7 +440,9 @@ contains
 !     -------------------------------------------------------------------
    endif
 !
-   allocate(wk_green(green_size*4),wk_dos((nsize+4*MaxNumSpecies)*n_spin_cant*n_spin_cant+12))
+   allocate( wk_green(green_size*4) )
+   allocate( wk_dos((nsize+4*MaxNumSpecies)*n_spin_cant*n_spin_cant+12*MaxNumSpecies) )
+!
    wk_green = CZERO; wk_dos = CZERO
    if (rad_derivative) then
       allocate(wk_dgreen(green_size*4))
@@ -3854,7 +3856,7 @@ contains
 !                 ====================================================
                   rstatus = getKeyValue(1,'No. Gauss Pts. along Resonance State Contour',NumGQPs)
                   if (e_delta > 0.002d0 .and. NumGQPs == 5) then
-                     NumGQPs = 5*int(TWO**(e_delta/0.002d0)+HALF)
+                     NumGQPs = 5*int(TWO*(e_delta/0.002d0)+HALF)
                   endif
                   if (NumGQPs > MaxGQPs) then
                      call ErrorHandler('calSingleScatteringIDOS','NumGQPs > MaxGQPs',NumGQPs,MaxGQPs)
@@ -6279,7 +6281,7 @@ contains
 !
    implicit none
 !
-   integer (kind=IntKind) :: id, n, ia
+   integer (kind=IntKind) :: id, n, ia, dsize
    integer (kind=IntKind) :: NumPEsInEKG, ekGID
 !
    type (ElectroStruct), intent(inout) :: eValue(LocalNumAtoms)
@@ -6292,6 +6294,7 @@ contains
    cfac = CONE/real(NumPEsInEKG,kind=RealKind)
 !
    do id = 1, LocalNumAtoms
+      dsize = eValue(id)%size/eValue(id)%NumSpecies
       n = 0
       do ia = 1, eValue(id)%NumSpecies
          wk_dos(n+1:n+4) = eValue(id)%dos(1:4,ia)
@@ -6299,14 +6302,14 @@ contains
          wk_dos(n+9:n+12) = eValue(id)%evalsum(1:4,ia)
          n = n + 12
 !        -------------------------------------------------------------
-         call zcopy(eValue(id)%size,eValue(id)%dos_r_jl(1,1,1,ia),1,wk_dos(n+1),1)
+         call zcopy(dsize,eValue(id)%dos_r_jl(1,1,1,ia),1,wk_dos(n+1),1)
 !        -------------------------------------------------------------
-         n = n + eValue(id)%size
+         n = n + dsize
          if (rad_derivative) then
 !           ----------------------------------------------------------
-            call zcopy(eValue(id)%size,eValue(id)%der_dos_r_jl(1,1,1,ia),1,wk_dos(n+1),1)
+            call zcopy(dsize,eValue(id)%der_dos_r_jl(1,1,1,ia),1,wk_dos(n+1),1)
 !           ----------------------------------------------------------
-            n = n + eValue(id)%size
+            n = n + dsize
          endif
       enddo
 !     ----------------------------------------------------------------
@@ -6324,14 +6327,14 @@ contains
          eValue(id)%evalsum(1:4,ia) = wk_dos(n+9:n+12)
          n = n + 12
 !        -------------------------------------------------------------
-         call zcopy(eValue(id)%size,wk_dos(n+1),1,eValue(id)%dos_r_jl(1,1,1,ia),1)
+         call zcopy(dsize,wk_dos(n+1),1,eValue(id)%dos_r_jl(1,1,1,ia),1)
 !        -------------------------------------------------------------
-         n = n + eValue(id)%size
+         n = n + dsize
          if (rad_derivative) then
 !           ----------------------------------------------------------
-            call zcopy(eValue(id)%size,wk_dos(n+1),1,eValue(id)%der_dos_r_jl(1,1,1,ia),1)
+            call zcopy(dsize,wk_dos(n+1),1,eValue(id)%der_dos_r_jl(1,1,1,ia),1)
 !           ----------------------------------------------------------
-            n = n + eValue(id)%size
+            n = n + dsize
          endif
       enddo
    enddo
@@ -8343,7 +8346,8 @@ contains
 !
    use QuadraticMatrixModule, only : initQuadraticMatrix, endQuadraticMatrix, &
                                      solveQuadraticEquation, getEigenValue,   &
-                                     solveLinearEquation
+                                     solveLinearEquation,                     &
+                                     isQuadraticMatrixInitialized
 !
    implicit none
 !
@@ -8416,6 +8420,9 @@ contains
       allocate( s1(1:kmax_kkr,1:kmax_kkr,1:LocalNumSpecies) )
       allocate( s2(1:kmax_kkr,1:kmax_kkr,1:LocalNumSpecies) )
       allocate( s1p(1:kmax_kkr,1:kmax_kkr,1:LocalNumSpecies) )
+      if (isQuadraticMatrixInitialized()) then
+         call endQuadraticMatrix()
+      endif
       call initQuadraticMatrix(kmax_kkr,isGeneral)
 !
       do is = 1,n_spin
@@ -8516,7 +8523,7 @@ contains
 !              ----------------------------------------------------------
                pv => getEigenValue(nv)
 !              ----------------------------------------------------------
-               if ( node_print_level >= 0) then
+               if ( node_print_level > 0) then
                   write(6,'("calQuadraticPoles: iw",t40,"=", i5,i5)')iw
                endif
                do ie = 1, kmax_kkr*2
@@ -8640,7 +8647,7 @@ contains
 !              ----------------------------------------------------------
                pv => getEigenValue(nv)
 !              ----------------------------------------------------------
-               if ( node_print_level >= 0) then
+               if ( node_print_level > 0) then
                   write(6,'("calQuadraticPoles: iw",t40,"=", i5,i5)')iw
                endif
                do ie = 1, kmax_kkr*2
@@ -8923,7 +8930,7 @@ contains
    !           -------------------------------------------------------
                pv => getEigenValue(nv)
    !           -------------------------------------------------------
-               if ( node_print_level >= 0) then
+               if ( node_print_level > 0) then
                   write(6,'("calQuadraticPoles_cmplx: iw",t40,"=", i5,i5)')iw
                endif
                do ie = 1, kmax_kkr*2
@@ -9051,7 +9058,7 @@ contains
 !              ----------------------------------------------------------
                pv => getEigenValue(nv)
 !              ----------------------------------------------------------
-               if ( node_print_level >= 0) then
+               if ( node_print_level > 0) then
                   write(6,'("calQuadraticPoles_cmplx: iw",t40,"=", i5,i5)')iw
                endif
                do ie = 1, kmax_kkr*2

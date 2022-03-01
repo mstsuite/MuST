@@ -1,13 +1,13 @@
 #=====================================================================
-# module load gcc/9.1.0 hdf5 essl netlib-scalapack
+# module load hdf5/1.12.0 libtirpc/1.2.6
 #
 # Currently Loaded Modules:
-#   1) lsf-tools/2.0                5) DefApps                      9) gcc/9.1.0                       13) fftw/3.3.9
-#   2) hsi/5.0.2.p5                 6) nsight-compute/2021.2.1     10) essl/6.3.0                      14) netlib-scalapack/2.1.0
-#   3) darshan-runtime/3.3.0-lite   7) nsight-systems/2021.3.1.54  11) spectrum-mpi/10.4.0.3-20210112
-#   4) xalt/1.2.1                   8) cuda/11.0.3                 12) hdf5/1.10.7
-#
+#   1) craype-x86-trento        5) xpmem/2.3.2-2.2_1.16__g9ea452c.shasta   9) craype/2.7.13          13) PrgEnv-cray/8.2.0  17) hdf5/1.12.0
+#   2) libfabric/1.13.0.0       6) cray-pmi/6.0.16                        10) cray-dsmml/0.2.2       14) DefApps/default    18) libtirpc/1.2.6
+#   3) craype-network-ofi       7) cray-pmi-lib/6.0.16                    11) cray-mpich/8.1.12      15) subversion/1.14.0
+#   4) perftools-base/21.12.0   8) cce/13.0.0                             12) cray-libsci/21.08.1.2  16) fftw/3.3.9
 #=====================================================================
+#
 # Acceleration = 1: enable GPU acceleration
 # Acceleration = 0: otherwise
 #=====================================================================
@@ -25,14 +25,16 @@ Acceleration = 0
 # corresponding packages will be installed under $(EXTERN_LIB_PATH)
 #=====================================================================
 HDF5_PATH   = $(OLCF_HDF5_ROOT)
-ACCEL       = CUDA
-ACCEL_PATH  = $(OLCF_CUDA_ROOT)
-# LIBXC_PATH  = /gpfs/alpine/proj-shared/mat020/libxc-5.0.0/GNU
+ACCEL       = HIPS
+ACCEL_PATH  = 
+LIBXC_PATH  = 
 FFTW_PATH   = $(OLCF_FFTW_ROOT)
-# P3DFFT_PATH = /gpfs/alpine/proj-shared/mat020/p3dfft-2.7.9/GNU
+P3DFFT_PATH =
 LUA_PATH    =
-LIBS       += -L${OLCF_ESSL_ROOT}/lib64 -lessl -L$(OLCF_NETLIB_SCALAPACK_ROOT)/lib -lscalapack
-ADD_LIBS   += -lgfortran -lm
+LIBS       += -L${CRAY_LIBSCI_PREFIX_DIR}/lib -lsci_cray
+
+XDR_INCLUDE = -I$(OLCF_LIBTIRPC_ROOT)/include/tirpc -I$(OLCF_LIBTIRPC_ROOT)/include/tirpc/rpc
+XDR_LIB     = -L$(OLCF_LIBTIRPC_ROOT)/lib -ltirpc
 
 ADD_LIBS   += -L$(LIBXC_PATH)/lib -lxcf90 -lxc
 Use_LibXC   = -DLIBXC5 -I$(LIBXC_PATH)/include
@@ -40,12 +42,12 @@ Use_LibXC   = -DLIBXC5 -I$(LIBXC_PATH)/include
 #=====================================================================
 # Compiler tools, gnu version 7.0 seems requiried by lsms.
 #=====================================================================
-CC          = mpicc
-CXX         = mpicxx
-F77         = mpif90
-FC          = mpif90
-MPICC       = mpicc
-ACCEL_CXX   = nvcc -arch=sm_60
+CC          = cc
+CXX         = CC
+F77         = ftn
+FC          = ftn
+MPICC       = cc
+ACCEL_CXX   = 
 ARCHV       = ar -r
 
 #=====================================================================
@@ -54,31 +56,31 @@ ARCHV       = ar -r
 # Note: "FPPFLAGS = -DMPI" enables MPI parallel processing.
 #=====================================================================
 FPPDEFS     = -cpp
-CPPDEFS     = -cpp
+CPPDEFS     =
 FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK $(Use_LibXC)
 CPPFLAGS    = 
 
 CFLAGS      = -O3
 CXXFLAGS    = -O3 -std=c++14
-FFLAGS      = -O3
-F77FLAGS    = -O3
+# FFLAGS      = -O1 -K trap=fp,ovf,unf -R bs 
+FFLAGS      = -O2
+F77FLAGS    = -O2
 OPT_OPENMP  = -fopenmp
 
 LD_FLAGS    =
 LD          = $(FC) $(LD_FLAGS)
 
 #=====================================================================
-# On IBM Systems with ESSL we need a workaround for missing LAPACK functions
-#=====================================================================
-
-export ESSL_WORKAROUND=1
-
-#=====================================================================
 # LIBXC_CONFIG_FLAGS, P3DFFT_CONFIG_FLAGS and FFTW_CONFIG_FLAGS are 
 # ./configure flags for libxc, p3dfft, and fftw package, respectively.
 # Note: for hdf5, "--enable-parallel" might be needed in the future.
+#
+# Note: In p3dfft, line #2854 of configure was
+#     CCLD="$CC"
+# It needs to be replaced with 
+#     CCLD="$FC"
 #=====================================================================
 HDF5_CONFIG_FLAGS   = --enable-fortran --enable-static-exec CC=$(CC) CXX=$(CXX) FC=$(FC)
 LIBXC_CONFIG_FLAGS  = CC=$(CC) CFLAGS="$(CFLAGS)" FC=$(FC) FFLAGS="$(FFLAGS)"
-P3DFFT_CONFIG_FLAGS = FC=$(FC) CC=$(CC) LIBS="$(LIBS)" CCLD=$(FC)
+P3DFFT_CONFIG_FLAGS = FC=$(FC) CC=$(CC) LIBS="$(LIBS)" --enable-cray
 FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS)" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)"

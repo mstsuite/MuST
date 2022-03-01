@@ -1208,14 +1208,10 @@ contains
             !     ----------------------------------------------------------------
                endif
                if (getNumIBZRotations() > 1) then
-                 if (isRelativistic) then
-                    call ErrorHandler('calCrystalMatrix_sumk','Relativistic sumIBZRotation not implemented',INFO)
-                 else
-!                   ----------------------------------------------------------------
-                    call sumIBZRotation(calculate_tau, calculate_kau = .false.,     &
-                                        use_sro=do_sro, jindex=j, nindex=index)
-!                   ----------------------------------------------------------------
-                 endif
+!                 ------------------------------------------------------------------
+                  call sumIBZRotation(calculate_tau, calculate_kau = .false.,     &
+                                      use_sro=do_sro, jindex=j, nindex=index)
+!                 ------------------------------------------------------------------
                endif
            enddo
         enddo
@@ -1305,9 +1301,7 @@ contains
       endif
 !    
       if (getNumIBZRotations() > 1) then
-         if (isRelativistic) then
-            call ErrorHandler('calCrystalMatrix_sumk','Relativistic sumIBZRotation not implemented',INFO)
-         else if (method == 0 .or. method == 1) then
+         if (method == 0 .or. method == 1) then
 !           ----------------------------------------------------------------
             call sumIBZRotation(calculate_tau, calculate_kau = .true.)
 !           ----------------------------------------------------------------
