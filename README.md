@@ -1,4 +1,6 @@
 # MuST
+<img src=https://img.shields.io/github/license/mstsuite/MuST></img>
+
 MuST is an ab initio electronic structure calculation software package, with petascale and beyond computing capability, for the first principles study of quantum phenomena in disordered materials. It is capable of performing KKR, KKR-CPA, and LSMS calculations for ordered or disordered structures.
 
 ## A sketch of MuST package
