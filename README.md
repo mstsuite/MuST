@@ -9,14 +9,21 @@ It is capable of performing
   <li> Kubo-Greenwood method for residual resistivity calculation
   <li> ...and many more upcoming features!
 </ul>
-This repository is actively developed and maintained - please check for regular updates! <br><br>
+This repository is actively developed and maintained - please check for regular updates! <br><br> 
+
 <p float="left">
+  <a href='https://must.readthedocs.io/en/latest/?badge=latest'>
+    <img src='https://readthedocs.org/projects/must/badge/?version=latest' alt='Documentation Status' />
+</a>
 <img src=https://img.shields.io/github/license/mstsuite/MuST> 
 <a href="https://github.com/mstsuite/MuST/wiki">
   <img src=https://img.shields.io/badge/-MuST%20Wiki-blue> </a>
 <a href="https://www.youtube.com/channel/UCvlVeAb_m4kvBa-3_q43TIQ">
-   <img src=https://img.shields.io/badge/-MuST%20Youtube%20Channel-red>
+  <img src=https://img.shields.io/badge/-MuST%20Youtube%20Channel-red></a>
  </p>
+
+## User Guide
+All the relevant information and instructions are provided in the <a href="https://must.readthedocs.io/en/latest/index.html#">documentation</a>
 
 ## Available Scientific Packages
 <ul>
