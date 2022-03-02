@@ -31,7 +31,7 @@ program testBZone
 !
    use MathParamModule, only : ZERO, TEN2m6, ONE, CZERO, SQRTm1
 !
-   use MPPModule, only : initMPP, endMPP
+   use MPPModule, only : initMPP, endMPP, syncAllPEs, MyPE
 !
    use Matrix3dModule, only : invm3
 !
@@ -63,6 +63,8 @@ program testBZone
 !
    real (kind=RealKind), allocatable :: AtomPosition(:,:)
 !
+   call initTimer()
+   t0 = getTime()
 !  -------------------------------------------------------------------
    call initMPP()
    call initDataServiceCenter()
@@ -72,6 +74,12 @@ program testBZone
    call initPotentialType(getPotentialTypeParam())
    call initSystem(def_id)
 !  -------------------------------------------------------------------
+!
+   if (MyPE == 0) then
+      iprint = 0
+   else
+      iprint = -1
+   endif
 !  
    if (isDataStorageExisting('Bravais Vector')) then
 !     ----------------------------------------------------------------
@@ -96,22 +104,32 @@ program testBZone
 !  ===================================================================
 !  Initialize the Brillouin zone mesh for k-space integration
 !  ===================================================================
+   if (MyPE == 0) then
+      write(6,'(a,f10.5)')'Timing before calling initBZone: ',getTime()-t0
+   endif
+   t0 = getTime()
    if (isReadKmesh()) then
 !     ----------------------------------------------------------------
-      call initBZone(getKmeshFileName(),'none',-1)
+      call initBZone(getKmeshFileName(),'none',iprint)
 !     ----------------------------------------------------------------
    else if (NumKMeshs > 0) then
 !     ----------------------------------------------------------------
       call initBZone(NumKMeshs,kGenScheme,Kdiv,Symmetrize,Bravais, &
-                     NumAtoms,AtomPosition,AtomicNumber,'none',-1)
+                     NumAtoms,AtomPosition,AtomicNumber,'none',iprint)
 !     ----------------------------------------------------------------
    else
 !     ----------------------------------------------------------------
       call ErrorHandler('main','No K mesh is initialized')
 !     ----------------------------------------------------------------
    endif
+   if (MyPE == 0) then
+      write(6,'(a,f10.5)')'Timing for initBZone: ',getTime()-t0
+   endif
 !  -------------------------------------------------------------------
-   call printBZone()
+   t0 = getTime()
+   if (MyPE == 0) then
+      call printBZone()
+   endif
    nk = getNumKs()
    kvec => getAllKPoints(kfac)
 !  -------------------------------------------------------------------
@@ -122,10 +140,12 @@ program testBZone
 !           kvec = k1*BZ(:,1) + k2*BZ(:,2) + k3*BZ(:,3)
 !     ================================================================
       bz_latt => getBZoneLattice()
-      write(6,'(/,a)')'Brillioun zone lattice:'
-      write(6,'(3f12.5)')bz_latt(1:3,1)
-      write(6,'(3f12.5)')bz_latt(1:3,2)
-      write(6,'(3f12.5)')bz_latt(1:3,3)
+      if (MyPE == 0) then
+         write(6,'(/,a)')'Brillioun zone lattice:'
+         write(6,'(3f12.5)')bz_latt(1:3,1)
+         write(6,'(3f12.5)')bz_latt(1:3,2)
+         write(6,'(3f12.5)')bz_latt(1:3,3)
+      endif
       nr = getNumRotations()
       if (nr > MaxRotations) then
          call ErrorHandler('testBZone','Number of crystal rotations exceeds its physical limit',nr,MaxRotations)
@@ -140,7 +160,7 @@ program testBZone
 !     If the k-points are generated only within IBZ, produce
 !     k-points in the entire BZ by rotation
 !     ================================================================
-      if (Symmetrize > 0) then
+      if (Symmetrize > 0 .and. MyPE == 0) then
          allocate(kvec_BZ(3,nr*nk))
          write(6,'(/,a)')'====== k-points in entire BZ ==============='
          write(6,'(a)')  '     Kx          Ky          Kz'
@@ -193,49 +213,55 @@ program testBZone
          tw = tw + ONE/real(nw,kind=RealKind)
       enddo
 !
-      write(6,'(/,a)')'Transforming the k-points coordinates...'
-      write(6,'(a)')'The k-points in BZ coordinates v.s. k-points in Cartition coordinates, redundancy, weight, and fraction'
+      if (MyPE == 0) then
+         write(6,'(/,a)')'Transforming the k-points coordinates...'
+         write(6,'(a)')'The k-points in BZ coordinates v.s. k-points in Cartition coordinates, redundancy, weight, and fraction'
 !
-      wght => getAllWeights()
-      wsum = getWeightSum()
+         wght => getAllWeights()
+         wsum = getWeightSum()
 !
-      do k = 1, nk
-         k1 = binv(1,1)*kvec(1,k)+binv(1,2)*kvec(2,k)+binv(1,3)*kvec(3,k)
-         k2 = binv(2,1)*kvec(1,k)+binv(2,2)*kvec(2,k)+binv(2,3)*kvec(3,k)
-         k3 = binv(3,1)*kvec(1,k)+binv(3,2)*kvec(2,k)+binv(3,3)*kvec(3,k)
+         do k = 1, nk
+            k1 = binv(1,1)*kvec(1,k)+binv(1,2)*kvec(2,k)+binv(1,3)*kvec(3,k)
+            k2 = binv(2,1)*kvec(1,k)+binv(2,2)*kvec(2,k)+binv(2,3)*kvec(3,k)
+            k3 = binv(3,1)*kvec(1,k)+binv(3,2)*kvec(2,k)+binv(3,3)*kvec(3,k)
 !
-         nw = 0   ! Number of rotations that rotate kvec back to itself...
-         do ir = 1, nr
-            rot = getRotMatrix3D(ir)
-            krot(1,ir) = rot(1,1)*kvec(1,k)+rot(1,2)*kvec(2,k)+rot(1,3)*kvec(3,k)
-            krot(2,ir) = rot(2,1)*kvec(1,k)+rot(2,2)*kvec(2,k)+rot(2,3)*kvec(3,k)
-            krot(3,ir) = rot(3,1)*kvec(1,k)+rot(3,2)*kvec(2,k)+rot(3,3)*kvec(3,k)
-            if (abs(krot(1,ir)-kvec(1,k))+abs(krot(2,ir)-kvec(2,k))+abs(krot(3,ir)-kvec(3,k)) < TEN2m6) then
-               nw = nw + 1
-            endif
-         enddo
-!
-!        nw = the redundancy
-!        weight = nr/nw, which is one way to calculate the weight.
-!
-         nd = nr   ! Number of distinguishable k-vectors among the k-vectors generated by rotating kvec 
-         do ir = 1, nr-1
-            redundant = .false.
-            LOOP_jr: do jr = ir+1, nr
-               if (abs(krot(1,ir)-krot(1,jr))+abs(krot(2,ir)-krot(2,jr))+abs(krot(3,ir)-krot(3,jr)) < TEN2m6) then
-                  redundant = .true.
-                  exit LOOP_jr
+            nw = 0   ! Number of rotations that rotate kvec back to itself...
+            do ir = 1, nr
+               rot = getRotMatrix3D(ir)
+               krot(1,ir) = rot(1,1)*kvec(1,k)+rot(1,2)*kvec(2,k)+rot(1,3)*kvec(3,k)
+               krot(2,ir) = rot(2,1)*kvec(1,k)+rot(2,2)*kvec(2,k)+rot(2,3)*kvec(3,k)
+               krot(3,ir) = rot(3,1)*kvec(1,k)+rot(3,2)*kvec(2,k)+rot(3,3)*kvec(3,k)
+               if (abs(krot(1,ir)-kvec(1,k))+abs(krot(2,ir)-kvec(2,k))+abs(krot(3,ir)-kvec(3,k)) < TEN2m6) then
+                  nw = nw + 1
                endif
-            enddo LOOP_jr
-            if (redundant) then
-               nd = nd - 1
-            endif
+            enddo
+!
+!           nw = the redundancy
+!           weight = nr/nw, which is one way to calculate the weight.
+!
+            nd = nr   ! Number of distinguishable k-vectors among the k-vectors generated by rotating kvec 
+            do ir = 1, nr-1
+               redundant = .false.
+               LOOP_jr: do jr = ir+1, nr
+                  if (abs(krot(1,ir)-krot(1,jr))+abs(krot(2,ir)-krot(2,jr))+abs(krot(3,ir)-krot(3,jr)) < TEN2m6) then
+                     redundant = .true.
+                     exit LOOP_jr
+                  endif
+               enddo LOOP_jr
+               if (redundant) then
+                  nd = nd - 1
+               endif
+            enddo
+!           We should get nd = nr/nw...........................
+            write(6,'(3f12.5,a,3f12.5,2x,i5,2x,2i5,2x,3f10.5)')k1,k2,k3,'   ==',kvec(1:3,k),nw,nr/nw,nd,ONE/(nw*tw), &
+                                                                                wght(k),wght(k)/wsum
          enddo
-!        We should get nd = nr/nw...........................
-         write(6,'(3f12.5,a,3f12.5,2x,i5,2x,2i5,2x,3f10.5)')k1,k2,k3,'   ==',kvec(1:3,k),nw,nr/nw,nd,ONE/(nw*tw), &
-                                                                             wght(k),wght(k)/wsum
-      enddo
+      endif
    endif
+   if (MyPE == 0) then
+      write(6,'(a,f10.5)')'Timing for print etc: ',getTime()-t0
+   endif
+   call syncAllPEs()
 !
    call endBZone()
    call endSystem()

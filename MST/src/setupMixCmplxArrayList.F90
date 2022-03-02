@@ -130,18 +130,22 @@
    p_item = 0
    do id = 1, LocalNumAtoms
       nr = getNumRmesh(id)
+      if (isPotentialMixing()) then
+         flag_jl => getPotComponentFlag(id)
+      else
+         flag_jl => getChargeComponentFlag(id)
+      endif
       do ia = 1, getLocalNumSpecies(id)
          p_item = p_item + 1
          p_CAL%size = data_size_ns
          p_CAL%mesh => getRmesh(id)
          p_CAL%vector_old => pStore_old(1:data_size_ns,p_item)
          p_CAL%vector_new => pStore_new(1:data_size_ns,p_item)
-         p_CAL%vector_old(:) = CZERO
-         p_CAL%vector_new(:) = CZERO
+         p_CAL%vector_old = ZERO
+         p_CAL%vector_new = ZERO
          p_CAL%rms = ZERO
 !!!!!!   p_CAL%weight = getLocalSpeciesContent(id,ia)
          p_CAL%weight = ONE
-         flag_jl => getPotComponentFlag(id)
          ind_jl = 0
          do is = 1, n_spin_pola
             if (isPotentialMixing()) then
@@ -172,7 +176,6 @@
                lmax = getRhoLmax(id)
                jmax = (lmax+1)*(lmax+2)/2
                factor = real(3-is*2,kind=RealKind)
-               flag_jl => getChargeComponentFlag(id)
                do jl = 1, jmax
                   if ( flag_jl(jl) /=0 ) then
                      ptmp1 => getChargeDensity('TotalOld', id, ia, jl)
@@ -212,7 +215,7 @@
          enddo
          if (associated(p_CAL%next)) then
             p_CAL => p_CAL%next
-         else if ( id/=LocalNumAtoms ) then
+         else if ( p_item /= num_items ) then
             call ErrorHandler('setupMixCmplxArrayList',                  &
                               'ArrayList is not set up properly', id)
          endif

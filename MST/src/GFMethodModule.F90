@@ -74,6 +74,7 @@ private
    logical :: Initialized = .false.
    logical :: isIterateEfOn = .true.
    logical :: isEfPinning = .false.
+   logical :: isZtauZ = .true.
 !
 !  Flags to stop the code after the specific task is completed( input(external) flags )
 !
@@ -98,6 +99,7 @@ private
    integer (kind=IntKind), allocatable :: lmax_green(:)
 !
    integer (kind=IntKind) :: RECORD_LENGTH
+   integer (kind=IntKind) :: MaxRs
 !
    integer (kind=IntKind), parameter :: n_inter = 5 ! order of polynomial
                                                     ! interpolation
@@ -216,6 +218,10 @@ contains
 !
    use AdaptIntegrationModule, only : initAdaptIntegration
 !
+   use SMatrixPolesModule, only : isSMatrixPolesInitialized, initSMatrixPoles
+!
+   use SineMatrixZerosModule, only : isSineMatrixZerosInitialized, initSineMatrixZeros
+!
    implicit none
 !
    character (len=*), intent(in) :: istop
@@ -229,9 +235,10 @@ contains
    integer (kind=IntKind), intent(in) :: lmax_green_in(na)
    integer (kind=IntKind), intent(in) :: pola, cant
    integer (kind=IntKind), intent(in) :: iprint(na)
-   integer (kind=IntKind) :: id, nsize, n, ia, MaxNumSpecies
+   integer (kind=IntKind) :: id, nsize, n, ia, MaxNumSpecies, iprint_loc
    integer (kind=IntKind) :: lmax_max, jmax, green_size, green_ind
    integer (kind=IntKind), allocatable :: NumRs(:)
+   integer (kind=IntKind), allocatable :: LocalNumSpecies(:)
 !
    real (kind=RealKind), intent(in) :: posi_in(3,na)
    real (kind=RealKind), pointer :: p1(:)
@@ -399,9 +406,11 @@ contains
 !  setup the data structure
 !  ===================================================================
    allocate( NumRs(LocalNumAtoms) )
+   allocate( LocalNumSpecies(LocalNumAtoms) )
 !
    green_size = 0
    nsize = 0
+   MaxRs = 0
    do id = 1,LocalNumAtoms
       Grid => getGrid(id)
       NumRs(id) = Grid%jend
@@ -413,6 +422,8 @@ contains
       else
          nsize = max(nsize,NumRs(id)*jmax*getLocalNumSpecies(id))
       endif
+      MaxRs = max(MaxRs,NumRs(id))
+      LocalNumSpecies(id) = getLocalNumSpecies(id)
    enddo
 !
    if (getAdaptiveIntegrationMethod() == 1) then
@@ -429,7 +440,9 @@ contains
 !     -------------------------------------------------------------------
    endif
 !
-   allocate(wk_green(green_size*4),wk_dos((nsize+4*MaxNumSpecies)*n_spin_cant*n_spin_cant+12))
+   allocate( wk_green(green_size*4) )
+   allocate( wk_dos((nsize+4*MaxNumSpecies)*n_spin_cant*n_spin_pola+12*MaxNumSpecies) )
+!
    wk_green = CZERO; wk_dos = CZERO
    if (rad_derivative) then
       allocate(wk_dgreen(green_size*4))
@@ -468,6 +481,32 @@ contains
 !
    call random_seed()
 !
+   if (.not.isSMatrixPolesInitialized()) then
+      if (MyPE == 0) then
+         iprint_loc = 0
+      else
+         iprint_loc = -1
+      endif
+!     ----------------------------------------------------------------
+      call initSMatrixPoles(LocalNumAtoms,n_spin_pola,LocalNumSpecies,&
+                            lmax_kkr,lmax_green,iprint_loc)
+!     ----------------------------------------------------------------
+   endif
+!
+   if (.not.isSineMatrixZerosInitialized()) then
+      if (MyPE == 0) then
+         iprint_loc = 0
+      else
+         iprint_loc = -1
+      endif
+!     ----------------------------------------------------------------
+      call initSineMatrixZeros(LocalNumAtoms,n_spin_pola,LocalNumSpecies,&
+                            lmax_kkr,lmax_green,iprint_loc)
+!     ----------------------------------------------------------------
+   endif
+!
+   deallocate(LocalNumSpecies)
+!
    end subroutine initGFMethod
 !  ===================================================================
 !
@@ -479,6 +518,11 @@ contains
    use IntegerFactorsModule, only : endIntegerFactors
 !
    use AdaptIntegrationModule, only : endAdaptIntegration
+!
+   use SMatrixPolesModule, only : isSMatrixPolesInitialized, endSMatrixPoles
+!
+   use SineMatrixZerosModule, only : isSineMatrixZerosInitialized,    &
+                                     endSineMatrixZeros
 !
    implicit none
    integer (kind=IntKind) :: id
@@ -523,6 +567,18 @@ contains
          nullify(dosdata(id)%rarray3)
       enddo
       deallocate(dosdata,wk_dosdata)
+   endif
+!
+   if (isSMatrixPolesInitialized()) then
+!     ----------------------------------------------------------------
+      call endSMatrixPoles()
+!     ----------------------------------------------------------------
+   endif
+!
+   if (isSineMatrixZerosInitialized()) then
+!     ----------------------------------------------------------------
+      call endSineMatrixZeros()
+!     ----------------------------------------------------------------
    endif
 !
    Initialized = .false.
@@ -776,7 +832,7 @@ contains
    use MSSolverModule, only : initMSSolver, endMSSolver
    use RelMSSolverModule, only : initRelMSSolver, endRelMSSolver, computeRelMST, getRelMSDOS !xianglin
 !
-!   use RelScattererModule, only : initRelScatterer, endRelScatterer !xianglin
+!  use RelScattererModule, only : initRelScatterer, endRelScatterer !xianglin
 !
 !  use RelGreenFunctionModule, only : initRelGreenFunction, &
 !                                     endRelGreenFunction
@@ -789,18 +845,20 @@ contains
 !
    use ValenceDensityModule, only : getFermiEnergy
 !
-   use ScfDataModule, only : ErBottom, ErTop !xianglin
+   use ScfDataModule, only : ErBottom, ErTop !xianglin 
 !
    implicit none
 !
-   integer (kind=IntKind) :: id, ia, kmax, num_species
+   integer (kind=IntKind) :: id, is, ia, pot_type, kmax, num_species
 !
-   real (kind=RealKind) :: t1, t2, NLloyd, efermi
+   real (kind=RealKind) :: t1, t2, NLloyd, efermi, delta
    real (kind=RealKind), allocatable :: local_density_matrix(:,:,:)
 !
    logical, optional, intent(in) :: PartialDensity_Ef
+   logical :: vc
    logical :: isBxyz(LocalNumAtoms) !xianglin
    complex (kind=CmplxKind) :: energy !xianglin
+   complex (kind=CmplxKind) :: temp_en
    real (kind=RealKind) :: etop, ebot !for findResonance
 !
    interface
@@ -855,6 +913,7 @@ contains
 !
    NumCalls_SS = 0
    Timing_SS = ZERO
+   temp_en = 0.01
 !
 !  ===================================================================
 !  initialize Single Site Scatterer
@@ -982,9 +1041,14 @@ contains
    else
      call calIntegratedDOS(efermi)
    endif
+
 !
+!  ===================================================================
+!  Average the density/DOS across all the processes for each atom so to
+!  make sure that the calculated density for each atom is the exactly
+!  same on all the processes it is mapped onto.
 !  -------------------------------------------------------------------
-!  call averageElectroStruct(IntegrValue)
+   call averageElectroStruct(IntegrValue)
 !  -------------------------------------------------------------------
 !
 !  ===================================================================
@@ -1083,6 +1147,8 @@ contains
    use AtomModule, only : getLocalEvec, getLocalNumSpecies,        &
                           getLocalAtomicNumber
 !
+   use PotentialTypeModule, only : isFullPotential
+!
    use SSSolverModule, only : initSSSolver, endSSSolver, computeDOS
 !
    use MSSolverModule, only : initMSSolver, endMSSolver,              &
@@ -1107,7 +1173,7 @@ contains
    logical :: redundant
    logical :: isBxyz(LocalNumAtoms) !xianglin
 !
-   integer (kind=IntKind) :: id, is, ne, ie, me, info(4), nvals, js, ns, ia
+   integer (kind=IntKind) :: id, is, ne, ie, me, info(5), nvals, js, ns, ia
    integer (kind=IntKind) :: num_species, nsize
 !
    real (kind=RealKind) :: e_imag, de, msDOS(2), ssDOS, eb
@@ -1242,10 +1308,14 @@ contains
       ie = 0
       do while (ie < ne)
          ie = ie + 1
-         if (abs(e_real(ie)) < 0.001d0) then  ! In case of the energy is too close to the origin
-            e_imag = max(0.01d0,EiBottom) ! we take a larger imaginary part
-         else if (e_real(ie) < 0.1d0) then     ! In case of existing shallow bound states or low lying resonance states
-            e_imag = max(0.005d0,EiBottom) ! we take a larger imaginary part
+         if (isFullPotential()) then
+            if (abs(e_real(ie)) < 0.001d0) then  ! In case of the energy is too close to the origin
+               e_imag = max(0.01d0,EiBottom) ! we take a larger imaginary part
+            else if (e_real(ie) < 0.1d0) then     ! In case of existing shallow bound states or low lying resonance states
+               e_imag = max(0.005d0,EiBottom) ! we take a larger imaginary part
+            else
+               e_imag = max(0.001d0,EiBottom) ! in case EiBottom is zero or too small
+            endif
          else
             e_imag = max(0.001d0,EiBottom) ! in case EiBottom is zero or too small
          endif
@@ -1257,10 +1327,10 @@ contains
          if (RelativisticFlag == 2) then !relativistic or not, note n_spin_pola/n_spin_cant = 1 in our formalism
             if (redundant .or. mod(ie,NumPEsInEGroup)==MyPEinEGroup) then
                if (isSingleSiteCluster) then
-                  energy = cmplx(e_real(ie),e_imag)
+                  energy = cmplx(e_real(ie),e_imag,kind=CmplxKind)
                   do js = 1, 1
                      do id = 1, LocalNumAtoms
-                        info(1) = max(is,js); info(2) = id; info(3) = -1; info(4) = -1
+                        info(1) = max(is,js); info(2) = id; info(3) = -1; info(4) = -1; info(5) = 0
 !                       -------------------------------------------------
                         ssDOS = returnRelSingleSiteDOSinCP(info,energy,wk_dos)
                         call calElectroStruct(info,4,wk_dos,LastValue(id),ss_int=.true.)
@@ -1272,19 +1342,21 @@ contains
                         do id = 1, LocalNumAtoms
                            do ia = 1, LastValue(id)%NumSpecies
                               write(6,'(/,''returnRelSingleSiteDOS:   energy ='',2f18.12,'', id ='',i4)')energy,id,ia
-                              write(6,'(''                       Single Site DOS_MT   ='',f18.12)')real(LastValue(id)%dos_mt(js,ia))
-                              write(6,'(''                       Single Site DOS_VP   ='',f18.12)')real(LastValue(id)%dos(js,ia))
+                              write(6,'(''                       Single Site DOS_MT   ='',f18.12)') &
+                                        real(LastValue(id)%dos_mt(js,ia),RealKind)
+                              write(6,'(''                       Single Site DOS_VP   ='',f18.12)') &
+                                        real(LastValue(id)%dos(js,ia),RealKind)
                            enddo
                         enddo
                      enddo
                   endif
                else !   single-site cluster or not
-                  energy = cmplx(e_real(ie),e_imag)
+                  energy = cmplx(e_real(ie),e_imag,kind=CmplxKind)
 !                 ----------------------------------------------------
                   call computeRelMST(adjustEnergy(is,energy))
 !                 ----------------------------------------------------
                   do id =  1,LocalNumAtoms
-                     info(1) = is; info(2) = id; info(3) = -1; info(4) = 0
+                     info(1) = is; info(2) = id; info(3) = -1; info(4) = 0; info(5) = 0
 !                    ----------------------------------------------------
                      msDOS = returnRelMultipleSiteDOS(info,energy,wk_dos)
                      call calElectroStruct(info,4,wk_dos,LastValue(id))
@@ -1304,9 +1376,9 @@ contains
                            do ia = 1, LastValue(id)%NumSpecies
                               do js = 1, n_spin_cant*n_spin_cant
                                  write(6,'(''                       Single Site DOS_MT   ='',f18.12)') &
-                                       real(ssLastValue(id)%dos_mt(js,ia))
+                                       real(ssLastValue(id)%dos_mt(js,ia),RealKind)
                                  write(6,'(''                       Single Site DOS_VP   ='',f18.12)') &
-                                       real(ssLastValue(id)%dos(js,ia))
+                                       real(ssLastValue(id)%dos(js,ia),RealKind)
                               enddo
                            enddo
                         endif             
@@ -1316,20 +1388,20 @@ contains
                         do ia = 1, LastValue(id)%NumSpecies
                            do js = 1, 1 !n_spin_cant*n_spin_cant
                               ns = max(js,is) !ns = 1:4
-                              if (real(LastValue(id)%dos_mt(ns,ia)) < ZERO) then
+                              if (real(LastValue(id)%dos_mt(ns,ia),RealKind) < ZERO) then
                                  if (node_print_level >= 0) then
                                     call WarningHandler('calValenceDOS',       &
                                               'dos_mt < 0 due to the energy in MS term having imaginary part', &
-                                              real(LastValue(id)%dos_mt(ns,ia)))
+                                              real(LastValue(id)%dos_mt(ns,ia),RealKind))
                                     call WarningHandler('calValenceDOS','dos_mt is set to 0.0')
                                  endif
                                  LastValue(id)%dos_mt(ns,ia) = CZERO
                               endif
-                              if (real(LastValue(id)%dos(ns,ia)) < ZERO) then
+                              if (real(LastValue(id)%dos(ns,ia),RealKind) < ZERO) then
                                  if (node_print_level >= 0) then
                                     call WarningHandler('calValenceDOS',       &
                                               'dos < 0 due to the energy in MS term having imaginary part', &
-                                              real(LastValue(id)%dos(ns,ia)))
+                                              real(LastValue(id)%dos(ns,ia),RealKind))
                                     call WarningHandler('calValenceDOS','dos is set to 0.0')
                                  endif
                                  LastValue(id)%dos(ns,ia) = CZERO
@@ -1347,10 +1419,10 @@ contains
          else ! relativistic or not
             if (redundant .or. mod(ie,NumPEsInEGroup)==MyPEinEGroup) then
                if (isSingleSiteCluster) then
-                  energy = cmplx(e_real(ie),e_imag)
+                  energy = cmplx(e_real(ie),e_imag,kind=CmplxKind)
                   do js = 1, n_spin_cant
                      do id = 1, LocalNumAtoms
-                        info(1) = max(is,js); info(2) = id; info(3) = -1; info(4) = -1
+                        info(1) = max(is,js); info(2) = id; info(3) = -1; info(4) = -1; info(5) = 0
 !                       -------------------------------------------------
                         ssDOS = returnSingleSiteDOSinCP(info,energy,wk_dos)
                         call calElectroStruct(info,1,wk_dos,LastValue(id),ss_int=.true.)
@@ -1363,77 +1435,95 @@ contains
                            do ia = 1, LastValue(id)%NumSpecies
                               write(6,'(/,''returnSingleSiteDOS:   energy ='',2f18.12,'', id ='',i4)')energy,id
                               write(6,'(''                       Single Site DOS_MT   ='',f18.12)') &
-                                    real(LastValue(id)%dos_mt(js,ia))
+                                    real(LastValue(id)%dos_mt(js,ia),RealKind)
                               write(6,'(''                       Single Site DOS_VP   ='',f18.12)') &
-                                    real(LastValue(id)%dos(js,ia))
+                                    real(LastValue(id)%dos(js,ia),RealKind)
                            enddo
                         enddo
                      enddo
                   endif
                else
-                  energy = cmplx(e_real(ie),e_imag)
+                  energy = cmplx(e_real(ie),e_imag,kind=CmplxKind)
                   if (e_real(ie) <= ZERO) then
-!                    ----------------------------------------------------
-                     call computeMSGreenFunction(is, adjustEnergy(is,energy), add_Gs=.true., isSphSolver=.true.)
-!                    ----------------------------------------------------
-                  else
-!                    ----------------------------------------------------
+!                    -------------------------------------------------
+                     call computeMSGreenFunction(is, adjustEnergy(is,energy), &
+                                                 add_Gs=.true., isSphSolver=.true.)
+!                    -------------------------------------------------
+                  else if (isFullPotential()) then
+!                    -------------------------------------------------
                      call computeMSGreenFunction(is, adjustEnergy(is,energy))
-!                    ----------------------------------------------------
+!                    -------------------------------------------------
+                  else
+!                    =================================================
+!                    In this case, the calculated Green function is Z*tau*Z - Z*J
+!                    -------------------------------------------------
+                     call computeMSGreenFunction(is, adjustEnergy(is,energy), &
+                                                 add_Gs=.true., isSphSolver=.true.)
+                     
+!                    -------------------------------------------------
                   endif
                   do id =  1,LocalNumAtoms
-                     info(1) = is; info(2) = id; info(3) = -1; info(4) = 0
-!                    ----------------------------------------------------
+                     info(1) = is; info(2) = id; info(3) = -1; info(4) = 0; info(5) = 0
+!                    -------------------------------------------------
                      msDOS = returnMultipleSiteDOS(info,energy,wk_dos)
                      call calElectroStruct(info,n_spin_cant,wk_dos,LastValue(id))
-!                    ----------------------------------------------------
+!                    -------------------------------------------------
                      if (e_real(ie) > ZERO) then
                         do js = 1, n_spin_cant
                            info(1) = max(is,js); info(2) = id; info(3) = -1 
                            info(4) = -1 ! do not set internal print to 1, otherwise, it
                                         ! could possiblly hang the MPI process
-!                          ----------------------------------------------
+                           info(5) = 0
+!                          -------------------------------------------
                            ssDOS = returnSingleSiteDOS(info,e_real(ie),wk_dos)
-!                          ----------------------------------------------
+!                          -------------------------------------------
                            call calElectroStruct(info,1,wk_dos,ssLastValue(id),ss_int=.true.)
-!                          ----------------------------------------------
+!                          -------------------------------------------
                         enddo
                         if (node_print_level >= 0) then
                            do ia = 1, LastValue(id)%NumSpecies
                               do js = 1, n_spin_cant*n_spin_cant
                                  write(6,'(''                       Single Site DOS_MT   ='',f18.12)') &
-                                       real(ssLastValue(id)%dos_mt(js,ia))
+                                       real(ssLastValue(id)%dos_mt(js,ia),kind=RealKind)
                                  write(6,'(''                       Single Site DOS_VP   ='',f18.12)') &
-                                       real(ssLastValue(id)%dos(js,ia))
+                                       real(ssLastValue(id)%dos(js,ia),kind=RealKind)
                               enddo
                            enddo
                         endif
-                        if (n_spin_cant == 2) then
-!                          ----------------------------------------------
-                           call addElectroStruct(ONE,ssLastValue(id),LastValue(id))
-!                          ----------------------------------------------
-                        else
-!                          ----------------------------------------------
-                           call addElectroStruct(ONE,ssLastValue(id),LastValue(id),is)
-!                          ----------------------------------------------
+!
+!                       ==============================================
+!                       For full-potential, it needs to add the single 
+!                       site DOS to the multiple scattering DOS
+!                       ==============================================
+                        if (isFullPotential()) then
+                           if (n_spin_cant == 2) then
+!                             ----------------------------------------
+                              call addElectroStruct(ONE,ssLastValue(id),LastValue(id))
+!                             ----------------------------------------
+                           else
+!                             ----------------------------------------
+                              call addElectroStruct(ONE,ssLastValue(id),LastValue(id),is)
+!                             ----------------------------------------
+                           endif
                         endif
+!
                         do ia = 1, LastValue(id)%NumSpecies
                            do js = 1, 1   !n_spin_cant*n_spin_cant
                               ns = max(js,is)
-                              if (real(LastValue(id)%dos_mt(ns,ia)) < ZERO) then
+                              if (real(LastValue(id)%dos_mt(ns,ia),kind=RealKind) < ZERO) then
                                  if (node_print_level >= 0) then
                                     call WarningHandler('calValenceDOS',       &
                                              'dos_mt < 0 due to the energy in MS term having imaginary part', &
-                                             real(LastValue(id)%dos_mt(ns,ia)))
+                                             real(LastValue(id)%dos_mt(ns,ia),kind=RealKind))
                                     call WarningHandler('calValenceDOS','dos_mt is set to 0.0')
                                  endif
                                  LastValue(id)%dos_mt(ns,ia) = CZERO
                               endif
-                              if (real(LastValue(id)%dos(ns,ia)) < ZERO) then
+                              if (real(LastValue(id)%dos(ns,ia),kind=RealKind) < ZERO) then
                                  if (node_print_level >= 0) then
                                     call WarningHandler('calValenceDOS',       &
                                             'dos < 0 due to the energy in MS term having imaginary part', &
-                                            real(LastValue(id)%dos(ns,ia)))
+                                            real(LastValue(id)%dos(ns,ia),kind=RealKind))
                                     call WarningHandler('calValenceDOS','dos is set to 0.0')
                                  endif
                                  LastValue(id)%dos(ns,ia) = CZERO
@@ -1502,8 +1592,9 @@ contains
 !
    use ScfDataModule, only : ErBottom, ErTop, EiBottom, EiTop, Temperature
    use ScfDataModule, only : NumEs, ContourType, eGridType, isReadEmesh, getEmeshFileName
-   use ScfDataModule, only : isKKR, isKKRCPA, isSSIrregularSolOn
+   use ScfDataModule, only : isKKR, isKKRCPA, isKKRCPASRO, isSSIrregularSolOn
    use ScfDataModule, only : NumSS_IntEs
+   use ScfDataModule, only : CurrentScfIteration
 !
    use AtomModule, only : getLocalSpeciesContent
 !
@@ -1523,7 +1614,7 @@ contains
    logical :: useIrregularSolution = .true.
    logical :: isContourInitialized = .false.
 !
-   integer (kind=IntKind) :: id, BadFermiEnergy, is, info(4), ns, ia
+   integer (kind=IntKind) :: id, BadFermiEnergy, is, info(5), ns, ia
    integer (kind=IntKind), parameter :: MaxIterations = 20
 !
    real (kind=RealKind), intent(inout) :: efermi
@@ -1604,8 +1695,8 @@ contains
          do ia = 1, IntegrValue(id)%NumSpecies
             do is = 1, n_spin_pola*n_spin_cant
                write(6,'(3(a,i2),2(a,d15.8))')'id = ',id,', ia = ',ia,', is = ',is, &
-                       ', MS    IDOS_mt = ',real(IntegrValue(id)%dos_mt(is,ia)),&
-                       ', MS    IDOS_ws = ',real(IntegrValue(id)%dos(is,ia))
+                       ', MS    IDOS_mt = ',real(IntegrValue(id)%dos_mt(is,ia),kind=RealKind),&
+                       ', MS    IDOS_ws = ',real(IntegrValue(id)%dos(is,ia),kind=RealKind)
             enddo
          enddo
       enddo
@@ -1613,14 +1704,14 @@ contains
    !     do id =  1,LocalNumAtoms
    !        do ia = 1, IntegrValue(id)%NumSpecies
    !           do is = 1, n_spin_pola
-   !              dosmt=HALF*( real(IntegrValue(id)%dos_mt(1,ia)) +                      &
-   !                           (3-2*is)*(real(IntegrValue(id)%dos_mt(2,ia))*evec(1,id) + &
-   !                                     real(IntegrValue(id)%dos_mt(3,ia))*evec(2,id) + &
-   !                                     real(IntegrValue(id)%dos_mt(4,ia))*evec(3,id)) )
-   !              dosws=HALF*( real(IntegrValue(id)%dos(1)) +                      &
-   !                           (3-2*is)*(real(IntegrValue(id)%dos(2,ia))*evec(1,id) + &
-   !                                     real(IntegrValue(id)%dos(3,ia))*evec(2,id) + &
-   !                                     real(IntegrValue(id)%dos(4,ia))*evec(3,id)) )
+   !              dosmt=HALF*( real(IntegrValue(id)%dos_mt(1,ia),kind=RealKind) +                      &
+   !                           (3-2*is)*(real(IntegrValue(id)%dos_mt(2,ia),kind=RealKind)*evec(1,id) + &
+   !                                     real(IntegrValue(id)%dos_mt(3,ia),kind=RealKind)*evec(2,id) + &
+   !                                     real(IntegrValue(id)%dos_mt(4,ia),kind=RealKind)*evec(3,id)) )
+   !              dosws=HALF*( real(IntegrValue(id)%dos(1),kind=RealKind) +                      &
+   !                           (3-2*is)*(real(IntegrValue(id)%dos(2,ia),kind=RealKind)*evec(1,id) + &
+   !                                     real(IntegrValue(id)%dos(3,ia),kind=RealKind)*evec(2,id) + &
+   !                                     real(IntegrValue(id)%dos(4,ia),kind=RealKind)*evec(3,id)) )
    !              write(6,'(3(a,i2),2(a,d15.8))')'id = ',id,', ia = ',ia,', is =',is, &
    !                      ', MS    IDOS_mt = ',dosmt,', MS    IDOS_ws = ',dosws
    !           enddo
@@ -1632,6 +1723,7 @@ contains
    if (.not.useIrregularSolution) then
 !     print *,'Not use irregular solution'
 !!    if (ContourType == ButterFly) then
+      if (.false.) then
          do id =  1,LocalNumAtoms
             call zeroElectroStruct(ssIntegrValue(id))
          enddo
@@ -1649,8 +1741,8 @@ contains
                   do is = 1, n_spin_pola*n_spin_cant
                     write(6,'(3(a,i2),2(a,d15.8))')'Before id = ',id,  &
                           ', ia = ',ia,', is = ',is,                   &
-                          ', MS    IDOS_mt = ',real(IntegrValue(id)%dos_mt(is,ia)),&
-                          ', MS    IDOS_ws = ',real(IntegrValue(id)%dos(is,ia))
+                          ', MS    IDOS_mt = ',real(IntegrValue(id)%dos_mt(is,ia),kind=RealKind),&
+                          ', MS    IDOS_ws = ',real(IntegrValue(id)%dos(is,ia),kind=RealKind)
                   enddo
                enddo
             endif
@@ -1662,13 +1754,13 @@ contains
                   do is = 1, n_spin_pola*n_spin_cant
                     write(6,'(3(a,i2),2(a,d15.8))')'After  id = ',id, &
                           ', ia = ',ia,', is = ',is,                  &
-                          ', MS    IDOS_mt = ',real(IntegrValue(id)%dos_mt(is,ia)),&
-                          ', MS    IDOS_ws = ',real(IntegrValue(id)%dos(is,ia))
+                          ', MS    IDOS_mt = ',real(IntegrValue(id)%dos_mt(is,ia),kind=RealKind),&
+                          ', MS    IDOS_ws = ',real(IntegrValue(id)%dos(is,ia),kind=RealKind)
                   enddo
                enddo
             endif
          enddo
-!!    endif
+      endif
 !
 !     ================================================================
 !     compute the DOS arising from the single site scattering term along
@@ -1708,13 +1800,13 @@ contains
             do ia = 1, ssIntegrValue(id)%NumSpecies
                do is = 1, n_spin_pola*n_spin_cant
                   write(6,'(3(a,i2),2(a,d15.8))')'id = ',id,', ia = ',ia,', is = ',is,  &
-                          ', SS    IDOS_mt = ',real(ssIntegrValue(id)%dos_mt(is,ia)), &
-                          ', SS    IDOS_ws = ',real(ssIntegrValue(id)%dos(is,ia))
+                          ', SS    IDOS_mt = ',real(ssIntegrValue(id)%dos_mt(is,ia),kind=RealKind), &
+                          ', SS    IDOS_ws = ',real(ssIntegrValue(id)%dos(is,ia),kind=RealKind)
                enddo
                do is = 1, n_spin_pola*n_spin_cant
                   write(6,'(3(a,i2),2(a,d15.8))')'id = ',id,', ia = ',ia,', is = ',is,  &
-                          ', MS    IDOS_mt = ',real(IntegrValue(id)%dos_mt(is,ia)),&
-                          ', MS    IDOS_ws = ',real(IntegrValue(id)%dos(is,ia))
+                          ', MS    IDOS_mt = ',real(IntegrValue(id)%dos_mt(is,ia),kind=RealKind),&
+                          ', MS    IDOS_ws = ',real(IntegrValue(id)%dos(is,ia),kind=RealKind)
                enddo
             enddo
          enddo
@@ -1724,6 +1816,14 @@ contains
 !        -------------------------------------------------------------
          call addElectroStruct(CONE,ssIntegrValue(id),IntegrValue(id))
 !        -------------------------------------------------------------
+!print *,'Checking sign ....'
+!!do ia = 1, IntegrValue(id)%NumRs
+!do ia = 100, 105
+!if (real(IntegrValue(id)%dos_r_jl(ia,1,1,1),RealKind) < ZERO) then
+!print *,'IntegrValue(id)%dos_r_jl(ir) < 0, id = ',id,' ir = ',ia
+!print *,'  IntegrValue(id)%dos_r_jl(ir) = ',real(IntegrValue(id)%dos_r_jl(ia,1,1,1),RealKind)
+!endif
+!enddo
       enddo
 !
       if ( node_print_level >= 0) then
@@ -1732,8 +1832,8 @@ contains
             do ia = 1, IntegrValue(id)%NumSpecies
                do is = 1, n_spin_pola*n_spin_cant
                   write(6,'(3(a,i2),2(a,d15.8))')'id = ',id,', ia = ',ia,', is = ',is, &
-                          ', MS+SS IDOS_mt = ',real(IntegrValue(id)%dos_mt(is,ia)),&
-                          ', MS+SS IDOS_ws = ',real(IntegrValue(id)%dos(is,ia))
+                          ', MS+SS IDOS_mt = ',real(IntegrValue(id)%dos_mt(is,ia),kind=RealKind),&
+                          ', MS+SS IDOS_ws = ',real(IntegrValue(id)%dos(is,ia),kind=RealKind)
                enddo
             enddo
          enddo
@@ -1746,8 +1846,8 @@ contains
             do ia = 1, IntegrValue(id)%NumSpecies
                do is = 1, n_spin_pola*n_spin_cant
                   write(6,'(3(a,i2),2(a,d15.8))')'id = ',id,', ia = ',ia,', is = ',is, &
-                          ', IDOS_mt = ',real(IntegrValue(id)%dos_mt(is,ia)),     &
-                          ', IDOS_ws = ',real(IntegrValue(id)%dos(is,ia))
+                          ', IDOS_mt = ',real(IntegrValue(id)%dos_mt(is,ia),kind=RealKind),     &
+                          ', IDOS_ws = ',real(IntegrValue(id)%dos(is,ia),kind=RealKind)
                enddo
             enddo
          enddo
@@ -1768,14 +1868,14 @@ contains
             write(6,'(/,a)')'After transform, the IDOS associated with the atom'
             do ia = 1, IntegrValue(id)%NumSpecies
                do is = 1, n_spin_pola
-                  dosmt=HALF*( real(IntegrValue(id)%dos_mt(1,ia)) +                      &
-                               (3-2*is)*(real(IntegrValue(id)%dos_mt(2,ia))*evec(1,id) + &
-                                         real(IntegrValue(id)%dos_mt(3,ia))*evec(2,id) + &
-                                         real(IntegrValue(id)%dos_mt(4,ia))*evec(3,id)) )
-                  dosws=HALF*( real(IntegrValue(id)%dos(1,ia)) +                      &
-                               (3-2*is)*(real(IntegrValue(id)%dos(2,ia))*evec(1,id) + &
-                                         real(IntegrValue(id)%dos(3,ia))*evec(2,id) + &
-                                         real(IntegrValue(id)%dos(4,ia))*evec(3,id)) )
+                  dosmt=HALF*( real(IntegrValue(id)%dos_mt(1,ia),kind=RealKind) +                 &
+                               (3-2*is)*(real(IntegrValue(id)%dos_mt(2,ia),RealKind)*evec(1,id) + &
+                                         real(IntegrValue(id)%dos_mt(3,ia),RealKind)*evec(2,id) + &
+                                         real(IntegrValue(id)%dos_mt(4,ia),RealKind)*evec(3,id)) )
+                  dosws=HALF*( real(IntegrValue(id)%dos(1,ia),kind=RealKind) +                 &
+                               (3-2*is)*(real(IntegrValue(id)%dos(2,ia),RealKind)*evec(1,id) + &
+                                         real(IntegrValue(id)%dos(3,ia),RealKind)*evec(2,id) + &
+                                         real(IntegrValue(id)%dos(4,ia),RealKind)*evec(3,id)) )
                   write(6,'(3(a,i2),2(a,d15.8))')'id = ',id,', ia = ',ia,', is = ',is, &
                           ', MS    IDOS_mt = ',dosmt,', MS    IDOS_ws = ',dosws
                enddo
@@ -1803,7 +1903,7 @@ contains
 !     Solve the multiple scattering problem for e = eLast, which is
 !     set to be (efermi,0.001) in KKR case.
 !     ===============================================================
-      if (isKKR() .or. isKKRCPA() .or. efermi < ZERO) then
+      if (isKKR() .or. isKKRCPA() .or. isKKRCPASRO() .or. efermi < ZERO) then
          eLast = cmplx(efermi,0.001d0,kind=CmplxKind)
       else
          eLast = cmplx(efermi,0.000d0,kind=CmplxKind)
@@ -1842,7 +1942,7 @@ contains
 !           ----------------------------------------------------------
          endif
          do id =  1,LocalNumAtoms
-            info(1) = is; info(2) = id; info(3) = -1; info(4) = 1
+            info(1) = is; info(2) = id; info(3) = -1; info(4) = 1; info(5) = 0
 !           ----------------------------------------------------------
             msDOS = returnMultipleSiteDOS(info,eLast,wk_dos)
             call calElectroStruct(info,n_spin_cant,wk_dos,LastValue(id))
@@ -1850,8 +1950,8 @@ contains
             if ( node_print_level >= 0) then
                do ia = 1, LastValue(id)%NumSpecies
                   write(6,'(3(a,i2),2(a,d15.8))')'id = ',id,', ia = ',ia,', is = ',is, &
-                          ', M.Site DOS_mt = ',real(LastValue(id)%dos_mt(is,ia)), &
-                          ', M.Site DOS_ws = ',real(LastValue(id)%dos(is,ia))
+                          ', M.Site DOS_mt = ',real(LastValue(id)%dos_mt(is,ia),kind=RealKind), &
+                          ', M.Site DOS_ws = ',real(LastValue(id)%dos(is,ia),kind=RealKind)
                enddo
             endif
          enddo
@@ -1873,7 +1973,7 @@ contains
             call zeroElectroStruct(ssLastValue(id))
 !           ----------------------------------------------------------
             do is = 1, n_spin_pola
-               info(1) = is; info(2) = id; info(3) = -1; info(4) = 0
+               info(1) = is; info(2) = id; info(3) = -1; info(4) = 0; info(5) = 0
 !              -------------------------------------------------------
                ssDOS = returnSingleSiteDOS(info,efermi,wk_dos)
                call calElectroStruct(info,1,wk_dos,ssLastValue(id),ss_int=.true.)
@@ -1883,8 +1983,8 @@ contains
                do ia = 1, ssLastValue(id)%NumSpecies
                   do is = 1, n_spin_pola
                      write(6,'(3(a,i2),2(a,d15.8))')'id = ',id,', ia = ',ia,', is = ',is, &
-                             ', S.Site DOS_mt = ',real(ssLastValue(id)%dos_mt(is,ia)), &
-                             ', S.Site DOS_ws = ',real(ssLastValue(id)%dos(is,ia))
+                             ', S.Site DOS_mt = ',real(ssLastValue(id)%dos_mt(is,ia),kind=RealKind), &
+                             ', S.Site DOS_ws = ',real(ssLastValue(id)%dos(is,ia),kind=RealKind)
                   enddo
                enddo
             endif
@@ -1904,8 +2004,8 @@ contains
             do ia = 1, LastValue(id)%NumSpecies
                do is = 1, n_spin_pola*n_spin_cant
                   write(6,'(3(a,i2),2(a,d15.8))')'id = ',id,', ia = ',ia,', is = ',is, &
-                          ', MS+SS  DOS_mt = ',real(LastValue(id)%dos_mt(is,ia)), &
-                          ', MS+SS  DOS_ws = ',real(LastValue(id)%dos(is,ia))
+                          ', MS+SS  DOS_mt = ',real(LastValue(id)%dos_mt(is,ia),kind=RealKind), &
+                          ', MS+SS  DOS_ws = ',real(LastValue(id)%dos(is,ia),kind=RealKind)
                enddo
             enddo
          enddo
@@ -1949,8 +2049,19 @@ contains
             enddo
          enddo
 !        =============================================================
+!        If efermi-efermi_old < 0, the following code could potentially
+!        cause IntegrValue(id)%dos_r_jl(1,1,:,:) < 0
+!        =============================================================
          call addElectroStruct(efermi-efermi_old,LastValue(id),IntegrValue(id))
 !        -------------------------------------------------------------
+!print *,'Checking sign .... after add last value'
+!!do ia = 1, IntegrValue(id)%NumRs
+!do ia = 100, 105
+!if (real(IntegrValue(id)%dos_r_jl(ia,1,1,1),RealKind) < ZERO) then
+!print *,'After add last value, IntegrValue(id)%dos_r_jl(ir) < 0, id = ',id,' ir = ',ia
+!print *,'  IntegrValue(id)%dos_r_jl(ir) = ',real(IntegrValue(id)%dos_r_jl(ia,1,1,1),RealKind)
+!endif
+!enddo
       enddo
       if ( node_print_level >= 0) then
          write(6,'(/,a)')'After mufind, the integrated DOS are:'
@@ -1958,8 +2069,8 @@ contains
             do ia = 1, IntegrValue(id)%NumSpecies
                do is = 1, n_spin_pola*n_spin_cant
                   write(6,'(3(a,i2),2(a,d15.8))')'id = ',id,', ia = ',ia,', is = ',is, &
-                          ', MS+SS  DOS_mt = ',real(IntegrValue(id)%dos_mt(is,ia)), &
-                          ', MS+SS  DOS_ws = ',real(IntegrValue(id)%dos(is,ia))
+                          ', MS+SS  DOS_mt = ',real(IntegrValue(id)%dos_mt(is,ia),kind=RealKind), &
+                          ', MS+SS  DOS_ws = ',real(IntegrValue(id)%dos(is,ia),kind=RealKind)
                enddo
             enddo
          enddo
@@ -2024,7 +2135,7 @@ contains
 !
    use RadialGridModule, only : getGrid
 !
-   use ScfDataModule, only : isKKR, isKKRCPA
+   use ScfDataModule, only : isKKR, isKKRCPA, isKKRCPASRO
 !
    use PotentialTypeModule, only : isASAPotential
 !
@@ -2217,7 +2328,7 @@ contains
 !  -------------------------------------------------------------------
    ns_sqr = n_spin_cant*n_spin_cant
    do is = 1, n_spin_pola/n_spin_cant
-      if (isKKR() .or. isKKRCPA()) then
+      if (isKKR() .or. isKKRCPA() .or. isKKRCPASRO()) then
          ec = adjustEnergy(is,cmplx(er,0.001d0,kind=CmplxKind))
       else
          ec = adjustEnergy(is,cmplx(er,0.000d0,kind=CmplxKind))
@@ -2500,7 +2611,9 @@ contains
 !
    use ScfDataModule, only : Temperature
 !
-   use RadialGridModule, only : getGrid
+   use PotentialTypeModule, only : isASAPotential
+!
+   use RadialGridModule, only : getGrid, getRadialIntegration
 !
    use StepFunctionModule, only : getVolumeIntegration
 !
@@ -2511,17 +2624,22 @@ contains
    use AtomModule, only : getLocalAtomicNumber, getLocalAtomName
    use AtomModule, only : getLocalNumSpecies
 !
+   use SMatrixPolesModule, only : getResidualResStateDensity,         &
+                                  getResonanceStateEnergy,            &
+                                  getBoundStateDensity, isEnergyInResonanceRange
+!
    implicit none
 !
    real (kind=RealKind), intent(in) :: e
    real (kind=RealKind), intent(in), optional :: rfac
 !
    logical, intent(in), optional :: redundant
-   logical :: red
+   logical :: red, InResonancePeak
 !
    integer (kind=IntKind), intent(in) :: info(*)
    integer (kind=IntKind) :: jmax_dos, kmax_phi, iend, n, kl, jl, ir
-   integer (kind=IntKind) :: is, id, print_dos, ia, i, atom
+   integer (kind=IntKind) :: is, id, print_dos, ia, i, atom, ib, ib0
+   integer (kind=IntKind) :: NumResonanceStates, NumBoundStates
 !
    real (kind=RealKind), pointer :: dos(:), dos_mt(:), dos_out(:), tps(:)
    real (kind=RealKind) :: sfac, rmul, t0, ssdos
@@ -2574,61 +2692,181 @@ contains
 !
    energy = adjustEnergy(is,e)
 !
-   t0 = getTime()
-!  -------------------------------------------------------------------
-   call solveSingleScattering(spin=is,site=id,atom=atom,e=energy,vshift=CZERO)
-!  -------------------------------------------------------------------
-   Timing_SS = Timing_SS + (getTime() - t0)
-   NumCalls_SS = NumCalls_SS + 1
+   InResonancePeak = .false.
 !
-   if (getLocalAtomicNumber(id,1) == 0) then
-!     call computeDOS(add_highl_fec=.true.)
-      call computeDOS(spin=is,site=id,atom=atom)
-   else
-      call computeDOS(spin=is,site=id,atom=atom)
+   ib = info(5)
+   if (ib > 0) then
+      if (atom < 1) then
+         call ErrorHandler('returnSingleSiteDOS','Ill condition: info(5) > 0 while atom < 1', &
+                           info(5),atom)
+      else if (isEnergyInResonanceRange(e=real(energy,kind=RealKind),site=id,atom=atom,spin=is,res_id=ib0)) then
+         InResonancePeak = .true.
+         if (ib0 /= ib) then
+            call ErrorHandler('returnSingleSiteDOS','resonance state ib0 <> ib',ib0,ib)
+         endif
+      else
+         call ErrorHandler('returnSingleSiteDOS','ib > 0, while e is not at a resonance energy',e)
+      endif
+!     if (abs(energy-getResonanceStateEnergy(id,atom,is,1)) < 0.005) then
+!        write(6,'(a,2f12.8,a,i3)')'e, re = ',real(energy,kind=RealKind),getResonanceStateEnergy(id,atom,is,1), &
+!                                  ', ib = ',ib
+!     endif
    endif
 !
-   Grid => getGrid(id)
-   n = 0
-   do ia = 1, getLocalNumSpecies(id)
-      if (atom < 0 .or. ia == atom) then
-         dos_r_jl => getDOS(spin=is,site=id,atom=ia)
-         if (rad_derivative) then
-            der_dos_r_jl => getDOSDerivative(spin=is,site=id,atom=ia)
-         endif
-!        -------------------------------------------------------------
-         iend = size(dos_r_jl,1); jmax_dos = size(dos_r_jl,2)
-!        -------------------------------------------------------------
-         dos(ia) = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
-                                             jmax_dos, 2, dos_r_jl, dos_mt(ia) )
-         dos_mt(ia) = sfac*dos_mt(ia)
-         dos_out(ia) = sfac*getOutsideDOS(spin=is,site=id,atom=ia)
-!        -------------------------------------------------------------
+!  ===================================================================
+!  For now, I haven't found it useful to calculate the density differently 
+!  for those energy points close to the resonance energy, so I will
+!  replace the density for those energies with the density calculated for
+!  the nearby energy which is outside of the resonance region.
+!  -Y.W. Aug. 12, 2021
+!  ===================================================================
+!  InResonancePeak = .false.; ib = 0
 !
-         do jl = 1, jmax_dos
-            do ir = 1, LastValue(id)%NumRs
-               aux(n+ir) = rmul*sfac*dos_r_jl(ir,jl)
-            enddo
-!           ----------------------------------------------------------
-!           call zcopy(LastValue(id)%NumRs,dos_r_jl(1,jl),1,aux(n+1),1)
-!           ----------------------------------------------------------
-            n = n + LastValue(id)%NumRs
-         enddo
-         if (rad_derivative) then
+   if (ib == 0) then ! In case the density is calculated with the normal scheme
+!     write(6,'(a,i3,a,f12.8)')'Not in the resonance peak, print_dos = ',print_dos,', e = ',real(energy,kind=RealKind)
+!     if (info(5) > 0) then
+!        do while (isEnergyInResonanceRange(e=real(energy,kind=RealKind),site=id,atom=atom,spin=is,res_id=ib))
+!           if (real(energy,kind=RealKind) < getResonanceStateEnergy(id,atom,is,ib)) then
+!              energy = energy - HALF*resonance_width
+!           else
+!              energy = energy + HALF*resonance_width
+!           endif
+!        enddo
+!     endif
+      t0 = getTime()
+!     ----------------------------------------------------------------
+      call solveSingleScattering(spin=is,site=id,atom=atom,e=energy,vshift=CZERO)
+!     ----------------------------------------------------------------
+      Timing_SS = Timing_SS + (getTime() - t0)
+      NumCalls_SS = NumCalls_SS + 1
+!
+      if (getLocalAtomicNumber(id,1) == 0) then
+!        call computeDOS(add_highl_fec=.true.)
+         call computeDOS(spin=is,site=id,atom=atom)
+      else
+         call computeDOS(spin=is,site=id,atom=atom)
+      endif
+!
+      Grid => getGrid(id)
+!
+      n = 0
+      do ia = 1, getLocalNumSpecies(id)
+         if (atom < 0 .or. ia == atom) then
+            dos_r_jl => getDOS(spin=is,site=id,atom=ia)
+            if (rad_derivative) then
+               der_dos_r_jl => getDOSDerivative(spin=is,site=id,atom=ia)
+            endif
+            iend = size(dos_r_jl,1); jmax_dos = size(dos_r_jl,2)
+            if (isASAPotential()) then
+               dos(ia) = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
+                                                   jmax_dos, 2, dos_r_jl, dos_mt(ia), truncated=.false. )
+               dos_mt(ia) = dos(ia)
+!              =======================================================
+!              Another way to calculate the ASA DOS is using getRadialIntegration
+!              -------------------------------------------------------
+!              dos_mt(ia) = sfac*getRadialIntegration(id, Grid%jmt, dos_r_jl(:,1))/Y0
+!              dos(ia) = dos_mt(ia)
+!              =======================================================
+               dos_out(ia) = ZERO
+            else
+!              -------------------------------------------------------
+               dos(ia) = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
+                                                   jmax_dos, 2, dos_r_jl, dos_mt(ia) )
+               dos_mt(ia) = sfac*dos_mt(ia)
+               dos_out(ia) = sfac*getOutsideDOS(spin=is,site=id,atom=ia)
+!              -------------------------------------------------------
+            endif
+!
             do jl = 1, jmax_dos
                do ir = 1, LastValue(id)%NumRs
-                  aux(n+ir) = rmul*sfac*der_dos_r_jl(ir,jl)
+                  aux(n+ir) = rmul*sfac*dos_r_jl(ir,jl)
                enddo
+!              -------------------------------------------------------
+!              call zcopy(LastValue(id)%NumRs,dos_r_jl(1,jl),1,aux(n+1),1)
+!              -------------------------------------------------------
                n = n + LastValue(id)%NumRs
             enddo
+            if (rad_derivative) then
+               do jl = 1, jmax_dos
+                  do ir = 1, LastValue(id)%NumRs
+                     aux(n+ir) = rmul*sfac*der_dos_r_jl(ir,jl)
+                  enddo
+                  n = n + LastValue(id)%NumRs
+               enddo
+            endif
+            aux(n+1) = rmul*dos(ia)
+            aux(n+2) = rmul*dos_mt(ia)
+            aux(n+3) = rmul*dos(ia)*energy
+            aux(n+4) = rmul*dos_out(ia)
+            n = n + 4
          endif
-         aux(n+1) = rmul*dos(ia)
-         aux(n+2) = rmul*dos_mt(ia)
-         aux(n+3) = rmul*dos(ia)*energy
-         aux(n+4) = rmul*dos_out(ia)
-         n = n + 4
-      endif
-   enddo
+      enddo
+   else ! In this case, InResonancePeak = true, and Lorentzian contribution is excluded
+!     ================================================================
+!     In case of ib = info(5) > 0:
+!     info(5) = the resonance state index
+!             ! the number of resonance states with the
+!             ! width of the resonance peak less than MaxWidth,
+!             ! which is specified when calling findSMatrixPoles
+!  !  if NumResonanceStates > 0 and e is in the resonance range, for which
+!  !            InResonancePeak = .true.
+!     it needs to separate the Lorentzian near the resonance energy from the DOS.
+!     The Lorentzian contribution to the DOS integration is treated separately.
+!     ================================================================
+      write(6,'(a,i3,a,f12.8)')'At the resonance peak, ib = ',ib,', e = ',real(energy,kind=RealKind)
+      n = 0
+      do ia = 1, getLocalNumSpecies(id)
+         if (atom < 0 .or. ia == atom) then
+            t0 = getTime()
+            if (rad_derivative) then
+               dos_r_jl => getResidualResStateDensity(site=id,atom=ia,spin=is,rstate=ib, &
+                                                      e=real(energy,kind=RealKind),      &
+                                                      NumRs=iend,jmax_rho=jmax_dos,      &
+                                                      derivative=der_dos_r_jl)
+            else
+               dos_r_jl => getResidualResStateDensity(site=id,atom=ia,spin=is,rstate=ib, &
+                                                      e=real(energy,kind=RealKind),      &
+                                                      NumRs=iend,jmax_rho=jmax_dos)
+            endif
+            Timing_SS = Timing_SS + (getTime() - t0)
+            NumCalls_SS = NumCalls_SS + 1
+!
+            if (isASAPotential()) then
+               dos(ia) = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
+                                                    jmax_dos, 2, dos_r_jl, dos_mt(ia), truncated=.false. )
+               dos_mt(ia) = dos(ia)
+               dos_out(ia) = ZERO
+            else
+               dos(ia) = sfac*getVolumeIntegration( id, iend, Grid%r_mesh, jmax_dos, 2, dos_r_jl, dos_mt(ia) )
+               dos_mt(ia) = sfac*dos_mt(ia)
+               dos_out(ia) = sfac*getOutsideDOS(spin=is,site=id,atom=ia)
+            endif
+!
+            do jl = 1, jmax_dos
+               do ir = 1, LastValue(id)%NumRs
+                  aux(n+ir) = rmul*sfac*dos_r_jl(ir,jl)
+               enddo
+!              -------------------------------------------------------
+!              call zcopy(LastValue(id)%NumRs,dos_r_jl(1,jl),1,aux(n+1),1)
+!              -------------------------------------------------------
+               n = n + LastValue(id)%NumRs
+            enddo
+            if (rad_derivative) then
+               do jl = 1, jmax_dos
+                  do ir = 1, LastValue(id)%NumRs
+                     aux(n+ir) = rmul*sfac*der_dos_r_jl(ir,jl)
+                  enddo
+                  n = n + LastValue(id)%NumRs
+               enddo
+            endif
+            aux(n+1) = rmul*dos(ia)
+            aux(n+2) = rmul*dos_mt(ia)
+            aux(n+3) = rmul*dos(ia)*energy
+            aux(n+4) = rmul*dos_out(ia)
+            n = n + 4
+         endif
+      enddo
+   endif
 !
 !  -------------------------------------------------------------------
    call computePhaseShift(spin=is,site=id,atom=atom)
@@ -2647,7 +2885,7 @@ contains
    if (print_dos > 0) then
       if (.not.red) then
          msgbuf = ZERO
-         msgbuf(1,MyPEinEGroup+1) = real(energy)
+         msgbuf(1,MyPEinEGroup+1) = real(energy,kind=RealKind)
          n = 1
          do ia = 1, getLocalNumSpecies(id)
             if (atom < 0 .or. ia == atom) then
@@ -2659,17 +2897,18 @@ contains
             endif
          enddo
 !        -------------------------------------------------------------
-         call GlobalSumInGroup(eGID,msgbuf,n,NumPEsInEGroup)
+         call GlobalSumInGroup(eGID,msgbuf,4*getLocalNumSpecies(id)+1,&
+                                  NumPEsInEGroup)
 !        -------------------------------------------------------------
          if ( node_print_level >= 0) then
             if (getLocalNumSpecies(id) == 1) then
                do i = 1, NumPEsInEGroup
-!                 write(6,'(f12.8,3x,d15.8,2x,3(4x,d15.8))')real(energy),dos,dos_mt,dos_out,tps
+!                 write(6,'(f12.8,3x,d15.8,2x,3(4x,d15.8))')real(energy,kind=RealKind),dos,dos_mt,dos_out,tps
                   write(6,'(f12.8,3x,d15.8,2x,3(4x,d15.8))')msgbuf(1:5,i)
                enddo
             else
                do i = 1, NumPEsInEGroup
-!                 write(6,'(f12.8,3x,d15.8,2x,3(4x,d15.8))')real(energy),dos,dos_mt,dos_out,tps
+!                 write(6,'(f12.8,3x,d15.8,2x,3(4x,d15.8))')real(energy,kind=RealKind),dos,dos_mt,dos_out,tps
                   n = 1
                   do ia = 1, getLocalNumSpecies(id)
                      if (atom < 0 .or. ia == atom) then
@@ -2683,12 +2922,12 @@ contains
          endif
       else if ( node_print_level >= 0) then
          if (getLocalNumSpecies(id) == 1) then
-            write(6,'(f12.8,3x,d15.8,2x,3(4x,d15.8))')real(energy),dos(1),dos_mt(1), &
+            write(6,'(f12.8,3x,d15.8,2x,3(4x,d15.8))')real(energy,kind=RealKind),dos(1),dos_mt(1), &
                   dos_out(1),tps(1)
          else
             do ia = 1, getLocalNumSpecies(id)
                if (atom < 0 .or. ia == atom) then
-                  write(6,'(f12.8,3x,d15.8,2x,3(4x,d15.8),4x,a)')real(energy),dos(ia),dos_mt(ia), &
+                  write(6,'(f12.8,3x,d15.8,2x,3(4x,d15.8),4x,a)')real(energy,kind=RealKind),dos(ia),dos_mt(ia), &
                         dos_out(ia),tps(ia), getLocalAtomName(id,ia)
                endif
             enddo
@@ -2714,17 +2953,17 @@ contains
    function returnSingleSiteDOSinCP(info,e,aux,cfac) result(dos)
 !  ===================================================================
 !
-!  This function returns single site DOS for a given energy on the real 
-!  energy axis.
+!  This function returns single site DOS for a given energy in the complex 
+!  plane. The returned dos value includes a factor cfac if it is present.
 !
 !  The function also returns aux, a data set that can be integrated
 !  on an energy grid
 !
 !  In the no-spin-polarized case, a factor of 2 is included in dos.
 !  ===================================================================
-   use PotentialTypeModule, only : isASAPotential
+   use PotentialTypeModule, only : isASAPotential, isFullPotential
 !
-   use RadialGridModule, only : getGrid
+   use RadialGridModule, only : getGrid, getRadialIntegration
 !
    use StepFunctionModule, only : getVolumeIntegration
 !
@@ -2770,15 +3009,39 @@ contains
    energy = adjustEnergy(is,e)
 !
    t0 = getTime()
-!  -------------------------------------------------------------------
-   call solveSingleScattering(spin=is,site=id,atom=atom,e=energy,vshift=CZERO, &
-                              isSphSolver=.true., useIrrSol='h')
-!  -------------------------------------------------------------------
+!! -------------------------------------------------------------------
+ ! call solveSingleScattering(spin=is,site=id,atom=atom,e=energy,vshift=CZERO,    &
+ !                            isSphSolver=.true.,useIrrSol='h')
+!! -------------------------------------------------------------------
+   if (isFullPotential()) then
+!     ================================================================
+!     Note: In the full-potential case, isSphSolver is disabled so that
+!           the complete green function is not calculated. We need to be 
+!           careful with the pole of the sine matrix.
+!     ----------------------------------------------------------------
+      call solveSingleScattering(spin=is,site=id,atom=atom,e=energy,vshift=CZERO, &
+                                 isSphSolver=.false.)
+!     ----------------------------------------------------------------
+      call computeGreenFunction(spin=is,site=id,atom=atom,noIrrTerm=.true.)
+!     ----------------------------------------------------------------
+   else
+!     ================================================================
+!     Note: If isSphSolver is enabled, unlike the full-potential case,
+!           useIrrSol can be set so that complete green function is
+!           calculated.
+!     ----------------------------------------------------------------
+      call solveSingleScattering(spin=is,site=id,atom=atom,e=energy,vshift=CZERO, &
+                                 isSphSolver=.true.) !,useIrrSol='h')
+      call computeGreenFunction(spin=is,site=id,atom=atom,noIrrTerm=.true.)
+!     ----------------------------------------------------------------
+   !  call computeGreenFunction(spin=is,site=id,atom=atom)
+!     ----------------------------------------------------------------
+   endif
    Timing_SS = Timing_SS + (getTime() - t0)
    NumCalls_SS = NumCalls_SS + 1
 !
 !  -------------------------------------------------------------------
-   call computeGreenFunction(spin=is,site=id,atom=atom)
+!! call computeGreenFunction(spin=is,site=id,atom=atom)
 !  -------------------------------------------------------------------
 !
    Grid => getGrid(id)
@@ -2791,18 +3054,21 @@ contains
          green=>getGreenFunction(spin=is,site=id,atom=ia)
 !        -------------------------------------------------------------
          iend = size(green,1); kmax = size(green,2)
-!        -------------------------------------------------------------
-         greenint = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,    &
-                                               kmax, 2, green, greenint_mt )
-!        -------------------------------------------------------------
-         greenint_mt = sfac*greenint_mt
-!
-         if (atom > 0 .or. ia == 1) then
-            dos = real(SQRTm1*greenint/PI,kind=RealKind)
+         if (isASAPotential()) then
+            greenint_mt = sfac*getRadialIntegration(id, Grid%jmt, green(:,1))/Y0
+            greenint = greenint_mt
+!           Alternatively, you can call getVolumeIntegration with truncated=.false.
+!           to run the integration in ASA volume.
+         else
+!           ----------------------------------------------------------
+            greenint = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,    &
+                                                  kmax, 2, green, greenint_mt )
+!           ----------------------------------------------------------
+            greenint_mt = sfac*greenint_mt
          endif
 !
-         if (isASAPotential()) then
-            greenint = greenint_mt
+         if (atom > 0 .or. ia == 1) then
+            dos = real(SQRTm1*cmul*greenint/PI,kind=RealKind)
          endif
 !
          if (iharris <= 1) then
@@ -2845,6 +3111,12 @@ contains
                                                truncated=.false. ) - greenint
 !        -------------------------------------------------------------
          aux(n+4) = SQRTm1*greenint/PI
+         if (node_print_level >= 0) then
+            write(6,'(f12.8,3x,d15.8,2x,2(4x,d15.8))')real(energy,kind=RealKind), &
+                                                      real(aux(n+1),RealKind),    &
+                                                      real(aux(n+2),RealKind),    &
+                                                      real(aux(n+4),RealKind)
+         endif
          n = n + 4
       endif
    enddo
@@ -3060,37 +3332,66 @@ contains
 !
    use GroupCommModule, only : GlobalSumInGroup
 !
+   use InputModule, only : getKeyValue
+!
    use ScfDataModule, only : NumSS_IntEs, getAdaptiveIntegrationMethod, &
-                             Contourtype, ErBottom, NumExtraEs
+                             Contourtype, ErBottom, NumExtraEs, pole_step
 !
    use AdaptIntegrationModule, only : setupAdaptMesh, getAdaptIntegration
    use AdaptIntegrationModule, only : getAuxDataAdaptIntegration
-   use AdaptIntegrationModule, only : getUniFormIntegration, getPeakPos,getWeightedIntegration !xianglin
-   use AdaptIntegrationModule, only : getUniMeshIntegration
+   use AdaptIntegrationModule, only : getUniFormIntegration, getWeightedIntegration !xianglin
+   use AdaptIntegrationModule, only : getUniMeshIntegration, getGaussianIntegration
+   use AdaptIntegrationModule, only : getRombergIntegration
 !
    use PolyhedraModule, only : getVolume
 !
    use ContourModule, only : getEPoint, getEWeight, getNumEs
+!
+   use SMatrixPolesModule, only : findSMatrixPoles,             &
+                                  getNumResonanceStates,        &
+                                  getResonanceStateEnergy,      &
+                                  getNumBoundStates,            &
+                                  computeResonanceStateDensity, &
+                                  computeBoundStateDensity,     &
+                                  printSMatrixPoleInfo
+!
+   use SineMatrixZerosModule, only : findSineMatrixZeros,       &
+                                     getNumSineMatrixZeros,     &
+                                     getSineMatrixZero,         &
+                                     computeSineZeroDensity,    &
+                                     isSineZeroInEnergyRange,   &
+                                     printSineMatrixZerosInfo
+!
+   use AtomModule, only : getLocalSpeciesContent
 !
    implicit none
 !
    logical, intent(in), optional :: LowerContour, UpperContour 
    logical :: LC, UC, REL !xianglin
 !
-   integer (kind=IntKind) :: id, is, ns, info(4), nm, ie, NumEs, ilc !xianglin
-   integer (kind=IntKind) :: ia
+   integer (kind=IntKind) :: id, is, ns, info(5), nm, ie, NumEs, ilc !xianglin
+   integer (kind=IntKind) :: ia, renorm, ib, jb, kb, ne, rstatus
+   integer (kind=IntKind) :: NumBoundStates, nz
+   integer (kind=IntKind) :: NumGQPs, nsize
+   integer (kind=IntKind), parameter :: MaxGQPs = 200
 !
    real (kind=RealKind), intent(in), optional :: Ebegin, Eend
    logical, intent(in), optional :: relativity !xianglin
+   logical :: contour_int
+   logical, parameter :: romberg = .true.
 !
-   real (kind=RealKind) :: ssdos_int, IDOS_cell, ps, peak_pos, e0, ps0, ssDOS
-   real (kind=RealKind) :: ebot, etop, er, ei
+   real (kind=RealKind) :: ssdos_int, IDOS_cell, ps, e0, ps0, ssDOS, width
+   real (kind=RealKind) :: scaling_factor, IDOS_space, IDOS_out
+   real (kind=RealKind) :: resonance_contour_radius, resonance_width
+   real (kind=RealKind) :: ebot, etop, er, ep, ei, e1, e2, e_delta, w, rfac, maxd, err
    real (kind=RealKind), allocatable :: xg(:), wg(:)
 !
    complex (kind=CmplxKind) :: int_test, ec, es
    complex (kind=CmplxKind), pointer :: p_aux(:)
    complex (kind=CmplxKind), pointer :: EPoint(:)
    complex (kind=CmplxKind), pointer :: EWght(:)
+   complex (kind=CmplxKind) :: eg(MaxGQPs), ew(MaxGQPs)
+   complex (kind=CmplxKind), allocatable :: wk_tmp(:)
 !
    type (ElectroStruct), pointer :: pCurrentValue
 !
@@ -3134,6 +3435,16 @@ contains
 !
    if (.not.LC .and. .not.UC .and. etop < ebot) then
       call ErrorHandler('calSingleScatteringIDOS','ebot > etop',ebot,etop)
+   endif
+!
+   if (getKeyValue(1,'Renormalize Green function',renorm) /= 0) then
+      renorm = 0
+   endif
+!
+   rstatus = getKeyValue(1,'Resonance State Max Width (>0.0)',resonance_width)
+   if ( rstatus == 0 .and. resonance_width < ZERO ) then
+      call ErrorHandler('calSingleScatteringIDOS',                    &
+                        'Input parameter for resonance width < 0.0',resonance_width)
    endif
 !
 !  ===================================================================
@@ -3200,7 +3511,7 @@ contains
 !                       Solve the single scattering problem e = (er,ei).
 !                       In this case, the calculated Green function is Z*tau*Z - Z*J
 !                       =======================================================
-                        info(1) = is; info(2) = id; info(3) = -1; info(4) = 0
+                        info(1) = is; info(2) = id; info(3) = -1; info(4) = 0; info(5) = 0
 !                       ----------------------------------------------
                         ssDOS = returnRelSingleSiteDOSinCP(info,EPoint(ie),wk_dos,EWght(ie))
                         if (is_Bxyz) then
@@ -3262,7 +3573,7 @@ contains
 !              do ie = 1, MatrixPoles(id)%NumPoles(ia,1)
 !                 call zeroElectroStruct(ssLastValue(id))
 !                 do ia = 1, ssLastValue(id)%NumSpecies
-!                    info(1) = is; info(2) = id; info(3) = ia; info(4) = 1
+!                    info(1) = is; info(2) = id; info(3) = ia; info(4) = 1; info(5) = 0
 !                    ssDOS = returnRelSingleSiteDOS_pole(info,real(MatrixPoles(id)%Poles(ie,ia,1),RealKind),wk_dos)
 !                    if (is_Bxyz) then
 !                       call calElectroStruct(info,4,wk_dos,ssLastValue(id),.true.)
@@ -3281,7 +3592,7 @@ contains
          do id = 1, LocalNumAtoms
             do ia = 1, ssLastValue(id)%NumSpecies
                do is = 1, 1!n_spin_cant*n_spin_cant
-                  info(1) = is; info(2) = id; info(3) = ia; info(4) = 1
+                  info(1) = is; info(2) = id; info(3) = ia; info(4) = 1; info(5) = 0
                   if (getAdaptiveIntegrationMethod() == 1) then
                      call ErrorHandler('calSingleScatteringIDOS',&
                                        'relativistic AdaptiveIntegration not implemented')
@@ -3292,8 +3603,6 @@ contains
                      nm=NumSS_IntEs
                   else
                      ssdos_int = getUniFormIntegration(NumSS_IntEs,ebot,etop,info,returnRelSingleSiteDOS,nm)
- !                   peak_pos = peak_pos + (3.d0-2.d0*is)*getPeakPos()
-!                    exc(ia,id) = exc(ia,id) + (3.d0-2.d0*is)*getPeakPos()
                   endif
                   if ( node_print_level >= 0) then
                      write(6,'(a)')   '================================================================================'
@@ -3303,15 +3612,15 @@ contains
                   p_aux => getAuxDataAdaptIntegration()
 !                 ----------------------------------------------------
                   if (is_Bxyz) then
-                     call calElectroStruct(info,4,p_aux,ssLastValue(id),.true.)
+                     call calElectroStruct(info,4,p_aux,ssLastValue(id),.true.,species=ia)
                   else
-                     call calElectroStruct(info,1,p_aux,ssLastValue(id),.true.)
+                     call calElectroStruct(info,1,p_aux,ssLastValue(id),.true.,species=ia)
                   endif
                enddo
             enddo
-!           -------------------------------------------------------
+!           ----------------------------------------------------------
             call addElectroStruct(CONE,ssLastValue(id),ssIntegrValue(id))
-!           -------------------------------------------------------
+!           ----------------------------------------------------------
          enddo
       endif !end if REL
    else if (LC) then !if nonrelativistic and lower contour needed
@@ -3353,7 +3662,7 @@ contains
 !              Solve the single scattering problem e = (er,ei).
 !              In this case, the calculated Green function is Z*tau*Z - Z*J
 !              =======================================================
-               info(1) = is; info(2) = id; info(3) = -1; info(4) = 0
+               info(1) = is; info(2) = id; info(3) = -1; info(4) = 0; info(5) = 0
 !              -------------------------------------------------------
                ssDOS = returnSingleSiteDOSinCP(info,EPoint(ie),wk_dos,EWght(ie))
                call calElectroStruct(info,1,wk_dos,pCurrentValue,ss_int=.true.)
@@ -3412,7 +3721,7 @@ contains
 !              Solve the single scattering problem e = (er,ei).
 !              In this case, the calculated Green function is Z*tau*Z - Z*J
 !              =======================================================
-               info(1) = is; info(2) = id; info(3) = -1; info(4) = 0
+               info(1) = is; info(2) = id; info(3) = -1; info(4) = 0; info(5) = 0
 !              -------------------------------------------------------
                ssDOS = returnSingleSiteDOSinCP(info,EPoint(ie),wk_dos,EWght(ie))
                call calElectroStruct(info,1,wk_dos,pCurrentValue,ss_int=.true.)
@@ -3451,21 +3760,113 @@ contains
          enddo
       endif
    else !if nonrelativistic and integration of G_ss on real axis is needed
+!     ================================================================
+!     Searching the S-matrix poles in the energy range (ErBotto, 0.0),
+!     in addition to (0.0, etop), allows to find shallow bound states.
+!     ================================================================
+      do id =  1, LocalNumAtoms
+         do is = 1, n_spin_pola
+            do ia = 1, ssLastValue(id)%NumSpecies
+!              -------------------------------------------------------
+               call findSMatrixPoles(id,ia,is,ErBottom,etop,Delta=pole_step, &
+                                     MaxResWidth=resonance_width, CheckPoles =.false.)
+!              -------------------------------------------------------
+               call computeBoundStateDensity(id,ia,is)
+!              -------------------------------------------------------
+               call computeResonanceStateDensity(id,ia,is)
+!              -------------------------------------------------------
+               if (node_print_level >= 0) then
+!                 ----------------------------------------------------
+                  call printSMatrixPoleInfo(id,ia,is)
+!                 ----------------------------------------------------
+               endif
+            enddo
+         enddo
+      enddo
+!
+      e_delta = ZERO
+      rstatus = getKeyValue(1,'Resonance State Contour Integration Radius (>0.0)',e_delta)
+      if (rstatus /= 0 .or. e_delta < TEN2m6 .or. e_delta > ONE) then
+         call WarningHandler('calSingleScatteringIDOS',   &
+                             'Error in reading Resonance State Contour Integration Radius',e_delta)
+         e_delta = 0.002d0
+      endif
+      do id =  1, LocalNumAtoms
+         do is = 1, n_spin_pola
+            do ia = 1, ssLastValue(id)%NumSpecies
+               nz = 0
+               do ib = 1, getNumResonanceStates(id,ia,is)
+                  er = getResonanceStateEnergy(id,ia,is,ib,w)
+!                 ----------------------------------------------------
+                  call findSineMatrixZeros(id,ia,is,er-e_delta,er+e_delta,Delta=pole_step, &
+                                           AccumulationCounts=nz)
+!                 ----------------------------------------------------
+                  call computeSineZeroDensity(id,ia,is)
+!                 ----------------------------------------------------
+               enddo
+               if (node_print_level >= 0) then
+!                 ----------------------------------------------------
+                  call printSineMatrixZerosInfo(id,ia,is)
+!                 ----------------------------------------------------
+               endif
+            enddo
+         enddo
+      enddo
+      nsize = size(wk_dos)
+      allocate(wk_tmp(nsize))
+!
       exc = ZERO
       e0 = 0.00001d0 ! initial energy slightly above e = 0.
       e0 = min(e0,abs(ebot))
-!
-      exc = ZERO
       do id =  1, LocalNumAtoms
          do is = 1, n_spin_pola
             ns = (2*n_spin_cant-1)*is - (n_spin_cant-1)*2  ! ns = 1 or 2, if n_spin_cant = 1
                                                            ! ns = 1 or 4, if n_spin_cant = 2
             do ia = 1, ssLastValue(id)%NumSpecies
-               info(1) = is; info(2) = id; info(3) = ia; info(4) = 1
+               info(1) = is; info(2) = id; info(3) = ia; info(4) = 1; info(5) = 0 !getNumResonanceStates(id,ia,is)
+!
 !              -------------------------------------------------------
                ps0 = returnSingleSitePS(info,e0)
 !              -------------------------------------------------------
-               if ( node_print_level >= 0) then
+!
+               e_delta = ZERO
+               if (getNumResonanceStates(id,ia,is) > 0) then
+                  rstatus = getKeyValue(1,'Resonance State Contour Integration Radius (>0.0)',e_delta)
+                  if (rstatus /= 0 .or. e_delta < TEN2m6 .or. e_delta > ONE) then
+                     call WarningHandler('calSingleScatteringIDOS',   &
+                                         'Error in reading Resonance State Contour Integration Radius',e_delta)
+                     e_delta = 0.002d0
+                  endif
+                  do ib = 1, getNumResonanceStates(id,ia,is)
+                     er = getResonanceStateEnergy(id,ia,is,ib,w)
+                     do while (isSineZeroInEnergyRange(id,ia,is,er-e_delta,er+e_delta))
+                        e_delta = e_delta - 0.0002d0
+                        if (e_delta < TEN2m6) then
+                           call ErrorHandler('calSingleScatteringIDOS', &
+                                'Failed to adjust small contour radius to avoid sine matrix zeros at resonance energy:',er)
+                        endif
+                     enddo
+                  enddo
+                  if (node_print_level >= 0) then
+                     write(6,'(a,f12.8)')'Adjusted small contour radius = ',e_delta
+                  endif
+!                 ====================================================
+!                 Setup Gaussian quadrature on a semi-circle contour
+!                 with radius = e_delta
+!                 ====================================================
+                  rstatus = getKeyValue(1,'No. Gauss Pts. along Resonance State Contour',NumGQPs)
+                  if (e_delta > 0.002d0 .and. NumGQPs == 5) then
+                     NumGQPs = 5*int(TWO*(e_delta/0.002d0)+HALF)
+                  endif
+                  if (NumGQPs > MaxGQPs) then
+                     call ErrorHandler('calSingleScatteringIDOS','NumGQPs > MaxGQPs',NumGQPs,MaxGQPs)
+                  endif
+!                 ----------------------------------------------------
+                  call setupSemiCircleContour(NumGQPs,e_delta,eg,ew)
+!                 ----------------------------------------------------
+               endif
+!
+               if (node_print_level >= 0) then
                   write(6,'(/,3(a,i2))')'is = ',is,', id = ',id,', ia = ',ia
                   write(6,'(a,f11.8,a)')'Integration over the real energy interval:  [0.001,',etop,']'
                   write(6,'(a,i5)')'The number of processors employed for parallelizing the DOS calculation: ',NumPEsInEGroup
@@ -3473,63 +3874,460 @@ contains
                   write(6,'(4x,a)')'Energy    Single_Site_DOS_ws   Single_Site_DOS_mt    DOS_Outside     Total_Phase_Shift'
                   write(6,'(a)')   '------------------------------------------------------------------------------------------'
                endif
-               if (getAdaptiveIntegrationMethod() == 0) then
-!                 ----------------------------------------------------
-                  ssdos_int = getUniMeshIntegration(NumSS_IntEs,ebot,etop,info,returnSingleSiteDOS,nm)
-!                 ----------------------------------------------------
-               else if (getAdaptiveIntegrationMethod() == 1) then
-!                 ----------------------------------------------------
-                  call setupAdaptMesh(ebot,etop,NumSS_IntEs,info,returnSingleSitePS)
-                  ssdos_int = getAdaptIntegration(info,returnSingleSiteDOS,nm)
-!                 ----------------------------------------------------
-               else if (getAdaptiveIntegrationMethod() == 2) then
-!                 ----------------------------------------------------
-                  ssdos_int = getUniformIntegration(NumSS_IntEs,ebot,etop,info,returnSingleSiteDOS,nm)
-!                 ----------------------------------------------------
-               else
-!                 ----------------------------------------------------
-                  call ErrorHandler('calSingleScatteringIDOS','Unknown integration scheme',&
-                                    getAdaptiveIntegrationMethod())
-!                 ----------------------------------------------------
-               endif
-               exc(ia,id) = exc(ia,id) + (3.d0-2.d0*is)*getPeakPos()
 !
-               if ( node_print_level >= 0) then
-                  write(6,'(a)')   '=========================================================================================='
-                  write(6,'(a,i4)')'Number of mesh points for the integration: ',nm
+               if (getNumResonanceStates(id,ia,is) > 0) then
+                  er = getResonanceStateEnergy(id,ia,is,1,width,sorted=.true.)
+                  exc(ia,id) = exc(ia,id) + (3.d0-2.d0*is)*er
                endif
+!
+               ssdos_int = ZERO
+               e2 = ebot
+               ib = 0
+               do while (ib <= getNumResonanceStates(id,ia,is))
+!                 ====================================================
+!                 Setup the energy integration domain.
+!                 If there exists resonance energy, break the integration
+!                 region (ebot, etop) into sub-domains to avoid the integration
+!                 over the resonance energy.
+!                 ====================================================
+                  e1 = e2
+                  if (ib == getNumResonanceStates(id,ia,is)) then
+                     e2 = etop
+                  else
+                     er = getResonanceStateEnergy(id,ia,is,ib+1,w,sorted=.true.)
+                     if (w < e_delta) then ! Contour integration will be applied at the next step
+                        e2 = er - e_delta
+                     else if (er-w-e1 > e_delta) then
+                        e2 = er - w
+                     else if (er-e_delta-e1 > e_delta) then
+                        e2 = er - e_delta
+                     endif
+                  endif
+!
+!                 ====================================================
+!                 Determine the number of grid points in the domain.
+!                 ====================================================
+                  if (e2-e1 > TEN2m6) then
+                     if (getNumResonanceStates(id,ia,is) == 0) then
+                        ne = NumSS_IntEs
+                     else
+                        ne = ceiling(NumSS_IntEs*(e2-e1)/(etop-ebot))
+                        ne = max(ne,30)
+                     endif
+                     if (node_print_level >= 0) then
+                        write(6,'(/,a,f8.5,a,f8.5,a,i4)')'Energy domain: (',e1,',',e2,'), number of energy points = ',ne
+                        write(6,'(a)')'=========================================================================================='
+                     endif
+!
+                     if (getAdaptiveIntegrationMethod() == 0) then
+!                       ----------------------------------------------
+                        ssDOS = getUniMeshIntegration(ne,e1,e2,info,returnSingleSiteDOS,nm)
+!                       ----------------------------------------------
+                     else if (getAdaptiveIntegrationMethod() == 1) then
+!                       ----------------------------------------------
+                        call setupAdaptMesh(e1,e2,ne,info,returnSingleSitePS)
+                        ssDOS = getAdaptIntegration(info,returnSingleSiteDOS,nm)
+!                       ----------------------------------------------
+                     else if (getAdaptiveIntegrationMethod() == 2) then
+!                       ----------------------------------------------
+                        ssDOS = getUniformIntegration(ne,e1,e2,info,returnSingleSiteDOS,nm)
+!                       ----------------------------------------------
+                     else if (getAdaptiveIntegrationMethod() == 3) then
+!                       ----------------------------------------------
+                        ssDOS = getGaussianIntegration(ne,e1,e2,info,returnSingleSiteDOS)
+!                       ----------------------------------------------
+                        nm = ne
+                     else if (getAdaptiveIntegrationMethod() == 4) then
+!                       ----------------------------------------------
+                        ssDOS = getRombergIntegration(ne,e1,e2,info,returnSingleSiteDOS,err,nm)
+!                       ----------------------------------------------
+                     else
+!                       ----------------------------------------------
+                        call ErrorHandler('calSingleScatteringIDOS','Unknown integration scheme',&
+                                          getAdaptiveIntegrationMethod())
+!                       ----------------------------------------------
+                     endif
+                     ssdos_int = ssdos_int + ssDOS*getLocalSpeciesContent(id,ia)
+!
+                     if ( node_print_level >= 0) then
+                        write(6,'(a)')'=========================================================================================='
+                        write(6,'(a,i4,/)')'Number of mesh points for the integration: ',nm
+                     endif
+!
+!                    =================================================
+!                    Get the energy integrated quantities by calling ...
+!                    -------------------------------------------------
+                     p_aux => getAuxDataAdaptIntegration()
+!                    -------------------------------------------------
+!                    write(6,'(a,i5)')'size of p_aux = ',size(p_aux)
+!                    =================================================
+!                    Store the quantities in p_aux to ssLastValue
+!                    -------------------------------------------------
+                     call calElectroStruct(info,1,p_aux,ssLastValue(id),ss_int=.true.,species=ia)
+!                    -------------------------------------------------
+                     call addElectroStruct(getLocalSpeciesContent(id,ia),ssLastValue(id),ssIntegrValue(id),ns,ia)
+!                    -------------------------------------------------
+                  else
+                     e2 = e1
+                  endif
+!
+                  ib = ib + 1
+!
+!                 ====================================================
+!                 Adding the contribution from the resonance state
+!                 by integrating around it.
+!                 ====================================================
+                  if (ib <= getNumResonanceStates(id,ia,is)) then
+                     e1 = e2
+                     er = getResonanceStateEnergy(id,ia,is,ib,width,sorted=.true.)
+                     if ( node_print_level >= 0) then
+                        write(6,'(/,a,f12.8,a,f12.8)')'Found resonance at energy = ',er,', with width = ',width
+                        write(6,'(a,f12.8)')'Before adding the resonance contribution, ssdos_int = ',ssdos_int
+                     endif
+!                    =================================================
+!                    Check if the next resonance energy happens to 
+!                    be within e_delta.
+!                    =================================================
+                     kb = 0
+                     if (width < e_delta) then
+                        contour_int = .true.
+                        width = e_delta
+                        LOOP_jb1: do jb = ib+1, getNumResonanceStates(id,ia,is)
+                           ep = getResonanceStateEnergy(id,ia,is,jb,w,sorted=.true.)
+                           if (ep-er > e_delta) then
+                              exit LOOP_jb1
+                           endif
+                           if ( node_print_level >= 0) then
+                              write(6,'(/,a,f12.8)')'The integration also encloses resonance at energy = ',ep
+                           endif
+                           er = ep
+                           kb = kb + 1
+                        enddo LOOP_jb1
+                     else
+                        contour_int = .false.
+                        LOOP_jb2: do jb = ib+1, getNumResonanceStates(id,ia,is)
+                           ep = getResonanceStateEnergy(id,ia,is,jb,w,sorted=.true.)
+                           if (w < e_delta) then
+                              if (ep - er > e_delta) then
+                                 width = ep - er - e_delta
+                              else
+                                 width = HALF*(ep - er)
+                              endif
+                              exit LOOP_jb2
+                           endif
+                           if ( node_print_level >= 0) then
+                              write(6,'(/,a,f12.8,a,f12.8)')'The integration also encloses resonance at energy = ',ep, &
+                                                            ', which has width = ',w
+                           endif
+                           er = ep
+                           width = w
+                           kb = kb + 1
+                        enddo LOOP_jb2
+                     endif
+!                    write(6,'(a,f12.8,a,f12.8,a,f12.8)')'e1 = ',e1,', er = ',er,', width = ',width
+                     e2 = er + min(er-e1,width)
+                     ib = ib + kb ! Skip the next resonance state
+!                    write(6,'(a,2i5)')'ib, kb = ',ib,kb
+                     if (e1 > e2) then
+!                       ----------------------------------------------
+                        call ErrorHandler('calSingleScatteringIDOS', &
+                                          'For integration around resonance: e1 > e2',e1,e2)
+!                       ----------------------------------------------
+                     else if (contour_int) then ! Perform contour integration with radius = HALF*(e2-e1)
+                        if (e2-e1 > (2+kb)*e_delta+TEN2m6) then
+!                          -------------------------------------------
+                           call ErrorHandler('calSingleScatteringIDOS', &
+                                             'The interval for the contour integration is too large: e2-e1',e2-e1)
+!                          -------------------------------------------
+                        endif
+                        rfac = (e2-e1)*HALF/e_delta ! scaling factor for changing the contour radius
+                        er = HALF*(e2+e1)
+                        if ( node_print_level >= 0) then
+                           write(6,'(/,a,f8.5,a)')'Performing contour integration, with radius = ',rfac*e_delta, &
+                                                   ', around the resonance over the'
+                           write(6,'(a,f8.5,a,f8.5,a)')'energy domain: (',e1,',',e2,')'
+                           write(6,'(a)')&
+                         '=========================================================================================='
+                        endif
+                        ssDOS = ZERO; wk_dos = CZERO; wk_tmp = CZERO
+                        do ie = MyPEinEGroup+1, NumGQPs, NumPEsInEGroup
+                           ec = er + rfac*eg(ie)
+                           ssDOS = ssDOS + returnSingleSiteDOSinCP(info,ec,wk_tmp,rfac*ew(ie))
+                           wk_dos = wk_dos + wk_tmp
+                        enddo
+                        if (mod(NumGQPs,MyPEinEGroup+1) > 0) then
+!                          ===========================================
+!                          This is needed to make sure that all processes
+!                          in the group are properly synchronized...
+!                          ===========================================
+                           ec = er + rfac*eg(NumGQPs)
+                           ssDOS = ssDOS + ZERO*returnSingleSiteDOSinCP(info,ec,wk_tmp,rfac*ew(NumGQPs))
+                        endif
+!                       ==============================================
+!                       Sum over the processors to get the integrated value
+!                       ----------------------------------------------
+                        call GlobalSumInGroup(eGID,ssDOS)
+                        call GlobalSumInGroup(eGID,wk_dos,nsize)
+!                       ----------------------------------------------
+                        call calElectroStruct(info,1,wk_dos,ssLastValue(id),ss_int=.true.,species=ia)
+!                       ----------------------------------------------
+                        call addElectroStruct(getLocalSpeciesContent(id,ia), &
+                                              ssLastValue(id),ssIntegrValue(id),ns,species=ia)
+!                       ----------------------------------------------
+                        nm = NumGQPs
+                     else
+                        ne = ceiling(NumSS_IntEs*(e2-e1)/(etop-ebot))
+!                       ==============================================
+!                       While Romberg method is highly accurate, it could
+!                       end up performing calculations on much larger
+!                       number of energy points than the Gaussian quadrature
+!                       method. For a narrow domain containing resonance peak,
+!                       we will use the Romberg method.
+!                       ==============================================
+                        if (romberg .and. e2-e1 < 0.020d0) then ! Using Romberg method to integrate the single site DOS over the domain
+                           if ( node_print_level >= 0) then
+                              write(6,'(/,a)')'Performing Romberg integration around the resonance over the'
+                              write(6,'(a,f8.5,a,f8.5,a)')'energy domain: (',e1,',',e2,')'
+                              write(6,'(a)')&
+                           '=========================================================================================='
+                           endif
+!                          -------------------------------------------
+                           ssDOS = getRombergIntegration(20,e1,e2,info,returnSingleSiteDOS,err,nm)
+!                          -------------------------------------------
+                           if ( node_print_level >= 0) then
+                              write(6,'(/,a,i4,a,d12.5)')'The Romberg integration terminated with ',&
+                                       nm,' mesh points, and error = ',err
+                           endif
+                        else ! Using Gaussian method to integrate the single site DOS over the domain
+                           nm = max(ne,200)
+                           if ( node_print_level >= 0) then
+                              write(6,'(/,a)')'Performing Gaussian quadrature integration around the resonance over the'
+                              write(6,'(a,f8.5,a,f8.5,a)')'energy domain: (',e1,',',e2,')'
+                              write(6,'(a)')&
+                            '=========================================================================================='
+                           endif
+!                          -------------------------------------------
+                           ssDOS = getGaussianIntegration(nm,e1,e2,info,returnSingleSiteDOS)
+!                          -------------------------------------------
+                        endif
+                        p_aux => getAuxDataAdaptIntegration()
+!                       ==============================================
+!                       Store the quantities in p_aux to ssLastValue
+!                       ----------------------------------------------
+                        call calElectroStruct(info,1,p_aux,ssLastValue(id),ss_int=.true.,species=ia)
+!                       ----------------------------------------------
+                        call addElectroStruct(getLocalSpeciesContent(id,ia), &
+                                              ssLastValue(id),ssIntegrValue(id),ns,species=ia)
+!                       ----------------------------------------------
+                     endif
+                     ssdos_int = ssdos_int + ssDOS*getLocalSpeciesContent(id,ia)
+                     if ( node_print_level >= 0) then
+                        write(6,'(a)')&
+                       '=========================================================================================='
+                        write(6,'(a,i4)')'Number of mesh points for the integration: ',nm
+                        write(6,'(a,f12.8,/)')'After  adding the resonance contribution, ssdos_int = ',ssdos_int
+                     endif
+                  endif
+               enddo
+!
 !              -------------------------------------------------------
-               p_aux => getAuxDataAdaptIntegration()
-!              -------------------------------------------------------
-!              write(6,'(a,i5)')'size of p_aux = ',size(p_aux)
-!              ----------------------------------------------------------
-               call calElectroStruct(info,1,p_aux,ssLastValue(id),ss_int=.true.)
                ps = returnSingleSitePS(info,etop) - ps0  ! Relative to the phase shift at energy = e0.
 !              -------------------------------------------------------
+               do while (ps < ZERO)
+                  ps = ps + PI
+               enddo
+               IDOS_space = (2/n_spin_pola)*(ps+getVolume(id)*sqrt(etop**3)/(6.0d0*PI))/PI
+               IDOS_out = ssIDOS_out(id)%rarray2(ns,ia)
+               IDOS_cell = IDOS_space - IDOS_out
+!
+               scaling_factor = IDOS_cell/ssdos_int
+!              =======================================================
                if ( node_print_level >= 0) then
                   write(6,'(a,f12.8,a,d15.8)')'At energy = ',etop,     &
                                               ': Single site IDOS given by Green function  =',ssdos_int
-                  write(6,'(26x,a,d15.8)')      'Integrated DOS outside the atomic cell    =', &
-                                              ssIDOS_out(id)%rarray2(ns,ia)
+                  write(6,'(26x,a,d15.8)')      'Integrated DOS outside the atomic cell    =', IDOS_out
 !                 ====================================================
                   write(6,'(26x,a,d15.8)')      'Single site sum. of partial phase shifts  =',ps
                   write(6,'(26x,a,d15.8)')      'Integrated DOS in space due to single site=',(2/n_spin_pola)*ps/PI
                   write(6,'(26x,a,d15.8)')      'Free electron DOS in the atomic cell      =', &
                                           (2/n_spin_pola)*getVolume(id)*sqrt(etop**3)/(6.0d0*PI**2)
-                  IDOS_cell = (2/n_spin_pola)*(ps+getVolume(id)*sqrt(etop**3)/(6.0d0*PI))/PI - &
-                              ssIDOS_out(id)%rarray2(ns,ia)
                   write(6,'(26x,a,d15.8)')      'Single site {phase shift sum-OutsideIDOS} =',IDOS_cell
+                  write(6,'(26x,a,d15.8)')      'Renormalization factor to Green function  =',scaling_factor
 !                 ====================================================
                endif
+!              =======================================================
+!              Ideally, scaling_factor = 1.0. We use this factor to
+!              renormalize the single site Green function, which is
+!              stored in ssLastValue
+!              =======================================================
+               if (scaling_factor < TEN2m6) then
+                  call WarningHandler('calSingleScatteringIDOS','scaling_factor < 10^-6',scaling_factor)
+               else if (renorm > 0) then
+!                 ----------------------------------------------------
+                  call scaleSpeciesElectroStruct(ia,ns,scaling_factor,ssLastValue(id),eIntegral_only=.false.)
+!                 ----------------------------------------------------
+               endif
+!
+               do ib = 1, getNumBoundStates(id,ia,is)
+!                 ====================================================
+!                 add the shallow bound state densities to the
+!                 single site density
+!                 ----------------------------------------------------
+                  ssDOS = returnIDOSofBoundStates(id,ia,is,ib,wk_dos)
+                  ssdos_int = ssdos_int + ssDOS*getLocalSpeciesContent(id,ia)
+!                 ----------------------------------------------------
+                  call calElectroStruct(info,1,wk_dos,ssLastValue(id),ss_int=.true.,species=ia)
+                  call addElectroStruct(getLocalSpeciesContent(id,ia),ssLastValue(id),ssIntegrValue(id),ns, &
+                                        species=ia)
+!                 ----------------------------------------------------
+               enddo
             enddo
 !           ----------------------------------------------------------
-            call addElectroStruct(CONE,ssLastValue(id),ssIntegrValue(id),ns)
+            call syncAllPEs()
 !           ----------------------------------------------------------
          enddo
       enddo
+      deallocate(wk_tmp)
    endif
 !
    end subroutine calSingleScatteringIDOS
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function returnIDOSofResonanceStates(id,atom,is,ib,dos_array) result(dos)
+!  ===================================================================
+   use SMatrixPolesModule, only : getIntegratedResStateDensity
+   use SMatrixPolesModule, only : getResonanceStateEnergy
+!
+   use RadialGridModule, only : getGrid
+!
+   use StepFunctionModule, only : getVolumeIntegration
+!
+   use SSSolverModule, only : getOutsideDOS
+!
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: id, atom, is, ib
+!
+   real (kind=RealKind) :: dos, dos_mt, sfac
+!
+   complex (kind=CmplxKind), intent(inout), target :: dos_array(:)
+!
+   integer (kind=IntKind) :: jl, ir, n, iend, jmax_dos
+!
+   complex (kind=CmplxKind), pointer :: dos_r_jl(:,:)
+   complex (kind=CmplxKind), pointer :: der_dos_r_jl(:,:)
+!
+   type (GridStruct), pointer :: Grid
+!
+   sfac= TWO/real(n_spin_pola,kind=RealKind)
+!
+   Grid => getGrid(id)
+   if (rad_derivative) then
+      dos_r_jl => getIntegratedResStateDensity(site=id,atom=atom,spin=is,rstate=ib, &
+                                               NumRs=iend,jmax_rho=jmax_dos,        &
+                                               derivative=der_dos_r_jl)
+   else
+      dos_r_jl => getIntegratedResStateDensity(site=id,atom=atom,spin=is,rstate=ib, &
+                                               NumRs=iend,jmax_rho=jmax_dos)
+   endif
+   dos = sfac*getVolumeIntegration( id, iend, Grid%r_mesh, jmax_dos, 2, dos_r_jl, dos_mt )
+   dos_mt = sfac*dos_mt
+!
+   n = 0
+   dos_array = CZERO
+   do jl = 1, jmax_dos
+      do ir = 1, LastValue(id)%NumRs
+         dos_array(n+ir) = dos_array(n+ir) + sfac*dos_r_jl(ir,jl)
+      enddo
+      n = n + LastValue(id)%NumRs
+   enddo
+   if (rad_derivative) then
+      do jl = 1, jmax_dos
+         do ir = 1, LastValue(id)%NumRs
+            dos_array(n+ir) = dos_array(n+ir) + sfac*der_dos_r_jl(ir,jl)
+         enddo
+         n = n + LastValue(id)%NumRs
+      enddo
+   endif
+   dos_array(n+1) = dos_array(n+1) + dos
+   dos_array(n+2) = dos_array(n+2) + dos_mt
+!  dos_array(n+3) = dos_array(n+3) + dos*energy
+   dos_array(n+3) = dos_array(n+3) + dos*getResonanceStateEnergy(id=id,ia=atom,is=is,ibs=ib)
+   dos_array(n+4) = dos_array(n+4) + sfac*getOutsideDOS(spin=is,site=id,atom=atom) ! Questionable?
+   n = n + 4
+!
+   end function returnIDOSofResonanceStates
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function returnIDOSofBoundStates(id,atom,is,ib,dos_array) result(dos)
+!  ===================================================================
+   use SMatrixPolesModule, only : getBoundStateDensity
+   use SMatrixPolesModule, only : getBoundStateEnergy
+!
+   use RadialGridModule, only : getGrid
+!
+   use StepFunctionModule, only : getVolumeIntegration
+!
+   use SSSolverModule, only : getOutsideDOS
+!
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: id, atom, is, ib
+!
+   real (kind=RealKind) :: dos, dos_mt, sfac
+!
+   complex (kind=CmplxKind), intent(inout), target :: dos_array(:)
+!
+   integer (kind=IntKind) :: jl, ir, n, iend, jmax_dos
+!
+   complex (kind=CmplxKind), pointer :: dos_r_jl(:,:)
+   complex (kind=CmplxKind), pointer :: der_dos_r_jl(:,:)
+!
+   type (GridStruct), pointer :: Grid
+!
+   sfac= TWO/real(n_spin_pola,kind=RealKind)
+!
+   Grid => getGrid(id)
+   if (rad_derivative) then
+      dos_r_jl => getBoundStateDensity(id=id,ia=atom,is=is,ibs=ib,NumRs=iend,jmax_rho=jmax_dos, &
+                                       derivative=der_dos_r_jl)
+   else
+      dos_r_jl => getBoundStateDensity(id=id,ia=atom,is=is,ibs=ib,NumRs=iend,jmax_rho=jmax_dos)
+   endif
+   dos = sfac*getVolumeIntegration( id, iend, Grid%r_mesh, jmax_dos, 2, dos_r_jl, dos_mt )
+   dos_mt = sfac*dos_mt
+!  write(6,'(a,2f12.5,a,i3)')'returnIDOSofBoundStates, dos_mt, dos = ',dos_mt, dos,', jmax_dos = ',jmax_dos
+!
+   n = 0
+   dos_array = CZERO
+   do jl = 1, jmax_dos
+      do ir = 1, LastValue(id)%NumRs
+         dos_array(n+ir) = dos_array(n+ir) + sfac*dos_r_jl(ir,jl)
+      enddo
+      n = n + LastValue(id)%NumRs
+   enddo
+   if (rad_derivative) then
+      do jl = 1, jmax_dos
+         do ir = 1, LastValue(id)%NumRs
+            dos_array(n+ir) = dos_array(n+ir) + sfac*der_dos_r_jl(ir,jl)
+         enddo
+         n = n + LastValue(id)%NumRs
+      enddo
+   endif
+   dos_array(n+1) = dos_array(n+1) + dos
+   dos_array(n+2) = dos_array(n+2) + dos_mt
+!  dos_array(n+3) = dos_array(n+3) + dos*energy
+   dos_array(n+3) = dos_array(n+3) + dos*getBoundStateEnergy(id=id,ia=atom,is=is,ibs=ib)
+   dos_array(n+4) = dos_array(n+4) + sfac*getOutsideDOS(spin=is,site=id,atom=atom) ! Questionable?
+   n = n + 4
+!
+   end function returnIDOSofBoundStates
 !  ===================================================================
 !
 !  *******************************************************************
@@ -3547,6 +4345,7 @@ contains
    use ContourModule, only : getEPoint, getEWeight, getNumEs
 !
    use ScfDataModule, only : isLloyd, getLloydMode, ContourType
+   use ScfDataModule, only : CurrentScfIteration
 !
    use PotentialTypeModule, only : isFullPotential
 !
@@ -3561,7 +4360,7 @@ contains
    logical, intent(in), optional :: relativity
    logical :: REL
 !
-   integer (kind=IntKind) :: ie, id, is, js, info(4), ia
+   integer (kind=IntKind) :: ie, id, is, js, info(5), ia
    integer (kind=IntKind) :: e_loc
    integer (kind=IntKind) :: NumEsOnMyProc, NumRedunEs
 !
@@ -3600,7 +4399,7 @@ contains
             call computeRelMST( adjustEnergy(is,EPoint(ie)) )
             do id =1, LocalNumAtoms
                pCurrentValue => LastValue(id) ! Use LastValue space for temporary working space.
-               info(1) = is; info(2) = id; info(3) = -1; info(4) = 0
+               info(1) = is; info(2) = id; info(3) = -1; info(4) = 0; info(5) = 0
                msDOS = returnRelMultipleSiteDOS(info,EPoint(ie),wk_dos,EWght(ie))
                call calElectroStruct(info,n_spin_cant,wk_dos,pCurrentValue)
                if (e_loc <= NumEsOnMyProc - NumRedunEs .or. MyPEinEGroup == 0) then
@@ -3656,12 +4455,14 @@ contains
                call computeMSGreenFunction(is, adjustEnergy(is,EPoint(ie)), &
                                            add_Gs=.true., isSphSolver=.true.)
 !              ----------------------------------------------------------
+               isZtauZ = .true.
             else if (isFullPotential()) then
 !              ==========================================================
 !              In this case, the calculated Green function is Z*(tau-t)*Z
 !              ----------------------------------------------------------
                call computeMSGreenFunction(is, adjustEnergy(is,EPoint(ie)))
 !              ----------------------------------------------------------
+               isZtauZ = .false.
             else
 !              ==========================================================
 !              In this case, the calculated Green function is Z*(tau-t)*Z
@@ -3669,13 +4470,16 @@ contains
                call computeMSGreenFunction(is, adjustEnergy(is,EPoint(ie)), &
                                            isSphSolver=.true.)
 !              ----------------------------------------------------------
+               isZtauZ = .false.
             endif
             do id = 1, LocalNumAtoms
                pCurrentValue => LastValue(id) ! Use LastValue space for temporary working space.
-               info(1) = is; info(2) = id; info(3) = -1; info(4) = 0
+               info(1) = is; info(2) = id; info(3) = -1; info(4) = 0; info(5) = 0
 !              ----------------------------------------------------------
                msDOS = returnMultipleSiteDOS(info,EPoint(ie),wk_dos,EWght(ie))
                call calElectroStruct(info,n_spin_cant,wk_dos,pCurrentValue)
+!  write(6,'(a,i4,a,2d15.8,a,d15.8)')'ie = ',ie,', w = ',EWght(ie),', msDOS = ',msDOS(1)
+!  write(6,'(a,2d15.8)')'pCurrentValue%dos_r_jl(900) = ',pCurrentValue%dos_r_jl(900,1,1,1)
 !              ==========================================================
 !              Sum over the energy points up to e_loc = NumEsOnMyProc - NumRedunEs
 !              on local processor.
@@ -3718,7 +4522,7 @@ contains
 !              Check the single site DOS for the real part of the energy
 !              =======================================================
 !!             do js = 1, n_spin_cant
-!!                info(1) = js; info(2) = id; info(3) = -1; info(4) = 1
+!!                info(1) = js; info(2) = id; info(3) = -1; info(4) = 1; info(5) = 0
 !!                ssDOS = returnSingleSiteDOS(info,real(EPoint(ie),kind=RealKind),wk_dos)
 !!                write(6,'(a,i2,a,i2,a,d15.8,a,d15.8)')'is = ',max(is,js),', id = ',id, &
 !!                     ', e = ',real(EPoint(ie),kind=RealKind),' 0.00000000D+00, Single Site DOS = ',ssDOS
@@ -3771,11 +4575,12 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calElectroStruct(info,ns,dos_array,CurrentValue,ss_int)
+   subroutine calElectroStruct(info,ns,dos_array,CurrentValue,ss_int,species)
 !  ===================================================================
    implicit none !subroutine added by xianglin
 !
    integer (kind=IntKind), intent(in) :: info(*), ns
+   integer (kind=IntKind), intent(in), optional :: species
 !
    logical, optional, intent(in) :: ss_int
 !
@@ -3783,6 +4588,7 @@ contains
 !
    integer (kind=IntKind) :: is, id, ia, atom
    integer (kind=IntKind) :: js, n, p0, iend, jmax, kmax, n0
+   integer (kind=IntKind) :: ia0, ia1
 ! 
    complex (kind=CmplxKind), intent(in), target :: dos_array(:)
 !
@@ -3796,13 +4602,19 @@ contains
       IntegratedSingleSite = .false.
    endif
 !
+   if (present(species)) then
+      ia0 = species; ia1 = species
+   else
+      ia0 = 1; ia1 = CurrentValue%NumSpecies
+   endif
+!
    is = info(1); id = info(2); atom = info(3)
 !
    if (ns == 4) then !when ns=4, is=1:4,for relativistic Bxyz calculation. Added by xianglin
       if (is_Bxyz) then
          n0 = 0
          n = CurrentValue%NumRs*CurrentValue%jmax
-         do ia = 1, CurrentValue%NumSpecies
+         do ia = ia0, ia1
             if (atom < 0 .or. atom == ia) then
                do js = 1,4
 !                 n0 = (js-1)*(n+4)
@@ -3831,7 +4643,7 @@ contains
          js=is
          n0 = 0
          n = CurrentValue%NumRs*CurrentValue%jmax
-         do ia = 1, CurrentValue%NumSpecies
+         do ia = ia0, ia1
             if (atom < 0 .or. atom == ia) then
 !              ----------------------------------------------------------
                call zcopy(n,dos_array(n0+1:n0+n),1,CurrentValue%dos_r_jl(1,1,js,ia),1)
@@ -3862,7 +4674,7 @@ contains
       endif
       n0 = 0
       n = CurrentValue%NumRs*CurrentValue%jmax
-      do ia = 1, CurrentValue%NumSpecies
+      do ia = ia0, ia1
          if (atom < 0 .or. atom == ia) then
 !           ----------------------------------------------------------
             call zcopy(n,dos_array(n0+1:n0+n),1,CurrentValue%dos_r_jl(1,1,js,ia),1)
@@ -3882,7 +4694,7 @@ contains
                ssIDOS_out(id)%rarray2(js,ia) = real(dos_array(n0+4),kind=RealKind)
             endif
             n0 = n0 + 4
-!           write(6,'(a,3d15.8)')'dos_array(n+1:n+3) = ',real(dos_array(n+1:n+3))*PI
+!           write(6,'(a,3d15.8)')'dos_array(n+1:n+3) = ',real(dos_array(n+1:n+3),kind=RealKind)*PI
             if (isDensityMatrixNeeded) then
                kmax = CurrentValue%kmax
                p1 => dos_array(n0+1:n0+kmax*kmax)
@@ -3898,7 +4710,7 @@ contains
       jmax = CurrentValue%jmax
       p0 = 0
       n = iend*jmax
-      do ia = 1, CurrentValue%NumSpecies
+      do ia = ia0, ia1
          if (atom < 0 .or. atom == ia) then
             do js = 1, ns*ns
                p1 => dos_array(p0+1:p0+n)
@@ -4016,20 +4828,24 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function returnMultipleSiteDOS(info,e,dos_array,cfac) result(dos)
 !  ===================================================================
-   use MathParamModule, only : CONE, ZERO, PI
+   use MathParamModule, only : CONE, ZERO, PI, Y0
 !
    use MSSolverModule, only : getMSGreenFunction, getMSGreenMatrix
    use MSSolverModule, only : getMSGreenFunctionDerivative
 !
+   use SSSolverModule, only : getFreeElectronDOS, getTMatrix
+!
    use PotentialTypeModule, only : isASAPotential
 !
-   use RadialGridModule, only : getGrid
+   use RadialGridModule, only : getGrid, getRadialIntegration
 !
    use AtomModule, only : getLocalEvec, getLocalNumSpecies
 !
    use StepFunctionModule, only : getVolumeIntegration
 !
    use SpinRotationModule, only : transformDensityMatrix
+!
+   use WriteMatrixModule,  only : writeMatrix
 !
    implicit none
 !
@@ -4039,7 +4855,7 @@ contains
    complex (kind=CmplxKind), intent(inout), target :: dos_array(:)
 !
    integer (kind=IntKind), intent(in) :: info(:)
-   integer (kind=IntKind) :: is, id, atom, ia
+   integer (kind=IntKind) :: is, id, atom, ia, ir, nr
    integer (kind=IntKind) :: ks, jid, j, l, m, jl, kl, klc, p0, n, i
    integer (kind=IntKind) :: jmax, kmax, iend, ns_sqr, gform
 !
@@ -4059,7 +4875,12 @@ contains
    complex (kind=CmplxKind), pointer :: der_green(:,:,:,:), der_dos_r_jl(:,:)
    complex (kind=CmplxKind), pointer :: pcv_x(:), pcv_y(:), pcv_z(:), p1(:)
 !
+   real (kind=RealKind), pointer :: fedos(:)
+   real (kind=RealKind) :: der_fedos(MaxRs)
+!
    type (GridStruct), pointer :: Grid
+!
+   logical :: isPositive
 !
    is = info(1); id = info(2); atom = info(3)
    energy = adjustEnergy(is,e)
@@ -4087,6 +4908,7 @@ contains
    else
 !     --------------------------------------------------------------
       green  => getMSGreenFunction(id,gform)
+!     write(6,'(a,2d15.8)')'green(900) = ',green(900,1,1,1)
 !     --------------------------------------------------------------
       if (rad_derivative) then
 !        -----------------------------------------------------------
@@ -4113,11 +4935,18 @@ contains
    do ia = 1, getLocalNumSpecies(id)
       if (atom < 0 .or. ia == atom) then
          do ks = 1, ns_sqr
-!           --------------------------------------------------------
-            greenint(ks) = cmul*sfac*getVolumeIntegration( id, iend, Grid%r_mesh, &
-                                                        kmax, 2, green(:,:,ks,ia), greenint_mt(ks) )
-!           --------------------------------------------------------
-            greenint_mt(ks) = cmul*sfac*greenint_mt(ks)
+            if (isASAPotential()) then
+               greenint_mt(ks) = cmul*sfac*getRadialIntegration(id, Grid%jmt, green(:,1,ks,ia))/Y0
+               greenint(ks) = greenint_mt(ks)
+!              Alternatively, you can call getVolumeIntegration with truncated=.false.
+!              to run the integration in ASA volume.
+            else
+!              -----------------------------------------------------
+               greenint(ks) = cmul*sfac*getVolumeIntegration( id, iend, Grid%r_mesh, &
+                                                              kmax, 2, green(:,:,ks,ia), greenint_mt(ks) )
+!              -----------------------------------------------------
+               greenint_mt(ks) = cmul*sfac*greenint_mt(ks)
+            endif
          enddo
 !
          if (isASAPotential()) then
@@ -4127,7 +4956,6 @@ contains
                call transformDensityMatrix(id,gm_mt)
 !              ------------------------------------------------------
             endif
-            greenint = greenint_mt
             gm = gm_mt
          else
             gm = greenint
@@ -4244,9 +5072,50 @@ contains
                pca_y = cmul*SQRTm1*pca_x
                p0 = p0 + kmax*kmax
             endif
+! =============================================================================
+! Note: It is possible that due to numerical round off error, the imaginary part
+!       of Green function becomes negative. If this happens, in non-full-potential 
+!       case, DOS is replaced with the free-electron DOS. An investigation of this
+!       issue is necessary in the future.  06/14/2020....
+! =============================================================================
+            if (jmax == 1 .and. isZtauZ) then
+               isPositive = .false.
+               LOOP_ir: do ir = Grid%jend, 1, -1
+                  if (aimag(green(ir,1,ks,ia)) > ZERO) then
+!                    write(6,'(a,2i5,2d16.8)')'id,ir,r,-Im[green(ir)]/PI = ',     &
+!                          id,ir,Grid%r_mesh(ir),-aimag(green(ir,1,ks,ia))/Grid%r_mesh(ir)**2/PI
+                     nr = ir
+                     isPositive = .true.
+                     exit LOOP_ir
+                  endif
+               enddo LOOP_ir
+               if (isPositive) then
+                  if (rad_derivative) then
+                     fedos => getFreeElectronDOS(site=id,gfac=cmul,derivative=der_fedos)
+                  else
+                     fedos => getFreeElectronDOS(site=id,gfac=cmul)
+                  endif
+                  if (rad_derivative) then
+                     do ir = 1, nr
+                        if (aimag(green(ir,1,ks,ia)) > ZERO) then
+                           dos_r_jl(ir,1) = sfac*fedos(ir)
+                           der_dos_r_jl(ir,1) = sfac*der_fedos(ir)
+                        endif
+                     enddo
+                  else
+                     do ir = 1, nr
+                        if (aimag(green(ir,1,ks,ia)) > ZERO) then
+                           dos_r_jl(ir,1) = sfac*fedos(ir)
+                        endif
+                     enddo
+                  endif
+               endif
+            endif
+! =============================================================================
          enddo
       endif
    enddo
+   nullify(fedos)
 !
 !! The following codes will be uncommented and implemented later....................................
 !! if (n_spin_cant == 2) then
@@ -4541,7 +5410,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine addElectroStruct_r(alp,ESV0,ESV1,is)
+   subroutine addElectroStruct_r(alp,ESV0,ESV1,is, species)
 !  ===================================================================
 !
 !  Perform ESV1 = alp*ESV0 + ESV1
@@ -4549,7 +5418,7 @@ contains
 !  ===================================================================
    implicit none
 !
-   integer (kind=IntKind), intent(in), optional :: is
+   integer (kind=IntKind), intent(in), optional :: is, species
    integer (kind=IntKind) :: ia
 !
    type(ElectroStruct), intent(in) :: ESV0
@@ -4571,11 +5440,39 @@ contains
          ESV1%density_matrix = ESV1%density_matrix + alp*ESV0%density_matrix
       endif
       if (n_spin_cant == 2) then
-         do ia = 1, ESV1%NumSpecies
+         if (present(species)) then
 !           ----------------------------------------------------------
-            call addSpinCantStruct(alp,ESV0%pSC(ia),ESV1%pSC(ia))
+            call addSpinCantStruct(alp,ESV0%pSC(species),ESV1%pSC(species))
 !           ----------------------------------------------------------
-         enddo
+         else
+            do ia = 1, ESV1%NumSpecies
+!              -------------------------------------------------------
+               call addSpinCantStruct(alp,ESV0%pSC(ia),ESV1%pSC(ia))
+!              -------------------------------------------------------
+            enddo
+         endif
+      endif
+   else if (present(species)) then
+      pca_x => ESV0%dos_r_jl(:,:,is,species)
+      pca_y => ESV1%dos_r_jl(:,:,is,species)
+      pca_y = pca_y + alp*pca_x
+      if (rad_derivative) then
+         pca_x => ESV0%der_dos_r_jl(:,:,is,species)
+         pca_y => ESV1%der_dos_r_jl(:,:,is,species)
+         pca_y = pca_y + alp*pca_x
+      endif
+      ESV1%dos(is,species) = ESV1%dos(is,species) + alp*ESV0%dos(is,species)
+      ESV1%dos_mt(is,species) = ESV1%dos_mt(is,species) + alp*ESV0%dos_mt(is,species)
+      ESV1%evalsum(is,species) = ESV1%evalsum(is,species) + alp*ESV0%evalsum(is,species)
+      if (isDensityMatrixNeeded) then
+         pca_x => ESV0%density_matrix(:,:,is,species)
+         pca_y => ESV1%density_matrix(:,:,is,species)
+         pca_y = pca_y + alp*pca_x
+      endif
+      if (n_spin_cant == 2 .and. is == 4) then
+!        -------------------------------------------------------------
+         call addSpinCantStruct(alp,ESV0%pSC(species),ESV1%pSC(species))
+!        -------------------------------------------------------------
       endif
    else
       do ia = 1, ESV1%NumSpecies
@@ -4609,7 +5506,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine addElectroStruct_c(alp,ESV0,ESV1,is)
+   subroutine addElectroStruct_c(alp,ESV0,ESV1,is,species)
 !  ===================================================================
 !
 !  Perform ESV1 = alp*ESV0 + ESV1
@@ -4617,7 +5514,7 @@ contains
 !  ===================================================================
    implicit none
 !
-   integer (kind=IntKind), intent(in), optional :: is
+   integer (kind=IntKind), intent(in), optional :: is, species
    integer (kind=IntKind) :: ia
 !
    type(ElectroStruct), intent(in) :: ESV0
@@ -4639,11 +5536,39 @@ contains
          ESV1%density_matrix = ESV1%density_matrix + alp*ESV0%density_matrix
       endif
       if (n_spin_cant == 2) then
-         do ia = 1, ESV1%NumSpecies
+         if (present(species)) then
 !           ----------------------------------------------------------
-            call addSpinCantStruct(alp,ESV0%pSC(ia),ESV1%pSC(ia))
+            call addSpinCantStruct(alp,ESV0%pSC(species),ESV1%pSC(species))
 !           ----------------------------------------------------------
-         enddo
+         else
+            do ia = 1, ESV1%NumSpecies
+!              -------------------------------------------------------
+               call addSpinCantStruct(alp,ESV0%pSC(ia),ESV1%pSC(ia))
+!              -------------------------------------------------------
+            enddo
+         endif
+      endif
+   else if (present(species)) then
+      pca_x => ESV0%dos_r_jl(:,:,is,species)
+      pca_y => ESV1%dos_r_jl(:,:,is,species)
+      pca_y = pca_y + alp*pca_x
+      if (rad_derivative) then
+         pca_x => ESV0%der_dos_r_jl(:,:,is,species)
+         pca_y => ESV1%der_dos_r_jl(:,:,is,species)
+         pca_y = pca_y + alp*pca_x
+      endif
+      ESV1%dos(is,species) = ESV1%dos(is,species) + alp*ESV0%dos(is,species)
+      ESV1%dos_mt(is,species) = ESV1%dos_mt(is,species) + alp*ESV0%dos_mt(is,species)
+      ESV1%evalsum(is,species) = ESV1%evalsum(is,species) + alp*ESV0%evalsum(is,species)
+      if (isDensityMatrixNeeded) then
+         pca_x => ESV0%density_matrix(:,:,is,species)
+         pca_y => ESV1%density_matrix(:,:,is,species)
+         pca_y = pca_y + alp*pca_x
+      endif
+      if (n_spin_cant == 2 .and. is == 4) then
+!        -------------------------------------------------------------
+         call addSpinCantStruct(alp,ESV0%pSC(species),ESV1%pSC(species))
+!        -------------------------------------------------------------
       endif
    else
       do ia = 1, ESV1%NumSpecies
@@ -4741,7 +5666,53 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine scaleElectroStruct(alp,ESV)
+   subroutine scaleSpeciesElectroStruct(ia,ns,alp,ESV,eIntegral_only)
+!  ===================================================================
+!
+!  Perform ESV = alp*ESV
+!
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: ia, ns
+!
+   real (kind=RealKind), intent(in) :: alp
+!
+   type(ElectroStruct), intent(inout) :: ESV
+!
+   complex (kind=CmplxKind) :: alpc
+!
+   logical, intent(in) :: eIntegral_only
+!
+   alpc = alp
+!
+   if (.not.eIntegral_only) then
+      ESV%dos(ns,ia) = alpc*ESV%dos(ns,ia)
+      ESV%dos_mt(ns,ia) = alpc*ESV%dos_mt(ns,ia)
+   endif
+!
+   ESV%dos_r_jl(:,:,ns,ia) = alpc*ESV%dos_r_jl(:,:,ns,ia)
+   if (rad_derivative) then
+      ESV%der_dos_r_jl(:,:,ns,ia) = alpc*ESV%der_dos_r_jl(:,:,ns,ia)
+   endif
+   ESV%evalsum(ns,ia) = alpc*ESV%evalsum(ns,ia)
+   if (isDensityMatrixNeeded) then
+      ESV%density_matrix(:,:,ns,ia) = alpc*ESV%density_matrix(:,:,ns,ia)
+   endif
+!
+   if (n_spin_cant == 2) then ! This needs to be fixed for the spin canted case
+!     ----------------------------------------------------------------
+      call scaleSpinCantStruct(alp,ESV%pSC(ia))
+!     ----------------------------------------------------------------
+   endif
+!
+   end subroutine scaleSpeciesElectroStruct
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine scaleElectroStruct(alp,ESV,eIntegral_only)
 !  ===================================================================
 !
 !  Perform ESV = alp*ESV
@@ -4757,14 +5728,19 @@ contains
 !
    integer (kind=IntKind) :: ia
 !
+   logical, intent(in) :: eIntegral_only
+!
    alpc = alp
+!
+   if (.not.eIntegral_only) then
+      ESV%dos = alpc*ESV%dos
+      ESV%dos_mt = alpc*ESV%dos_mt
+   endif
 !
    ESV%dos_r_jl = alpc*ESV%dos_r_jl
    if (rad_derivative) then
       ESV%der_dos_r_jl = alpc*ESV%der_dos_r_jl
    endif
-   ESV%dos = alpc*ESV%dos
-   ESV%dos_mt = alpc*ESV%dos_mt
    ESV%evalsum = alpc*ESV%evalsum
    if (isDensityMatrixNeeded) then
       ESV%density_matrix = alpc*ESV%density_matrix
@@ -4873,7 +5849,7 @@ contains
 !
    use GroupCommModule, only : GlobalSumInGroup
 !
-   use ScfDataModule, only : isLloyd, getLloydMode
+   use ScfDataModule, only : isLloyd, getLloydMode, getMixingParamForFermiEnergy
 !
    use KreinModule, only : isLloydOn
 !
@@ -4895,7 +5871,7 @@ contains
    real (kind=RealKind) :: efdif
    real (kind=RealKind) :: dosefpa
    real (kind=RealKind) :: ztdif
-   real (kind=RealKind) :: r
+   real (kind=RealKind) :: ef_mixing, mixing_switch
    real (kind=RealKind) :: N_Green_Contour(2)
    real (kind=RealKind) :: wspace(6)
 !
@@ -4982,6 +5958,13 @@ contains
 !  falls into a band gap, where the DOS is very small, the new Fermi
 !  energy is adjusted by an amount <= 0.01.
 !  +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+!
+!  ===================================================================
+!  The following line is added on 06/14/2020 to enable fermi energy  
+!  mixing if the change is found greater than mixing_switch
+!  ===================================================================
+   ef_mixing = getMixingParamForFermiEnergy(mixing_switch)
+!
    if (iharris > 1) then
       efermi = efermi_old
    else if (tnen < 0.0001d0) then
@@ -4989,27 +5972,29 @@ contains
       if (node_print_level >= 0) then
          write(6,'(/,a,d17.8,/)')'WARNING :: tnen = ',tnen
       endif
-   else if (abs(xtws/tnen) > 0.50d0) then
-!     ----------------------------------------------------------------
-!     call random_number(r) ! Use random number as a scaling factor to 
-!                           ! set the estimate of the next Fermi energy.
-!                           ! This could help to avoid charge sloshing problem.
-!     ----------------------------------------------------------------
-      r = HALF
-      if (xtws > ZERO) then
-         efdif =-r*min(0.01d0,xtws)
-      else
-         efdif = r*min(0.01d0,-xtws)
-      endif
+!  ===================================================================
+!  The following code is prior to 05/27/2020
+!  else if (abs(xtws/tnen) > 0.50d0) then
+!     if (xtws > ZERO) then
+!        efdif =-r*min(0.01d0,xtws)
+!     else
+!        efdif = r*min(0.01d0,-xtws)
+!     endif
 !     ================================================================
 !     An average of efdif is needed since r may be different on different
 !     processors
 !     ----------------------------------------------------------------
-      call GlobalSumInGroup(aGID,efdif)
+!     call GlobalSumInGroup(aGID,efdif)
 !     ----------------------------------------------------------------
-      efermi = efermi_old + efdif/real(NumPEsInAGroup,kind=RealKind)
+!     efermi = efermi_old + efdif/real(NumPEsInAGroup,kind=RealKind)
+!  ===================================================================
+!  The following code added on 05/27/2020 and updated on 06/14/2020 to 
+!  change the way the new Fermi energy is determined
+!  ===================================================================
+   else if (abs(xtws/tnen) > mixing_switch) then
+      efermi = efermi_old -ef_mixing*xtws/tnen
       if ( node_print_level >= 0) then
-         write(6,'(/,a,4d17.8,/)')'tnen,xtws,x/t,r = ',tnen,xtws,xtws/tnen,r
+         write(6,'(/,a,4d17.8,/)')'tnen,xtws,x/t,ef_mixing = ',tnen,xtws,xtws/tnen,ef_mixing
       endif
    else
       efermi = efermi_old - xtws/tnen
@@ -5128,6 +6113,8 @@ contains
 !  ===================================================================
    use IntegrationModule, only : calIntegration
 !
+   use PotentialTypeModule, only : isASAPotential
+!
    use StepFunctionModule, only : getVolumeIntegration
 !
    use RadialGridModule, only : getGrid
@@ -5170,10 +6157,19 @@ contains
    call calIntegration(Grid%jmt,Grid%r_mesh,rho_0,intr,0)
 !  call calIntegration(Grid%jmt,Grid%r_mesh,rho_0,intr,2)
    do js=1,n_spin_pola*n_spin_cant
-!     ----------------------------------------------------------------
-      q_VP=getVolumeIntegration( id, CurrentValue%NumRs, Grid%r_mesh,    &
-                                 CurrentValue%kmax, CurrentValue%jmax, 2, CurrentValue%dos_r_jl(:,:,js,ia), q_MT )
-!     ----------------------------------------------------------------
+      if (isASAPotential()) then
+!        -------------------------------------------------------------
+         q_VP=getVolumeIntegration( id, CurrentValue%NumRs, Grid%r_mesh,    &
+                                    CurrentValue%kmax, CurrentValue%jmax, 2,&
+                                    CurrentValue%dos_r_jl(:,:,js,ia), q_MT, truncated = .false. )
+!        -------------------------------------------------------------
+         q_MT = q_VP
+      else
+!        -------------------------------------------------------------
+         q_VP=getVolumeIntegration( id, CurrentValue%NumRs, Grid%r_mesh,    &
+                                    CurrentValue%kmax, CurrentValue%jmax, 2, CurrentValue%dos_r_jl(:,:,js,ia), q_MT )
+!        -------------------------------------------------------------
+      endif
       if ( node_print_level >= 0) then
          write(6,'(4x,a,t40,a,f18.11)')'Integrated spherical Density in MT','=', intr(Grid%jmt)*PI4
          write(6,'(4x,a,t40,a,2f18.11)')'Integrated Electron Density in VP, MT','=',q_VP, q_MT
@@ -5238,7 +6234,8 @@ contains
       do is = 1, n_spin_pola/n_spin_cant
          if (isLloyd().and.(getLloydMode().eq.1) ) then
 !           ----------------------------------------------------------
-            call scaleElectroStruct(Lloyd_factor(is),IntegrValue(id))
+            call scaleElectroStruct(Lloyd_factor(is),IntegrValue(id), &
+                                    eIntegral_only=.false.)
 !           ----------------------------------------------------------
          endif
       enddo
@@ -5280,58 +6277,64 @@ contains
    subroutine averageElectroStruct(eValue)
 !  ===================================================================
    use GroupCommModule, only : GlobalSumInGroup
+   use GroupCommModule, only : getGroupID, getNumPEsInGroup, getMyPEinGroup
 !
    implicit none
 !
-   integer (kind=IntKind) :: id, n, ia
+   integer (kind=IntKind) :: id, n, ia, dsize
+   integer (kind=IntKind) :: NumPEsInEKG, ekGID
 !
    type (ElectroStruct), intent(inout) :: eValue(LocalNumAtoms)
 !
    complex (kind=CmplxKind) :: cfac
 !
-   cfac = CONE/real(NumPEsInEGroup,kind=RealKind)
+   ekGID = getGroupID('E-K Plane')
+   NumPEsInEKG = getNumPEsInGroup(ekGID)
 !
-   n = 0
+   cfac = CONE/real(NumPEsInEKG,kind=RealKind)
+!
    do id = 1, LocalNumAtoms
+      dsize = eValue(id)%size/eValue(id)%NumSpecies
+      n = 0
       do ia = 1, eValue(id)%NumSpecies
          wk_dos(n+1:n+4) = eValue(id)%dos(1:4,ia)
          wk_dos(n+5:n+8) = eValue(id)%dos_mt(1:4,ia)
          wk_dos(n+9:n+12) = eValue(id)%evalsum(1:4,ia)
          n = n + 12
 !        -------------------------------------------------------------
-         call zcopy(eValue(id)%size,eValue(id)%dos_r_jl(1,1,1,ia),1,wk_dos(n+1),1)
+         call zcopy(dsize,eValue(id)%dos_r_jl(1,1,1,ia),1,wk_dos(n+1),1)
 !        -------------------------------------------------------------
-         n = n + eValue(id)%size
+         n = n + dsize
          if (rad_derivative) then
 !           ----------------------------------------------------------
-            call zcopy(eValue(id)%size,eValue(id)%der_dos_r_jl(1,1,1,ia),1,wk_dos(n+1),1)
+            call zcopy(dsize,eValue(id)%der_dos_r_jl(1,1,1,ia),1,wk_dos(n+1),1)
 !           ----------------------------------------------------------
-            n = n + eValue(id)%size
+            n = n + dsize
          endif
       enddo
-   enddo
+!     ----------------------------------------------------------------
+!     call GlobalSumInGroup(ekGID,wk_dos,n)
+!     ----------------------------------------------------------------
+!     wk_dos = cfac*wk_dos
+!     ----------------------------------------------------------------
+      call averageCFuncXProc(ekGID,n,wk_dos)
+!     ----------------------------------------------------------------
 !
-!  -------------------------------------------------------------------
-   call GlobalSumInGroup(eGID,wk_dos,n)
-!  -------------------------------------------------------------------
-   wk_dos = cfac*wk_dos
-!
-   n = 0
-   do id = 1, LocalNumAtoms
+      n = 0
       do ia = 1, eValue(id)%NumSpecies
          eValue(id)%dos(1:4,ia) = wk_dos(n+1:n+4)
          eValue(id)%dos_mt(1:4,ia) = wk_dos(n+5:n+8)
          eValue(id)%evalsum(1:4,ia) = wk_dos(n+9:n+12)
          n = n + 12
 !        -------------------------------------------------------------
-         call zcopy(eValue(id)%size,wk_dos(n+1),1,eValue(id)%dos_r_jl(1,1,1,ia),1)
+         call zcopy(dsize,wk_dos(n+1),1,eValue(id)%dos_r_jl(1,1,1,ia),1)
 !        -------------------------------------------------------------
-         n = n + eValue(id)%size
+         n = n + dsize
          if (rad_derivative) then
 !           ----------------------------------------------------------
-            call zcopy(eValue(id)%size,wk_dos(n+1),1,eValue(id)%der_dos_r_jl(1,1,1,ia),1)
+            call zcopy(dsize,wk_dos(n+1),1,eValue(id)%der_dos_r_jl(1,1,1,ia),1)
 !           ----------------------------------------------------------
-            n = n + eValue(id)%size
+            n = n + dsize
          endif
       enddo
    enddo
@@ -5356,7 +6359,7 @@ contains
 !
    character (len=17) :: sname='calDensity'
 !
-   integer (kind=IntKind) :: id, ir, ia
+   integer (kind=IntKind) :: id, ir, ia, is
 !
    real (kind=RealKind), intent(in):: efermi
    real (kind=RealKind) :: dos(4)
@@ -5779,11 +6782,13 @@ contains
    use Atom2ProcModule, only : getAtom2ProcInGroup, getLocalIndex
 !
    use SystemModule, only : getNumAtomTypes, getAtomType, getNumAtomsOfType, &
-                            getAtomTypeName
+                            getAtomTypeName, getAtomName
 !
    use NeighborModule, only : getNeighbor
 !
    use AtomModule, only : getLocalSpeciesContent
+!
+   use ScfDataModule, only : isLSMS
 !
    implicit none
 !
@@ -5843,10 +6848,17 @@ contains
             fname = trim(cpath)//'SS_DOS_'//trim(systemid)//anm
             open(unit=fu, file=fname, form='formatted', status='unknown')
             p_dos => SS_dosdata(id)%rarray3(:,:,ia)
-            write(fu,'(a,i4)')'SS_DOS Data: Atom #',ig
-            write(dos_title(1),'(a,f12.8)')'Fermi energy:',chempot
-            write(dos_title(2),'(a,f12.8)')'LIZ Radius:',Neighbor%ShellRad(s)
-            write(dos_title(3),'(a,i6)')'Num Energy Points:', nume_dos
+            write(fu,'(a)')'This file contains single site DOS for a stand-alone atom, i.e., in vacuum'
+            write(fu,'(a,i4)')'Atomic index in the system   :',ig
+            write(fu,'(2a)')  'Name of the atom at the site : ',getAtomName(ig,ia)
+            write(dos_title(1),'(a,f12.8)')   'Fermi energy     :',chempot
+            if (isLSMS()) then
+!              write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
+               write(dos_title(2),'(a,i5)')   'No. Atoms in LIZ :',Neighbor%NumAtoms+1
+            else
+               write(dos_title(2),'(a,i3)')   'Species index    :',ia
+            endif
+            write(dos_title(3),'(a,i6)')      'Num Energy Points:', nume_dos
 !           ----------------------------------------------------------
             call printDOSDATA(fu,nvals,nume_dos,3,p_dos,dos_title)
 !           ----------------------------------------------------------
@@ -5876,10 +6888,16 @@ contains
                fname = trim(cpath)//'SS_DOS_'//trim(systemid)//anm
                open(unit=fu+gid, file=fname, form='formatted', status='unknown')
                p_dos => SS_dosdata(id)%rarray3(:,:,ia)
-               write(fu+gid,'(a,i4)')'SS_DOS Data: Atom #',gid
-               write(dos_title(1),'(a,f12.8)')'Fermi energy:',chempot
-               write(dos_title(2),'(a,f12.8)')'LIZ Radius:',Neighbor%ShellRad(s)
-               write(dos_title(3),'(a,i6)')'Num Energy Points:', nume_dos
+               write(fu+gid,'(a)')'This file contains single site DOS for a stand-alone atom, i.e., in vacuum'
+               write(fu+gid,'(a,i4)')'Atomic index in the system :',gid
+               write(dos_title(1),'(a,f12.8)')   'Fermi energy     :',chempot
+               if (isLSMS()) then
+!                 write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
+                  write(dos_title(2),'(a,i5)')   'No. Atoms in LIZ :',Neighbor%NumAtoms+1
+               else
+                  write(dos_title(2),'(a,i3)')   'Species index    :',ia
+               endif
+               write(dos_title(3),'(a,i6)')      'Num Energy Points:', nume_dos
 !              -------------------------------------------------------
                call printDOSDATA(fu+gid,nvals,nume_dos,3,p_dos,dos_title)
 !              -------------------------------------------------------
@@ -5943,10 +6961,16 @@ contains
       if (getMyPE() == 0) then
          fname = trim(cpath)//'SS_DOS_'//trim(systemid)//'_average_'//trim(anm)
          open(unit=fu-it, file=fname, form='formatted', status='unknown')
-         write(fu-it,'(a,i6,a,a)')'SS_DOS Data: Averaged over ',n,trim(anm),' atoms'
-         write(dos_title(1),'(a,f12.8)')'Fermi energy:',chempot
-         write(dos_title(2),'(a,f12.8)')'LIZ Radius:',Neighbor%ShellRad(s)
-         write(dos_title(3),'(a,i6)')'Num Energy Points:', nume_dos
+         write(fu-it,'(a)')'This file contains single site DOS for a stand-alone atom, i.e., in vacuum'
+         write(fu-it,'(a,i6,3a)')'The DOS data averaged over ',n,' ',trim(getAtomTypeName(it)),' atoms'
+         write(dos_title(1),'(a,f12.8)')   'Fermi energy     :',chempot
+         if (isLSMS()) then
+!           write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
+            write(dos_title(2),'(a,i5)')   'No. Atoms in LIZ :',Neighbor%NumAtoms+1
+         else
+            write(dos_title(2),'(a,i3)')   'Species index    :',it
+         endif
+         write(dos_title(3),'(a,i6)')      'Num Energy Points:', nume_dos
 !        -------------------------------------------------------------
          call printDOSDATA(fu-it,nvals,nume_dos,3,p_dos,dos_title)
 !        -------------------------------------------------------------
@@ -5974,10 +6998,16 @@ contains
       enddo
       fname = trim(cpath)//'SS_DOS_'//trim(systemid)//'_average'
       open(unit=fu-ntypes-1, file=fname, form='formatted', status='unknown')
-      write(fu-ntypes-1,'(a,i6,a)')'SS_DOS Data: Averaged over ',GlobalNumAtoms,' atoms'
-      write(dos_title(1),'(a,f12.8)')'Fermi energy:',chempot
-      write(dos_title(2),'(a,f12.8)')'LIZ Radius:',Neighbor%ShellRad(s)
-      write(dos_title(3),'(a,i6)')'Num Energy Points:', nume_dos
+      write(fu-ntypes-1,'(a)')'This file contains single site DOS for a stand-alone atom, i.e., in vacuum'
+      write(fu-ntypes-1,'(a,i6,a)')'The DOS data averaged over ',GlobalNumAtoms,' atoms'
+      write(dos_title(1),'(a,f12.8)')   'Fermi energy     :',chempot
+      if (isLSMS()) then
+!        write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
+         write(dos_title(2),'(a,i5)')   'No. Atoms in LIZ :',Neighbor%NumAtoms+1
+      else
+         write(dos_title(2),'(a,i3)')   'Number of species:',ntypes
+      endif
+      write(dos_title(3),'(a,i6)')      'Num Energy Points:', nume_dos
 !     ----------------------------------------------------------------
       call printDOSDATA(fu-ntypes-1,nvals,nume_dos,3,p_tdos,dos_title)
 !     ----------------------------------------------------------------
@@ -6008,11 +7038,13 @@ contains
    use Atom2ProcModule, only : getAtom2ProcInGroup, getLocalIndex
 !
    use SystemModule, only : getNumAtomTypes, getAtomType, getNumAtomsOfType, &
-                            getAtomTypeName
+                            getAtomTypeName, getAtomName
 !
    use NeighborModule, only : getNeighbor
 !
    use AtomModule, only : getLocalSpeciesContent
+!
+   use ScfDataModule, only : isLSMS, isKKRCPA
 !
    implicit none
 !
@@ -6071,10 +7103,16 @@ contains
             fname = trim(cpath)//'DOS_'//trim(systemid)//anm
             open(unit=fu, file=fname, form='formatted', status='unknown')
             p_dos => dosdata(id)%rarray3(:,:,ia)
-            write(fu,'(a,i4)')'DOS Data: Atom #',ig
-            write(dos_title(1),'(a,f12.8)')'Fermi energy:',chempot
-            write(dos_title(2),'(a,f12.8)')'LIZ Radius:',Neighbor%ShellRad(s)
-            write(dos_title(3),'(a,i6)')'Num Energy Points:', nume_dos
+            write(fu,'(a,i4)')'Atomic site index   : ',ig
+            write(fu,'(2a)')  'Atomic species name : ',getAtomName(ig,ia)
+            write(dos_title(1),'(a,f12.8)')   'Fermi energy      :',chempot
+            if (isLSMS()) then
+!              write(dos_title(2),'(a,f12.8)')'LIZ Radius        :',Neighbor%ShellRad(s)
+               write(dos_title(2),'(a,i5)')   'No. Atoms in LIZ  :',Neighbor%NumAtoms+1
+            else
+               write(dos_title(2),'(a,i3)')   'Species index     :',ia
+            endif
+            write(dos_title(3),'(a,i6)')      'Num Energy Points :', nume_dos
 !           ----------------------------------------------------------
             call printDOSDATA(fu,nvals,nume_dos,3,p_dos,dos_title)
 !           ----------------------------------------------------------
@@ -6104,10 +7142,16 @@ contains
                fname = trim(cpath)//'DOS_'//trim(systemid)//anm
                open(unit=fu+gid, file=fname, form='formatted', status='unknown')
                p_dos => dosdata(id)%rarray3(:,:,ia)
-               write(fu+gid,'(a,i4)')'DOS Data: Atom #',gid
-               write(dos_title(1),'(a,f12.8)')'Fermi energy:',chempot
-               write(dos_title(2),'(a,f12.8)')'LIZ Radius:',Neighbor%ShellRad(s)
-               write(dos_title(3),'(a,i6)')'Num Energy Points:', nume_dos
+               write(fu+gid,'(a,i4)')'Atomic site index   : ',gid
+               write(fu+gid,'(2a)')  'Atomic species name : ',getAtomName(gid,ia)
+               write(dos_title(1),'(a,f12.8)')   'Fermi energy      :',chempot
+               if (isLSMS()) then
+!                 write(dos_title(2),'(a,f12.8)')'LIZ Radius        :',Neighbor%ShellRad(s)
+                  write(dos_title(2),'(a,i5)')   'No. Atoms in LIZ  :',Neighbor%NumAtoms+1
+               else
+                  write(dos_title(2),'(a,i3)')   'Species index     :',ia
+               endif
+               write(dos_title(3),'(a,i6)')      'Num Energy Points :', nume_dos
 !              -------------------------------------------------------
                call printDOSDATA(fu+gid,nvals,nume_dos,3,p_dos,dos_title)
 !              -------------------------------------------------------
@@ -6170,10 +7214,15 @@ contains
       if (getMyPE() == 0) then
          fname = trim(cpath)//'DOS_'//trim(systemid)//'_average_'//trim(anm)
          open(unit=fu-it, file=fname, form='formatted', status='unknown')
-         write(fu-it,'(a,i6,a,a)')'DOS Data: Averaged over ',n,trim(anm),' atoms'
-         write(dos_title(1),'(a,f12.8)')'Fermi energy:',chempot
-         write(dos_title(2),'(a,f12.8)')'LIZ Radius:',Neighbor%ShellRad(s)
-         write(dos_title(3),'(a,i6)')'Num Energy Points:', nume_dos
+         write(fu-it,'(a,i6,3a)')'Averaged DOS over ',n,' ',trim(getAtomTypeName(it)),' atoms'
+         write(dos_title(1),'(a,f12.8)')   'Fermi energy     :',chempot
+         if (isLSMS()) then
+!           write(dos_title(2),'(a,f12.8)')'LIZ Radius       :',Neighbor%ShellRad(s)
+            write(dos_title(2),'(a,i5)')   'No. Atoms in LIZ  :',Neighbor%NumAtoms+1
+         else
+            write(dos_title(2),'(a,i3)')   'Species index    :',it
+         endif
+         write(dos_title(3),'(a,i6)')      'Num Energy Points:', nume_dos
 !        -------------------------------------------------------------
          call printDOSDATA(fu-it,nvals,nume_dos,3,p_dos,dos_title)
 !        -------------------------------------------------------------
@@ -6201,10 +7250,15 @@ contains
       enddo
       fname = trim(cpath)//'DOS_'//trim(systemid)//'_average'
       open(unit=fu-ntypes-1, file=fname, form='formatted', status='unknown')
-      write(fu-ntypes-1,'(a,i6,a)')'DOS Data: Averaged over ',GlobalNumAtoms,' atoms'
-      write(dos_title(1),'(a,f12.8)')'Fermi energy:',chempot
-      write(dos_title(2),'(a,f12.8)')'LIZ Radius:',Neighbor%ShellRad(s)
-      write(dos_title(3),'(a,i6)')'Num Energy Points:', nume_dos
+      write(fu-ntypes-1,'(a,i6,a)')'Averaged DOS over ',GlobalNumAtoms,' atoms'
+      write(dos_title(1),'(a,f12.8)')   'Fermi energy      :',chempot
+      if (isLSMS()) then
+!        write(dos_title(2),'(a,f12.8)')'LIZ Radius        :',Neighbor%ShellRad(s)
+         write(dos_title(2),'(a,i5)')   'No. Atoms in LIZ  :',Neighbor%NumAtoms+1
+      else
+         write(dos_title(2),'(a,i3)')   'Number of species :',ntypes
+      endif
+      write(dos_title(3),'(a,i6)')      'Num Energy Points :', nume_dos
 !     ----------------------------------------------------------------
       call printDOSDATA(fu-ntypes-1,nvals,nume_dos,3,p_tdos,dos_title)
 !     ----------------------------------------------------------------
@@ -6298,6 +7352,7 @@ contains
 !  ===================================================================
    use PhysParamModule, only : Boltzmann
    use ScfDataModule, only : Temperature
+   use PotentialTypeModule, only : isASAPotential
    use GroupCommModule, only : GlobalSumInGroup
    use RadialGridModule, only : getGrid
    use StepFunctionModule, only : getVolumeIntegration
@@ -6373,7 +7428,7 @@ contains
 !!
 !   if (print_dos > 0) then
 !      msgbuf = ZERO
-!      msgbuf(1,MyPEinEGroup+1) = real(energy)
+!      msgbuf(1,MyPEinEGroup+1) = real(energy,kind=RealKind)
 !      msgbuf(2,MyPEinEGroup+1) = dos
 !      msgbuf(3,MyPEinEGroup+1) = dos_mt
 !      msgbuf(4,MyPEinEGroup+1) = dos_out
@@ -6383,7 +7438,7 @@ contains
 !!     ----------------------------------------------------------------
 !      if ( node_print_level >= 0) then
 !         do n = 1, NumPEsInEGroup
-!!           write(6,'(f12.8,3x,d15.8,2x,3(4x,d15.8))')real(energy),dos,dos_mt,dos_out,tps
+!!           write(6,'(f12.8,3x,d15.8,2x,3(4x,d15.8))')real(energy,kind=RealKind),dos,dos_mt,dos_out,tps
 !            write(6,'(f12.8,3x,d15.8,2x,3(4x,d15.8))')msgbuf(1:5,n)
 !         enddo
 !      endif
@@ -6405,11 +7460,16 @@ contains
 !        ----------------------------------------------------------------
       enddo
       n = LastValue(id)%NumRs*jmax_dos
-      dos = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
-                                     jmax_dos, 2, dos_r_jl, dos_mt )
+      if (isASAPotential()) then
+         dos = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
+                                          jmax_dos, 2, dos_r_jl, dos_mt, truncated=.false. )
+      else
+         dos = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
+                                          jmax_dos, 2, dos_r_jl, dos_mt )
+      endif
       dos_mt = sfac*dos_mt
 !      print*,"single-site dos at real axis", "  is=", is
-!      print*,"energy=",real(energy), "dos=", dos, "dos_mt=", dos_mt
+!      print*,"energy=",real(energy,kind=RealKind), "dos=", dos, "dos_mt=", dos_mt
       aux(n0+n+1) = rmul*dos
       aux(n0+n+2) = rmul*dos_mt
       aux(n0+n+3) = rmul*dos*energy
@@ -6437,6 +7497,7 @@ contains
 !  In the no-spin-polarized case, a factor of 2 is included in dos.
 !  ===================================================================
    use GroupCommModule, only : GlobalSumInGroup
+   use PotentialTypeModule, only : isASAPotential
    use RadialGridModule, only : getGrid
    use StepFunctionModule, only : getVolumeIntegration
 !   use SSSolverModule, only : computeDOS, getDOS
@@ -6503,7 +7564,7 @@ contains
 !!
 !   if (print_dos > 0) then
 !      msgbuf = ZERO
-!      msgbuf(1,MyPEinEGroup+1) = real(energy)
+!      msgbuf(1,MyPEinEGroup+1) = real(energy,kind=RealKind)
 !      msgbuf(2,MyPEinEGroup+1) = dos
 !      msgbuf(3,MyPEinEGroup+1) = dos_mt
 !      msgbuf(4,MyPEinEGroup+1) = dos_out
@@ -6513,7 +7574,7 @@ contains
 !!     ----------------------------------------------------------------
 !      if ( node_print_level >= 0) then
 !         do n = 1, NumPEsInEGroup
-!!           write(6,'(f12.8,3x,d15.8,2x,3(4x,d15.8))')real(energy),dos,dos_mt,dos_out,tps
+!!           write(6,'(f12.8,3x,d15.8,2x,3(4x,d15.8))')real(energy,kind=RealKind),dos,dos_mt,dos_out,tps
 !            write(6,'(f12.8,3x,d15.8,2x,3(4x,d15.8))')msgbuf(1:5,n)
 !         enddo
 !      endif
@@ -6554,8 +7615,13 @@ contains
 !     ----------------------------------------------------------------
       enddo
       n = LastValue(id)%NumRs*jmax_dos
-      dos = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
-                                     jmax_dos, 2, dos_r_jl, dos_mt )
+      if (isASAPotential()) then
+         dos = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
+                                          jmax_dos, 2, dos_r_jl, dos_mt, truncated = .false. )
+      else
+         dos = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,   &
+                                          jmax_dos, 2, dos_r_jl, dos_mt )
+      endif
       dos_mt = sfac*dos_mt
       aux(n0+n+1) = rmul*dos
       aux(n0+n+2) = rmul*dos_mt
@@ -6574,7 +7640,7 @@ contains
 !      open (104,file="dos_r_jl1",action="write")
 !      do jl=1,jmax_dos
 !         do ir=1,iend
-!            write(104,*) Grid%r_mesh(ir), real(dos_r_jl(ir,jl)*rmul)
+!            write(104,*) Grid%r_mesh(ir),real(dos_r_jl(ir,jl)*rmul,kind=RealKind)
 !         enddo
 !      enddo
 !      close (104)
@@ -6582,7 +7648,7 @@ contains
 !      open (105,file="dos_r_jl2",action="write")
 !      do jl=1,jmax_dos
 !         do ir=1,iend
-!            write(105,*) Grid%r_mesh(ir), real(dos_r_jl(ir,jl)*rmul)
+!            write(105,*) Grid%r_mesh(ir),real(dos_r_jl(ir,jl)*rmul,kind=RealKind)
 !         enddo
 !      enddo
 !      close (105)
@@ -6597,8 +7663,8 @@ contains
    function returnRelSingleSiteDOSinCP(info,e,aux,cfac) result(dos)
 !  ===================================================================
 !
-!  This function returns single site DOS for a given energy on the real 
-!  energy axis.
+!  This function returns single site DOS for a given energy in the complex 
+!  plane. The returned dos value includes a factor cfac if it is present.
 !
 !  The function also returns aux, a data set that can be integrated
 !  on an energy grid
@@ -6607,7 +7673,7 @@ contains
 !  ===================================================================
    use PotentialTypeModule, only : isASAPotential
 !
-   use RadialGridModule, only : getGrid
+   use RadialGridModule, only : getGrid, getRadialIntegration
 !
    use StepFunctionModule, only : getVolumeIntegration
 !
@@ -6660,18 +7726,18 @@ contains
 !
    iend = size(green,1); kmax = size(green,2); jmax = jofk(kmax)
    Grid => getGrid(id)
-!  -------------------------------------------------------------------
-   greenint = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,            &
-                                         kmax, 2, green, greenint_mt )
-!  -------------------------------------------------------------------
-   greenint_mt = sfac*greenint_mt
-!
-   dos = real(SQRTm1*greenint/PI,kind=RealKind)
-!
    if (isASAPotential()) then
+      greenint_mt = sfac*getRadialIntegration(id, Grid%jmt, green(:,1))/Y0
       greenint = greenint_mt
+   else
+!     ----------------------------------------------------------------
+      greenint = sfac*getVolumeIntegration( id, iend, Grid%r_mesh,            &
+                                            kmax, 2, green, greenint_mt )
+!     ----------------------------------------------------------------
+      greenint_mt = sfac*greenint_mt
    endif
 !
+   dos = real(SQRTm1*cmul*greenint/PI,kind=RealKind)
 !
    if (iharris <= 1) then
       ede = energy
@@ -6722,7 +7788,7 @@ contains
 !
    use PotentialTypeModule, only : isASAPotential
 !
-   use RadialGridModule, only : getGrid
+   use RadialGridModule, only : getGrid, getRadialIntegration
 !
    use AtomModule, only : getLocalEvec
 !
@@ -6803,11 +7869,18 @@ contains
    Grid => getGrid(id)
 !
    do ks = 1, ns_sqr
-!     --------------------------------------------------------------
-      greenint(ks) = cmul*sfac*getVolumeIntegration( id, iend, Grid%r_mesh, &
-                                                     kmax, 2, green(:,:,ks), greenint_mt(ks) )
-!     --------------------------------------------------------------
-      greenint_mt(ks) = cmul*sfac*greenint_mt(ks)
+      if (isASAPotential()) then
+         greenint_mt(ks) = cmul*sfac*getRadialIntegration(id, Grid%jmt, green(:,1,ks))/Y0
+         greenint(ks) = greenint_mt(ks)
+!        Alternatively, you can call getVolumeIntegration with truncated=.false.
+!        to run the integration in ASA volume.
+      else
+!        -----------------------------------------------------------
+         greenint(ks) = cmul*sfac*getVolumeIntegration( id, iend, Grid%r_mesh, &
+                                                        kmax, 2, green(:,:,ks), greenint_mt(ks) )
+!        -----------------------------------------------------------
+         greenint_mt(ks) = cmul*sfac*greenint_mt(ks)
+      endif
    enddo
 !
 !   if (isASAPotential()) then
@@ -6932,7 +8005,7 @@ contains
    logical :: useIrregularSolution = .false.
    logical :: relativity
 !
-   integer (kind=IntKind) :: id, BadFermiEnergy, is, info(4), ns, ia
+   integer (kind=IntKind) :: id, BadFermiEnergy, is, info(5), ns, ia
    integer (kind=IntKind), parameter :: MaxIterations = 20
    !
    real (kind=RealKind), intent(inout) :: efermi
@@ -7005,8 +8078,8 @@ contains
             do ia = 1, ssIntegrValue(id)%NumSpecies
                do is = 1, n_spin_pola*n_spin_cant
                   write(6,'(3(a,i2),2(a,d15.8))')'id = ',id,', ia = ',ia,', is = ',is, &
-                          ', MS IDOS_mt_Pole = ',real(ssIntegrValue(id)%dos_mt(is,ia)),&
-                          ', MS IDOS_ws_Pole = ',real(ssIntegrValue(id)%dos(is,ia))
+                          ', MS IDOS_mt_Pole = ',real(ssIntegrValue(id)%dos_mt(is,ia),RealKind),&
+                          ', MS IDOS_ws_Pole = ',real(ssIntegrValue(id)%dos(is,ia),RealKind)
                enddo
             enddo
          enddo
@@ -7029,8 +8102,8 @@ contains
             do ia = 1, IntegrValue(id)%NumSpecies
                do is = 1, n_spin_pola*n_spin_cant
                   write(6,'(3(a,i2),2(a,d15.8))')'id = ',id,', ia = ',ia,', is = ',is, &
-                          ', MS IDOS_mt = ',real(IntegrValue(id)%dos_mt(is,ia)),&
-                          ', MS IDOS_ws = ',real(IntegrValue(id)%dos(is,ia))
+                          ', MS IDOS_mt = ',real(IntegrValue(id)%dos_mt(is,ia),RealKind),&
+                          ', MS IDOS_ws = ',real(IntegrValue(id)%dos(is,ia),RealKind)
                enddo
             enddo
          enddo
@@ -7039,8 +8112,8 @@ contains
             do ia = 1, ssIntegrValue(id)%NumSpecies
                do is = 1, n_spin_pola*n_spin_cant
                   write(6,'(3(a,i2),2(a,d15.8))')'id = ',id,', ia = ',ia,', is = ',is, &
-                          ', SS IDOS_mt = ',real(ssIntegrValue(id)%dos_mt(is,ia)),&
-                          ', SS IDOS_ws = ',real(ssIntegrValue(id)%dos(is,ia))
+                          ', SS IDOS_mt = ',real(ssIntegrValue(id)%dos_mt(is,ia),RealKind),&
+                          ', SS IDOS_ws = ',real(ssIntegrValue(id)%dos(is,ia),RealKind)
                enddo
             enddo
          enddo
@@ -7056,8 +8129,8 @@ contains
             do ia = 1, IntegrValue(id)%NumSpecies
                do is = 1, n_spin_pola*n_spin_cant
                   write(6,'(3(a,i2),2(a,d15.8))')'id = ',id,', ia ',ia,', is = ',is,   &
-                          ', MS+SS IDOS_mt = ',real(IntegrValue(id)%dos_mt(is,ia)),&
-                          ', MS+SS IDOS_ws = ',real(IntegrValue(id)%dos(is,ia))
+                          ', MS+SS IDOS_mt = ',real(IntegrValue(id)%dos_mt(is,ia),RealKind),&
+                          ', MS+SS IDOS_ws = ',real(IntegrValue(id)%dos(is,ia),RealKind)
                enddo
             enddo
          enddo
@@ -7124,7 +8197,7 @@ contains
 !           ----------------------------------------------------------
 !         endif
          do id =  1,LocalNumAtoms
-            info(1) = is; info(2) = id; info(3) = -1; info(4) = 1
+            info(1) = is; info(2) = id; info(3) = -1; info(4) = 1; info(5) = 0
 !           ----------------------------------------------------------
             msDOS = returnRelMultipleSiteDOS(info,eLast,wk_dos)
             call calElectroStruct(info,4,wk_dos,LastValue(id))
@@ -7132,8 +8205,8 @@ contains
             if ( node_print_level >= 0) then
                do ia = 1, LastValue(id)%NumSpecies
                   write(6,'(3(a,i2),2(a,d15.8))')'id = ',id,', ia = ',ia,', is = ',is, &
-                          ', M.Site DOS_mt = ',real(LastValue(id)%dos_mt(is,ia)), &
-                          ', M.Site DOS_ws = ',real(LastValue(id)%dos(is,ia))
+                          ', M.Site DOS_mt = ',real(LastValue(id)%dos_mt(is,ia),RealKind), &
+                          ', M.Site DOS_ws = ',real(LastValue(id)%dos(is,ia),RealKind)
                enddo
             endif
          enddo
@@ -7152,7 +8225,7 @@ contains
             call zeroElectroStruct(ssLastValue(id))
 !           ----------------------------------------------------------
             do is = 1, 1!n_spin_pola*n_spin_pola !major change by xianglin
-               info(1) = is; info(2) = id; info(3) = -1; info(4) = -1
+               info(1) = is; info(2) = id; info(3) = -1; info(4) = -1; info(5) = 0
 !              -------------------------------------------------------
                ssDOS = returnRelSingleSiteDOS(info,efermi,wk_dos)
                call calElectroStruct(info,4,wk_dos,ssLastValue(id))
@@ -7161,8 +8234,8 @@ contains
                   write(6,'(/,a,d15.8)')'S.S. Term DOS at the last energy: ',efermi
                   do ia = 1, ssLastValue(id)%NumSpecies
                      write(6,'(3(a,i2),2(a,d15.8))')'id = ',id,', ia = ',ia,', is = ',is, &
-                          ', S.Site DOS_mt = ',real(ssLastValue(id)%dos_mt(is,ia)), &
-                          ', S.Site DOS_ws = ',real(ssLastValue(id)%dos(is,ia))
+                          ', S.Site DOS_mt = ',real(ssLastValue(id)%dos_mt(is,ia),RealKind), &
+                          ', S.Site DOS_ws = ',real(ssLastValue(id)%dos(is,ia),RealKind)
                   enddo
                endif
             enddo
@@ -7185,8 +8258,8 @@ contains
                do ia = 1, LastValue(id)%NumSpecies
                   do is = 1, n_spin_pola*n_spin_cant
                      write(6,'(3(a,i2),2(a,d15.8))')'id = ',id,', ia = ',ia,', is = ',is, &
-                             ', MS+SS  DOS_mt = ',real(LastValue(id)%dos_mt(is,ia)), &
-                             ', MS+SS  DOS_ws = ',real(LastValue(id)%dos(is,ia))
+                             ', MS+SS  DOS_mt = ',real(LastValue(id)%dos_mt(is,ia),RealKind), &
+                             ', MS+SS  DOS_ws = ',real(LastValue(id)%dos(is,ia),RealKind)
                   enddo
                enddo
             endif
@@ -7221,8 +8294,8 @@ contains
             do ia = 1, IntegrValue(id)%NumSpecies
                do is = 1, n_spin_pola*n_spin_cant
                   write(6,'(3(a,i2),2(a,d15.8))')'id = ',id,', ia = ',ia,', is = ',is, &
-                          ', MS+SS  DOS_mt = ',real(IntegrValue(id)%dos_mt(is,ia)), &
-                          ', MS+SS  DOS_ws = ',real(IntegrValue(id)%dos(is,ia))
+                          ', MS+SS  DOS_mt = ',real(IntegrValue(id)%dos_mt(is,ia),RealKind), &
+                          ', MS+SS  DOS_ws = ',real(IntegrValue(id)%dos(is,ia),RealKind)
                enddo
             enddo
          enddo
@@ -7273,7 +8346,8 @@ contains
 !
    use QuadraticMatrixModule, only : initQuadraticMatrix, endQuadraticMatrix, &
                                      solveQuadraticEquation, getEigenValue,   &
-                                     solveLinearEquation
+                                     solveLinearEquation,                     &
+                                     isQuadraticMatrixInitialized
 !
    implicit none
 !
@@ -7346,6 +8420,9 @@ contains
       allocate( s1(1:kmax_kkr,1:kmax_kkr,1:LocalNumSpecies) )
       allocate( s2(1:kmax_kkr,1:kmax_kkr,1:LocalNumSpecies) )
       allocate( s1p(1:kmax_kkr,1:kmax_kkr,1:LocalNumSpecies) )
+      if (isQuadraticMatrixInitialized()) then
+         call endQuadraticMatrix()
+      endif
       call initQuadraticMatrix(kmax_kkr,isGeneral)
 !
       do is = 1,n_spin
@@ -7446,7 +8523,7 @@ contains
 !              ----------------------------------------------------------
                pv => getEigenValue(nv)
 !              ----------------------------------------------------------
-               if ( node_print_level >= 0) then
+               if ( node_print_level > 0) then
                   write(6,'("calQuadraticPoles: iw",t40,"=", i5,i5)')iw
                endif
                do ie = 1, kmax_kkr*2
@@ -7570,7 +8647,7 @@ contains
 !              ----------------------------------------------------------
                pv => getEigenValue(nv)
 !              ----------------------------------------------------------
-               if ( node_print_level >= 0) then
+               if ( node_print_level > 0) then
                   write(6,'("calQuadraticPoles: iw",t40,"=", i5,i5)')iw
                endif
                do ie = 1, kmax_kkr*2
@@ -7853,7 +8930,7 @@ contains
    !           -------------------------------------------------------
                pv => getEigenValue(nv)
    !           -------------------------------------------------------
-               if ( node_print_level >= 0) then
+               if ( node_print_level > 0) then
                   write(6,'("calQuadraticPoles_cmplx: iw",t40,"=", i5,i5)')iw
                endif
                do ie = 1, kmax_kkr*2
@@ -7981,7 +9058,7 @@ contains
 !              ----------------------------------------------------------
                pv => getEigenValue(nv)
 !              ----------------------------------------------------------
-               if ( node_print_level >= 0) then
+               if ( node_print_level > 0) then
                   write(6,'("calQuadraticPoles_cmplx: iw",t40,"=", i5,i5)')iw
                endif
                do ie = 1, kmax_kkr*2
@@ -8096,5 +9173,46 @@ contains
    endif
 !
    end function getFermiDiracFunc
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine setupSemiCircleContour(ne,er,eg,ew)
+!  ===================================================================
+!  Set up a semi-circle contour around (0.0, 0.0) with radius er by
+!  generating ne number of Gaussian points, eg with weight ew, along the
+!  contour.
+!      Input:  ne -- the number of Gaussian quadrature points
+!              er -- the radius of the contour
+!      Output: eg -- the Gaussian quadrature points
+!              ew -- the weight of each Gaussian quadrature point
+!  *******************************************************************
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: ne
+   integer (kind=IntKind) :: ie
+!
+   real (kind=RealKind), intent(in) :: er
+   real (kind=RealKind) :: xg(ne), wg(ne)
+!
+   complex (kind=CmplxKind), intent(out) :: eg(ne), ew(ne)
+   complex (kind=CmplxKind) :: es, ec, check_wght
+!
+!  -------------------------------------------------------------------
+   call gauleg(-ONE, ONE, xg, wg, ne)
+!  -------------------------------------------------------------------
+   ec = PI*HALF*SQRTm1
+   check_wght = CZERO
+   do ie = 1, ne
+      es = er*exp(ec*(ONE-xg(ie)))
+      eg(ie) = es
+      ew(ie) = -ec*es*wg(ie)
+      check_wght = check_wght + ew(ie)
+   enddo
+   if (abs(check_wght-TWO*er) > TEN2m6) then
+      call ErrorHandler('setupSemiCircleContour','Weight check is failed', &
+                        check_wght)
+   endif
+!
+   end subroutine setupSemiCircleContour
 !  ===================================================================
 end module GFMethodModule

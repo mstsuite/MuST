@@ -288,8 +288,10 @@ program  madpot
          call printPolyhedron(i)
 !      endif
 !     ----------------------------------------------------------------
+!     call genRadialGrid(i,getInscrSphRadius(i), getInscrSphRadius(i),&
+!                        getWignerSeitzRadius(i), getOutscrSphRadius(i), ndivin,ndivout,nmult)
       call genRadialGrid(i,getInscrSphRadius(i), getInscrSphRadius(i),&
-                         getWignerSeitzRadius(i), getOutscrSphRadius(i), ndivin,ndivout,nmult)
+                         getOutscrSphRadius(i), ndivin = ndivin)
 !     ----------------------------------------------------------------
    enddo
 !  --------------------------------------------------------------------

@@ -1,12 +1,14 @@
 ifdef MST
 include ../MST/arch/bolt_intel
+else ifdef KUBO
+include ../MST/arch/bolt_intel
 else ifdef EXTERNAL
 include ../MST/arch/bolt_intel
 else
-include ../lsms/architecture/bolt-intel-nvidia
+include ../lsms/arch/bolt-intel-nvidia
 endif
 
-export LIBXC_PATH=/opt/packages/LibXC/libxc-4.3.4/INTEL
+export LIBXC_PATH=/opt/packages/LibXC/libxc-5.0.0/INTEL
 export HDF5_PATH=/opt/packages/HDF5/hdf5-1.10.5
 export LUA_PATH=/opt/packages/Lua/lua-5.3.5
 export FFTW_PATH = /usr/local/fftw/fftw-3.3.8/INTEL

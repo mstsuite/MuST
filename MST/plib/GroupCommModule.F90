@@ -14,6 +14,8 @@ public ::                   &
    destroyProcGrid,         &
    createBoxGroupFromGrid,  &
    createGroupFromGrid,     &
+   createGroupFromUnion,    &
+   createGroupFromIntersection, &
    createDimGroupFromGrid,  &
    destroyGroupFromGrid,    &
    getNumGroups,            &
@@ -403,17 +405,17 @@ contains
 !  step: the increment in each dimension. 
 !  s : the label of the subgroup to be created.
 !
-!  Example 1:
+!  Example 1: for the following 9 x 4 processor grid
 !
 !        W    A    Y    W    A    Y    W    A    Y
 !        X    O    I    X    O    I    X    O    I
 !        W    A    Y    W    A    Y    W    A    Y
 !        X    O    I    X    O    I    X    O    I  
 !
-!      processors "X", "O", "W", "I", "A", "Y", form subgroups, with
+!      processors "X", "O", "I", "W", "A", "Y", form subgroups, with
 !      step(1) = 3, step(2) = 2
 !
-!  Example 2:
+!  Example 2: for the following 8 x 4 processor grid
 !
 !        X4    O4    Y4    X4    O4    Y4    X4    O4    Y4
 !        X3    O3    Y3    X3    O3    Y3    X3    O3    Y3
@@ -621,6 +623,157 @@ contains
 #endif
 !
    end subroutine createDimGroupFromGrid
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine createGroupFromUnion(id1,id2,s)
+!  ===================================================================
+   use MPPModule, only : MyPE, NumPEs
+!
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: id1, id2  ! Group ID
+   character (len=*), intent(in) :: s              ! New Group Label
+!
+   integer (kind=IntKind) :: comm1, comm2
+   integer (kind=IntKind) :: g1, g2, gnew
+   integer (kind=IntKind) :: i, n, nc1, nc2, ic1, ic2, np1, np2
+!
+   call searchGroup('createGroupFromUnion',id1)
+   comm1 = ptr2CommGr%Communicator
+   nc1 = ptr2CommGr%NumClusters
+   ic1 = ptr2CommGr%MyCluster
+   np1 = ptr2CommGr%Size
+!
+   call searchGroup('createGroupFromUnion',id2)
+   comm2 = ptr2CommGr%Communicator
+   nc2 = ptr2CommGr%NumClusters
+   ic2 = ptr2CommGr%MyCluster
+   np2 = ptr2CommGr%Size
+!
+   call allocateGroup(s)
+!
+#ifdef MPI
+   call MPI_COMM_GROUP(comm1,g1,info)
+   call MPI_COMM_GROUP(comm2,g2,info)
+   call MPI_GROUP_UNION(g1,g2,gnew,info)
+   call MPI_GROUP_SIZE(gnew,ptr2CommGr%Size,info)
+   call MPI_GROUP_RANK(gnew,ptr2CommGr%MyRank,info)
+   call MPI_COMM_CREATE(MPI_COMM_WORLD,gnew,ptr2CommGr%Communicator,info)
+#else
+   ptr2CommGr%Communicator = 0
+   ptr2CommGr%Size = 1
+   ptr2CommGr%MyRank = 0
+#endif
+!
+   n = ptr2CommGr%Size
+   i = ptr2CommGr%MyRank + 1
+   allocate( ptr2CommGr%GroupMembers(n) )
+   ptr2CommGr%GroupMembers = 0
+   ptr2CommGr%GroupMembers(i) = MyPE
+!
+#ifdef MPI
+!  The following call will hang the code.
+!  -------------------------------------------------------------------
+!  call MPI_ALLREDUCE(MPI_IN_PLACE,ptr2CommGr%GroupMembers,n,         &
+!                     MPI_INTEGER,MPI_SUM,ptr2CommGr%Communicator,info)
+!  -------------------------------------------------------------------
+#endif
+!
+   n = nc1*np1
+   if (n == nc2*np2 .and. mod(NumPEs,n) == 0 .and. n == ptr2CommGr%Size) then
+      ptr2CommGr%NumClusters = NumPEs/n
+      if (ptr2CommGr%MyRank == 0) then
+         ptr2CommGr%MyCluster = mod(MyPE+1,n)
+      endif
+   else
+      if (MyPE == 0) then
+         call WarningHandler('createGroupFromUnion',                     &
+                             'Group cluster size is undetermined',n,ptr2CommGr%Size)
+      endif
+      ptr2CommGr%NumClusters = 1
+      ptr2CommGr%MyCluster = 1
+   endif
+!
+   end subroutine createGroupFromUnion
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine createGroupFromIntersection(id1,id2,s)
+!  ===================================================================
+   use MPPModule, only : MyPE, NumPEs
+!
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: id1, id2  ! Group ID
+   character (len=*), intent(in) :: s              ! New Group Label
+!
+   integer (kind=IntKind) :: comm1, comm2
+   integer (kind=IntKind) :: g1, g2, gnew
+   integer (kind=IntKind) :: i, n, nc1, nc2, ic1, ic2
+!
+   if (id1 > 1) then
+      call searchGroup('createGroupFromUnion',id1)
+      comm1 = ptr2CommGr%Communicator
+      nc1 = ptr2CommGr%NumClusters
+      ic1 = ptr2CommGr%MyCluster
+   else if (id1 == 0) then
+      comm1 = MPI_COMM_WORLD
+      nc1 = 1
+      ic1 = 1
+   else
+      call ErrorHandler('createGroupFromIntersection','id1 < 0',id1)
+   endif
+!
+   if (id2 > 1) then
+      call searchGroup('createGroupFromUnion',id2)
+      comm2 = ptr2CommGr%Communicator
+      nc2 = ptr2CommGr%NumClusters
+      ic2 = ptr2CommGr%MyCluster
+   else if (id2 == 0) then
+      comm2 = MPI_COMM_WORLD
+      nc2 = 1
+      ic2 = 1
+   else
+      call ErrorHandler('createGroupFromIntersection','id2 < 0',id2)
+   endif
+!
+   call allocateGroup(s)
+!
+#ifdef MPI
+   call MPI_COMM_GROUP(comm1,g1,info)
+   call MPI_COMM_GROUP(comm2,g2,info)
+   call MPI_GROUP_INTERSECTION(g1,g2,gnew,info)
+   call MPI_GROUP_SIZE(gnew,ptr2CommGr%Size,info)
+   call MPI_GROUP_RANK(gnew,ptr2CommGr%MyRank,info)
+   call MPI_COMM_CREATE(comm1,gnew,ptr2CommGr%Communicator,info)
+#else
+   ptr2CommGr%Communicator = 0
+   ptr2CommGr%Size = 1
+   ptr2CommGr%MyRank = 0
+#endif
+!
+   ptr2CommGr%NumClusters = NumPEs/ptr2CommGr%Size
+   ptr2CommGr%MyCluster = (ic2-1)*nc1/ptr2CommGr%Size + ic1
+!
+   n = ptr2CommGr%Size
+   i = ptr2CommGr%MyRank + 1
+   allocate( ptr2CommGr%GroupMembers(n) )
+   ptr2CommGr%GroupMembers = 0
+   ptr2CommGr%GroupMembers(i) = MyPE
+!
+#ifdef MPI
+!  -------------------------------------------------------------------
+   call MPI_ALLREDUCE(MPI_IN_PLACE,ptr2CommGr%GroupMembers,n,         &
+                      MPI_INTEGER,MPI_SUM,ptr2CommGr%Communicator,info)
+!  -------------------------------------------------------------------
+#endif
+!
+   end subroutine createGroupFromIntersection
 !  ===================================================================
 !
 !  *******************************************************************
@@ -965,7 +1118,7 @@ contains
    ptr2PG%Size = 1
    do i = 1, nd
       if (proc_dims(i) < 1) then
-         call ErrorHandler(sname,'Dimension size < 1',proc_dims(i))
+         call ErrorHandler(sname,'Dimension size < 1',i,proc_dims(i))
       else
          ptr2PG%Dsize(i) = proc_dims(i)
       endif

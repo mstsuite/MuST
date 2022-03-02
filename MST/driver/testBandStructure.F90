@@ -34,7 +34,7 @@ program testBandStructure
    use StepFunctionModule, only : getVolumeIntegration
 !
    use PotentialModule, only : initPotential, endPotential
-   use PotentialModule, only : readPotential, setPotentialOutsideMT, getPotential
+   use PotentialModule, only : readPotential, getPotential
    use PotentialModule, only : getPotEf, setV0, setPotential, isPotComponentZero, getSphPotr
 !
    use ScfDataModule, only : ngaussr, ngaussq
@@ -70,7 +70,7 @@ program testBandStructure
 !
    use AtomModule, only : getStepFuncLmax, setTruncPotLmax, setPotLmax
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
-   use AtomModule, only : getGridData, getLocalEvec
+   use AtomModule, only : getLocalEvec
    use AtomModule, only : getLocalNumSpecies, getLocalAtomicNumber
 !
    use SphericalHarmonicsModule, only : initSphericalHarmonics
@@ -561,7 +561,7 @@ end program testBandStructure
    use QuadraticMatrixModule, only : initQuadraticMatrix, endQuadraticMatrix, &
                                      solveQuadraticEquation, getEigenValue,   &
                                      solveLinearEquation, getEigenVector,     &
-                                     getEigenMatrix
+                                     getResidualMatrix
 !
    implicit none
 !
@@ -762,8 +762,8 @@ end program testBandStructure
                      nb = nb + 1
                      BoundPoles(nb,id,is) = pe
 !write(6,'(a,2d15.8,a,2d15.8)')'Pole = ',pv(ie)+e0,', kappa = ',sqrt(pv(ie)+e0)
-                     em => getEigenMatrix(ie) ! em is the residule matrix of
-                                              ! integrating sm^{-1} around its eigenvalue
+                     em => getResidualMatrix(ie) ! em is the residule matrix of
+                                                 ! integrating sm^{-1} around its eigenvalue
                   endif
                else if (aimag(sqrt(pv(ie)+e0)) < ZERO) then  ! Resonance states
                   pe = real(pv(ie),kind=RealKind) + e0
@@ -772,8 +772,8 @@ end program testBandStructure
                      ResPoles(nr,id,is) = pe
                      ResWidth(nr,id,is) = aimag(sqrt(pv(ie)))**2
 !write(6,'(a,2d15.8,a,2d15.8)')'Pole = ',pv(ie)+e0,', kappa = ',sqrt(pv(ie)+e0)
-                     em => getEigenMatrix(ie) ! em is the residule matrix of
-                                              ! integrating sm^{-1} around its eigenvalue
+                     em => getResidualMatrix(ie) ! em is the residule matrix of
+                                                 ! integrating sm^{-1} around its eigenvalue
                   endif
                endif
             enddo

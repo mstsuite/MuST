@@ -5,8 +5,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #ifndef NoXDR_format
-#include <rpc/types.h>
-#include <rpc/xdr.h>
+#include <types.h>
+#include <xdr.h>
 #endif
 
 struct FileListStruct {
@@ -212,7 +212,7 @@ void c_fseek(INTEGER *findex, INTEGER *offset, INTEGER *whence) {
         if (!fseek(pfl->fp, (long)(*offset-1), SEEK_SET)) return;
     }
     else {
-        if (!fseek(pfl->fp, (long)(*offset-1), SEEK_CUR)) return;
+        if (!fseek(pfl->fp, (long)(*offset), SEEK_CUR)) return;
     }
     printf("Error in fseek file pointer for: %s\n",pfl->fname);
     perror("Error in calling fseek");

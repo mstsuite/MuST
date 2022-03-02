@@ -32,6 +32,8 @@ public :: initScfData,                 &
           isKKR,                       &
           isKKRCPA,                    &
           isEmbeddedCluster,           &
+          isKKRCPASRO,                 &
+          isSROSCF,                    &
           isScreenKKR_LSMS,            &
           isSingleSite,                &
           isFrozenCore,                &
@@ -55,6 +57,11 @@ public :: initScfData,                 &
           setSCFMethod,                &
           getPoleSearchStep,           &
           retreiveEffectiveMediumParams,   &
+          isNextNearestSRO,            &
+          isManualNeighborChoice,      &
+          getManualNumNeighbor,        &
+          retrieveSROParams,           &
+          getMixingParamForFermiEnergy, &
           printScfData
 !
 public
@@ -129,6 +136,7 @@ public
    integer (kind=IntKind) :: Lloyd = 0
    integer (kind=IntKind) :: LloydMode = 1
    integer (kind=IntKind) :: TableID
+   integer (kind=IntKind) :: CurrentScfIteration = 0
 !
    integer (kind=IntKind), parameter, private :: readEmesh   = 1
    integer (kind=IntKind), parameter, private :: readKmesh   = 1
@@ -139,6 +147,7 @@ public
    integer (kind=IntKind), parameter, private :: KKR = 2
    integer (kind=IntKind), parameter, private :: KKRCPA = 3
    integer (kind=IntKind), parameter, private :: EmbeddedCluster = 4
+   integer (kind=IntKind), parameter, private :: KKRCPASRO = 5
 !
    integer (kind=IntKind), private :: read_emesh = 0
    integer (kind=IntKind), private :: read_kmesh = 0
@@ -149,6 +158,8 @@ public
    integer (kind=IntKind), private :: RealEIntMethod = 0
 !
    real (kind=RealKind), private :: ctq
+   real (kind=RealKind), private :: efermi_mix = 1.0d0
+   real (kind=RealKind), private :: efermi_mix_switch = 0.10d0
 !
    character (len=1),  private :: j_ij
    character (len=50), private :: UJfile
@@ -165,12 +176,33 @@ public
 !  ===================================================================
 !  Effective medium parameters
 !  ===================================================================
+   logical :: isWarrenCowley = .false.
    integer (kind=IntKind), private :: EM_mix_type=2
    integer (kind=IntKind), private :: EM_max_iter = 30
    real (kind=RealKind), private ::   EM_mix_0 = 0.1d0
    real (kind=RealKind), private ::   EM_mix_1 = 0.01d0
    real (kind=RealKind), private ::   EM_tol = 0.0000001d0
    real (kind=RealKind), private ::   EM_switch = 0.003
+   real (kind=RealKind), private ::   SRO_mix_type=1
+   real (kind=RealKind), private ::   SRO_mix_0 = 0.1d0
+   real (kind=RealKind), private ::   SRO_mix_1 = 0.01d0
+   real (kind=RealKind), private ::   SRO_tol = 0.00001d0
+   integer (kind=IntKind), private :: SRO_max_iter = 5
+   integer (kind=IntKind), private :: sro_param_num = 0
+   integer (kind=IntKind), private :: next_nearest
+   integer (kind=IntKind), private :: set_neighbors = 0
+   integer (kind=IntKind), private :: num_neighbors
+   integer (kind=IntKind), private :: sro_scf = 0
+   real (kind=RealKind), private, allocatable :: sro_params(:)
+   real (kind=RealKind), private, allocatable :: sro_params_nn(:)
+   integer (kind=IntKind), private :: charge_corr = 0
+   integer (kind=IntKind), private :: use_linear_relation = 0
+   integer (kind=IntKind), private :: num_elements = 0
+   real (kind=RealKind), private, allocatable :: slopes(:)
+   real (kind=RealKind), private, allocatable :: intercepts(:)
+   real (kind=RealKind), private :: cvm_params(2)
+   integer (kind=IntKind), private :: is_cvm = 0
+
 !
 contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -184,6 +216,7 @@ contains
    integer (kind=IntKind), intent(in) :: tbl_id
 !
    integer (kind=IntKind) :: rstatus, n
+   character(len=120) :: svalue
 !
    character (len=50) :: s50
 !
@@ -260,15 +293,16 @@ contains
       lmax_sol_cutoff = -1
    endif
 !
-   if (getKeyValue(tbl_id,'Irregular Solutions (>=0)',ss_irrsol,default_param=.false.) /= 0) then
-      if (getKeyValue(tbl_id,'Irregular Solutions (>=0)',ss_irrsol,default_param=.true.) == 0) then
-         if (ss_irrsol == 0 .and. pot_type /= 3 .and. pot_type /= 5 .and. pot_type /= 6) then
-            ss_irrsol = 1  ! In case of default case and muffin-tin potential, enable irr. sol. calc.
-         endif
-      else
-         call ErrorHandler('initScfData','Input parameter is not found','Irregular Solutions (>=0)')
-      endif
-   endif
+!! if (getKeyValue(tbl_id,'Irregular Solutions (>=0)',ss_irrsol,default_param=.false.) /= 0) then
+!!    if (getKeyValue(tbl_id,'Irregular Solutions (>=0)',ss_irrsol,default_param=.true.) == 0) then
+!!       if (ss_irrsol == 0 .and. pot_type /= 3 .and. pot_type /= 5 .and. pot_type /= 6) then
+!!          ss_irrsol = 1  ! In case of default case and muffin-tin potential, enable irr. sol. calc.
+!!       endif
+!!    else
+!!       call ErrorHandler('initScfData','Input parameter is not found','Irregular Solutions (>=0)')
+!!    endif
+!! endif
+   rstatus = getKeyValue(tbl_id,'Irregular Solutions (>=0)',ss_irrsol)
    if (ss_irrsol==1) then
 !     necessary to account for the boundary conditions of irregular solutions
       ss_solution_method = 1
@@ -291,7 +325,7 @@ contains
    if ( getKeyValue(tbl_id,'No. SD Time Steps (>= 1)',ntstep) /= 0 ) then
       rstatus = getKeyValue(tbl_id,'No. Spin-dynamics Time Steps (>= 1)',ntstep)
    endif
-   if ( getKeyValue(tbl_id,'SD Time Step',tstep) /= 0) then
+   if ( getKeyValue(tbl_id,'SD Time Step',tstep) /= 0 ) then
       rstatus = getKeyValue(tbl_id,'Spin-dynamics Time Step',tstep)
    endif
 !  -------------------------------------------------------------------
@@ -351,6 +385,20 @@ contains
       call ErrorHandler('initScfData','invalid nspin',nspin)
    endif
 !
+!  ===================================================================
+!  The IBZ integration and rotation needs to be carefully tested in the
+!  relativistic case.
+!  For now, we enforce full-BZ integration in the relativistic case.
+!  This limitation will be lifted after a full test.
+!    -- Yang @ 02-15-2022
+!  ===================================================================
+   if (nrelv == 2) then
+      call WarningHandler('initScfData',                              &
+              'In relativistic case, the IBZ integration/rotation needs to be checked and is disabled for now.')
+      Symmetrize = 0
+   endif
+!  ===================================================================
+!
    if (i_vdif < 1 .or. i_vdif > 2) then
       call WarningHandler('initScfData','Unknown interstitial spin index', &
                           i_vdif)
@@ -387,13 +435,88 @@ contains
 !
    rstatus = getKeyValue(tbl_id,'Effective Medium Mixing Scheme',EM_mix_type)
    rstatus = getKeyValue(tbl_id,'Maximum Effective Medium Iterations',EM_max_iter)
+   rstatus = getKeyValue(tbl_id,'Maximum SRO Medium Iterations',SRO_max_iter)
+   rstatus = getKeyValue(tbl_id,'Number of SRO Parameters', sro_param_num)
+   
+   if (rstatus == 0) then
+      allocate(sro_params(sro_param_num))
+      rstatus = getKeyValue(tbl_id,'SRO Parameters',svalue)
+      if (rstatus == 0) then
+         read(svalue,*) sro_params(1:sro_param_num)
+         isWarrenCowley = .false.
+      else if (getKeyValue(tbl_id,'Warren-Cowley SRO Parameters',svalue) == 0) then
+         read(svalue,*) sro_params(1:sro_param_num)
+         isWarrenCowley = .true.
+      else if (isKKRCPASRO()) then
+         call ErrorHandler('initScfData', 'SRO Parameters not found')
+      endif
+      rstatus = getKeyValue(tbl_id, 'Next Nearest', next_nearest)
+      if (rstatus == 0) then
+        if (next_nearest == 1) then
+          allocate(sro_params_nn(sro_param_num))
+          rstatus = getKeyValue(tbl_id, 'Next Nearest SRO Parameters', svalue)
+          if (rstatus == 0) then
+             read(svalue,*) sro_params_nn(1:sro_param_num)
+          else
+             call ErrorHandler('initScfData', 'Next Nearest SRO Parameters not given')
+          endif
+        endif
+      endif
+   else if (rstatus /= 0 .and. isKKRCPASRO()) then
+      call ErrorHandler('initScfData','Number of SRO Parameters not found')
+   endif
+
+   rstatus = getKeyValue(tbl_id, 'Neighbor Choice', set_neighbors)
+   rstatus = getKeyValue(tbl_id, 'Set Number of Neighbors', num_neighbors)
+   rstatus = getKeyValue(tbl_id, 'SCF Mode', sro_scf)
+   rstatus = getKeyValue(tbl_id, 'SRO Medium Mixing Scheme', SRO_mix_type)
+   rstatus = getKeyValue(tbl_id, 'SRO Medium T-matrix Tol (> 0)', SRO_tol)
+   
    if ( getKeyValue(tbl_id,'Effective Medium Mixing Parameters',2,rp) == 0) then
       EM_mix_0 = rp(1); EM_mix_1 = rp(2)
    else
       call ErrorHandler('initScfData','Effective Medium Mixing Parameters are not found')
    endif
+
+   if ( getKeyValue(tbl_id, 'SRO Medium Mixing Parameters',2,rp) == 0) then
+      SRO_mix_0 = rp(1); SRO_mix_1 = rp(2)
+   endif
+
    rstatus = getKeyValue(tbl_id,'Effective Medium T-matrix Tol (> 0)',EM_tol)
    rstatus = getKeyValue(tbl_id,'Effective Medium Mixing eSwitch Value',EM_switch)
+!
+   rstatus = getKeyValue(tbl_id,'Include CPA/SRO Charge Correction', charge_corr)
+!
+   rstatus = getKeyValue(tbl_id,'Use Linear Relation', use_linear_relation)
+   if (use_linear_relation == 1) then
+      rstatus = getKeyValue(tbl_id, 'Number of Slopes/Intercepts', num_elements)
+      allocate(slopes(num_elements), intercepts(num_elements))
+      rstatus = getKeyValue(tbl_id,'Slopes for Linear Relation', svalue)
+      if (rstatus == 0) then
+         read(svalue,*) slopes(1:num_elements)
+      endif
+      rstatus = getKeyValue(tbl_id, 'Intercepts for Linear Relation', svalue)
+      if (rstatus == 0) then
+         read(svalue,*) intercepts(1:num_elements)
+      endif
+   endif
+
+   rstatus = getKeyValue(tbl_id,'CVM SRO Parameters',svalue)
+   if (rstatus == 0) then
+      read(svalue,*) cvm_params(1:2)
+      is_cvm = 1
+   endif
+
+   rstatus = getKeyValue(tbl_id,'Mixing Parameter for Finding Ef',efermi_mix)
+   if (efermi_mix < ZERO .or. efermi_mix > ONE) then
+      call ErrorHandler('initScfData','Invalid efermi_mix value',efermi_mix)
+   endif
+   rstatus = getKeyValue(tbl_id,'Mixing Switch for Finding Ef',efermi_mix_switch)
+   if (efermi_mix_switch < ZERO) then
+      call ErrorHandler('initScfData','Invalid efermi_mix_switch value',efermi_mix_switch)
+   endif
+!
+   CurrentScfIteration = 0
 !
    end subroutine initScfData
 !  ===================================================================
@@ -404,10 +527,31 @@ contains
    subroutine endScfData()
 !  ===================================================================
    implicit none
+!
    if (NumKMeshs > 0) then
       deallocate(Kdiv)
    endif
+   CurrentScfIteration = 0
+!
    end subroutine endScfData
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isSROCVM() result(sro_cvm)
+!  ===================================================================
+   implicit none
+!
+   logical :: sro_cvm
+!
+   if (is_cvm == 1) then
+      sro_cvm = .true.
+   else
+      sro_cvm = .false.
+   endif
+!
+   end function isSROCVM
 !  ===================================================================
 !
 !  *******************************************************************
@@ -620,6 +764,8 @@ contains
       write(fu,'(a)')'# MST Method        : KKR'
    else if ( scf_method == 3) then
       write(fu,'(a)')'# MST Method        : KKRCPA'
+   else if ( scf_method == 5) then
+      write(fu,'(a)')'# MST Method        : KKRCPASRO'
    endif
    if ( nspin==1 ) then
       write(fu,'(a,i3)')'# Spin Parameter    : Non-magnetic -',nspin
@@ -713,6 +859,35 @@ contains
        md = .false.
    endif
    end function isEmbeddedCluster
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isKKRCPASRO() result(md)
+!  ===================================================================
+   implicit none
+   logical :: md
+!
+   if (scf_method == KKRCPASRO) then
+       md = .true.
+   else
+       md = .false.
+   endif
+   end function isKKRCPASRO
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isSROSCF() result(md)
+!  ===================================================================
+   implicit none
+   integer (kind=IntKind) :: md
+
+   md = sro_scf
+
+   end function isSROSCF
 !  ===================================================================
 !
 !  *******************************************************************
@@ -872,6 +1047,82 @@ contains
    endif
 !
    end function isFittedChargeDen
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isChargeCorr() result (isChargeCorrelated)
+!  ===================================================================
+   implicit none
+!
+   logical :: isChargeCorrelated
+!
+   if (isKKRCPA() .and. charge_corr == 1) then
+      isChargeCorrelated = .true.
+   else if (isKKRCPASRO() .and. charge_corr == 1) then
+      isChargeCorrelated = .true.
+   else
+      isChargeCorrelated = .false.
+   endif
+!
+   end function isChargeCorr
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isLinRel() result (isLinearRelationUsed)
+!  ===================================================================
+   implicit none
+!
+   logical :: isLinearRelationUsed
+!
+   if (isChargeCorr() .and. use_linear_relation == 1) then
+      isLinearRelationUsed = .true.
+   else
+      isLinearRelationUsed = .false.
+   endif
+!
+   end function isLinRel
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getSpeciesSlope(ia) result (slope)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: ia
+   real (kind=RealKind) :: slope
+!
+   if (ia < 1 .or. ia > num_elements) then
+      call ErrorHandler('getSpeciesSlope', 'Invalid Species Index', ia)
+   else
+      slope = slopes(ia)
+   endif
+!
+   end function getSpeciesSlope
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getSpeciesIntercept(ia) result (intercept)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: ia
+   real (kind=RealKind) :: intercept
+!
+   if (ia < 1 .or. ia > num_elements) then
+      call ErrorHandler('getSpeciesSlope', 'Invalid Species Index', ia)
+   else
+      intercept = intercepts(ia)
+   endif
+!
+   end function getSpeciesIntercept
 !  ===================================================================
 !
 !  *******************************************************************
@@ -1205,7 +1456,7 @@ contains
 !
    mlloyd = LloydMode
 !
- end function getLloydMode
+   end function getLloydMode
 !  ===================================================================
 !
 !  *******************************************************************
@@ -1354,5 +1605,133 @@ contains
    eSwitch  = EM_switch
 !
    end subroutine retrieveEffectiveMediumParams
+!  ===================================================================
+!  
+!  *******************************************************************
+!  
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
+   subroutine retrieveSROSCFParams(mix_type, alpha_0, alpha_1, tol, max_iter)
+!  ===================================================================
+   implicit none
+
+   integer (kind=IntKind), intent(out) :: mix_type, max_iter
+
+   real (kind=RealKind), intent(out) :: alpha_0, alpha_1, tol
+
+   mix_type = SRO_mix_type
+   alpha_0 = SRO_mix_0
+   alpha_1 = SRO_mix_1
+   tol = SRO_tol
+   max_iter = SRO_max_iter
+
+   end subroutine retrieveSROSCFParams
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc   
+   function isManualNeighborChoice()  result(md)
+!  ===================================================================
+   implicit none
+  
+   logical :: md
+
+   if (set_neighbors == 1) then
+     md = .true.
+   else
+     md = .false.
+   endif   
+
+   end function isManualNeighborChoice
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getManualNumNeighbor() result(num_neigh)
+!  ===================================================================
+   implicit none
+
+   integer (kind=IntKind) :: num_neigh
+
+   if (set_neighbors == 1) then
+     num_neigh = num_neighbors
+   else
+     call ErrorHandler('getManualNumNeighbor', 'Neighbor Type is not Manual!')
+   endif
+
+   end function getManualNumNeighbor
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isNextNearestSRO() result(nn)
+!  ===================================================================
+   implicit none
+
+   integer(kind=IntKind) :: nn
+!
+   nn = next_nearest
+!
+   end function isNextNearestSRO
+!  ===================================================================
+!
+!  *******************************************************************
+!  
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
+   subroutine retrieveCVMParams(cvm_param_list)
+!  ===================================================================
+   implicit none
+!
+   real (kind=RealKind), allocatable, intent(out) :: cvm_param_list(:)
+
+   allocate(cvm_param_list(2))
+   cvm_param_list = cvm_params
+!
+   end subroutine retrieveCVMParams
+!  ==================================================================
+!
+!  *******************************************************************
+!  
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
+   subroutine retrieveSROParams(sro_param_list, param_num, sro_param_list_nn, isWC)
+!  ===================================================================
+   implicit none
+
+   integer (kind=IntKind), intent(out) :: param_num
+!
+   real (kind=RealKind), allocatable, intent(out) :: sro_param_list(:)
+   real (kind=RealKind), allocatable, intent(out), optional :: sro_param_list_nn(:)
+
+   logical, intent(out), optional :: isWC
+
+   param_num = sro_param_num
+   allocate(sro_param_list(param_num))
+   sro_param_list = sro_params
+   if (present(sro_param_list_nn)) then
+      allocate(sro_param_list_nn(param_num))
+      sro_param_list_nn = sro_params_nn
+   endif
+!
+   isWC = isWarrenCowley
+!
+   end subroutine retrieveSROParams
+!  ==================================================================
+!
+!  *******************************************************************
+!  
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc 
+   function getMixingParamForFermiEnergy(mixing_switch) result(alp)
+!  ===================================================================
+   implicit none
+!
+   real (kind=RealKind), intent(out) :: mixing_switch
+   real (kind=RealKind) :: alp
+!
+   alp = efermi_mix
+   mixing_switch = efermi_mix_switch
+!
+   end function getMixingParamForFermiEnergy
 !  ===================================================================
 end module ScfDataModule

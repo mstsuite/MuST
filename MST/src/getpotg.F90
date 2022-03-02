@@ -67,8 +67,8 @@
    integer (kind=IntKind) :: numcmax_in
    integer (kind=IntKind) :: is, ns, nspin_in, n_spin_pola_in
    integer (kind=IntKind) :: present_atom
-   integer (kind=IntKind) :: fp_pos
-   integer (kind=IntKind) :: msg_bytes
+   integer (kind=IntKind) :: fp_pos, fp_tmp
+   integer (kind=IntKind) :: msg_bytes, ip, mp
    integer (kind=IntKind) :: itmp
    integer (kind=IntKind) :: i, ig, ia
    integer (kind=IntKind) :: jl, nr_old, ir, jmt0, nj, lenc, lenf
@@ -218,6 +218,7 @@
                   endif
                   allocate( data_nspot(imsgbuf(14,ia),MaxNumSpecies) )
                   dsize_nspot = imsgbuf(14,ia)
+                  data_nspot = ZERO
                endif
             endif
 !           ==========================================================
@@ -226,14 +227,42 @@
             call c_string_padsize(vunit,imsgbuf(2,ia),pad_bytes)
 !                print *,'imsgbuf = ',imsgbuf(2,ia),', pad_bytes = ',pad_bytes
             msg_bytes=imsgbuf(2,ia)+pad_bytes+(imsgbuf(3,ia)+3)*real8_size
+!!!         ==========================================================
+!!!         The following code was re-written to take care the situation
+!!!         that fp_pos value becomes overflow when a large number of atoms
+!!!         are involved. Function c_fseek is now called repeatedly.
+!!!         By Yang Wang on June 14, 2021.
+!!!         **********************************************************
+!!!         if (imsgbuf(1,ia) > 0) then
+!!!            fp_pos=table_size*integer4_size*10+(present_atom-1)*msg_bytes+1
+!!!         else
+!!!            fp_pos=imsgbuf(12,ia)*real8_size +                     &
+!!!                   table_size*integer4_size*20+(present_atom-1)*msg_bytes+1
+!!!         endif
+!           ----------------------------------------------------------
+!!!         call c_fseek(vunit,fp_pos,0)
+!           ----------------------------------------------------------
             if (imsgbuf(1,ia) > 0) then
-               fp_pos=table_size*integer4_size*10+(present_atom-1)*msg_bytes+1
+               fp_pos = table_size*integer4_size*10 + 1
             else
-               fp_pos=imsgbuf(12,ia)*real8_size +                     &
-                      table_size*integer4_size*20+(present_atom-1)*msg_bytes+1
+               fp_pos = table_size*integer4_size*20 + 1
             endif
 !           ----------------------------------------------------------
             call c_fseek(vunit,fp_pos,0)
+!           ----------------------------------------------------------
+            if (imsgbuf(1,ia) < 0) then ! In case there are data_ldapu and/or data_nspot
+               msg_bytes = msg_bytes + (imsgbuf(13,ia)+imsgbuf(14,ia))*real8_size
+            endif
+!           mp = getAlloySpeciesIndex(present_atom,ia)-1
+            do ip = 1, present_atom-1
+!              -------------------------------------------------------
+               call c_fseek(vunit,msg_bytes,1)
+!              -------------------------------------------------------
+            enddo
+!!!         **********************************************************
+!!!         End of the change made on June 14, 2021
+!!!         ==========================================================
+!           ----------------------------------------------------------
             call c_read_string(vunit,cmsgbuf(:,ia),imsgbuf(2,ia),slen)
             call c_read_double(vunit,fspace(:,ia),imsgbuf(3,ia))
             call c_read_double(vunit,evec,3)
@@ -281,7 +310,10 @@
          fp_pos=(present_atom-1)*integer4_size*10+1
 !        -------------------------------------------------------------
          call c_fseek(vunit,fp_pos,0)
+!1-30-22 fp_tmp = fp_pos
          call c_read_integer(vunit,imsgbuf(:,ia),10)
+!1-30-22 write(6,'(a,i5,2x,2i12)')'Read  imsgbuf(01:10) => ',present_atom,fp_tmp,fp_tmp+10*integer4_size-1
+!1-30-22 write(6,'(a,i5,2x,10i6)')'Imsgbuf(01:10) => ',present_atom,imsgbuf(1:10,ia)
          if (imsgbuf(3,ia) > fsize) then
             call ErrorHandler('getpotg','imsgbuf(3) > size(fspace): ',&
                               present_atom,imsgbuf(3,ia),fsize)
@@ -292,7 +324,10 @@
             fp_pos=table_size*integer4_size*10+fp_pos
 !           ----------------------------------------------------------
             call c_fseek(vunit,fp_pos,0)
+!1-30-22 fp_tmp = fp_pos
             call c_read_integer(vunit,imsgbuf(11:20,ia),10)
+!1-30-22 write(6,'(a,i5,2x,2i12)')'Read  imsgbuf(11:20) => ',present_atom,fp_tmp,fp_tmp+10*integer4_size-1
+!1-30-22 write(6,'(a,i5,2x,10i6)')'Imsgbuf(11:20) => ',present_atom,imsgbuf(11:20,ia)
 !           ----------------------------------------------------------
             if (dsize_ldapu < imsgbuf(13,ia)) then
                if ( allocated(data_ldapu) ) then
@@ -308,6 +343,7 @@
                allocate( data_nspot(imsgbuf(14,ia),MaxNumSpecies) )
                dsize_nspot = imsgbuf(14,ia)
             endif
+            data_nspot = ZERO
          endif
 !        =============================================================
 !        reading cmsgbuf, fspace and evec arrays from vfile...........
@@ -315,17 +351,53 @@
          call c_string_padsize(vunit,imsgbuf(2,ia),pad_bytes)
 !             print *,'pad_bytes = ',pad_bytes
          msg_bytes=imsgbuf(2,ia)+pad_bytes+(imsgbuf(3,ia)+3)*real8_size
+!!!      =============================================================
+!!!      The following code was re-written to take care the situation
+!!!      that fp_pos value becomes overflow when a large number of atoms
+!!!      are involved. Function c_fseek is now called repeatedly.
+!!!      By Yang Wang on June 14, 2021.
+!!!      *************************************************************
+!!!      if (imsgbuf(1,ia) > 0) then
+!!!         fp_pos=table_size*integer4_size*10+(present_atom-1)*msg_bytes+1
+!!!      else
+!!!         fp_pos=imsgbuf(12,ia)*real8_size +                         &
+!!!                (ia-1)*(imsgbuf(13,ia)+imsgbuf(14,ia))*real8_size + &
+!!!                table_size*integer4_size*20+(present_atom-1)*msg_bytes+1
+!!!      endif
+!        -------------------------------------------------------------
+!!!      call c_fseek(vunit,fp_pos,0)
+!        -------------------------------------------------------------
          if (imsgbuf(1,ia) > 0) then
-            fp_pos=table_size*integer4_size*10+(present_atom-1)*msg_bytes+1
+            fp_pos=table_size*integer4_size*10 + 1
          else
-            fp_pos=imsgbuf(12,ia)*real8_size +                        &
-                   table_size*integer4_size*20+(present_atom-1)*msg_bytes+1
+            fp_pos=table_size*integer4_size*20 + 1
          endif
 !        -------------------------------------------------------------
          call c_fseek(vunit,fp_pos,0)
+!        -------------------------------------------------------------
+         if (imsgbuf(1,ia) < 0) then ! In case there are data_ldapu and/or data_nspot
+            msg_bytes = msg_bytes + (imsgbuf(13,ia)+imsgbuf(14,ia))*real8_size
+         endif
+!        mp = getAlloySpeciesIndex(ig,ia)-1
+         do ip = 1, present_atom-1
+!           ----------------------------------------------------------
+            call c_fseek(vunit,msg_bytes,1)
+!           ----------------------------------------------------------
+         enddo
+!!!      *************************************************************
+!!!      End of the change made on June 14, 2021
+!!!      =============================================================
+!        -------------------------------------------------------------
+!1-30-22 fp_tmp = fp_pos + msg_bytes*(present_atom-1)
          call c_read_string(vunit,cmsgbuf(:,ia),imsgbuf(2,ia),slen)
+!1-30-22 write(6,'(a,i5,2x,2i12)')'Read  cmsgbuf => ',present_atom,fp_tmp,fp_tmp+slen-1
+!1-30-22 fp_tmp = fp_tmp + slen
          call c_read_double(vunit,fspace(:,ia),imsgbuf(3,ia))
+!1-30-22 write(6,'(a,i5,2x,2i12)')'Read  fspace  => ',present_atom,fp_tmp,fp_tmp+imsgbuf(3,ia)*real8_size-1
+!1-30-22 fp_tmp = fp_tmp + imsgbuf(3,ia)*real8_size
          call c_read_double(vunit,evec,3)
+!1-30-22 write(6,'(a,i5,2x,2i12)')'Read  evec    => ',present_atom,fp_tmp,fp_tmp+3*real8_size-1
+!1-30-22 fp_tmp = fp_tmp + 3*real8_size
 !        -------------------------------------------------------------
          if(mod(imsgbuf(4,ia),10) < 3) then
             evec(1)=0.0d0
@@ -334,9 +406,13 @@
          endif
          if (imsgbuf(13,ia) > 0) then  
             call c_read_double(vunit,data_ldapu(:,ia),imsgbuf(13,ia))
+!1-30-22 write(6,'(a,i5,2x,2i12)')'Read  ldapu   => ',present_atom,fp_tmp,fp_tmp+imsgbuf(13,ia)*real8_size-1
+!1-30-22 fp_tmp = fp_tmp + imsgbuf(13,ia)*real8_size
          endif
          if (imsgbuf(14,ia) > 0) then
             call c_read_double(vunit,data_nspot(:,ia),imsgbuf(14,ia))
+!1-30-22 write(6,'(a,i5,2x,2i12)')'Read  nspot   => ',present_atom,fp_tmp,fp_tmp+imsgbuf(14,ia)*real8_size-1
+!1-30-22 fp_tmp = fp_tmp + imsgbuf(14,ia)*real8_size
          endif
 !
          if (checkLdaCorrection(local_id,1) .and. imsgbuf(13,ia) > 1) then
@@ -366,6 +442,7 @@
                allocate( data_nspot(imsgbuf(14,ia),MaxNumSpecies) )
                dsize_nspot = imsgbuf(14,ia)
             endif
+            data_nspot = ZERO
          endif
          if (imsgbuf(13,ia) > 0) then  
 !           ----------------------------------------------------------
@@ -516,7 +593,13 @@
 !     perform interpolation: added by Yang @08/06/14
 !     Note : imsgbuf(4) = nspin_old; imsgbuf(17) = jmax_pot_old
 !     ================================================================
-      nr_old = dsize_nspot/(2*imsgbuf(17,1)*n_spin_pola*num_species)
+!     nr_old = dsize_nspot/(2*imsgbuf(17,1)*n_spin_pola*num_species)
+!     nr_old = dsize_nspot/(2*imsgbuf(17,1)*n_spin_pola)
+      if (imsgbuf(15,1) == 0) then ! In case the data were produced by an old version of the code
+         nr_old = dsize_nspot/(2*imsgbuf(17,1)*n_spin_pola)
+      else
+         nr_old = imsgbuf(15,1)
+      endif
       allocate(r_mesh_old(nr_old), c_data_nspot(dsize_nspot/2))
       jmt0=imsgbuf(5,1)
       hh=(xmt-xst)/real(jmt0-1,kind=RealKind) ! Assuming hin = hout
@@ -573,7 +656,7 @@
    integer (kind=IntKind), intent(in) :: table_size
    integer (kind=IntKind), intent(in) :: integer4_size,real8_size
    integer (kind=IntKind) :: p
-   integer (kind=IntKind) :: it, msg_bytes, imsgbuf(20), fp_pos, pad_bytes
+   integer (kind=IntKind) :: it, msg_bytes, imsgbuf(20), fp_pos, pad_bytes, mp, ip
 !
    real (kind=RealKind) :: za
 !
@@ -590,19 +673,48 @@
          call c_string_padsize(vunit,imsgbuf(2),pad_bytes)
 !        -------------------------------------------------------------
          msg_bytes=imsgbuf(2)+pad_bytes+(imsgbuf(3)+3)*real8_size
+!!!      =============================================================
+!!!      The following code was re-written to take care the situation
+!!!      that fp_pos value becomes overflow when a large number of atoms
+!!!      are involved. Function c_fseek is now called repeatedly.
+!!!      By Yang Wang on June 14, 2021.
+!!!      *************************************************************
+!!!      if (imsgbuf(1) > 0) then
+!!!         fp_pos=table_size*integer4_size*10+(it-1)*msg_bytes+1
+!!!      else
+!!!         fp_pos=table_size*integer4_size*10+fp_pos
+!           ----------------------------------------------------------
+!!!         call c_fseek(vunit,fp_pos,0)
+!!!         call c_read_integer(vunit,imsgbuf(11:20),10)
+!           ----------------------------------------------------------
+!!!         fp_pos=imsgbuf(12)*real8_size+table_size*integer4_size*20+(it-1)*msg_bytes+1
+!!!      endif
+!!!      fp_pos = fp_pos + imsgbuf(2) + 3*real8_size
+!        -------------------------------------------------------------
+!!!      call c_fseek(vunit,fp_pos,0)
+!        -------------------------------------------------------------
          if (imsgbuf(1) > 0) then
-            fp_pos=table_size*integer4_size*10+(it-1)*msg_bytes+1
+            fp_pos=table_size*integer4_size*10 + 1
          else
-            fp_pos=table_size*integer4_size*10+fp_pos
-!           ----------------------------------------------------------
-            call c_fseek(vunit,fp_pos,0)
             call c_read_integer(vunit,imsgbuf(11:20),10)
-!           ----------------------------------------------------------
-            fp_pos=imsgbuf(12)*real8_size+table_size*integer4_size*20+(it-1)*msg_bytes+1
+            fp_pos=table_size*integer4_size*20 + 1
          endif
-         fp_pos = fp_pos + imsgbuf(2) + 3*real8_size
 !        -------------------------------------------------------------
          call c_fseek(vunit,fp_pos,0)
+!        -------------------------------------------------------------
+         if (imsgbuf(1) < 0) then ! In case there are data_ldapu and/or data_nspot
+            msg_bytes = msg_bytes + (imsgbuf(13)+imsgbuf(14))*real8_size
+         endif
+         mp = getAlloySpeciesIndex(ig,ia)-1
+         do ip = 1, mp
+!           ----------------------------------------------------------
+            call c_fseek(vunit,msg_bytes,1)
+!           ----------------------------------------------------------
+         enddo
+!!!      *************************************************************
+!!!      End of the change made on June 14, 2021
+!!!      =============================================================
+!        -------------------------------------------------------------
          call c_read_double(vunit,za,1)
 !        -------------------------------------------------------------
          if (int(za) /= getAtomicNumber(ig,ia)) then

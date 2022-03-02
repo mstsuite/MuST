@@ -69,7 +69,7 @@ program pot_average
    use AtomModule, only : initAtom, endAtom
    use AtomModule, only : getMaxLmax, printAtom
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
-   use AtomModule, only : getGridData
+   use AtomModule, only : getRadialGridData
    use AtomModule, only : getLocalAtomPosition
 !
    use SphericalHarmonicsModule, only : initSphericalHarmonics
@@ -120,7 +120,7 @@ program pot_average
    real (kind=RealKind), allocatable :: AtomPosition(:,:)
 !
    real (kind=RealKind) :: bravais(3,3)
-   real (kind=RealKind) :: rmt, rend
+   real (kind=RealKind) :: rmt, rend, hin
    real (kind=RealKind) :: t0, t1, t2, t3
    real (kind=RealKind) :: pot_aver(2)
    real (kind=RealKind), pointer :: r_mesh(:)
@@ -260,59 +260,8 @@ program pot_average
 !  ===================================================================
 !  initialize radial grid
 !  -------------------------------------------------------------------
-   call initRadialGrid(LocalNumAtoms, istop, node_print_level)
+   call setupRadGridAndCell(LocalNumAtoms,lmax_max)
 !  -------------------------------------------------------------------
-   do i=1,LocalNumAtoms
-      ig=getGlobalIndex(i,MyPE)
-!     ----------------------------------------------------------------
-      call getGridData(i,ndivin,ndivout,nmult)
-!     ----------------------------------------------------------------
-!     call genPolyhedron(i,ig,NumAtoms,AtomPosition)
-!     ----------------------------------------------------------------
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printPolyhedron(i)
-!        call printPolyhedronBoundary(i)
-!        -------------------------------------------------------------
-      endif
-      if (isMuffinTinPotential() .or. isMuffinTinTestPotential()) then
-!        -------------------------------------------------------------
-!         call genRadialGrid(i,xstart,getInscrSphRadius(i),           &
-!                            getWignerSeitzRadius(i),ndivin)
-         call genRadialGrid(i,xstart,getInscrSphRadius(i),            &
-                            getInscrSphRadius(i),                     &
-                            getOutscrSphRadius(i),ndivin)
-!        -------------------------------------------------------------
-      else if (isASAPotential() .or. isMuffinTinASAPotential()) then
-!        -------------------------------------------------------------
-         call genRadialGrid(i,xstart,getWignerSeitzRadius(i),         &
-                            getWignerSeitzRadius(i),                  &
-                            getOutscrSphRadius(i),ndivin)
-!                           getWignerSeitzRadius(i),ndivin)
-!        -------------------------------------------------------------
-      else
-         if (getNeighborDistance(i,1)-getOutscrSphRadius(i) < TEN2m8) then
-!           ----------------------------------------------------------
-            call WarningHandler('main',                               &
-                     'Ill condition found: Neighbor distance <= Rcs', &
-                     getNeighborDistance(i,1),getOutscrSphRadius(i))
-!           ----------------------------------------------------------
-         endif
-!        -------------------------------------------------------------
-         call genRadialGrid(i,xstart,getInscrSphRadius(i),            &
-                            getInscrSphRadius(i),                     &
-                            getOutscrSphRadius(i),ndivin)
-!        call genRadialGrid(i,getInscrSphRadius(i),getOutscrSphRadius(i), &
-!                           ndivin,ndivout,nmult)
-!        -------------------------------------------------------------
-      endif
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printRadialGrid(i)
-!        -------------------------------------------------------------
-      endif
-   enddo
-!  ===================================================================
 !
 !  *******************************************************************
 !

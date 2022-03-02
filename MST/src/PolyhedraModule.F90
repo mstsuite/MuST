@@ -1,6 +1,6 @@
 module PolyhedraModule
    use KindParamModule, only : IntKind, RealKind
-   use ErrorHandlerModule, only : ErrorHandler, StopHandler
+   use ErrorHandlerModule, only : ErrorHandler, StopHandler, WarningHandler
    use MathParamModule, only : ZERO, THIRD, HALF, ONE, TEN2m6, TEN2m8, TEN2m10, TEN2m12
    use Matrix3dModule, only : invm3
 !
@@ -126,19 +126,25 @@ private
    type (PolyhedronStruct), allocatable, target :: Polyhedron(:)
 !
    real (kind=RealKind) :: UnitBox(3,3), UnitBoxM(3)
-   real (kind=RealKind), parameter :: TOLERANCE = HALF*TEN2m6
+!  real (kind=RealKind), parameter :: TOLERANCE = HALF*TEN2m6
+!  real (kind=RealKind), parameter :: TOLERANCE = TEN2m8
+   real (kind=RealKind) :: TOLERANCE
 !
 contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine initPolyhedra(n,Box,istop,iprint)
+   subroutine initPolyhedra(n,Box,istop,iprint,tol)
 !  ===================================================================
    implicit none
+!
    character (len=*), intent(in) :: istop
+!
    integer (kind=IntKind), intent(in) :: n
    integer (kind=IntKind), intent(in) :: iprint
    integer (kind=IntKind) :: i
+!
    real (kind=RealKind), intent(in) :: Box(3,3)
+   real (kind=RealKind), intent(in), optional :: tol
 !
    if (n < 1) then
       call ErrorHandler('initPolyhedra','invalid num atoms on my PE',n)
@@ -146,6 +152,16 @@ contains
 !
    stop_routine = istop
    print_level = iprint
+!
+   if (present(tol)) then
+      if (tol < ZERO .or. tol > ONE) then
+         call ErrorHandler('initPolyhedra','invalid tol value',tol)
+      else
+         TOLERANCE = tol
+      endif
+   else
+      TOLERANCE = HALF*TEN2m6
+   endif
 !
    NumLocalPolyhedra = n
    allocate(Polyhedron(n))
@@ -1087,8 +1103,9 @@ contains
    real (kind=RealKind) :: zt
    real (kind=RealKind) :: r2t
    real (kind=RealKind) :: r
-   real (kind=RealKind), allocatable :: radsq(:)
-   real (kind=RealKind) :: d2, radsq_dif, CutRatio, d2t
+!  real (kind=RealKind), allocatable :: radsq(:)
+!  real (kind=RealKind) :: radsq_dif
+   real (kind=RealKind) :: d2, CutRatio, d2t
 !
 !  ==================================================================
 !  determine i,j,k data set.......................................
@@ -1118,10 +1135,10 @@ contains
       enddo
    enddo
 !
-   allocate( radsq(num_seeds) )
-   do n=1,num_seeds
-      radsq(n) = radical(n)*radical(n)
-   enddo
+!  allocate( radsq(num_seeds) )
+!  do n=1,num_seeds
+!     radsq(n) = radical(n)*radical(n)
+!  enddo
 !
    x0=seed_pos(1,i_seed)
    y0=seed_pos(2,i_seed)
@@ -1139,12 +1156,13 @@ contains
          if (d2 < TOLERANCE) then
             cycle LOOP_j_seed
          endif
-         radsq_dif = radsq(i_seed)-radsq(j_seed)
-         if (abs(radsq_dif) < TOLERANCE) then
-            CutRatio = HALF
-         else
-            CutRatio = HALF*(ONE+radsq_dif/d2)
-         endif
+!        radsq_dif = radsq(i_seed)-radsq(j_seed)
+         CutRatio = radical(i_seed)/(radical(i_seed)+radical(j_seed))
+!        if (abs(radsq_dif) < TOLERANCE) then
+!           CutRatio = HALF
+!        else
+!           CutRatio = HALF*(ONE+radsq_dif/d2)
+!        endif
          x = CutRatio*x
          y = CutRatio*y
          z = CutRatio*z
@@ -1193,7 +1211,7 @@ contains
       enddo LOOP_j_seed
    enddo
    nm1=j
-   deallocate( radsq )
+!  deallocate( radsq )
 !
 !  ===================================================================
 !  reduce nm1 to speed up the process of looking for boundary planes
@@ -2340,22 +2358,75 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getNeighborDistance(poly,plane) result(d)
+   function getNeighborDistance(poly,plane,dmin,dmax) result(d)
 !  ===================================================================
    implicit none
 !
    integer (kind=IntKind), intent(in) :: poly
-   integer (kind=IntKind), intent(in) :: plane
+   integer (kind=IntKind), intent(in), optional :: plane
+   logical, intent(in), optional :: dmin, dmax
+   logical :: minimum, maximum
+   integer (kind=IntKind) :: ip
 !
    real (kind=RealKind) :: d
 !
    if (poly < 1 .or. poly > NumLocalPolyhedra) then
       call ErrorHandler('getNeighborDistance','Invalid polyhedron index',poly)
-   else if (plane < 1 .or. plane > Polyhedron(poly)%NumPlanes) then
-      call ErrorHandler('getNeighborDistance','Invalid plane index',plane)
    endif
 !
-   d = Polyhedron(poly)%NeighborDist(plane)
+   if (Polyhedron(poly)%NumPlanes < 1) then
+      call WarningHandler('getNeighborDistance','The number of neighboring atoms = 0')
+      d = ZERO
+      return
+   endif
+!
+   minimum = .false.; maximum = .false.
+!
+   if (present(dmin)) then
+      if (dmin) then
+         minimum = .true.
+      endif
+   endif
+!
+   if (present(dmax)) then
+      if (dmax) then
+         maximum = .true.
+      endif
+   endif
+!
+   if ( present(plane) .and. minimum) then
+      call ErrorHandler('getNeighborDistance',                        &
+                        'Both plane index and dmin=.true. are present')
+   else if (present(plane) .and. maximum) then
+      call ErrorHandler('getNeighborDistance',                        &
+                        'Both plane index and dmax=.true. are present')
+   else if (minimum .and. maximum) then
+      call ErrorHandler('getNeighborDistance',                        &
+                        'Both dmin=.true. and dmax=.true. are present')
+   endif
+!
+   if (present(plane)) then
+      if (plane < 1 .or. plane > Polyhedron(poly)%NumPlanes) then
+         call ErrorHandler('getNeighborDistance','Invalid plane index',plane)
+      endif
+      d = Polyhedron(poly)%NeighborDist(plane)
+   else if (minimum) then
+      d = Polyhedron(poly)%NeighborDist(1)
+      do ip = 2, Polyhedron(poly)%NumPlanes
+         d = min(d,Polyhedron(poly)%NeighborDist(ip))
+      enddo
+   else if (maximum) then
+      d = Polyhedron(poly)%NeighborDist(1)
+      do ip = 2, Polyhedron(poly)%NumPlanes
+         d = max(d,Polyhedron(poly)%NeighborDist(ip))
+      enddo
+   else ! return the averaged neighbor distance
+      d = ZERO
+      do ip = 1, Polyhedron(poly)%NumPlanes
+         d = d + Polyhedron(poly)%NeighborDist(ip)
+      enddo
+      d = d/real(Polyhedron(poly)%NumPlanes,kind=RealKind)
+   endif
 !
    end function getNeighborDistance
 !  ===================================================================
@@ -2527,7 +2598,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function isExternalPoint(poly,x,y,z) result(a)
+   function isExternalPoint(poly,x,y,z,tol_in) result(a)
 !  ===================================================================
    implicit none
 !
@@ -2535,6 +2606,7 @@ contains
    integer (kind=IntKind) :: isigma
 !
    real (kind=RealKind), intent(in) :: x, y, z
+   real (kind=RealKind), intent(in), optional :: tol_in
    real (kind=RealKind) :: tol
 !
    logical :: a
@@ -2543,7 +2615,11 @@ contains
       call ErrorHandler('isExternalPoint','Invalid polyhedron index',poly)
    endif
 !
-   tol = TOLERANCE
+   if (present(tol_in)) then
+      tol = tol_in
+   else
+      tol = TOLERANCE
+   endif
 !  -------------------------------------------------------------------
    call chkpnt(x,y,z,Polyhedron(poly)%vplane,                         &
                      Polyhedron(poly)%vpsq,                           &
@@ -2561,7 +2637,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function isSurfacePoint(poly,x,y,z) result(a)
+   function isSurfacePoint(poly,x,y,z,tol_in) result(a)
 !  ===================================================================
    implicit none
 !
@@ -2569,6 +2645,7 @@ contains
    integer (kind=IntKind) :: isigma
 !
    real (kind=RealKind), intent(in) :: x, y, z
+   real (kind=RealKind), intent(in), optional :: tol_in
    real (kind=RealKind) :: tol
 !
    logical :: a
@@ -2577,7 +2654,11 @@ contains
       call ErrorHandler('isExternalPoint','Invalid polyhedron index',poly)
    endif
 !
-   tol = HALF*TOLERANCE
+   if (present(tol_in)) then
+      tol = tol_in
+   else
+      tol = HALF*TOLERANCE
+   endif
 !  -------------------------------------------------------------------
    call chkpnt(x,y,z,Polyhedron(poly)%vplane,                         &
                      Polyhedron(poly)%vpsq,                           &
@@ -2604,7 +2685,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getPointLocationFlag(poly,x,y,z) result(f)
+   function getPointLocationFlag(poly,x,y,z,tol) result(f)
 !  ===================================================================
    implicit none
 !
@@ -2612,13 +2693,38 @@ contains
    integer (kind=IntKind) :: f
 !
    real (kind=RealKind), intent(in) :: x, y, z
+   real (kind=RealKind), intent(in), optional :: tol
 !
-   if (isExternalPoint(poly,x,y,z)) then
-      f = -1
-   else if (isSurfacePoint(poly,x,y,z)) then
-      f = 0
+   if (present(tol)) then
+!     if (isExternalPoint(poly,x,y,z,tol_in=tol)) then
+!        f = -1
+!     else if (isSurfacePoint(poly,x,y,z,tol_in=tol)) then
+!        f = 0
+!     else
+!        f = 1
+!     endif
+      if (isSurfacePoint(poly,x,y,z,tol_in=tol)) then
+         f = 0
+      else if (isExternalPoint(poly,x,y,z,tol_in=tol)) then
+         f = -1
+      else
+         f = 1
+      endif
    else
-      f = 1
+!     if (isExternalPoint(poly,x,y,z)) then
+!        f = -1
+!     else if (isSurfacePoint(poly,x,y,z)) then
+!        f = 0
+!     else
+!        f = 1
+!     endif
+      if (isSurfacePoint(poly,x,y,z)) then
+         f = 0
+      else if (isExternalPoint(poly,x,y,z)) then
+         f = -1
+      else
+         f = 1
+      endif
    endif
 !
    end function getPointLocationFlag

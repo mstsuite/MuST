@@ -188,7 +188,7 @@
    endif
 !
 !  ===================================================================
-!  interpolate chg density and cor density onto rsw mesh
+!  interpolate potential and charge density onto new r-mesh
 !  ===================================================================
    performed_Interpolation = .false.
    if (jmt /= jmt0 .or. abs(log(r_mesh(jmt))-x_mesh_old(jmt0)) > TEN2m8 .or. &
@@ -196,6 +196,12 @@
       do j=1,jmt
 !        vr(j)=ylag(x_mesh(j),x_mesh_old,vrold,0,3,jmt0,iex)
          call interp(r_mesh_old,vrold,nr_old,r_mesh(j),vr(j),dvr)
+!        write(6,'(a,i5,5d15.8)')'j,rold,r,vold,v,dvr = ',j,r_mesh_old(j),r_mesh(j), &
+!                                vrold(j),vr(j),dvr
+!        call interp(x_mesh_old,vrold,nr_old,log(r_mesh(j)),vr(j),dvr)
+         if (abs(vr(j)) < TEN2m8) then
+            vr(j) = ZERO
+         endif
       enddo
       if (ztotss > TEN2m8) then
          j = 1
@@ -221,6 +227,7 @@
 !           rhotot(j)=ylag(x_mesh(j),x_mesh_old,chgold,0,3,ntchg,iex)
 !           print*,'potredg:: ir=',j, ntchg, jws 
             call interp(r_mesh_old,chgold,ntchg,r_mesh(j),rhotot(j),dvr)
+!           call interp(x_mesh_old,chgold,ntchg,log(r_mesh(j)),rhotot(j),dvr)
             if(rhotot(j) < ZERO) rhotot(j)=ZERO
          enddo
       else
@@ -240,6 +247,7 @@
       write(6,'(''  POTREDG: New Potential Grid Parameters'')')
       write(6,'(''  POTREDG:     jmt:'',i4)') jmt
       write(6,'(''  POTREDG:    alat:'',f10.5)') alat
+      write(6,'(''  POTREDG: xst,xmt:'',2e23.14)') log(r_mesh(1)),log(r_mesh(jmt))
       write(6,'(''  POTREDG: rst,rmt:'',2e23.14)') r_mesh(1),r_mesh(jmt)
       write(6,'(''  POTREDG: vst,vmt:'',2e23.14)') vr(1),vr(jmt)
    endif

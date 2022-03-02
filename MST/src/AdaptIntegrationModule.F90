@@ -10,9 +10,11 @@ public :: initAdaptIntegration,    &
           getAdaptIntegration,     &
           getUniMeshIntegration,   &
           getUniformIntegration,   &
+          getGaussianIntegration,  &
           getAuxDataAdaptIntegration, &
           getPeakPos,              &
-          getWeightedIntegration !added by xianglin
+          getWeightedIntegration,  & !added by xianglin
+          getRombergIntegration
 !
 private
    integer (kind=IntKind) :: AuxArraySize
@@ -24,8 +26,9 @@ private
 !
    real (kind=RealKind) :: LowEnd, HighEnd, peak_pos
 !
-   complex (kind=CmplxKind), allocatable :: AuxArray(:)
    complex (kind=CmplxKind), allocatable, target :: AuxArrayIntegral(:)
+!
+   logical :: Initialized = .false.
 !
 contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -45,7 +48,7 @@ contains
             AuxArraySize = 4*n
       endif
    endif
-   allocate( AuxArray(AuxArraySize), AuxArrayIntegral(AuxArraySize) )
+   allocate( AuxArrayIntegral(AuxArraySize) )
 !
    if (present(gid)) then
       GroupID = gid
@@ -57,6 +60,8 @@ contains
       MyPEinGroup = 0
    endif
 !
+   Initialized = .true.
+!
    end subroutine initAdaptIntegration
 !  ===================================================================
 !
@@ -65,7 +70,7 @@ contains
 !  ===================================================================
    implicit none
 !
-   deallocate( AuxArray, AuxArrayIntegral )
+   deallocate( AuxArrayIntegral )
 !
    if (allocated( AdaptMesh )) then
       deallocate( AdaptMesh )
@@ -73,6 +78,8 @@ contains
    if (allocated( AdaptMeshWeight )) then
       deallocate( AdaptMeshWeight )
    endif
+!
+   Initialized = .false.
 !
    end subroutine endAdaptIntegration
 !  ===================================================================
@@ -302,6 +309,7 @@ contains
    real (kind=RealKind), allocatable :: ehalf(:),rhohalf(:)
    complex (kind=CmplxKind), allocatable :: aa_mesh(:,:)
    complex (kind=CmplxKind) :: aa_int(AdaptMeshSize)
+   complex (kind=CmplxKind) :: AuxArray(AuxArraySize)
 !
    interface
       function func(info,x,aux,xi,redundant) result(y)
@@ -314,6 +322,10 @@ contains
          logical, intent(in), optional :: redundant
       end function func
    end interface
+!
+   if (.not.Initialized) then
+      call ErrorHandler('getAdaptIntegration','Need to call initAdaptIntegration first')
+   endif
 !
    allocate( aa_mesh(AdaptMeshSize,AuxArraySize) )
    aa_mesh = CZERO; rho = ZERO
@@ -378,7 +390,7 @@ contains
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getUniformIntegration(n,x0,x,info,func,nm) result(fint)
+   function getUniformIntegration(n_in,x0,x,info,func,n_out) result(fint)
 !  ===================================================================
 !  Note: For using different number of processors, the integration
 !        mesh can potentially be different, thus the result could be 
@@ -391,7 +403,7 @@ contains
 !
    use IntegrationModule, only : calIntegration
 !
-   use MPPModule, only : setCommunicator, resetCommunicator
+   use MPPModule, only : setCommunicator, resetCommunicator, MyPE
    use MPPModule, only : nbrecvMessage, nbsendMessage, WaitMessage, bcastMessage
 !
    use GroupCommModule, only : GlobalSumInGroup, GlobalMaxInGroup
@@ -399,19 +411,22 @@ contains
 !
    implicit none
 !
-   integer (kind=IntKind), intent(in) :: n
+   integer (kind=IntKind), intent(in) :: n_in
    integer (kind=IntKind), intent(in) :: info(*)
-   integer (kind=IntKind), intent(out) :: nm
-   integer (kind=IntKind) :: i, j, n_loc, m_loc, imax, ns, ms
+   integer (kind=IntKind), intent(out) :: n_out
+   integer (kind=IntKind) :: n, i, j, n_loc, m_loc, imax, ns, ms, mp, ne
    integer (kind=IntKind) :: msgid0, msgid1, msgid2, msgid3, comm
 !
    real (kind=RealKind), intent(in) :: x0, x
    real (kind=RealKind) :: fint, del, f0, peak_val
-   real (kind=RealKind) :: x_mesh(n)
+   real (kind=RealKind), allocatable :: x_mesh(:)
    real (kind=RealKind), allocatable :: f_mesh(:), y_mesh(:)
 !
    complex (kind=CmplxKind), allocatable :: aa_mesh(:,:), aa_int(:)
-   complex (kind=CmplxKind), allocatable :: a_buf(:), b_buf(:)
+   complex (kind=CmplxKind), allocatable :: a_buf(:,:), b_buf(:,:)
+   complex (kind=CmplxKind) :: AuxArray(AuxArraySize)
+!
+   logical :: adjust_n = .true.
 !
    interface
       function func(info,x,aux,xi,redundant) result(y)
@@ -425,9 +440,13 @@ contains
       end function func
    end interface
 !
-   if (n < 2) then
+   if (.not.Initialized) then
+      call ErrorHandler('getUniformIntegration','Need to call initAdaptIntegration first')
+   endif
+!
+   if (n_in < 3) then
 !     ----------------------------------------------------------------
-      call ErrorHandler('getUniformIntegration','Number of mesh < 2',n)
+      call ErrorHandler('getUniformIntegration','Number of mesh < 3',n_in)
 !     ----------------------------------------------------------------
    else if (x0 > x) then
 !     ----------------------------------------------------------------
@@ -435,29 +454,58 @@ contains
 !     ----------------------------------------------------------------
    endif
 !
-   nm = n
+   if (n_in < 3*NumPEsInGroup) then ! This ensures to integrate over >= 3 points on each process
+      n = 3*NumPEsInGroup
+   else
+      n = n_in
+   endif
+!
+!  ===================================================================
+!  mp is the number of function values to be sent to the next process 
+!  ===================================================================
+   mp = 1
+!
+!  ===================================================================
+!  n_loc is the number of grid points mapped onto the local process
+!  ===================================================================
+   n_loc = n/NumPEsInGroup
+   if (adjust_n) then
+!     we may choose to adjust n value so that n is evenly distributed
+      if (n > n_loc*NumPEsInGroup) then
+         n_loc = n_loc + 1
+         n = n_loc*NumPEsInGroup
+      endif
+   else
+!     Or we may choose to adjust n_loc
+      if (n-n_loc*NumPEsInGroup > 0 .and. n-n_loc*NumPEsInGroup + mp < 3) then
+         n_loc = n_loc - 1
+      endif
+   endif
+!
+!  ===================================================================
+!  ns+i is an index in [1,n] for index i on the local process
+!  ===================================================================
+   ns = MyPEinGroup*n_loc
+   ne = n_loc*NumPEsInGroup
+   n_out = n
+!
+   allocate( x_mesh(n), f_mesh(n_loc+mp), y_mesh(n_loc+mp) )
+   allocate( aa_mesh(n_loc+mp,AuxArraySize), aa_int(n_loc+mp) )
+   allocate( a_buf(mp,AuxArraySize), b_buf(mp,AuxArraySize) )
+!
+!  ===================================================================
+!  ms is the number of function values to be obtained from the previous process
+!  ===================================================================
+   if (MyPEinGroup == 0) then
+      ms = 0
+   else
+      ms = mp
+   endif
+!
    del = (x-x0)/real(n-1,kind=RealKind)
    do i = 1, n
       x_mesh(i) = x0 + (i-1)*del
    enddo
-!
-   if (n >= NumPEsInGroup) then
-      n_loc = n/NumPEsInGroup ! number of energy points mapped onto the local process
-      ns = MyPEinGroup*n_loc
-   else ! This may happen if number of CPU Cores > n. No parallelization is done
-      n_loc = n
-      ns = 1
-   endif
-!
-   if (MyPEinGroup == 0) then
-      ms = 0
-   else
-      ms = 1
-   endif
-!
-   allocate( f_mesh(n_loc+ms), y_mesh(n_loc+ms) )
-   allocate( aa_mesh(n_loc+ms,AuxArraySize), aa_int(n_loc+ms) )
-   allocate(a_buf(AuxArraySize), b_buf(AuxArraySize))
    f_mesh = ZERO; y_mesh = ZERO
    aa_mesh = CZERO; aa_int = CZERO
 !
@@ -471,26 +519,28 @@ contains
    peak_pos = x_mesh(ns+imax-ms)
    peak_val = f_mesh(imax)
 !
-   if (n_loc < n) then
+   if (NumPEsInGroup > 1) then
       comm = getGroupCommunicator(GroupID)
 !     ----------------------------------------------------------------
-      call setCommunicator(comm,MyPEinGroup,NumPEsInGroup)
+      call setCommunicator(comm,MyPEinGroup,NumPEsInGroup,sync=.true.)
 !     ----------------------------------------------------------------
       if (MyPEinGroup > 0) then
 !        -------------------------------------------------------------
-         msgid0 = nbrecvMessage(f_mesh(1),10001,MyPEinGroup-1)
-         msgid1 = nbrecvMessage(a_buf,AuxArraySize,10002,MyPEinGroup-1)
+         msgid0 = nbrecvMessage(f_mesh,ms,10001,MyPEinGroup-1)
+         msgid1 = nbrecvMessage(a_buf,ms,AuxArraySize,10002,MyPEinGroup-1)
 !        -------------------------------------------------------------
       endif
-      if (MyPEinGroup < NumPesInGroup-1) then
+      if (MyPEinGroup < NumPEsInGroup-1) then
 !        -------------------------------------------------------------
-         msgid2 = nbsendMessage(f_mesh(n_loc+ms),10001,MyPEinGroup+1)
+         msgid2 = nbsendMessage(f_mesh(n_loc+ms-mp+1:n_loc+ms),mp,10001,MyPEinGroup+1)
 !        -------------------------------------------------------------
          do j = 1, AuxArraySize
-            b_buf(j) = aa_mesh(n_loc+ms,j)
+            do i = 1, mp
+               b_buf(i,j) = aa_mesh(n_loc+ms-mp+i,j)
+            enddo
          enddo
 !        -------------------------------------------------------------
-         msgid3 = nbsendMessage(b_buf,AuxArraySize,10002,MyPEinGroup+1)
+         msgid3 = nbsendMessage(b_buf,mp,AuxArraySize,10002,MyPEinGroup+1)
 !        -------------------------------------------------------------
       endif
       if (MyPEinGroup > 0) then
@@ -499,7 +549,9 @@ contains
          call waitMessage(msgid1)
 !        -------------------------------------------------------------
          do j = 1, AuxArraySize
-            aa_mesh(1,j) = a_buf(j)
+            do i = 1, ms
+               aa_mesh(i,j) = a_buf(i,j)
+            enddo
          enddo
       endif
       if (MyPEinGroup < NumPEsInGroup-1) then
@@ -516,16 +568,25 @@ contains
 !  -------------------------------------------------------------------
    call calIntegration(0,n_loc+ms,x_mesh(ns+1-ms:),f_mesh,y_mesh)
 !  -------------------------------------------------------------------
-   fint = y_mesh(n_loc+ms)
+   if (ne == n .and. MyPEinGroup == NumPEsInGroup-1) then
+      fint = y_mesh(n_loc+ms)
+      do j = 1, AuxArraySize
+!        -------------------------------------------------------------
+         call calIntegration(0,n_loc+ms,x_mesh(ns+1-ms:),aa_mesh(:,j),aa_int)
+!        -------------------------------------------------------------
+         AuxArrayIntegral(j) = aa_int(n_loc+ms)
+      enddo
+   else
+      fint = y_mesh(n_loc-mp+ms+1)
+      do j = 1, AuxArraySize
+!        -------------------------------------------------------------
+         call calIntegration(0,n_loc+ms,x_mesh(ns+1-ms:),aa_mesh(:,j),aa_int)
+!        -------------------------------------------------------------
+         AuxArrayIntegral(j) = aa_int(n_loc-mp+ms+1)
+      enddo
+   endif
 !
-   do j = 1, AuxArraySize
-!     ----------------------------------------------------------------
-      call calIntegration(0,n_loc+ms,x_mesh(ns+1-ms:),aa_mesh(:,j),aa_int)
-!     ----------------------------------------------------------------
-      AuxArrayIntegral(j) = aa_int(n_loc+ms)
-   enddo
-!
-   if (n_loc < n) then ! In case parallelization is performed
+   if (NumPEsInGroup > 1) then
 !     ----------------------------------------------------------------
       call GlobalSumInGroup(GroupID,fint)
 !     ----------------------------------------------------------------
@@ -544,46 +605,50 @@ contains
 !     ----------------------------------------------------------------
    endif
 !
-   ns = n_loc*NumPEsInGroup
-   if (ns < n) then
+   if (ne < n) then
 !     ----------------------------------------------------------------
-      call setCommunicator(comm,MyPEinGroup,NumPEsInGroup)
+      call setCommunicator(comm,MyPEinGroup,NumPEsInGroup,sync=.true.)
 !     ----------------------------------------------------------------
       if (MyPEinGroup == NumPEsInGroup-1) then
-         f_mesh(1) = f_mesh(n_loc+ms)
+         do i = 1, mp
+            f_mesh(i) = f_mesh(n_loc+i)
+         enddo
          do j = 1, AuxArraySize
-            b_buf(j) = aa_mesh(n_loc+ms,j)
+            do i = 1, mp
+               b_buf(i,j) = aa_mesh(n_loc+i,j)
+            enddo
          enddo
       endif
-      call bcastMessage(f_mesh(1),NumPEsInGroup-1)
-      call bcastMessage(b_buf,AuxArraySize,NumPEsInGroup-1)
+      call bcastMessage(f_mesh,mp,NumPEsInGroup-1)
+      call bcastMessage(b_buf,mp,AuxArraySize,NumPEsInGroup-1)
 !     ----------------------------------------------------------------
       call resetCommunicator()
 !     ----------------------------------------------------------------
       do j = 1, AuxArraySize
-          aa_mesh(1,j) = b_buf(j)
-      enddo
-      do i = 1, n-ns
-         f_mesh(i+1) = func(info,x_mesh(ns+i),AuxArray,redundant=.true.)
-         do j = 1, AuxArraySize
-            aa_mesh(i+1,j) = AuxArray(j)
+         do i = 1, mp
+            aa_mesh(i,j) = b_buf(i,j)
          enddo
       enddo
-      imax = maxloc(f_mesh(2:),1)
+      do i = 1, n-ne
+         f_mesh(i+mp) = func(info,x_mesh(ne+i),AuxArray,redundant=.true.)
+         do j = 1, AuxArraySize
+            aa_mesh(i+mp,j) = AuxArray(j)
+         enddo
+      enddo
+      imax = maxloc(f_mesh(mp+1:),1)
       if (peak_val < f_mesh(imax)) then
          peak_val = f_mesh(imax)
-         peak_pos = x_mesh(ns+imax-1)
+         peak_pos = x_mesh(ne+imax-mp)
       endif
 !     ----------------------------------------------------------------
-      call calIntegration(0,n-ns+1,x_mesh(ns:),f_mesh,y_mesh)
+      call calIntegration(0,n-ne+mp,x_mesh(ne+1-mp:),f_mesh(1:),y_mesh)
 !     ----------------------------------------------------------------
-      fint = fint + y_mesh(n-ns+1)
-!
+      fint = fint + y_mesh(n-ne+mp)
       do j = 1, AuxArraySize
 !        -------------------------------------------------------------
-         call calIntegration(0,n-ns+1,x_mesh(ns:),aa_mesh(:,j),aa_int)
+         call calIntegration(0,n-ne+mp,x_mesh(ne+1-mp:),aa_mesh(1:,j),aa_int)
 !        -------------------------------------------------------------
-         AuxArrayIntegral(j) = AuxArrayIntegral(j) + aa_int(n-ns+1)
+         AuxArrayIntegral(j) = AuxArrayIntegral(j) + aa_int(n-ne+mp)
       enddo
    endif
 !
@@ -604,7 +669,7 @@ contains
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getUniMeshIntegration(n,x0,x,info,func,nm) result(fint)
+   function getUniMeshIntegration(n,x0,x,info,func,n_out) result(fint)
 !  ===================================================================
 !  Use Boole's rule, also known as Bode's rule, to perform the integration
 !  Note: For using different number of processors, the integration
@@ -618,12 +683,14 @@ contains
 !
    integer (kind=IntKind), intent(in) :: n
    integer (kind=IntKind), intent(in) :: info(*)
-   integer (kind=IntKind), intent(out) :: nm
+   integer (kind=IntKind), intent(out) :: n_out
    integer (kind=IntKind) :: i, j, imax, m, m4
 !
    real (kind=RealKind), intent(in) :: x0, x
    real (kind=RealKind) :: fint, h, f_mesh, x1, x2, x3, x4, x5, p, fac
    real (kind=RealKind), allocatable :: peak_dos(:,:)
+!
+   complex (kind=CmplxKind) :: AuxArray(AuxArraySize)
 !
    interface
       function func(info,x,aux,xi,redundant) result(y)
@@ -636,6 +703,10 @@ contains
          logical, intent(in), optional :: redundant
       end function func
    end interface
+!
+   if (.not.Initialized) then
+      call ErrorHandler('getUniMeshIntegration','Need to call initAdaptIntegration first')
+   endif
 !
    if (n < 4) then
 !     ----------------------------------------------------------------
@@ -658,7 +729,7 @@ contains
             ! forms a segment. Thus, there are m joining segments in total.
             ! The integration over each segment is performed using Bode's rule.
    h = (x-x0)/real(m4,kind=RealKind)
-   nm = m4+1  ! nm = the total number of mesh points
+   n_out = m4+1  ! n_out = the total number of mesh points
 !
    allocate(peak_dos(2,NumPEsInGroup))
    peak_dos = ZERO
@@ -751,7 +822,7 @@ contains
    integer (kind=IntKind), intent(in) :: info(*)
    integer (kind=IntKind), intent(in) :: n_pole
    complex (kind=CmplxKind) :: jost_pole(*)
-!   integer (kind=IntKind), intent(out) :: nm
+!   integer (kind=IntKind), intent(out) :: n_out
    integer (kind=IntKind) :: i, j, n_loc, imax
 !
    real (kind=RealKind), intent(in) :: x0, x
@@ -761,6 +832,7 @@ contains
 !  complex (kind=CmplxKind) :: aa_mesh(n,AuxArraySize)
    complex (kind=CmplxKind), allocatable :: aa_mesh(:,:)
    complex (kind=CmplxKind) :: aa_int(n)
+   complex (kind=CmplxKind) :: AuxArray(AuxArraySize)
 !
    interface
       function func(info,x,aux,xi,redundant) result(y)
@@ -773,6 +845,10 @@ contains
          logical, intent(in), optional :: redundant
       end function func
    end interface
+!
+   if (.not.Initialized) then
+      call ErrorHandler('getWeightedIntegration','Need to call initAdaptIntegration first')
+   endif
 !
    if (n < 2) then
 !     ----------------------------------------------------------------
@@ -943,5 +1019,343 @@ contains
       y=y+1.d0/PI*ATAN( (x-x0)/lambda )+.5d0
    enddo
    end function weight
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getGaussianIntegration(n,x0,x,info,func) result(fint)
+!  ===================================================================
+!  Note: Creating n Gaussian quadrature points and integrate function
+!        evaluated by func from x0 to x
+!  ===================================================================
+   use MathParamModule, only : CZERO, ZERO, TEN2m8
+!
+   use ErrorHandlerModule, only : ErrorHandler
+!
+   use GroupCommModule, only : GlobalSumInGroup, GlobalMaxInGroup
+   use GroupCommModule, only : getGroupCommunicator
+!
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: n
+   integer (kind=IntKind), intent(in) :: info(*)
+   integer (kind=IntKind) :: i, j, n_loc, imax
+!
+   real (kind=RealKind), intent(in) :: x0, x
+   real (kind=RealKind) :: fint, f0, peak_val
+   real (kind=RealKind), allocatable :: xg(:), wg(:), f_mesh(:)
+!
+   complex (kind=CmplxKind) :: AuxArray(AuxArraySize)
+!
+   interface
+      function func(info,x,aux,xi,redundant) result(y)
+         use KindParamModule, only : IntKind, RealKind, CmplxKind
+         integer (kind=IntKind), intent(in) :: info(*)
+         real (kind=RealKind), intent(in) :: x
+         real (kind=RealKind), intent(in), optional :: xi
+         real (kind=RealKind) :: y
+         complex (kind=CmplxKind), intent(out), target :: aux(:)
+         logical, intent(in), optional :: redundant
+      end function func
+   end interface
+!
+   if (.not.Initialized) then
+      call ErrorHandler('getGaussianIntegration','Need to call initAdaptIntegration first')
+   else if (n < 3) then
+!     ----------------------------------------------------------------
+      call ErrorHandler('getGaussianIntegration','Number of mesh < 3',n)
+!     ----------------------------------------------------------------
+   else if (x0 > x) then
+!     ----------------------------------------------------------------
+      call ErrorHandler('getGaussianIntegration','x0 > x1',x0,x)
+!     ----------------------------------------------------------------
+   endif
+!
+   allocate( xg(n), wg(n), f_mesh(n) )
+!
+!  -------------------------------------------------------------------
+   call gauleg(x0, x, xg, wg, n)
+!  -------------------------------------------------------------------
+!
+   fint = ZERO; f_mesh = ZERO
+   AuxArrayIntegral = CZERO
+   n_loc = 0
+   do i = MyPEinGroup+1, n, NumPEsInGroup
+      n_loc = n_loc + 1
+      f_mesh(n_loc) = func(info,xg(i),AuxArray)
+      fint = fint + f_mesh(n_loc)*wg(i)
+      do j = 1, AuxArraySize
+         AuxArrayIntegral(j) = AuxArrayIntegral(j) + AuxArray(j)*wg(i)
+      enddo
+   enddo
+   if (n_loc*NumPEsInGroup < n) then
+      n_loc = n_loc + 1
+      f_mesh(n_loc) = func(info,xg(n),AuxArray)
+   endif
+   if (n_loc > 1) then
+      imax = maxloc(f_mesh,1)
+   else
+      imax = 1
+   endif
+   i = min((imax-1)*NumPEsInGroup+MyPEinGroup+1,n)
+   peak_val = f_mesh(imax)
+   peak_pos = xg(i)
+!
+   if (NumPEsInGroup > 1) then
+!     ----------------------------------------------------------------
+      call GlobalSumInGroup(GroupID,fint)
+!     ----------------------------------------------------------------
+      f0 = peak_val
+!     ----------------------------------------------------------------
+      call GlobalMaxInGroup(GroupID,f0)
+!     ----------------------------------------------------------------
+      if (abs(f0-peak_val) > TEN2m8) then
+         peak_pos = ZERO
+      endif
+      peak_val = f0
+!     ----------------------------------------------------------------
+      call GlobalSumInGroup(GroupID,peak_pos)
+!     ----------------------------------------------------------------
+      call GlobalSumInGroup(GroupID,AuxArrayIntegral,AuxArraySize)
+!     ----------------------------------------------------------------
+   endif
+!
+   deallocate( xg, wg, f_mesh )
+!
+   end function getGaussianIntegration
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getRombergIntegration(nstep,a,b,info,func,err,nm) result(romb)
+!  ===================================================================
+   use KindParamModule, only : IntKind, RealKind, CmplxKind
+!
+   use ErrorHandlerModule, only : WarningHandler, ErrorHandler
+!
+   use MathParamModule, only : ZERO, CZERO, TEN2m8, TEN2m6, FOURTH, ONE
+!
+   use InterpolationModule, only : PolyInterp
+!
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: info(:)
+!
+   INTEGER (kind=IntKind), intent(in) :: nstep
+   INTEGER (kind=IntKind), intent(out) :: nm
+   INTEGER (kind=IntKind), parameter :: inter = 5
+   INTEGER (kind=IntKind) :: i, j, k, jstop, jm
+!
+   REAL (kind=RealKind), parameter :: EPS = TEN2m6
+!
+   REAL (kind=RealKind), intent(in) :: a,b
+   REAL (kind=RealKind), intent(out) :: err
+   REAL (kind=RealKind) :: romb, er0
+   REAL (kind=RealKind) :: h(nstep+1), s(nstep+1)
+!
+   complex (kind=CmplxKind), allocatable :: aux(:,:)
+   complex (kind=CmplxKind), allocatable :: aux_t(:,:)
+   complex (kind=CmplxKind) :: sc(nstep+1)
+!
+   logical :: converged
+!
+   interface
+      function func(info,x,aux,xi,redundant) result(y)
+         use KindParamModule, only : IntKind, RealKind, CmplxKind
+         integer (kind=IntKind), intent(in) :: info(*)
+         real (kind=RealKind), intent(in) :: x
+         real (kind=RealKind), intent(in), optional :: xi
+         real (kind=RealKind) :: y
+         complex (kind=CmplxKind), intent(out), target :: aux(:)
+         logical, intent(in), optional :: redundant
+      end function func
+   end interface
+!
+   if (.not.Initialized) then
+      call ErrorHandler('getRombergIntegration','Need to call initAdaptIntegration first')
+   else if (nstep < inter) then
+!     ----------------------------------------------------------------
+      call ErrorHandler('getRombergIntegration',                      &
+                        'Number of Romberg steps < iter',nstep,inter)
+!     ----------------------------------------------------------------
+   endif
+!
+   romb = ZERO
+   AuxArrayIntegral = CZERO
+!
+   allocate(aux(AuxArraySize,nstep+1), aux_t(AuxArraySize,2))
+!
+   s = ZERO
+   aux = CZERO
+!
+   converged = .false.
+   nm = 0
+   h(1)=ONE
+   LOOP_j: do j = 1, nstep
+      jstop = j
+!     ----------------------------------------------------------------
+      call trapezoidal(info,func,a,b,s(j),aux(:,j),aux_t,j,jm)
+!     ----------------------------------------------------------------
+      nm = nm + jm
+      if (j .ge. inter) then
+!        -------------------------------------------------------------
+         call PolyInterp(inter,h(j-inter+1:),s(j-inter+1:),ZERO,romb,err)
+!        -------------------------------------------------------------
+         if (abs(err) .le. EPS*abs(romb)) then
+            converged = .true.
+            exit LOOP_j
+         endif
+      endif
+      s(j+1)=s(j)
+!     ----------------------------------------------------------------
+      call zcopy(AuxArraySize,aux(1,j),1,aux(1,j+1),1)
+!     ----------------------------------------------------------------
+      h(j+1)=FOURTH*h(j)
+   enddo LOOP_j
+!
+   if (.not.converged) then
+!     ----------------------------------------------------------------
+      call WarningHandler('getRombergIntegration',                    &
+                          'Not converged after Romberg steps = ',nstep)
+!     ----------------------------------------------------------------
+   endif
+!
+   do i = 1, AuxArraySize
+      do k = 1, inter
+         sc(k) = aux(i,jstop-inter+k)
+      enddo
+!     ----------------------------------------------------------------
+      call PolyInterp(inter,h(jstop-inter+1:),sc,ZERO,AuxArrayIntegral(i),er0)
+!     ----------------------------------------------------------------
+   enddo
+!
+   deallocate(aux, aux_t)
+!
+!  ===================================================================
+!  Give peal_pos a dumb value, since it is no longer needed for this
+!  module to calculate it. It should be the d-resonance energy, which
+!  is goven by SMatrixPoleModule.
+!  ===================================================================
+   peak_pos = ZERO
+!
+   end function getRombergIntegration
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine trapezoidal(info,func,a,b,s,aux,aux_t,n,it)
+!  ===================================================================
+   use KindParamModule, only : IntKind, RealKind, CmplxKind
+!
+   use MathParamModule, only : ZERO, CZERO, HALF
+!
+   use GroupCommModule, only : GlobalSumInGroup
+!
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: info(:)
+!
+   INTEGER (kind=IntKind), intent(in) :: n
+   INTEGER (kind=IntKind), intent(out) :: it
+   INTEGER (kind=IntKind) :: j, n_loc
+!
+   REAL (kind=RealKind), intent(in) :: a,b
+   REAL (kind=RealKind), intent(inout) :: s
+   REAL (kind=RealKind) :: del, sum, tnm, x, dum
+!
+   complex (kind=CmplxKind), intent(inout) :: aux(AuxArraySize)
+   complex (kind=CmplxKind), target, intent(out) :: aux_t(AuxArraySize,2)
+   complex (kind=CmplxKind), pointer :: aux_a(:), aux_b(:), aux_sum(:)
+!
+   interface
+      function func(info,x,aux,xi,redundant) result(y)
+         use KindParamModule, only : IntKind, RealKind, CmplxKind
+         integer (kind=IntKind), intent(in) :: info(*)
+         real (kind=RealKind), intent(in) :: x
+         real (kind=RealKind), intent(in), optional :: xi
+         real (kind=RealKind) :: y
+         complex (kind=CmplxKind), intent(out), target :: aux(:)
+         logical, intent(in), optional :: redundant
+      end function func
+   end interface
+!
+   if (n == 1) then
+!     ================================================================
+!     The following code is parallelized.
+!     ================================================================
+      aux_a => aux_t(:,1)
+      aux_b => aux_t(:,2)
+      it = 2
+      if (NumPEsInGroup == 1) then
+         s = func(info,a,aux_a)
+         s = s + func(info,b,aux_b)
+         aux = aux_a + aux_b
+      else
+         if (mod(MyPEinGroup,2) == 0) then
+            s = func(info,a,aux)
+         else
+            s = func(info,b,aux)
+         endif
+         if (MyPEinGroup > 1) then
+            s = ZERO
+            aux = CZERO
+         endif
+!        -------------------------------------------------------------
+         call GlobalSumInGroup(GroupID,s)
+!        -------------------------------------------------------------
+         call GlobalSumInGroup(GroupID,aux,AuxArraySize)
+!        -------------------------------------------------------------
+      endif
+      del = HALF*(b-a)
+      s = del*s
+      aux = del*aux
+!!!   ================================================================
+!!!   The original serial code
+!!!   ================================================================
+!!!   s=HALF*(b-a)*(func(info,a,aux_a)+func(info,b,aux_b))
+!!!   aux = HALF*(b-a)*(aux_a+aux_b)
+!!!   ================================================================
+   else
+      aux_a => aux_t(:,1)
+      aux_sum => aux_t(:,2)
+      it = 2**(n-2)
+      tnm = it
+      del = (b-a)/tnm
+      x = a + HALF*del + MyPEinGroup*del
+      sum = ZERO
+      aux_sum = CZERO
+!     ================================================================
+!     The following code is parallelized.
+!     ================================================================
+      n_loc = 0
+      do j = MyPEinGroup+1, it, NumPEsInGroup
+         n_loc = n_loc + 1
+         sum = sum + func(info,x,aux_a)
+         aux_sum = aux_sum + aux_a
+         x = x + del*NumPEsInGroup
+      enddo
+      if (n_loc*NumPEsInGroup < it) then
+         n_loc = n_loc + 1
+         dum = func(info,a,aux_a)
+         it = it - 1
+      endif
+      if (NumPEsInGroup > 1) then
+!        -------------------------------------------------------------
+         call GlobalSumInGroup(GroupID,sum)
+!        -------------------------------------------------------------
+         call GlobalSumInGroup(GroupID,aux_sum,AuxArraySize)
+!        -------------------------------------------------------------
+      endif
+!!!   ================================================================
+!!!   The original serial code
+!!!   ================================================================
+!!!   do j=1,it
+!!!      sum=sum+func(info,x,aux_a)
+!!!      aux_sum = aux_sum + aux_a
+!!!      x=x+del
+!!!   enddo
+!!!   ================================================================
+      s = HALF*(s + del*sum)
+      aux = HALF*(aux + del*aux_sum)
+   endif
+!
+   end subroutine trapezoidal
 !  ===================================================================
 end module AdaptIntegrationModule

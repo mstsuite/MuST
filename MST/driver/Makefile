@@ -1,4 +1,4 @@
-VPATH = ../driver
+VPATH = $(TOP_DIR)/driver
 
 .SUFFIXES:	.o .f .f90 .F90
 
@@ -39,6 +39,7 @@ BASE_ROUTINES = readInputs.o startProcess.o finishProcess.o setupRadGridAndCell.
 SRC_OBJS =  \
 $(ODIR)/PublicTypeDefinitionsModule.o \
 $(ODIR)/PublicParamDefinitionsModule.o \
+$(ODIR)/AdaptIntegrationModule.o \
 $(ODIR)/AtomModule.o \
 $(ODIR)/Atom2ProcModule.o \
 $(ODIR)/buildSendTable.o \
@@ -83,6 +84,8 @@ $(ODIR)/StepFunctionModule.o  \
 $(ODIR)/SSSolverModule.o \
 $(ODIR)/RelSSSolverModule.o \
 $(ODIR)/StrConstModule.o  \
+$(ODIR)/SROModule.o \
+$(ODIR)/MediumHostModule.o \
 $(ODIR)/CrystalMatrixModule.o \
 $(ODIR)/SurfElementsModule.o \
 $(ODIR)/SystemModule.o  \
@@ -92,6 +95,8 @@ $(ODIR)/TestPotentialModule.o \
 $(ODIR)/TriangleModule.o \
 $(ODIR)/calNicholsonPoles.o \
 $(ODIR)/polyfermi.o \
+$(ODIR)/SineMatrixZerosModule.o \
+$(ODIR)/SMatrixPolesModule.o \
 $(ODIR)/VPI_main.o
 
 TEST_CASES = $(ODIR)/testStrConst \
@@ -99,7 +104,7 @@ TEST_CASES = $(ODIR)/testStrConst \
              $(ODIR)/tst_ylm \
              $(ODIR)/tst_bessel \
              $(ODIR)/testIntegration \
-             $(ODIR)/tst_string \
+             $(ODIR)/testString \
              $(ODIR)/testNeighbor \
              $(ODIR)/tst_write \
              $(ODIR)/tst_read \
@@ -111,8 +116,8 @@ TEST_CASES = $(ODIR)/testStrConst \
              $(ODIR)/ft_p \
              $(ODIR)/pav \
              $(ODIR)/testParallelFFT \
-             $(ODIR)/testSineMatrixPole \
-             $(ODIR)/testSineMatrixPole2 \
+             $(ODIR)/testSineMatrixZero \
+             $(ODIR)/testSineMatrixZero2 \
              $(ODIR)/findResonance \
              $(ODIR)/testPZGETRI \
              $(ODIR)/testStepFunc \
@@ -134,16 +139,19 @@ TEST_CASES = $(ODIR)/testStrConst \
              $(ODIR)/assk \
              $(ODIR)/testCoreStates \
              $(ODIR)/findBoundStates \
+             $(ODIR)/testSMatrixPoles \
+             $(ODIR)/testResonanceStates \
              $(ODIR)/testPolyFermi \
              $(ODIR)/testBandStructure \
-             $(ODIR)/testExchCorr
+             $(ODIR)/testExchCorr \
+             $(ODIR)/testAdaptiveIntegration
 
 TEST_CASES_O = $(ODIR)/testStrConst.o \
                $(ODIR)/tst_SurfElements.o \
                $(ODIR)/tst_ylm.o \
                $(ODIR)/tst_bessel.o \
                $(ODIR)/testIntegration.o \
-               $(ODIR)/tst_string.o \
+               $(ODIR)/testString.o \
                $(ODIR)/testNeighbor.o \
                $(ODIR)/tst_write.o \
                $(ODIR)/tst_read.o \
@@ -151,8 +159,8 @@ TEST_CASES_O = $(ODIR)/testStrConst.o \
                $(ODIR)/testMadelung.o \
                $(ODIR)/madpot.o \
                $(ODIR)/pav.o \
-               $(ODIR)/testSineMatrixPole.o \
-               $(ODIR)/testSineMatrixPole2.o \
+               $(ODIR)/testSineMatrixZero.o \
+               $(ODIR)/testSineMatrixZero2.o \
                $(ODIR)/findResonance.o \
                $(ODIR)/testPZGETRI.o \
                $(ODIR)/testStepFunc.o \
@@ -187,7 +195,7 @@ $(ODIR)/tst_findFit: tst_findFit.o
 $(ODIR)/testStrConst: testStrConst.o $(SRC_OBJS)
 	$(LD) -o $(ODIR)/testStrConst testStrConst.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
-$(ODIR)/testBZone: testBZone.o
+$(ODIR)/testBZone: testBZone.o $(SRC_OBJS)
 	$(LD) -o $(ODIR)/testBZone testBZone.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/testQuadraticMatrix: testQuadraticMatrix.o
@@ -205,8 +213,8 @@ $(ODIR)/tst_bessel: tst_bessel.o
 $(ODIR)/testIntegration: testIntegration.o
 	$(LD) -o $(ODIR)/testIntegration testIntegration.o $(MSTLIB) $(ADDLIBS)
 
-$(ODIR)/tst_string: tst_string.o $(ODIR)/StringModule.o
-	$(LD) -o $(ODIR)/tst_string tst_string.o $(ODIR)/StringModule.o $(MSTLIB) $(ADDLIBS)
+$(ODIR)/testString: testString.o $(ODIR)/StringModule.o $(ODIR)/breakLine.o
+	$(LD) -o $(ODIR)/testString testString.o $(ODIR)/StringModule.o $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/tst_write: tst_write.o
 	$(LD) -o $(ODIR)/tst_write tst_write.o $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
@@ -224,7 +232,7 @@ $(ODIR)/madpot: madpot.o
 	$(LD) -o $(ODIR)/madpot madpot.o $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/pav: pot_average.o
-	$(LD) -o $(ODIR)/pav pot_average.o $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
+	$(LD) -o $(ODIR)/pav pot_average.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 
 $(ODIR)/ft: inc_fftw fourier_transform.o
@@ -251,11 +259,11 @@ $(ODIR)/testParallelFFT: inc_fftw testParallelFFT.o $(ODIR)/Uniform3DGridModule.
 $(SRC_OBJS)  $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 	rm -f fftw3f.h
 
-$(ODIR)/testSineMatrixPole: testSineMatrixPole.o calScatteringPoles.o
-	$(LD) -o $(ODIR)/testSineMatrixPole testSineMatrixPole.o $(ODIR)/calScatteringPoles.o $(ODIR)/readInputs.o $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
+$(ODIR)/testSineMatrixZero: testSineMatrixZero.o calScatteringZeros.o $(ODIR)/SineMatrixZerosModule.o
+	$(LD) -o $(ODIR)/testSineMatrixZero testSineMatrixZero.o $(ODIR)/calScatteringZeros.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
-$(ODIR)/testSineMatrixPole2: testSineMatrixPole2.o calScatteringPoles.o
-	$(LD) -o $(ODIR)/testSineMatrixPole2 testSineMatrixPole2.o $(ODIR)/readInputs.o $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
+$(ODIR)/testSineMatrixZero2: testSineMatrixZero2.o calScatteringZeros.o
+	$(LD) -o $(ODIR)/testSineMatrixZero2 testSineMatrixZero2.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/findResonance:  findResonance.o
 	$(LD) -o $(ODIR)/findResonance findResonance.o $(ODIR)/SCPolesModule.o \
@@ -281,14 +289,14 @@ $(ODIR)/ssk: SingleSiteKrein.o
 $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/assk: AdaptIntegrationModule.o adaptiveSSK.o 
-	$(LD) -o $(ODIR)/assk $(ODIR)/adaptiveSSK.o $(ODIR)/AdaptIntegrationModule.o \
+	$(LD) -o $(ODIR)/assk $(ODIR)/adaptiveSSK.o \
 $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/testBlockInverse: testBlockInverse.o
 	$(LD) -o $(ODIR)/testBlockInverse $(ODIR)/testBlockInverse.o $(ODIR)/MatrixBlockInversionModule.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/testParallelIO: testParallelIO.o
-	$(LD) -o $(ODIR)/testParallelIO testParallelIO.o $(ODIR)/readInputs.o $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
+	$(LD) -o $(ODIR)/testParallelIO testParallelIO.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/testPZGETRI: testPZGETRI.o 
 	$(LD) -o $(ODIR)/testPZGETRI testPZGETRI.o $(ADDLIBS) $(MPPLIB) $(MSTLIB)
@@ -328,6 +336,15 @@ $(ODIR)/testCoreStates: testCoreStates.o $(SRC_OBJS)
 
 $(ODIR)/findBoundStates: findBoundStates.o $(SRC_OBJS)
 	$(LD) -o $(ODIR)/findBoundStates findBoundStates.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
+
+$(ODIR)/testSMatrixPoles: testSMatrixPoles.o $(SRC_OBJS)
+	$(LD) -o $(ODIR)/testSMatrixPoles testSMatrixPoles.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
+
+$(ODIR)/testResonanceStates: testResonanceStates.o $(SRC_OBJS)
+	$(LD) -o $(ODIR)/testResonanceStates testResonanceStates.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
+
+$(ODIR)/testAdaptiveIntegration: testAdaptiveIntegration.o $(SRC_OBJS)
+	$(LD) -o $(ODIR)/testAdaptiveIntegration testAdaptiveIntegration.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/testPolyFermi: testPolyFermi.o $(SRC_OBJS)
 	$(LD) -o $(ODIR)/testPolyFermi testPolyFermi.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)

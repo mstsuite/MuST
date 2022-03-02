@@ -1,0 +1,17 @@
+export LIBXC_PATH=/opt/packages/LibXC/libxc-4.3.4/PGI
+export HDF5_PATH=/opt/packages/HDF5/hdf5-1.10.5/PGI
+export LUA_PATH=/opt/packages/Lua/lua-5.3.5
+export USE_OPENMP=1
+# export LIBS += -L/opt/packages/pgi/19.7/linux86-64-llvm/19.7/lib -lblas -llapack -lpgf90 -lpgf902 -lpgf90rtl -lpgf90_rpm1
+export LIBS += -L/opt/packages/pgi/19.7/linux86-64-llvm/19.7/lib -lblas -llapack -pgf90libs
+# export BOOST_ROOT=$(TOP_DIR)
+# export CUDA_CXX=nvcc -arch=sm_20
+
+ifdef USE_OPENMP
+  export OPT_OPENMP=-mp
+endif
+
+export CC=mpicc -g -O3
+export CXX=mpic++ -g -O3 -std=c++17
+export F77=mpifort -g -O3
+export LUACXX = $(CXX)

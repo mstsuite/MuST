@@ -36,7 +36,7 @@ program testSSSolver
    use StepFunctionModule, only : getVolumeIntegration
 !
    use PotentialModule, only : initPotential, endPotential
-   use PotentialModule, only : readPotential, setPotentialOutsideMT, getPotential
+   use PotentialModule, only : readPotential, setPotentialOutsideR, getPotential
    use PotentialModule, only : getPotEf, setV0, setPotential, isPotComponentZero, getSphPotr
 !
    use ScfDataModule, only : ngaussr, ngaussq
@@ -74,7 +74,7 @@ program testSSSolver
 !
    use AtomModule, only : getStepFuncLmax, setTruncPotLmax, setPotLmax
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
-   use AtomModule, only : getGridData, getLocalEvec, getMuffinTinRadius
+   use AtomModule, only : getRadialGridData, getLocalEvec, getMuffinTinRadius
    use AtomModule, only : getLocalNumSpecies, getLocalAtomicNumber
 !
    use SphericalHarmonicsModule, only : initSphericalHarmonics
@@ -168,7 +168,7 @@ program testSSSolver
 !
    real (kind=RealKind) :: Efermi, v0, re, vol
    real (kind=RealKind) :: t0, t1, t2, t3
-   real (kind=RealKind) :: rmt, rend, rws, rinsc, Rb, si, sr
+   real (kind=RealKind) :: rmt, rend, rws, rinsc, Rb, si, sr, hin
    real (kind=RealKind) :: dos, sfac, dos_mt, dos_tmp, intdos, intdos0, intdos1, corr, corr_rb, phase
    real (kind=RealKind), allocatable :: diags(:), diags_e(:,:,:,:), phase_e(:,:,:)
 !
@@ -211,6 +211,7 @@ program testSSSolver
    allocate(atom_print_level(1:LocalNumAtoms))
    do i=1,LocalNumAtoms
       atom_print_level(i) = getStandardOutputLevel(i)
+      GlobalIndex(i)=getGlobalIndex(i)
    enddo
 !
 !  ===================================================================
@@ -278,12 +279,6 @@ program testSSSolver
    call initGauntFactors(lmax_max,istop,0)
 !  -------------------------------------------------------------------
 !
-!  ===================================================================
-!  initialize radial grid
-!  -------------------------------------------------------------------
-   call initRadialGrid(LocalNumAtoms, istop, node_print_level)
-!  -------------------------------------------------------------------
-!
    if (isDataStorageExisting('Bravais Vector')) then
 !     ----------------------------------------------------------------
       bravais => getDataStorage('Bravais Vector',3,3,RealMark)
@@ -297,116 +292,21 @@ program testSSSolver
 !  -------------------------------------------------------------------
 !   call initPolyhedra(NumAtoms,bravais,'main',0)
 !  -------------------------------------------------------------------
-   do i=1,LocalNumAtoms
-      ig=getGlobalIndex(i)
-      GlobalIndex(i)=ig
-!     ----------------------------------------------------------------
-      call getGridData(i,ndivin,ndivout,nmult)
-!     ----------------------------------------------------------------
-!     call genPolyhedron(i,ig,NumAtoms,AtomPosition)
-!     ----------------------------------------------------------------
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printPolyhedron(i)
-!        call printPolyhedronBoundary(i)
-!        -------------------------------------------------------------
-      endif
-      rend =  getOutscrSphRadius(i)
-      if (isMuffinTinPotential() .or. isMuffinTinTestPotential()) then
-         rmt = getMuffinTinRadius(i)
-         rinsc = getInscrSphRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = rinsc
-         endif
-         rws = getWignerSeitzRadius(i)
-         if (getSingleSiteSolverType()==1) then
-            rend=rws
-         endif
-!        -------------------------------------------------------------
-         call genRadialGrid(i,xstart, rmt, rinsc, rend, ndivin)
-!        -------------------------------------------------------------
-      else if ( isASAPotential() ) then
-         rend =  getWignerSeitzRadius(i)
-         rmt = getMuffinTinRadius(i)
-         rinsc = getWignerSeitzRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = rinsc
-         endif
-!        -------------------------------------------------------------
-         call genRadialGrid(i,xstart, rmt, rinsc, rend, ndivin )
-!        -------------------------------------------------------------
-      else if (isMuffinTinASAPotential()) then
-         rend =  getWignerSeitzRadius(i)
-         rmt = getMuffinTinRadius(i)
-         rinsc = getWignerSeitzRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = rinsc
-         endif
-!        -------------------------------------------------------------
-         call genRadialGrid( i, xstart, rmt, rinsc, rend, ndivin )
-!        -------------------------------------------------------------
-      else
-         if (getNeighborDistance(i,1)-getOutscrSphRadius(i) < TEN2m8) then
-!           ----------------------------------------------------------
-            call WarningHandler('testSSSolver',                       &
-                     'Ill condition found: Neighbor distance <= Rcs', &
-                     getNeighborDistance(i,1),getOutscrSphRadius(i))
-!           ----------------------------------------------------------
-         endif
-         rmt = getMuffinTinRadius(i)
-         rinsc = getInscrSphRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = getInscrSphRadius(i)
-         endif
-         rws = getWignerSeitzRadius(i)
-!        -------------------------------------------------------------
-         call genRadialGrid( i, rmt, rinsc, rws, rend, ndivin, ndivout, nmult)
-!        call genRadialGrid(i,getInscrSphRadius(i),getOutscrSphRadius(i), &
-!                           ndivin,ndivout,nmult)
-!        -------------------------------------------------------------
-      endif
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printRadialGrid(i)
-!        -------------------------------------------------------------
-      endif
-   enddo
+   call setupRadGridAndCell(LocalNumAtoms,lmax_max)
+!  -------------------------------------------------------------------
    if (MyPE == 0) then
       if (getKeyValue(1,'Large sphere radius (a.u.)',Rb) > 0) then
          Rb = 500.0d0
          call WarningHandler('testSSSolver','No input for Rb. It is set to default',Rb)
       endif
+!     Rb = 100.0d0 ! If Rb is too large ( > 100), the spherical bessel and neumann
+!     function will give garbage. The algorithms for calculating the spherical 
+!     bessel and neumann function needs to be carefully checked.
       write(6,'(a,f12.5)')'You entered Rb = ',Rb
       write(string_rb,'(f10.1)')10000000.0+Rb
       string_rb(1:3)='_Rb'
    endif
    call bcastMessage(Rb,0)
-!
-!  ===================================================================
-!  initialize step function module
-!  ===================================================================
-   allocate( ngr(LocalNumAtoms), ngt(LocalNumAtoms) )
-   do i=1,LocalNumAtoms
-      ngr(i) = ngaussr
-      ngt(i) = ngaussq
-   enddo
-!
-!  -------------------------------------------------------------------
-   call initStepFunction(LocalNumAtoms, lmax_max, lmax_step, ngr, ngt, &
-                         istop,node_print_level)
-!  -------------------------------------------------------------------
-   deallocate( ngr, ngt )
-!
-   do i=1,LocalNumAtoms
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printStepFunction(i)
-!        -------------------------------------------------------------
-      endif
-!     ----------------------------------------------------------------
-      call testStepFunction(i)
-!     ----------------------------------------------------------------
-   enddo
 !
 !  ===================================================================
 !  initialize potential module
@@ -489,7 +389,7 @@ program testSSSolver
             Grid => getGrid(id)
             do is = 1,n_spin_pola
 !              -------------------------------------------------------
-!ywg           call setPotentialOutsideMT(id,1,is,nfit=3)
+!ywg           call setPotentialOutsideR(id,1,is,nfit=3)
 !              -------------------------------------------------------
                jl = 0
                do l = 0, lmax_pot(id)
@@ -753,7 +653,9 @@ program testSSSolver
 !              A correction term needs to be added to the Krein formula's DOS
 !              due to the DOS outside the atomic cell.
 !              -------------------------------------------------------
-!              t_mat => getTMatrix()
+               t_mat => getTMatrix()
+               call writeMatrix('T-Matrix',t_mat,kmax_kkr,kmax_kkr,1.0d-8)
+!              -------------------------------------------------------
 !
 !              Check different ways of calculting the t-matrix if needed
 !              -------------------------------------------------------
@@ -1347,8 +1249,9 @@ contains
    subroutine calIntSphHankelSq0(lmax,rc,energy,fint)
 !  ===================================================================
       use KindParamModule, only : IntKind, RealKind, CmplxKind
-      use MathParamModule, only : Half, SQRTm1
+      use MathParamModule, only : Half, SQRTm1, ONE
       use BesselModule, only : SphericalBessel, SphericalNeumann
+      use BesselModule, only : SphericalHankel
 !
       implicit none
 !
@@ -1360,20 +1263,36 @@ contains
       complex (kind=CmplxKind), intent(in) :: energy
       complex (kind=CmplxKind), intent(out) :: fint(0:lmax)
       complex (kind=CmplxKind) :: bjl(0:lmax+1), bnl(0:lmax+1), x, bhl, bhlp1, bhlm1
-      complex (kind=CmplxKind) :: Ul, Ulp1
+      complex (kind=CmplxKind) :: Ul, Ulp1, shl(0:lmax+1)
 !
       x = rc*sqrt(energy)+SQRTm1*0.00001d0
 !     ----------------------------------------------------------------
       call SphericalBessel(lmax+1,x,bjl)
       call SphericalNeumann(lmax+1,x,bnl)
 !     ----------------------------------------------------------------
-      bhl = bjl(0)+SQRTm1*bnl(0)
-      bhlp1 = bjl(1)+SQRTm1*bnl(1)
-      fint(0) = (bhl*bhlp1/x-bhl**2-bhlp1**2)*HALF
+! For large abs(x) >> l, the forward recursive algorithm is more stable
+! And it is better to use the following algorithm to calculate the Hankel
+! function.
+!write(6,'(a,2d15.8)')'x = ',x
+      call SphericalHankel(1,x,shl)
+do l = 1, lmax
+shl(l+1) = (2*l+1)*shl(l)/x - shl(l-1)
+!write(6,'(a,i5,2d15.8,2x,2d15.8)')'l,bjl,bnl = ',l,bjl(l),bnl(l)
+!write(6,'(a,i5,2d15.8)')'l,bjl+i*bnl = ',l,bjl(l)+SQRTm1*bnl(l)
+!write(6,'(a,5x,2d15.8)')'        shl = ',shl(l)
+enddo
+!     bhl = bjl(0)+SQRTm1*bnl(0)
+!     bhlp1 = bjl(1)+SQRTm1*bnl(1)
+      bhl = shl(0)
+      bhlp1 = shl(1)
       do l = 1, lmax
+!write(6,'(a,i5)')'l = ',l
          bhlm1 = bhl
+!write(6,'(a,2d15.8)')'bhl = ',bhl
          bhl = bhlp1
-         bhlp1 = bjl(l+1)+SQRTm1*bnl(l+1)
+!write(6,'(a,2d15.8)')'bhlp1 = ',bhlp1
+!        bhlp1 = bjl(l+1)+SQRTm1*bnl(l+1)
+         bhlp1 = shl(l+1)
 !        fint(l) = ((2*l+1)*bhl*bhlp1/x-bhl**2-bhlp1**2)*HALF
          fint(l) = (bhlm1*bhlp1-bhl**2)*HALF
       enddo

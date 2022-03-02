@@ -40,7 +40,7 @@ public :: initAtom,    &
           getInValDenFileForm,  &
           getOutValDenFileName,  &
           getOutValDenFileForm,  &
-          getGridData, &
+          getRadialGridData, &
           getMixingParam4Rho,    &
           getMixingParam4Pot,    &
           getMixingParam4Mom,    &
@@ -186,6 +186,7 @@ private
       integer (kind=IntKind) :: ndivin
       integer (kind=IntKind) :: ndivout
       integer (kind=IntKind) :: nmult
+      real (kind=RealKind) :: hin
    end type LocalGridStruct
    type (LocalGridStruct), allocatable :: GridData(:)
 !  ===================================================================
@@ -203,7 +204,7 @@ contains
    use PublicParamDefinitionsModule, only : ASA, MuffinTin, MuffinTinASA
    use Atom2ProcModule, only : getLocalNumAtoms, getGlobalIndex
    use InputModule, only : getKeyValue, getKeyIndexValue
-   use ScfDataModule, only : inputpath, isKKRCPA,  getPotentialTypeParam
+   use ScfDataModule, only : inputpath, isKKRCPA, isKKRCPASRO, getPotentialTypeParam
    use SystemModule, only : getNumAtoms, getNumAlloyElements, getAlloyElementContent
    use SystemModule, only : getAlloyElementName
    use SystemModule, only : getAtomPosition
@@ -261,6 +262,7 @@ contains
    integer (kind=IntKind), allocatable :: ind_ndivin(:)
    integer (kind=IntKind), allocatable :: ind_ndivout(:)
    integer (kind=IntKind), allocatable :: ind_nmult(:)
+   integer (kind=IntKind), allocatable :: ind_hin(:)
    integer (kind=IntKind), allocatable :: ind_cutoff_r(:)
    integer (kind=IntKind), allocatable :: ind_cutoff_r_s(:)
    integer (kind=IntKind), allocatable :: ind_pseudo_r(:)
@@ -276,6 +278,7 @@ contains
    real (kind=RealKind), allocatable :: pseudo_r(:)
    real (kind=RealKind), allocatable :: potScreen(:)
    real (kind=RealKind), allocatable :: cutoff_r_s(:)
+   real (kind=RealKind), allocatable :: hin(:)
    real (kind=RealKind) :: Za, Rav
 !
    real (kind=RealKind), optional, intent(in) :: rinsc(:)
@@ -362,7 +365,7 @@ contains
             alpha_rho(0:GlobalNumAtoms), alpha_pot(0:GlobalNumAtoms),  &
             alpha_mom(0:GlobalNumAtoms), nmax_liz(0:GlobalNumAtoms),   &
             alpha_chg(0:GlobalNumAtoms), ndivin(0:GlobalNumAtoms),     & 
-            ndivout(0:GlobalNumAtoms), nmult(0:GlobalNumAtoms))
+            ndivout(0:GlobalNumAtoms), nmult(0:GlobalNumAtoms), hin(0:GlobalNumAtoms))
    allocate(ind_lmax_kkr(GlobalNumAtoms), ind_lmax_phi(GlobalNumAtoms),    &
             ind_lmax_pot(GlobalNumAtoms), ind_lmax_rho(GlobalNumAtoms),    &
             ind_num_shells(GlobalNumAtoms), ind_lmax_shell(GlobalNumAtoms),&
@@ -371,7 +374,7 @@ contains
             ind_alpha_rho(GlobalNumAtoms), ind_alpha_pot(GlobalNumAtoms),  &
             ind_alpha_chg(GlobalNumAtoms), ind_alpha_mom(GlobalNumAtoms),  &
             ind_nmax_liz(GlobalNumAtoms), ind_nmult(GlobalNumAtoms),       &
-            ind_ndivin(GlobalNumAtoms), ind_ndivout(GlobalNumAtoms))
+            ind_ndivin(GlobalNumAtoms), ind_ndivout(GlobalNumAtoms), ind_hin(GlobalNumAtoms))
    allocate(ind_lmax_step(GlobalNumAtoms),lmax_step(0:GlobalNumAtoms))
    allocate(ind_lmax_pot_trunc(GlobalNumAtoms), lmax_pot_trunc(0:GlobalNumAtoms))
    allocate(ind_cutoff_r(GlobalNumAtoms), cutoff_r(0:GlobalNumAtoms))
@@ -496,41 +499,56 @@ contains
    rstatus = getKeyIndexValue(info_id,'Lmax-Charge Den',              &
                               ind_lmax_rho,lmax_rho(1:GlobalNumAtoms),GlobalNumAtoms)
 !
-   if (getKeyValue(info_id,'Default LIZ # Neighbors',nmax_liz(0)) /= 0) then
-      call ErrorHandler('initAtom','Default LIZ # Neighbors is missing from input')
-   endif
-   ind_nmax_liz = 0
-   rstatus = getKeyIndexValue(info_id,'LIZ # Neighbors',              &
-                              ind_nmax_liz,nmax_liz(1:GlobalNumAtoms),GlobalNumAtoms)
+   if (.not.isKKRCPA()) then
+      if (getKeyValue(info_id,'Default LIZ # Neighbors',nmax_liz(0)) /= 0) then
+         call ErrorHandler('initAtom','Default LIZ # Neighbors is missing from input')
+      endif
+      ind_nmax_liz = 0
+      rstatus = getKeyIndexValue(info_id,'LIZ # Neighbors',              &
+                                 ind_nmax_liz,nmax_liz(1:GlobalNumAtoms),GlobalNumAtoms)
 !
-   if (getKeyValue(info_id,'Default LIZ # NN Shells',num_shells(0),default_param=.false.) /= 0) then
+      if (getKeyValue(info_id,'Default LIZ # NN Shells',num_shells(0),default_param=.false.) /= 0) then
+         num_shells(0) = 8
+      endif
+      ind_num_shells = 0
+      rstatus = getKeyIndexValue(info_id,'LIZ # NN Shells',              &
+                                 ind_num_shells,num_shells(1:GlobalNumAtoms),GlobalNumAtoms)
+!
+      if (getKeyValue(info_id,'Default LIZ Shell Lmax',lmax_shell(0)) /= 0) then
+         write(s2,'(i2)')lmax_kkr(0)
+         lmax_shell(0) = s2
+         do i = 2, num_shells(0)
+            lmax_shell(0) = trim(lmax_shell(0))//' '//s2
+         enddo
+      else 
+         call initString(lmax_shell(0))
+         num_shells(0) = getNumTokens()
+         call endString()
+      endif
+      ind_lmax_shell = 0
+      rstatus = getKeyIndexValue(info_id,'LIZ Shell Lmax',               &
+                                 ind_lmax_shell,lmax_shell(1:GlobalNumAtoms),GlobalNumAtoms)
+!
+      if (getKeyValue(info_id,'Default LIZ Cutoff Radius',cutoff_r(0)) /= 0) then
+         call ErrorHandler('initAtom','Default LIZ Cutoff Radius is missing from input')
+      endif
+      ind_cutoff_r = 0
+      rstatus = getKeyIndexValue(info_id,'LIZ Cutoff Radius',            &
+                                 ind_cutoff_r,cutoff_r(1:GlobalNumAtoms),GlobalNumAtoms)
+   else ! In the case of CA-KKR-CPA calculations, we setup local cluster with the following parameters
+      nmax_liz(0) = 90 
+      ind_nmax_liz = 0
       num_shells(0) = 8
-   endif
-   ind_num_shells = 0
-   rstatus = getKeyIndexValue(info_id,'LIZ # NN Shells',              &
-                              ind_num_shells,num_shells(1:GlobalNumAtoms),GlobalNumAtoms)
-!
-   if (getKeyValue(info_id,'Default LIZ Shell Lmax',lmax_shell(0)) /= 0) then
+      ind_num_shells = 0
       write(s2,'(i2)')lmax_kkr(0)
       lmax_shell(0) = s2
       do i = 2, num_shells(0)
          lmax_shell(0) = trim(lmax_shell(0))//' '//s2
       enddo
-   else 
-      call initString(lmax_shell(0))
-      num_shells(0) = getNumTokens()
-      call endString()
+      ind_lmax_shell = 0
+      cutoff_r(0) = 20.0d0
+      ind_cutoff_r = 0
    endif
-   ind_lmax_shell = 0
-   rstatus = getKeyIndexValue(info_id,'LIZ Shell Lmax',               &
-                              ind_lmax_shell,lmax_shell(1:GlobalNumAtoms),GlobalNumAtoms)
-!
-   if (getKeyValue(info_id,'Default LIZ Cutoff Radius',cutoff_r(0)) /= 0) then
-      call ErrorHandler('initAtom','Default LIZ Cutoff Radius is missing from input')
-   endif
-   ind_cutoff_r = 0
-   rstatus = getKeyIndexValue(info_id,'LIZ Cutoff Radius',            &
-                              ind_cutoff_r,cutoff_r(1:GlobalNumAtoms),GlobalNumAtoms)
 !
    rstatus = getKeyValue(info_id,'Default Rcut-Screen',cutoff_r_s(0))
    ind_cutoff_r_s = 0
@@ -595,7 +613,14 @@ contains
    endif
    ind_nmult = 0
    rstatus = getKeyIndexValue(info_id,'Integer Factor nmult',         &
-                              ind_nmult,nmult(1:GlobalNumAtoms), GlobalNumAtoms)
+                              ind_nmult, nmult(1:GlobalNumAtoms), GlobalNumAtoms)
+!
+   if (getKeyValue(info_id,'Default Radial Grid Exponential Step',hin(0)) /= 0) then
+      call ErrorHandler('initAtom','Radial Grid Exponential Step hin is missing from input')
+   endif
+   ind_hin = 0
+   rstatus = getKeyIndexValue(info_id,'Radial Grid Exponential Step', &
+                              ind_hin, hin(1:GlobalNumAtoms), GlobalNumAtoms)
 !
    rstatus = getKeyValue(info_id,'Default Screen Potential',potScreen(0))
    ind_potScreen = 0
@@ -620,7 +645,7 @@ contains
       ig = getGlobalIndex(n)
       AtomProperty(n)%GlobalIndex = ig
       AtomProperty(n)%NumSpecies = getNumAlloyElements(ig)
-      if (AtomProperty(n)%NumSpecies > 1 .and. .not. isKKRCPA()) then
+      if (AtomProperty(n)%NumSpecies > 1 .and. .not. isKKRCPA() .and. .not. isKKRCPASRO()) then
 !        -------------------------------------------------------------
          call ErrorHandler('initAtomModule','Number of Species > 1 for global index',ig)
 !        -------------------------------------------------------------
@@ -785,6 +810,17 @@ contains
       else if ( isRealNumber( rmt_input(ind_rmt_input(ig)) ) ) then
 !        Using the specified value as the muffin-tin radius
          read(rmt_input(ind_rmt_input(ig)),*)AtomProperty(n)%Rmt
+         if (AtomProperty(n)%Rmt < ZERO) then
+!           ----------------------------------------------------------
+            call ErrorHandler('initAtom','Invalid muffin-tin radius parameter', &
+                              AtomProperty(n)%Rmt)
+!           ----------------------------------------------------------
+         else if (AtomProperty(n)%Rmt == ZERO .and. present(rinsc)) then
+            AtomProperty(n)%Rmt=rinsc(n)
+         else if (AtomProperty(n)%Rmt < ONE .and. present(rinsc)) then 
+!           The read-in value is used as a multiplier to the inscribed sphere radius
+            AtomProperty(n)%Rmt=AtomProperty(n)%Rmt*rinsc(n)
+         endif
       else
 !        -------------------------------------------------------------
          call ErrorHandler('initAtom','Invalid muffin-tin radius parameter', &
@@ -839,10 +875,10 @@ contains
       endif
 !     ================================================================
 !
-      if ( pseudo_r(ind_pseudo_r(ig)) >= 0.5d0 ) then
+      if ( pseudo_r(ind_pseudo_r(ig)) > ZERO ) then
          AtomProperty(n)%Rcut_pseudo=pseudo_r(ind_pseudo_r(ig))
       else
-         AtomProperty(n)%Rcut_pseudo=ZERO
+         AtomProperty(n)%Rcut_pseudo=ONE
       endif
       Lmax(n)%lmax_kkr=lmax_kkr(ind_lmax_kkr(ig))
       Lmax(n)%lmax_step=lmax_step(ind_lmax_step(ig))
@@ -882,6 +918,7 @@ contains
       GridData(n)%ndivin=ndivin(ind_ndivin(ig))
       GridData(n)%ndivout=ndivout(ind_ndivout(ig))
       GridData(n)%nmult=nmult(ind_nmult(ig))
+      GridData(n)%hin=hin(ind_hin(ig))
    enddo
 !
    do n = 1, LocalNumAtoms
@@ -927,13 +964,13 @@ contains
    deallocate(lmax_kkr,lmax_phi,lmax_pot,lmax_rho, lmax_step, num_shells, &
               lmax_shell, alpha_rho, alpha_pot, nmax_liz,                 &
               potinname, potinform, potoutname, potoutform,               &
-              alpha_mom, alpha_chg, ndivin, ndivout, nmult)
+              alpha_mom, alpha_chg, ndivin, ndivout, nmult, hin)
    deallocate(ind_lmax_pot_trunc, lmax_pot_trunc)
    deallocate(ind_lmax_kkr, ind_lmax_phi, ind_lmax_pot, ind_lmax_rho,     &
               ind_num_shells, ind_lmax_shell, ind_lmax_step,              &
               ind_alpha_rho, ind_alpha_pot, ind_alpha_mom, ind_nmax_liz,  &
               ind_potinname, ind_potinform, ind_potoutname, ind_potoutform, &
-              ind_ndivin, ind_ndivout,ind_nmult, ind_alpha_chg)
+              ind_ndivin, ind_ndivout, ind_nmult, ind_hin, ind_alpha_chg)
 !
    deallocate(ind_cutoff_r, cutoff_r, ind_potScreen, potScreen )
    deallocate(ind_cutoff_r_s, cutoff_r_s)
@@ -1751,23 +1788,25 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine getGridData(id,nin,nout,nmul)
+   subroutine getRadialGridData(id,nin,nout,nmul,h)
 !  ===================================================================
    implicit none
    integer (kind=IntKind), intent(in) :: id
    integer (kind=IntKind), intent(out) :: nin
    integer (kind=IntKind), intent(out) :: nout
    integer (kind=IntKind), intent(out) :: nmul
+   real (kind=RealKind), intent(out) :: h
 !
    if (id<1 .or. id>LocalNumAtoms) then
-      call ErrorHandler('getGridData','Invalid atom index',id)
+      call ErrorHandler('getRadialGridData','Invalid atom index',id)
    endif
 !
    nin=GridData(id)%ndivin
    nout=GridData(id)%ndivout
    nmul=GridData(id)%nmult
+   h=GridData(id)%hin
 !
-   end subroutine getGridData
+   end subroutine getRadialGridData
 !  ===================================================================
 !
 !  *******************************************************************
@@ -1912,9 +1951,6 @@ contains
       call ErrorHandler('setMuffinTinRadius','Invalid atom index',i)
    endif
    AtomProperty(i)%Rmt = rmt
-   if (AtomProperty(i)%Rcore < 0.001d0) then
-      AtomProperty(i)%Rcore=AtomProperty(i)%Rmt
-   endif
 !
    end subroutine setMuffinTinRadius
 !  ===================================================================
@@ -2031,14 +2067,18 @@ contains
       write(6,'(''Moment    Mixing Parameter: '',f8.5)')MixParam(i)%alpha_mom
       write(6,'(''Evec      Mixing Algorithm: '',f8.5)')MixParam(i)%alpha_evec
       write(6,'(''Number of Shells in LIZ: '',i4)')LizLmax(i)%NumShells
-      write(6,'(''Lmax for each LIZ shell: '',10i4)') &
+      write(6,'(''Lmax for each LIZ shell: '',10i4)')                 &
             LizLmax(i)%lmax_shell(1:LizLmax(i)%NumShells)
-      write(6,'(''Number of r-mesh less or equal than Rmt: '',i5)')   &
-            GridData(i)%ndivin
-      write(6,'(''Number of r-mesh greater than Rmt      : '',i5)')   &
-            GridData(i)%ndivout
-      write(6,'(''Ratio of r-mesh steps, hin and hout    : '',i5)')   &
-            GridData(i)%nmult
+      if (GridData(i)%ndivin > 0) then
+         write(6,'(''Number of r-mesh less or equal than Rmt: '',i5)') GridData(i)%ndivin
+      endif
+      if (GridData(i)%ndivout > 0) then
+         write(6,'(''Number of r-mesh greater than Rmt      : '',i5)') GridData(i)%ndivout
+      endif
+      write(6,'(''Ratio of r-mesh steps, hin and hout    : '',i5)') GridData(i)%nmult
+      if (GridData(i)%hin > 0.000001d0) then
+         write(6,'(''exponential step of inside r-mesh   : '',f10.6)') GridData(i)%hin
+      endif
       if (AtomProperty(i)%Rmt > 0.000001d0) then
          write(6,'(''Desired Rmt         : '',f10.5)') AtomProperty(i)%Rmt
       endif

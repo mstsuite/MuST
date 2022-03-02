@@ -1,4 +1,4 @@
-VPATH = $(ODIR)/../src
+VPATH = $(TOP_DIR)/src
 
 BasicModules = \
 PhysParamModule.o \
@@ -9,7 +9,9 @@ AdaptIntegrationModule.o \
 MatrixBlockInversionModule.o \
 BinvMatrix.o \
 WriteFunctionModule.o \
-DefaultParamModule.o
+DefaultParamModule.o \
+LatticeModule.o \
+IBZRotationModule.o
 
 BasicRoutines = \
 readPositionData.o \
@@ -20,7 +22,8 @@ rdin_old_lsms.o \
 rdin_old_infotable.o \
 rdin_old_infoevec.o \
 getValueAtPosi.o \
-lattice.o
+lattice.o \
+averageAcrossProcesses.o
 
 AppModules = \
 InputModule.o \
@@ -46,7 +49,6 @@ SystemSymmetryModule.o \
 LdaCorrectionModule.o \
 RadialGridModule.o \
 PotentialModule.o \
-CoreStatesModule.o \
 StrConstModule.o \
 RSpaceStrConstModule.o \
 TriangleModule.o \
@@ -54,17 +56,22 @@ PolygonModule.o \
 SurfElementsModule.o \
 SpinRotationModule.o \
 SSSolverModule.o \
-SCPolesModule.o \
-Uniform3DGridModule.o \
-ParallelFFTModule.o \
-KreinModule.o \
 DiracSolverModule.o \
 RelScattererModule.o \
+RelSSSolverModule.o \
+SCPolesModule.o \
+SMatrixPolesModule.o \
+SineMatrixZerosModule.o \
+KreinModule.o \
+CoreStatesModule.o \
+Uniform3DGridModule.o \
+ParallelFFTModule.o \
 ConstrainLocalMomentModule.o \
 ExchCorrFunctionalModule.o \
 ValenceDensityModule.o \
 ChargeDensityModule.o \
 ChargeDistributionModule.o \
+ChargeScreeningModule.o \
 PotentialGenerationModule.o \
 TotalEnergyModule.o \
 ConvergenceCheckModule.o \
@@ -72,17 +79,15 @@ MixingModule.o \
 TestPotentialModule.o \
 BookKeepingModule.o \
 ForceModule.o \
-RelSSSolverModule.o \
 
 #HDF5Module.o
 
 Modules_2 = \
-LatticeModule.o \
-IBZRotationModule.o \
 ClusterMatrixModule.o \
+MediumHostModule.o \
+SROModule.o \
 CrystalMatrixModule.o \
 AccelerateCPAModule.o \
-MediumHostModule.o \
 EmbeddedClusterModule.o \
 CPAMediumModule.o \
 BandStructureModule.o \
@@ -153,7 +158,7 @@ printScfResults.o
 all: $(ODIR)/preproc print_version $(ODIR)/$(EXEC_NAME)
 
 print_version:
-	cd .. && ./src/get_svn.sh ./src/print_version_include.h
+	cd $(TOP_DIR) && ./src/get_svn.sh ./src/print_version_include.h
 	rm -f $(ODIR)/print_version.o
 
 $(ODIR)/preproc: preproc.o
@@ -176,3 +181,6 @@ clean:
 printSystemMovie.o: $(Modules_2)
 
 DefaultParamModule.o: DefaultParameters.h
+InputModule.o: DefaultParamModule.o
+
+keep.o: git_version.h

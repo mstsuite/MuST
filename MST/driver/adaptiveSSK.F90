@@ -30,7 +30,7 @@ program adaptiveSSK
    use StepFunctionModule, only : getVolumeIntegration
 !
    use PotentialModule, only : initPotential, endPotential
-   use PotentialModule, only : readPotential, setPotentialOutsideMT, getPotential
+   use PotentialModule, only : readPotential, getPotential
    use PotentialModule, only : getPotEf, setV0, setPotential, isPotComponentZero, getSphPotr
 !
    use ScfDataModule, only : ngaussr, ngaussq
@@ -59,7 +59,7 @@ program adaptiveSSK
 !
    use AtomModule, only : getStepFuncLmax, setTruncPotLmax, setPotLmax
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
-   use AtomModule, only : getGridData, getMuffinTinRadius
+   use AtomModule, only : getRadialGridData, getMuffinTinRadius
    use AtomModule, only : getLocalNumSpecies, getLocalAtomicNumber
 !
    use SphericalHarmonicsModule, only : initSphericalHarmonics
@@ -137,7 +137,7 @@ program adaptiveSSK
    real (kind=RealKind) :: bravais(3,3)
    real (kind=RealKind), pointer :: AtomPosition(:,:)
 !
-   real (kind=RealKind) :: re, vol, de
+   real (kind=RealKind) :: re, vol, de, hin
    real (kind=RealKind) :: t0, t1, t2, t3
    real (kind=RealKind) :: rmt, rend, rws, rinsc, Rb, ps, IDOS_cell, ssdos_int
 !
@@ -187,6 +187,7 @@ program adaptiveSSK
    allocate(GlobalIndex(LocalNumAtoms), atom_print_level(1:LocalNumAtoms))
    do i=1,LocalNumAtoms
       atom_print_level(i) = getStandardOutputLevel(i)
+      GlobalIndex(i)=getGlobalIndex(i)
    enddo
 !
 !  ===================================================================
@@ -253,78 +254,9 @@ program adaptiveSSK
 !  ===================================================================
 !  initialize radial grid
 !  -------------------------------------------------------------------
-   call initRadialGrid(LocalNumAtoms, istop, node_print_level)
+   call setupRadGridAndCell(LocalNumAtoms,lmax_max)
 !  -------------------------------------------------------------------
 !
-   do i=1,LocalNumAtoms
-      ig=getGlobalIndex(i)
-      GlobalIndex(i)=ig
-!     ----------------------------------------------------------------
-      call getGridData(i,ndivin,ndivout,nmult)
-!     ----------------------------------------------------------------
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printPolyhedron(i)
-!        -------------------------------------------------------------
-      endif
-      rend =  getOutscrSphRadius(i)
-      if (isMuffinTinPotential()) then
-         rmt = getMuffinTinRadius(i)
-         rinsc = getInscrSphRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = rinsc
-         endif
-         rws = getWignerSeitzRadius(i)
-         if (getSingleSiteSolverType()==1) then
-            rend=rws
-         endif
-!        -------------------------------------------------------------
-         call genRadialGrid(i,xstart, rmt, rinsc, rend, ndivin)
-!        -------------------------------------------------------------
-      else if ( isASAPotential() ) then
-         rend =  getWignerSeitzRadius(i)
-         rmt = getMuffinTinRadius(i)
-         rinsc = getWignerSeitzRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = rinsc
-         endif
-!        -------------------------------------------------------------
-         call genRadialGrid(i,xstart, rmt, rinsc, rend, ndivin )
-!        -------------------------------------------------------------
-      else if (isMuffinTinASAPotential()) then
-         rend =  getWignerSeitzRadius(i)
-         rmt = getMuffinTinRadius(i)
-         rinsc = getWignerSeitzRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = rinsc
-         endif
-!        -------------------------------------------------------------
-         call genRadialGrid( i, xstart, rmt, rinsc, rend, ndivin )
-!        -------------------------------------------------------------
-      else
-         if (getNeighborDistance(i,1)-getOutscrSphRadius(i) < TEN2m8) then
-!           ----------------------------------------------------------
-            call WarningHandler('testSSSolver',                       &
-                     'Ill condition found: Neighbor distance <= Rcs', &
-                     getNeighborDistance(i,1),getOutscrSphRadius(i))
-!           ----------------------------------------------------------
-         endif
-         rmt = getMuffinTinRadius(i)
-         rinsc = getInscrSphRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = getInscrSphRadius(i)
-         endif
-         rws = getWignerSeitzRadius(i)
-!        -------------------------------------------------------------
-         call genRadialGrid( i, rmt, rinsc, rws, rend, ndivin, ndivout, nmult)
-!        -------------------------------------------------------------
-      endif
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printRadialGrid(i)
-!        -------------------------------------------------------------
-      endif
-   enddo
    if (MyPE == 0) then
       if (getKeyValue(1,'Large sphere radius (a.u.)',Rb) > 0) then
          Rb = 500.0d0
@@ -335,32 +267,6 @@ program adaptiveSSK
       string_rb(1:3)='_Rb'
    endif
    call bcastMessage(Rb,0)
-!
-!  ===================================================================
-!  initialize step function module
-!  ===================================================================
-   allocate( ngr(LocalNumAtoms), ngt(LocalNumAtoms) )
-   do i=1,LocalNumAtoms
-      ngr(i) = ngaussr
-      ngt(i) = ngaussq
-   enddo
-!
-!  -------------------------------------------------------------------
-   call initStepFunction(LocalNumAtoms, lmax_max, lmax_step, ngr, ngt, &
-                         istop,node_print_level)
-!  -------------------------------------------------------------------
-   deallocate( ngr, ngt )
-!
-   do i=1,LocalNumAtoms
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printStepFunction(i)
-!        -------------------------------------------------------------
-      endif
-!     ----------------------------------------------------------------
-      call testStepFunction(i)
-!     ----------------------------------------------------------------
-   enddo
 !
 !  ===================================================================
 !  initialize potential module

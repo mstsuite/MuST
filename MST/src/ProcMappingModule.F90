@@ -625,6 +625,8 @@ contains
             endif
          endif
       enddo
+   else
+      ra_sav = 0
    endif
 !
    if (ra_sav /= 0) then
@@ -655,7 +657,11 @@ contains
    NumEsPerBox = (NumEs-re_sav)/ne_sav + re_sav
    na = na_sav; nk = nk_sav; ne = ne_sav
    ra = ra_sav; rk = rk_sav; re = re_sav
-   np = NumAtoms/NumAtomsPerProc  ! = na
+   if (ne == 1 .and. nk == 1) then
+      np = NumPEs
+   else
+      np = NumAtoms/NumAtomsPerProc  ! = na
+   endif
 !
    if (print_level >= 0 .and. MyPE == 0) then
       write(6,'(/,80(''=''))')
@@ -689,33 +695,40 @@ contains
 !  -------------------------------------------------------------------
    box(1:3) = proc_dim(1:3)
    if (print_level >= 0 .and. MyPE == 0) then
-      write(6,'(3(a,i5))')'Dimension of the box :',box(1),' x',box(2),' x',box(3)
+      write(6,'(3(a,i5))')'Dimension of the box (to be repeated to produce processor grid):', &
+                          box(1),'  X',box(2),'  X',box(3)
    endif
 !
    proc_dim(1) = proc_dim(1)*nk
    proc_dim(2) = proc_dim(2)*ne
+!
+   if (print_level >= 0 .and. MyPE == 0) then
+      write(6,'(3(a,i5))')'Dimension of processors :',proc_dim(1),'  X', &
+                          proc_dim(2),'  X',proc_dim(3)
+   endif
 !
 !  -------------------------------------------------------------------
    call createProcGrid(3,'3-D Proc Grid',proc_dim)
 !  -------------------------------------------------------------------
    grid_id = getProcGridID('3-D Proc Grid')
 !  -------------------------------------------------------------------
-   if (print_level >= 1 .and. MyPE < min(NumPEs,8)) then
-!     ----------------------------------------------------------------
-      d = getProcGridDimention(grid_id)
-!     ----------------------------------------------------------------
-      if (MyPE == 0) then
-         write(6,'(a,i5)')'Grid Dimension: ',d
-         write(6,'(a,i5)')'Grid Size: ',getProcGridSize(grid_id)
-         do j = 1, d
-            write(6,'(a,i5,a,i5)')'For dim = ',j,                     &
-                                  ', size = ',getProcGridSize(grid_id,j)
-         enddo
-      endif
-      do j = 1, d
-         write(6,'(3(a,i5))')'MyPE = ',MyPE,', for dim = ',j,         &
-                             ',my coordinate: ',getMyCoordInProcGrid(grid_id,j)
+   d = getProcGridDimention(grid_id)
+!  -------------------------------------------------------------------
+   if (MyPE == 0) then
+      write(6,'(a,i5)')'Proc Grid Dimension:  ',d
+      write(6,'(a,i5)')'Total Number of Procs:',getProcGridSize(grid_id)
+      write(6,'(a,$)') 'Proc Grid Size in Each Dimension: ('
+      do j = 1, d-1
+         write(6,'(i3,a,$)')getProcGridSize(grid_id,j),','
       enddo
+      write(6,'(i3,a)')getProcGridSize(grid_id,d),')'
+   endif
+   if (print_level >= 0 .and. MyPE < min(NumPEs,16)) then
+      write(6,'(a,i5,a,$)')'MyPE = ',MyPE,' is at ('
+      do j = 1, d-1
+         write(6,'(i3,a,$)')getMyCoordInProcGrid(grid_id,j),','
+      enddo
+      write(6,'(i3,a)')getMyCoordInProcGrid(grid_id,d),')'
    endif
 !  -------------------------------------------------------------------
    call createBoxGroupFromGrid(grid_id,box,'Unit Cell')
@@ -725,11 +738,25 @@ contains
 !     ----------------------------------------------------------------
       call createGroupFromGrid(grid_id,step,'K-Mesh')
 !     ----------------------------------------------------------------
+      step(1) = proc_dim(1); step(2) = box(2); step(3) = proc_dim(3)
+!     ----------------------------------------------------------------
+      call createBoxGroupFromGrid(grid_id,step,'A-K Plane')
+!     ----------------------------------------------------------------
    endif
    if (NumEs > 0) then
       step(1) = 0; step(2) = box(2); step(3) = 0
 !     ----------------------------------------------------------------
       call createGroupFromGrid(grid_id,step,'Energy Mesh')
+!     ----------------------------------------------------------------
+      step(1) = box(1); step(2) = proc_dim(2); step(3) = proc_dim(3)
+!     ----------------------------------------------------------------
+      call createBoxGroupFromGrid(grid_id,step,'A-E Plane')
+!     ----------------------------------------------------------------
+   endif
+   if (NumKs > 0 .and. NumEs > 0) then
+      step(1) = box(1); step(2) = box(2); step(3) = box(3)
+!     ----------------------------------------------------------------
+      call createGroupFromGrid(grid_id,step,'E-K Plane')
 !     ----------------------------------------------------------------
    endif
 !
@@ -920,21 +947,27 @@ contains
 !
    factors => getSubFactors(num,3,m)
 !
-   dsav = 1.0d+20
-   do i = 1, m
-      n1 = factors(1,i)
-      n2 = factors(2,i)
-      n3 = factors(3,i)
-      dsqr = sqrt( (n1*bsize(2)-n2*bsize(1))**2 + &
-                   (n1*bsize(3)-n3*bsize(1))**2 + &
-                   (n2*bsize(3)-n3*bsize(2))**2 )
-      if (dsqr < dsav) then
-         dsav = dsqr
-         n1s = n1
-         n2s = n2
-         n3s = n3
-      endif
-   enddo
+   if (m > 0) then
+      dsav = 1.0d+20
+      do i = 1, m
+         n1 = factors(1,i)
+         n2 = factors(2,i)
+         n3 = factors(3,i)
+         dsqr = sqrt( (n1*bsize(2)-n2*bsize(1))**2 + &
+                      (n1*bsize(3)-n3*bsize(1))**2 + &
+                      (n2*bsize(3)-n3*bsize(2))**2 )
+         if (dsqr < dsav) then
+            dsav = dsqr
+            n1s = n1
+            n2s = n2
+            n3s = n3
+         endif
+      enddo
+   else
+      n1s = num
+      n2s = 1
+      n3s = 1
+   endif
    proc_dim(1) = n1s; proc_dim(2) = n2s; proc_dim(3) = n3s
 !
    end subroutine setupProcDim

@@ -85,10 +85,19 @@
 !                     =  0: Untruncated potential in solver, Untruncated potential in volume integration
 !                     =  1: Untruncated potential in solver, Truncated potential in volume integration
 !                     =  2: Truncated potential in solver
-   n = n + 1; Keys(n) = 'Irregular Solutions (>=0)';             Values(n) = '0'
-!                     = 0: Solver does not use the IrrSolulions; = 1: Solver does use the IrrSolulions
+   n = n + 1; Keys(n) = 'Irregular Solutions (>=0)';             Values(n) = '1'
+!                     = 0: Solver does NOT USE the IrrSolulions; = 1: Solver does USE the IrrSolulions
    n = n + 1; Keys(n) = 'Pole Search Step (>0.0)';               Values(n) = '0.010'
-!             Note: Defaults to 0.2 for unspecified value, <= 0.0 or > 0.4
+!             Note: Defaults to 0.01 for unspecified value, <= 0.0 or > 0.4
+   n = n + 1; Keys(n) = 'Resonance State Max Width (>0.0)';      Values(n) = '0.050'
+!             Note: If a pole is in the 4th quadrant and its distance from the real axis is less this value, 
+!                   the pole is considered as a resonance, and the imaginary part is the width of the resonance 
+   n = n + 1; Keys(n) = 'Resonance State Contour Integration Radius (>0.0)'; Values(n) = '0.002'
+!             Note: This parameter defines the radius of the semi-circle contour around the resonance energy if
+!                   its width is less than this value.
+   n = n + 1; Keys(n) = 'No. Gauss Pts. along Resonance State Contour'; Values(n) = '5'
+!             Note: This parameter specifies the number of Gaussian Quadrature points used for the integration
+!                   along the semi-circle contour around the resonance energy.
    n = n + 1; Keys(n) = 'Solutions Lmax Cutoff';                 Values(n) = '-1'
 !                     = l<0: uses the lmax of the wave functions defined in info_table
 !                     = l: finite, the coupled integral solver is used up to this l, while beyond it 
@@ -136,7 +145,7 @@
    n = n + 1; Keys(n) = 'Iterate Fermi energy';                  Values(n) = '0'
 !                     = 1: On; = 0: Off
    n = n + 1; Keys(n) = 'SS Real Axis Int. Method';              Values(n) = '0'
-!                     = 0: Unimesh; = 1: Adaptive; = 2: Uniform
+!                     = 0: Unimesh; = 1: Adaptive; = 2: Uniform; = 3: Gaussian Quadrature; = 4: Romberg Method
    n = n + 1; Keys(n) = 'SS Real Axis Int. Points';              Values(n) = '300'
    n = n + 1; Keys(n) = 'T-matrix inversion (>= 0)';             Values(n) = '2'
    n = n + 1; Keys(n) = 'M-matrix inversion (>= 0)';             Values(n) = '10'
@@ -189,8 +198,8 @@
 !             Note: The neighbors number represents the maximum number of neighbors of a site. It can be less than
 !                   the specified number if the neighbors on the next shell adds up over its maximum set.
    n = n + 1; Keys(n) = 'Default LIZ # NN Shells';               Values(n) = '16'
-   n = n + 1; Keys(n) = 'Default LIZ Shell Lmax';                Values(n) = '4 4 4 4 3 3 3 3 2 2 2 2 1 1 1 1'
-   n = n + 1; Keys(n) = 'Default LIZ Cutoff Radius';             Values(n) = '8.5'
+   n = n + 1; Keys(n) = 'Default LIZ Shell Lmax';                Values(n) = '4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4'
+   n = n + 1; Keys(n) = 'Default LIZ Cutoff Radius';             Values(n) = '25.0'
    n = n + 1; Keys(n) = 'Default Rho  Mix Param.';               Values(n) = '0.1000'
    n = n + 1; Keys(n) = 'Default Pot  Mix Param.';               Values(n) = '0.1000'
    n = n + 1; Keys(n) = 'Default Mom  Mix Param.';               Values(n) = '0.1500'
@@ -203,7 +212,11 @@
    n = n + 1; Keys(n) = 'Default No. Rad Points ndivout';        Values(n) = '0'
 !                     = 0: Not specified; > 0: Speciflied. Note: rmt < r(j)=exp(j*hout) <= rmax, j=1,2,...,ndivout
    n = n + 1; Keys(n) = 'Default Integer Factor nmult';          Values(n) = '1'
-!                     = 0: Not specified; > 0: Speciflied. Note: r(j) = exp(j*h), hin = nmult*hout
+!                     = 0: Not specified; > 0: Speciflied. Note: r(j) = exp(j*hin), hin = nmult*hout
+   n = n + 1; Keys(n) = 'Default Radial Grid Exponential Step';  Values(n) = '0.01'
+!                     = 0.0: Not specified; 
+!                     > 0.0: 0.005 - 0.02 is recommended. Note: r(j) = exp(j*hin), here hin is the 
+!                            exponential step. In this case, you may want to leave ndivin unspecified
    n = n + 1; Keys(n) = 'Default Pseudo Charge Radius';          Values(n) = '0.9'
 !             Note: This is the ratio of the pseudo charge radius and the muffin-tin radius
    n = n + 1; Keys(n) = 'Default Screen Pot.';                   Values(n) = '3.0'
@@ -229,12 +242,57 @@
 !                     = 0: Using the inscribed sphere radius for full-potential calculations,
 !                          the muffin-tin radius for muffin-tin calculations, or the ASA radius for ASA calculations.
 !                     = 1: Using the implicit core radius defined in ChemElementModule
-!                     = A specific real value (> 0.0, in atomic units)
+!                     = A specific real value (> 0.0, in atomic units). However, if this value < 1.0, it will be treated
+!                       as a multiplier, and the core radius is this value times the inscribed sphere radius.
    n = n + 1; Keys(n) = 'Default Muffin-tin Radius';             Values(n) = '0'
 !                     = 0: Using the inscribed sphere radius
 !                     = 1: Using the implicit muffin-tin radius defined in ChemElementModule
-!                     = A specific real value (> 0.0, in atomic units)
-   n = n + 1; Keys(n) = 'Default Radical Plane Ratio';           Values(n) = '0.000'
+!                     = A specific real value (> 0.0, in atomic units). However, if this value < 1.0, it will be treated
+!                       as a multiplier, and the muffin-tin radius is this value times the inscribed sphere radius.
+   n = n + 1; Keys(n) = 'Default Radical Plane Ratio';           Values(n) = '1.000'
+!  Note: "Ratio" here is the radical plane distance from atom ralative to a 
+!        universal value applied to the entire system. This universal value does 
+!        not have to be specified, so long as all the atoms in the system have 
+!        the same denominator when choosing this value. If all atoms have the same
+!        radical plane ratio (RPR), a radical plane is set at half way between two
+!        atoms. If each atom has its own RPR, which is in effect treated as a 
+!        "weight" for the atom when setting up a radical plane. Specifically, a 
+!        radical plane between atom i and atom j, separated by distance D, will be 
+!        set at distance from atom i at D*RPR(i)/(RPR(i)+RPR(j)), and at distance 
+!        from atom j at D*RPR(j)/(RPR(i)+RPR(j))
+   n = n + 1; Keys(n) = 'Uniform Grid Origin';                   Values(n) = '0'
+!                     = 0: Using unit cell corner             
+!                     = 1: Using Unit cell center
+   n = n + 1; Keys(n) = 'Core States Normalization Range';       Values(n) = '0'
+!                     = 0: Up to bounding sphere radius
+!                     = 1: Up to infinity
+   n = n + 1; Keys(n) = 'Mixing Parameter for Finding Ef';       Values(n) = '0.5'
+!        Note: At each SCF step, the calculated fermi energy will be mixing with the old fermi energy
+!              to determine the new fermi energy for the next SCF iteration
+   n = n + 1; Keys(n) = 'Mixing Switch for Finding Ef';          Values(n) = '0.01'
+!        Note: If the difference between the calculated fermi energy and the old fermi energy is
+!              greater than this switching value, mixing will be engaged. otherwise, no fermi energy
+!              mixing is applied. One may keep the fermi energy fixed by setting this switching value 
+!              to 0.0 and also setting fermi energy mixing parameter to 0.0.
+   n = n + 1; Keys(n) = 'Renormalize Green function';            Values(n) = '0'
+!        Note: The Green function may be renormalized using the the integrated DOS value
+!              calculated from multiple scattering Lloyd formula and/or single scattering
+!              Krein formula.
+!                     = 0: Do NOT renormalize the Green function
+!                     = 1: Renormalize the Green function
+   n = n + 1; Keys(n) = 'Full-potential Semi-core';              Values(n) = '0'
+!                     = 0: Do NOT treat semi-core states with full-potential;
+!                     = 1: Treat semi-core states with full-potential.
+   n = n + 1; Keys(n) = 'Include CPA/SRO Charge Correction';     Values(n) = '0'
+!                     = 0: Do NOT include charge correction term in potential for the CPA calculation;
+!                     = 1: Include the charge correction term in potential/energy for the CPA calculation;
+   n = n + 1; Keys(n) = 'Use Linear Relation';                   Values(n) = '0'
+!                     = 0: DO NOT use the linear q-V relation to determine the charge correction term;
+!                     = 1: Use the linear q-V relation to determine the charge correction term;
+   n = n + 1; Keys(n) = 'Tolerance for setting up polyhedra';    Values(n) = '0.0000005d0'
+!        Note: This is the tolerance value used in setting up atomic polyhedra in the unit cell.
+!              If one gets error message for determining the corners or edges of a polyhedron, it is
+!              likely that this tolerance value needs to be adjusted.
 !  =============================================================================
 !  Additional input parameters can be added to this table using the 
 !  following format:

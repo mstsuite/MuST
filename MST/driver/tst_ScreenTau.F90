@@ -37,7 +37,7 @@ program test_ScreenTau
    use AtomModule, only : initAtom, endAtom
    use AtomModule, only : getMaxLmax, printAtom
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
-   use AtomModule, only : getGridData
+   use AtomModule, only : getRadialGridData
    use AtomModule, only : getLocalAtomName, getLocalAtomicNumber
    use AtomModule, only : getLocalAtomPosition
    use AtomModule, only : getInPotFileName, getInPotFileForm
@@ -86,7 +86,7 @@ program test_ScreenTau
    real (kind=RealKind), allocatable :: rmt(:)
    real (kind=RealKind), allocatable :: v_swiss(:)
    real (kind=RealKind), allocatable :: rcut_swiss(:)
-   real (kind=RealKind) :: NumKpoints, weight
+   real (kind=RealKind) :: NumKpoints, weight, hin
 !
    complex (kind=CmplxKind), pointer :: tau_0j_swiss(:,:,:)
    complex (kind=CmplxKind) :: vshift
@@ -181,7 +181,7 @@ program test_ScreenTau
 !     ----------------------------------------------------------------
       call genPolyhedron(i,ig,NumAtoms,AtomPosition)
 !     ----------------------------------------------------------------
-      call getGridData(i,ndivin,ndivout,nmult)
+      call getRadialGridData(i,ndivin,ndivout,nmult,hin)
 !     ----------------------------------------------------------------
       if (print_level >= 2) then
 !        -------------------------------------------------------------
@@ -193,8 +193,9 @@ program test_ScreenTau
       write(6,*) i, getInscrSphRadius(i), getOutscrSphRadius(i),        &
                 ndivin,ndivout,nmult
 !     ----------------------------------------------------------------
-      call genRadialGrid(i,getInscrSphRadius(i),getOutscrSphRadius(i), &
-                         ndivin,ndivout,nmult)
+      call genRadialGrid(i,getInscrSphRadius(i), getInscrSphRadius(i),&
+                         getOutscrSphRadius(i),                       &
+                         ndivin = ndivin, ndivout = ndivout, nmult = nmult)
 !     ----------------------------------------------------------------
       call printRadialGrid(i)
 !     ----------------------------------------------------------------

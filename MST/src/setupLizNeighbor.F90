@@ -194,22 +194,22 @@ subroutine setupLizNeighbor(print_level)
                r = sqrt( x*x + y*y + z*z )
                if (r < ONE .and. ig == i) then
                   cycle LOOP_k0
-!              else if (r < ONE) then
+               else if (r < ONE) then
 !                 -------------------------------------------------
-!                 call ErrorHandler('setupLizNeighbor','atoms are too close')
+                  call ErrorHandler('setupLizNeighbor','Check position data: atoms are too close to one another',i,ig)
 !                 -------------------------------------------------
-!                 write(6,'(50(''=''))')
-!                 write(6,'(a,f15.8)')'The following pair of atoms has small distance:',r/scaling
-!                 write(6,'(a)')'Index         x                y                z'
-!                 write(6,'(i5,3(2x,f15.8))')ig,posl(1:3)/scaling
-!                 write(6,'(i5,3(2x,f15.8))')i,posg(1:3)/scaling
-!                 if (m1(k) /= 0 .or. m2(k) /= 0 .or. m3(k) /= 0) then
-!                    write(6,'(a,3i5,x,a)')'After the cell shifted by:',m1(k),m2(k),m3(k), &
-!                                          'the following atom is at'
-!                    write(6,'(i5,3(2x,f15.8))')i,(x+posl(1))/scaling,(y+posl(2))/scaling, &
-!                                                 (z+posl(3))/scaling
-!                 endif
-!                 write(6,'(50(''-''))')
+                  write(6,'(50(''=''))')
+                  write(6,'(a,f15.8)')'The following pair of atoms has small distance:',r/scaling
+                  write(6,'(a)')'Index         x                y                z'
+                  write(6,'(i5,3(2x,f15.8))')ig,posl(1:3)/scaling
+                  write(6,'(i5,3(2x,f15.8))')i,posg(1:3)/scaling
+                  if (m1(k) /= 0 .or. m2(k) /= 0 .or. m3(k) /= 0) then
+                     write(6,'(a,3i5,x,a)')'After the cell shifted by:',m1(k),m2(k),m3(k), &
+                                           'the following atom is at'
+                     write(6,'(i5,3(2x,f15.8))')i,(x+posl(1))/scaling,(y+posl(2))/scaling, &
+                                                  (z+posl(3))/scaling
+                  endif
+                  write(6,'(50(''-''))')
                else if ( r <= rcut_max+ten2m8 ) then
                   do js = 1, ns
                      if (abs(r - rs(js)) < TEN2m6) then
@@ -217,7 +217,7 @@ subroutine setupLizNeighbor(print_level)
                         cycle LOOP_k0
                      endif
                   enddo
-                  ns = ns + 1 ! count no. of neighboring shells within LizLmax%rad
+                  ns = ns + 1 ! count no. of neighboring shells within rcut_max
                   if (ns > MaxLizShells) then
 !                    -------------------------------------------------
                      call StopHandler('setupLizNeighbor','ns > MaxLizShells')
@@ -228,9 +228,11 @@ subroutine setupLizNeighbor(print_level)
                endif
             enddo LOOP_k0
          enddo
-!        -------------------------------------------------------------
-         call HeapSort(ns, rs, indx)
-!        -------------------------------------------------------------
+         if (ns > 0) then
+!           ----------------------------------------------------------
+            call HeapSort(ns, rs, indx)
+!           ----------------------------------------------------------
+         endif
          na = 0
          Loop_js: do js = 1,ns
             na = na+nas(indx(js))
@@ -325,10 +327,11 @@ subroutine setupLizNeighbor(print_level)
 !        call WarningHandler('setupLizNeighbor','no neighbor for this atom',ig)
 !        -------------------------------------------------------------
 !     else
-      if (ns > 0) then
-!        -------------------------------------------------------------
-         call HeapSort(ns, rs, indx)
-!        -------------------------------------------------------------
+         if (ns > 0) then
+!           ----------------------------------------------------------
+            call HeapSort(ns, rs, indx)
+!           ----------------------------------------------------------
+         endif
          neighb%NumAtoms = na
          neighb%NumShells = ns
          allocate( neighb%Z(na), neighb%Lmax(na) )
@@ -336,10 +339,11 @@ subroutine setupLizNeighbor(print_level)
          allocate( neighb%GlobalIndex(na), neighb%Position(3,na) )
          allocate( neighb%IndexMN(GlobalNumAtoms) )
          allocate( neighb%Rmunu(3,index_mn_max,GlobalNumAtoms))
-         allocate( neighb%ShellIndex(na) ) 
-         allocate( neighb%ShellRad(ns) )
+         allocate( neighb%ShellIndex(na) )
+         allocate( neighb%ShellRad(ns), neighb%NAsOnShell(ns) )
          do i=1,ns
             neighb%ShellRad(i)=rs(i)
+            neighb%NAsOnShell(i)=0
          enddo
          neighb%IndexMN = -1
          neighb%Rmunu = real(-10000)
@@ -394,14 +398,22 @@ subroutine setupLizNeighbor(print_level)
                neighb%NumReceives = neighb%NumReceives + 1
             endif
          enddo
+         do js = 1, neighb%NumShells
+            neighb%NAsOnShell(js) = 0
+            do i = 1, neighb%NumAtoms
+               if (neighb%ShellIndex(i) == js) then
+                  neighb%NAsOnShell(js) = neighb%NAsOnShell(js) + 1
+               endif
+            enddo
+         enddo
 !        -------------------------------------------------------------
          call setNeighbor(id,neighb)
 !        -------------------------------------------------------------
          deallocate( neighb%Z, neighb%Lmax, neighb%ProcIndex,          &
                      neighb%LocalIndex, neighb%GlobalIndex )
          deallocate( neighb%Position, neighb%IndexMN, neighb%Rmunu )
-         deallocate( neighb%ShellIndex, neighb%ShellRad)
-      endif
+         deallocate( neighb%ShellIndex, neighb%NAsOnShell, neighb%ShellRad)
+!     endif
       deallocate( m1, m2, m3 )
 !
       if (print_level(id) >= 0) then

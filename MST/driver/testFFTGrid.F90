@@ -36,7 +36,7 @@ program testFFTGrid
    use StepFunctionModule, only : getVolumeIntegration
 !
    use PotentialModule, only : initPotential, endPotential
-   use PotentialModule, only : readPotential, setPotentialOutsideMT, getPotential
+   use PotentialModule, only : readPotential, getPotential
    use PotentialModule, only : getPotEf, setV0, setPotential, isPotComponentZero, getSphPotr
 !
    use ScfDataModule, only : ngaussr, ngaussq
@@ -72,7 +72,7 @@ program testFFTGrid
 !
    use AtomModule, only : getStepFuncLmax, setTruncPotLmax, setPotLmax
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
-   use AtomModule, only : getGridData, getLocalEvec, getMuffinTinRadius
+   use AtomModule, only : getRadialGridData, getLocalEvec, getMuffinTinRadius
    use AtomModule, only : getLocalAtomPosition
 !
    use SphericalHarmonicsModule, only : initSphericalHarmonics
@@ -141,7 +141,7 @@ program testFFTGrid
 !  ******  variables after the following line.             ***********
 !  *******************************************************************
 !
-   real (kind=RealKind) :: t0, t1, t2, t3
+   real (kind=RealKind) :: t0, t1, t2, t3, hin
 !
    integer (kind=IntKind) :: i, id, ig, is, ie_loc, ie_glb
    integer (kind=IntKind) :: eGID, aGID, NumPEsInGroup, comm
@@ -237,6 +237,7 @@ contains
    do i=1,LocalNumAtoms
       atom_print_level(i) = getStandardOutputLevel(i)
       LocalAtomPosi(1:3,i)=getLocalAtomPosition(i)
+      GlobalIndex(i)=getGlobalIndex(i)
    enddo
 !
 !  ===================================================================
@@ -305,7 +306,7 @@ contains
 !  ===================================================================
 !  initialize radial grid
 !  -------------------------------------------------------------------
-   call initRadialGrid(LocalNumAtoms, istop, node_print_level)
+   call setupRadGridAndCell(LocalNumAtoms,lmax_max)
 !  -------------------------------------------------------------------
 !
    if (isDataStorageExisting('Bravais Vector')) then
@@ -317,110 +318,6 @@ contains
       call ErrorHandler('testSineMatrixPole','Bravais vector data does not exist')
 !     ----------------------------------------------------------------
    endif
-!
-!  -------------------------------------------------------------------
-!   call initPolyhedra(NumAtoms,bravais,'main',0)
-!  -------------------------------------------------------------------
-   do i=1,LocalNumAtoms
-      ig=getGlobalIndex(i)
-      GlobalIndex(i)=ig
-!     ----------------------------------------------------------------
-      call getGridData(i,ndivin,ndivout,nmult)
-!     ----------------------------------------------------------------
-!     call genPolyhedron(i,ig,NumAtoms,AtomPosition)
-!     ----------------------------------------------------------------
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printPolyhedron(i)
-!        call printPolyhedronBoundary(i)
-!        -------------------------------------------------------------
-      endif
-      rend =  getOutscrSphRadius(i)
-      if (isMuffinTinPotential() .or. isMuffinTinTestPotential()) then
-         rmt = getMuffinTinRadius(i)
-         rinsc = getInscrSphRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = rinsc
-         endif
-         rws = getWignerSeitzRadius(i)
-         if (getSingleSiteSolverType()==1) then
-            rend=rws
-         endif
-!        -------------------------------------------------------------
-         call genRadialGrid(i,xstart, rmt, rinsc, rend, ndivin)
-!        -------------------------------------------------------------
-      else if ( isASAPotential() ) then
-         rend =  getWignerSeitzRadius(i)
-         rmt = getMuffinTinRadius(i)
-         rinsc = getWignerSeitzRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = rinsc
-         endif
-!        -------------------------------------------------------------
-         call genRadialGrid(i,xstart, rmt, rinsc, rend, ndivin )
-!        -------------------------------------------------------------
-      else if (isMuffinTinASAPotential()) then
-         rend =  getWignerSeitzRadius(i)
-         rmt = getMuffinTinRadius(i)
-         rinsc = getWignerSeitzRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = rinsc
-         endif
-!        -------------------------------------------------------------
-         call genRadialGrid( i, xstart, rmt, rinsc, rend, ndivin )
-!        -------------------------------------------------------------
-      else
-         if (getNeighborDistance(i,1)-getOutscrSphRadius(i) < TEN2m8) then
-!           ----------------------------------------------------------
-            call WarningHandler('testSSSolver',                       &
-                     'Ill condition found: Neighbor distance <= Rcs', &
-                     getNeighborDistance(i,1),getOutscrSphRadius(i))
-!           ----------------------------------------------------------
-         endif
-         rmt = getMuffinTinRadius(i)
-         rinsc = getInscrSphRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = getInscrSphRadius(i)
-         endif
-         rws = getWignerSeitzRadius(i)
-!        -------------------------------------------------------------
-         call genRadialGrid( i, rmt, rws, rinsc, rend, ndivin, ndivout, nmult)
-!        call genRadialGrid(i,getInscrSphRadius(i),getOutscrSphRadius(i), &
-!                           ndivin,ndivout,nmult)
-!        -------------------------------------------------------------
-      endif
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printRadialGrid(i)
-!        -------------------------------------------------------------
-      endif
-   enddo
-!
-!  ===================================================================
-!  initialize step function module
-!  ===================================================================
-   allocate( ngr(LocalNumAtoms), ngt(LocalNumAtoms) )
-   do i=1,LocalNumAtoms
-      ngr(i) = ngaussr
-      ngt(i) = ngaussq
-   enddo
-!
-!  -------------------------------------------------------------------
-   call initStepFunction(LocalNumAtoms, lmax_max, lmax_step, ngr, ngt, &
-                         istop,node_print_level)
-!  -------------------------------------------------------------------
-   deallocate( ngr, ngt )
-!
-   do i=1,LocalNumAtoms
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printStepFunction(i)
-!        -------------------------------------------------------------
-      endif
-!     ----------------------------------------------------------------
-      call testStepFunction(i)
-!     ----------------------------------------------------------------
-   enddo
 !
 !  ===================================================================
 !  initialize potential module

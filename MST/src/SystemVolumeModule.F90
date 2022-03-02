@@ -48,6 +48,8 @@ contains
 !
    use MathParamModule, only : THIRD, PI4
 !
+   use InputModule, only : getKeyValue
+!
    use SystemModule, only : getNumAtoms, getBravaisLattice, getAtomPosition
    use SystemModule, only : getRadicalPlaneRatio
 !
@@ -68,6 +70,7 @@ contains
    real (kind=RealKind), allocatable :: atompos(:,:)
    real (kind=RealKind), allocatable :: radplane(:)
    real (kind=RealKind) :: msgbuf(3)
+   real (kind=RealKind) :: tol
 !
    id = getGroupID('Unit Cell')
    NumPEsInGroup = getNumPEsInGroup(id)
@@ -79,8 +82,16 @@ contains
 !  -------------------------------------------------------------------
    LocalNumAtoms=getLocalNumAtoms(MyPEinGroup)
 !  -------------------------------------------------------------------
-   call initPolyhedra(LocalNumAtoms,Bravais,'None',0)
-!  -------------------------------------------------------------------
+!
+   if (getKeyValue(1,'Tolerance for setting up polyhedra',tol) == 0) then
+!     ----------------------------------------------------------------
+      call initPolyhedra(LocalNumAtoms,Bravais,'None',0,tol)
+!     ----------------------------------------------------------------
+   else
+!     ----------------------------------------------------------------
+      call initPolyhedra(LocalNumAtoms,Bravais,'None',0)
+!     ----------------------------------------------------------------
+   endif
 !
    allocate(atompos(3,GlobalNumAtoms))
    allocate(radplane(GlobalNumAtoms))
@@ -383,8 +394,9 @@ contains
    TotalInterstitialVolume = ZERO
    do i=1,LocalNumAtoms
       ig=getGlobalIndex(i,MyPEinGroup)
-      TotalInterstitialVolume = AtomicVoronoiPolyhedraVolume(ig) -    &
-                                  AtomicMuffintinVolume(ig)
+      TotalInterstitialVolume = TotalInterstitialVolume +             &
+                                AtomicVoronoiPolyhedraVolume(ig) -    &
+                                AtomicMuffintinVolume(ig)
    enddo
 !  -------------------------------------------------------------------
    call GlobalSumInGroup(id,TotalInterstitialVolume)

@@ -1233,11 +1233,20 @@ contains
    Element( 72)%NumSemiCoreElectrons=22
    Element( 72)%NumValenceElectrons=4
    Element( 72)%NumCoreStates=19
-   Element( 72)%NumVariations=0
+   Element( 72)%NumVariations=1
    Element( 72)%DebyeT=ZERO
    Element( 72)%AtomicRadius=1.55d0*Angstrom2Bohr
    Element( 72)%ImplicitMuffinTinRadius=0.75d0*Element( 72)%AtomicRadius
    Element( 72)%ImplicitCoreRadius=0.75d0*Element( 72)%AtomicRadius
+!
+   allocate( Element( 72)%Variation(1:Element( 72)%NumVariations) )
+   Element( 72)%Variation(1)%AtomName='Hf-4f'
+   Element( 72)%Variation(1)%AtomicNumber=72
+   Element( 72)%Variation(1)%NumDeepCoreElectrons=46
+   Element( 72)%Variation(1)%NumSemiCoreElectrons=8
+   Element( 72)%Variation(1)%NumValenceElectrons=18
+   Element( 72)%Variation(1)%NumCoreStates=17
+   Element( 72)%Variation(1)%NumVariations=0
 !
    Element( 73)%AtomName='Ta'
    Element( 73)%AtomicNumber=73
@@ -2033,21 +2042,21 @@ contains
    z=getZtot(AtomName)
    if (z < MinZtot) then
       call ErrorHandler('getCoreStateN','Invalid Atom Name',AtomName)
-   else if (i < 1) then
+   else if (i < 1 .or. i > MaxNumc) then
       call ErrorHandler('getCoreStateN','Invalid Core State Index',i)
-   else if (Element(z)%NumVariations == 0 .and.                       &
-            i <= Element(z)%NumCoreStates) then
+   else if (Element(z)%NumVariations == 0 ) then 
+!           .and. i <= Element(z)%NumCoreStates) then
       c=CoreState(i)%n
       return
    else if (Element(z)%NumVariations > 0) then
-      if (AtomName == Element(z)%AtomName .and.                       &
-             i <= Element(z)%NumCoreStates) then
+      if (AtomName == Element(z)%AtomName) then
+!         .and. i <= Element(z)%NumCoreStates) then
          c=CoreState(i)%n
          return
       else
          do j = 1, Element(z)%NumVariations
-            if (AtomName == Element(z)%Variation(j)%AtomName .and.    &
-                i <= Element(z)%Variation(j)%NumCoreStates) then
+            if (AtomName == Element(z)%Variation(j)%AtomName) then 
+!               .and. i <= Element(z)%Variation(j)%NumCoreStates) then
                c=CoreState(i)%n
                return
             endif
@@ -2055,7 +2064,7 @@ contains
       endif
    endif
 !
-   call ErrorHandler('getCoreStateN','Invalid Core State Index',i)
+   call ErrorHandler('getCoreStateN','Invalid atom name',AtomName)
 !
    end function getCoreStateN_a
 !  ===================================================================
@@ -2064,6 +2073,7 @@ contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getCoreStateN_n(AtomNumber, i) result(c)
+!  Note: This function is not implemented for other variations of the element
 !  ===================================================================
    implicit none
 !
@@ -2102,21 +2112,21 @@ contains
    z=getZtot(AtomName)
    if (z < MinZtot) then
       call ErrorHandler('getCoreStateL','Invalid Atom Name',AtomName)
-   else if (i < 1) then
+   else if (i < 1 .or. i > MaxNumc) then
       call ErrorHandler('getCoreStateL','Invalid Core State Index',i)
-   else if (Element(z)%NumVariations == 0 .and.                       &
-            i <= Element(z)%NumCoreStates) then
+   else if (Element(z)%NumVariations == 0 ) then
+!           .and. i <= Element(z)%NumCoreStates) then
       c=CoreState(i)%l
       return
    else if (Element(z)%NumVariations > 0) then
-      if (AtomName == Element(z)%AtomName .and.                       &
-             i <= Element(z)%NumCoreStates) then
+      if (AtomName == Element(z)%AtomName) then
+!         .and. i <= Element(z)%NumCoreStates) then
          c=CoreState(i)%l
          return
       else
          do j = 1, Element(z)%NumVariations
-            if (AtomName == Element(z)%Variation(j)%AtomName .and.    &
-                i <= Element(z)%Variation(j)%NumCoreStates) then
+            if (AtomName == Element(z)%Variation(j)%AtomName) then
+!               .and. i <= Element(z)%Variation(j)%NumCoreStates) then
                c=CoreState(i)%l
                return
             endif
@@ -2124,7 +2134,7 @@ contains
       endif
    endif
 !
-   call ErrorHandler('getCoreStateL','Invalid Core State Index',i)
+   call ErrorHandler('getCoreStateL','Invalid atom name',AtomName)
 !
    end function getCoreStateL_a
 !  ===================================================================
@@ -2133,6 +2143,7 @@ contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getCoreStateL_n(AtomNumber,i) result(c)
+!  Note: This function is not implemented for other variations of the element
 !  ===================================================================
    implicit none
 !
@@ -2171,21 +2182,21 @@ contains
    z=getZtot(AtomName)
    if (z < MinZtot) then
       call ErrorHandler('getCoreStateKappa','Invalid Atom Name',AtomName)
-   else if (i < 1) then
+   else if (i < 1 .or. i > MaxNumc) then
       call ErrorHandler('getCoreStateKappa','Invalid Core State Index',i)
-   else if (Element(z)%NumVariations == 0 .and.                       &
-            i <= Element(z)%NumCoreStates) then
+   else if (Element(z)%NumVariations == 0) then
+!           .and. i <= Element(z)%NumCoreStates) then
       c=CoreState(i)%kappa
       return
    else if (Element(z)%NumVariations > 0) then
-      if (AtomName == Element(z)%AtomName .and.                       &
-             i <= Element(z)%NumCoreStates) then
+      if (AtomName == Element(z)%AtomName) then
+!         .and. i <= Element(z)%NumCoreStates) then
          c=CoreState(i)%kappa
          return
       else
          do j = 1, Element(z)%NumVariations
-            if (AtomName == Element(z)%Variation(j)%AtomName .and.    &
-                i <= Element(z)%Variation(j)%NumCoreStates) then
+            if (AtomName == Element(z)%Variation(j)%AtomName) then
+!               .and. i <= Element(z)%Variation(j)%NumCoreStates) then
                c=CoreState(i)%kappa
                return
             endif
@@ -2193,7 +2204,7 @@ contains
       endif
    endif
 !
-   call ErrorHandler('getCoreStateKappa','Invalid Core State Index',i)
+   call ErrorHandler('getCoreStateKappa','Invalid atom name',AtomName)
 !
    end function getCoreStateKappa_a
 !  ===================================================================
@@ -2202,6 +2213,7 @@ contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getCoreStateKappa_n(AtomNumber,i) result(c)
+!  Note: This function is not implemented for other variations of the element
 !  ===================================================================
    implicit none
 !
@@ -2241,21 +2253,21 @@ contains
    z=getZtot(AtomName)
    if (z < MinZtot) then
       call ErrorHandler('getCoreStateSymbol','Invalid Atom Name',AtomName)
-   else if (i < 1) then
+   else if (i < 1 .or. i > MaxNumc) then
       call ErrorHandler('getCoreStateSymbol','Invalid Core State Index',i)
-   else if (Element(z)%NumVariations == 0 .and.                       &
-            i <= Element(z)%NumCoreStates) then
+   else if (Element(z)%NumVariations == 0) then
+!           .and. i <= Element(z)%NumCoreStates) then
       c=CoreState(i)%Symbol
       return
    else if (Element(z)%NumVariations > 0) then
-      if (AtomName == Element(z)%AtomName .and.                       &
-             i <= Element(z)%NumCoreStates) then
+      if (AtomName == Element(z)%AtomName) then
+!         .and. i <= Element(z)%NumCoreStates) then
          c=CoreState(i)%Symbol
          return
       else
          do j = 1, Element(z)%NumVariations
-            if (AtomName == Element(z)%Variation(j)%AtomName .and.    &
-                i <= Element(z)%Variation(j)%NumCoreStates) then
+            if (AtomName == Element(z)%Variation(j)%AtomName) then
+!               .and. i <= Element(z)%Variation(j)%NumCoreStates) then
                c=CoreState(i)%Symbol
                return
             endif
@@ -2263,7 +2275,7 @@ contains
       endif
    endif
 !
-   call ErrorHandler('getCoreStateSymbol','Invalid Core State Index',i)
+   call ErrorHandler('getCoreStateSymbol','Invalid atom name',AtomName)
 !
    end function getCoreStateSymbol_a
 !  ===================================================================
@@ -2272,6 +2284,7 @@ contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getCoreStateSymbol_n(AtomNumber,i) result(c)
+!  Note: This function is not implemented for other variations of the element
 !  ===================================================================
    implicit none
 !
@@ -2344,6 +2357,7 @@ contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getAtomicRadius_n(AtomNumber) result(r)
+!  Note: This function is not implemented for other variations of the element
 !  ===================================================================
    implicit none
 !
@@ -2392,6 +2406,7 @@ contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getImplicitMuffinTinRadius_n(AtomNumber) result(r)
+!  Note: This function is not implemented for other variations of the element
 !  ===================================================================
    implicit none
 !
@@ -2440,6 +2455,7 @@ contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getImplicitCoreRadius_n(AtomNumber) result(r)
+!  Note: This function is not implemented for other variations of the element
 !  ===================================================================
    implicit none
 !

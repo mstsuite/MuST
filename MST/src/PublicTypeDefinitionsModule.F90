@@ -71,6 +71,7 @@ public
       integer (kind=IntKind),pointer:: ShellIndex(:) ! index to which shell 
                                                      ! this neighbor atom
                                                      ! belongs
+      integer (kind=IntKind),pointer:: NAsOnShell(:) ! Number Atoms on each shell
       real (kind=RealKind), pointer :: ShellRad(:)   ! radii of shells
 
    end type NeighborStruct
@@ -94,8 +95,8 @@ public
 !     real (kind=RealKind) :: rws           ! the Wigner-Seitz sphere radius
 !     real (kind=RealKind) :: rinsc         ! the inscribed sphere radius 
 !     real (kind=RealKind) :: xinsc         ! log(rinsc)
-!     integer (kind=IntKind) :: jinsc       ! Num. of r-mesh on and inside
-!                                           ! the inscribed radius.
+      integer (kind=IntKind) :: jinsc       ! Num. of r-mesh inside the inscribed
+                                            ! sphere radius.
       real (kind=RealKind) :: rend          ! the terminal sphere radius
                                             ! = rmt, rws, or rcirc
       real (kind=RealKind) :: rmt           ! the muffin-tin sphere radius
@@ -169,6 +170,11 @@ public
       complex(kind=CmplxKind) :: q_lloyd(2)
    end type LloydStruct
 !
+   type SROStruct
+      complex (kind=CmplxKind), pointer :: tau_l_sro(:,:,:) 
+      complex (kind=CmplxKind), pointer :: kau_l_sro(:,:,:)
+   end type SROStruct
+!
    type MatrixBlockStruct
       integer (kind=IntKind) :: lmax_kkr
       integer (kind=IntKind) :: kmax_kkr
@@ -176,6 +182,7 @@ public
       integer (kind=IntKind) :: global_index
       complex (kind=CmplxKind), pointer :: tau_l(:,:,:)
       complex (kind=CmplxKind), pointer :: kau_l(:,:,:)
+      type (SROStruct), pointer :: NeighMat_l(:) ! Contains all the matrices for the neighbors
    end type MatrixBlockStruct
 !
    type MatrixBandStruct

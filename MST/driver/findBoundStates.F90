@@ -607,17 +607,19 @@ contains
                endif
             enddo
          enddo
-         write(6,'(/)')
-         pflag => getTruncatedPotComponentFlag(id)
-         jl = 0
-         do l = 0, lmax_pot(id)
-            do m = 0, l
-               jl = jl + 1
-               if (pflag(jl) /= 0 .and. node_print_level >= 0) then
-                  write(6,'(a,i2,a,i2,a)')'Truncated pflag<>0 component at (l,m) channel: (',l,',',m,')'
-               endif
+         if (isFullPotential()) then
+            write(6,'(/)')
+            pflag => getTruncatedPotComponentFlag(id)
+            jl = 0
+            do l = 0, lmax_pot(id)
+               do m = 0, l
+                  jl = jl + 1
+                  if (pflag(jl) /= 0 .and. node_print_level >= 0) then
+                     write(6,'(a,i2,a,i2,a)')'Truncated pflag<>0 component at (l,m) channel: (',l,',',m,')'
+                  endif
+               enddo
             enddo
-         enddo
+         endif
          do is = 1,n_spin_pola
             write(6,'(/,a,i2)')'spin = ',is
             pot_jl => getPotential(id,1,is)
@@ -637,24 +639,26 @@ contains
                   endif
                enddo
             enddo
-            write(6,'(/)')
-            pot_jl => getTruncatedPotential(id,1,is)
-            jl = 0
-            do l = 0, getTruncPotLmax(id)
-               do m = 0, l
-                  jl = jl + 1
-                  non_zero = .false.
-                  LOOP_ir_1: do ir = 1, Grid%jend-Grid%jmt+1
-                     if (abs(pot_jl(ir,jl)) > TEN2m6) then
-                        non_zero = .true.
-                        exit LOOP_ir_1
+            if (isFullPotential()) then
+               write(6,'(/)')
+               pot_jl => getTruncatedPotential(id,1,is)
+               jl = 0
+               do l = 0, getTruncPotLmax(id)
+                     do m = 0, l
+                     jl = jl + 1
+                     non_zero = .false.
+                     LOOP_ir_1: do ir = 1, Grid%jend-Grid%jmt+1
+                        if (abs(pot_jl(ir,jl)) > TEN2m6) then
+                           non_zero = .true.
+                           exit LOOP_ir_1
+                        endif
+                     enddo LOOP_ir_1
+                     if (non_zero .and. node_print_level >= 0) then
+                        write(6,'(a,i2,a,i2,a)')'Recheck non-zero truncated potential component at (l,m) channel: (',l,',',m,')'
                      endif
-                  enddo LOOP_ir_1
-                  if (non_zero .and. node_print_level >= 0) then
-                     write(6,'(a,i2,a,i2,a)')'Recheck non-zero truncated potential component at (l,m) channel: (',l,',',m,')'
-                  endif
+                  enddo
                enddo
-            enddo
+            endif
          enddo
       enddo
    endif
@@ -758,7 +762,7 @@ end program findBoundStates
    use QuadraticMatrixModule, only : initQuadraticMatrix, endQuadraticMatrix, &
                                      solveQuadraticEquation, getEigenValue,   &
                                      solveLinearEquation, getEigenVector,     &
-                                     getEigenMatrix
+                                     getResidualMatrix
 !
    implicit none
 !
@@ -986,8 +990,8 @@ print *,'NumWindows = ',NumWindows
                   pe = real(pv(ie),kind=RealKind) + e0
                   if (pe >= w0 .and. pe <= w0+WindowWidth) then
 !                    -------------------------------------------------
-                     em => getEigenMatrix(ie) ! em is the residule matrix of
-                                              ! integrating sm^{-1} around its eigenvalue
+                     em => getResidualMatrix(ie) ! em is the residule matrix of
+                                                 ! integrating sm^{-1} around its eigenvalue
 !                    -------------------------------------------------
                      if (size(em,1) /= kmax_kkr) then
                         call ErrorHandler('calQuadraticPoles','inconsistent matrix size',size(em,1),kmax_kkr)
@@ -1016,8 +1020,8 @@ print *,'NumWindows = ',NumWindows
                   pe = real(pv(ie),kind=RealKind) + e0
                   if (pe >= w0 .and. pe <= w0+WindowWidth .and. pe > ZERO) then
 !                    -------------------------------------------------
-                     em => getEigenMatrix(ie) ! em is the residule matrix of
-                                              ! integrating sm^{-1} around its eigenvalue
+                     em => getResidualMatrix(ie) ! em is the residule matrix of
+                                                 ! integrating sm^{-1} around its eigenvalue
 !                    -------------------------------------------------
                      if (abs(pe-rpe_prev) > TEN2m6) then
                         nr = nr + 1

@@ -40,6 +40,11 @@
          endif
       enddo
 !
+!     ****************************************************************
+!     Important note: the following codes are found numerically unstable.
+!     Sometimes, running on different nodes produces different results, 
+!     possibly caused by round-off error.
+!     ****************************************************************
       do i=2,n
          f1=-ONE/a(i-1,i-1)
          do j=i,n

@@ -34,7 +34,7 @@ program findResonance
    use StepFunctionModule, only : getVolumeIntegration
 !
    use PotentialModule, only : initPotential, endPotential
-   use PotentialModule, only : readPotential, setPotentialOutsideMT, getPotential
+   use PotentialModule, only : readPotential, getPotential
    use PotentialModule, only : getPotEf, setV0, setPotential, isPotComponentZero, getSphPotr
 !
    use ScfDataModule, only : ngaussr, ngaussq
@@ -70,7 +70,7 @@ program findResonance
 !
    use AtomModule, only : getStepFuncLmax, setTruncPotLmax, setPotLmax
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
-   use AtomModule, only : getGridData, getLocalEvec
+   use AtomModule, only : getLocalEvec
    use AtomModule, only : getLocalNumSpecies, getLocalAtomicNumber
 !
    use SphericalHarmonicsModule, only : initSphericalHarmonics
@@ -218,20 +218,26 @@ program findResonance
                           NumResPoles,ResPoles,ResWidth,              &
                           CheckPoles =.false.)
 !  ------------------------------------------------------------------
-   write(6,'(/,a,f12.5,a,/)') 'Quadratic technique time: ',getTime() - t1,' sec.'
+   write(6,'(/,a,f12.5,a)') 'Quadratic technique time: ',getTime() - t1,' sec.'
    do is = 1,n_spin_pola
       do id = 1,LocalNumAtoms
-         write(6,'(a,i3,a,i3)')'Spin index: ',is,',  Atom index: ',id
-         write(6,'(a,f13.8,a,f13.8,a,i5)')'The Number of bound states found within (',  &
-                                          ErBottom,', ',ZERO,'): ',NumBoundPoles(id,is)
-         do i = 1, NumBoundPoles(id,is)
-            write(6,'(f20.12)')BoundPoles(i,id,is)
-         enddo
-         write(6,'(/,a,f13.8,a,f13.8,a,i5)')'The Number of resonance states found within (',  &
-                                            ZERO,', ',Efermi,'): ',NumResPoles(id,is)
-         do i = 1, NumResPoles(id,is)
-            write(6,'(a,f20.12,a,f20.12)')'Resonance e = ',ResPoles(i,id,is),', Width = ',ResWidth(i,id,is)
-         enddo
+         write(6,'(/,a,i3,a,i3)')'Spin index: ',is,',  Atom index: ',id
+         if (ErBottom + TEN2m3 < ZERO) then
+            write(6,'(a,f13.8,a,f13.8,a,i5)')'The Number of bound states found within (',  &
+                                             ErBottom,', ',ZERO,'): ',NumBoundPoles(id,is)
+            do i = 1, NumBoundPoles(id,is)
+               write(6,'(f20.12)')BoundPoles(i,id,is)
+            enddo
+         endif
+         if (Efermi > ZERO) then
+            write(6,'(/,a,f13.8,a,f13.8,a,i5)')'The Number of resonance states found within (',  &
+                                               ZERO,', ',Efermi,'): ',NumResPoles(id,is)
+            do i = 1, NumResPoles(id,is)
+               write(6,'(a,f20.12,a,f20.12)')'Resonance e = ',ResPoles(i,id,is),', Width = ',ResWidth(i,id,is)
+            enddo
+         else
+            write(6,'(/,a,f13.8,a)')'WARNING: Ef = ',Efermi,' <= 0.0'
+         endif
       enddo
    enddo
    write(6,'(/,a,f12.5,a,/)') 'Quadratic technique time: ',getTime() - t1,' sec.'
@@ -543,7 +549,7 @@ end program findResonance
    use QuadraticMatrixModule, only : initQuadraticMatrix, endQuadraticMatrix, &
                                      solveQuadraticEquation, getEigenValue,   &
                                      solveLinearEquation, getEigenVector,     &
-                                     getEigenMatrix
+                                     getResidualMatrix
 !
    implicit none
 !
@@ -609,6 +615,7 @@ end program findResonance
    endif
    de2 = de*TWO; dede2 = de*de*TWO
    cde = de
+!write(6,'(a,2d15.8,i5)')'de,win,nw = ',de,WindowWidth,NumWindows
 !
    kmax_kkr = (lkkr(1)+1)**2
    allocate( s0(1:kmax_kkr,1:kmax_kkr) )
@@ -744,18 +751,19 @@ end program findResonance
                      nb = nb + 1
                      BoundPoles(nb,id,is) = pe
 !write(6,'(a,2d15.8,a,2d15.8)')'Pole = ',pv(ie)+e0,', kappa = ',sqrt(pv(ie)+e0)
-                     em => getEigenMatrix(ie) ! em is the residule matrix of
-                                              ! integrating sm^{-1} around its eigenvalue
+                     em => getResidualMatrix(ie) ! em is the residule matrix of
+                                                 ! integrating sm^{-1} around its eigenvalue
                   endif
                else if (aimag(sqrt(pv(ie)+e0)) < ZERO) then  ! Resonance states
                   pe = real(pv(ie),kind=RealKind) + e0
                   if (pe >= w0 .and. pe <= w0+WindowWidth .and. pe > ZERO) then
                      nr = nr + 1
                      ResPoles(nr,id,is) = pe
-                     ResWidth(nr,id,is) = aimag(sqrt(pv(ie)))**2
-!write(6,'(a,2d15.8,a,2d15.8)')'Pole = ',pv(ie)+e0,', kappa = ',sqrt(pv(ie)+e0)
-                     em => getEigenMatrix(ie) ! em is the residule matrix of
-                                              ! integrating sm^{-1} around its eigenvalue
+!                    ResWidth(nr,id,is) = aimag(sqrt(pv(ie)))**2
+                     ResWidth(nr,id,is) = TWO*aimag(sqrt(pv(ie)))**2
+!write(6,'(a,2f15.12,a,2f15.12)')'Pole = ',pv(ie)+e0,', kappa = ',sqrt(pv(ie)+e0)
+                     em => getResidualMatrix(ie) ! em is the residule matrix of
+                                                 ! integrating sm^{-1} around its eigenvalue
                   endif
                endif
             enddo

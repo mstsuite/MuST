@@ -5,7 +5,7 @@
 #                     10-14-97          
 #                     04-23-01          
 #*********************************************************************
-VPATH = $(ODIR)/../lib
+VPATH = $(TOP_DIR)/lib
 
 MODULE = \
 KindParamModule.o \
@@ -97,7 +97,13 @@ PrimeFactorsModule.o \
 computeProdExpan.o \
 BroydenLib.o \
 AndersonLib.o \
-newtc.o
+newtc.o \
+decompose3Index.o \
+breakLine.o
+
+ifdef ESSL_WORKAROUND
+  LOBS += essl_workaround.o
+endif
 
 .SUFFIXES:	.o .f .F .f90 .F90 
 #.SUFFIXES:	.o .F .F90 

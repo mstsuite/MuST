@@ -1,9 +1,9 @@
 module CoreStatesModule
    use KindParamModule, only : IntKind, RealKind, CmplxKind
    use ErrorHandlerModule, only : StopHandler, ErrorHandler, WarningHandler
-   use MathParamModule, only : ZERO, HALF, ONE, TWO, THREE, FOUR, THIRD
+   use MathParamModule, only : ZERO, HALF, ONE, TWO, THREE, FOUR, THIRD, CZERO
    use MathParamModule, only : TEN, TEN2m5, TEN2m6, TEN2m8, TEN2m10, SQRTm1, &
-                               TEN2p10,PI4,TEN2m12, THIRD, PI4
+                               TEN2p10,PI4,TEN2m12, THIRD, PI4, Y0
    use PhysParamModule, only : LightSpeed
    use IntegrationModule, only : calIntegration
    use DerivativeModule, only : derv5
@@ -16,14 +16,19 @@ public :: initCoreStates,     &
           readCoreDensity,    &
           printCoreStates,    &
           printCoreDensity,   &
+          isFullPotentialSemiCore, &
           getDeepCoreDensity, &
           getSemiCoreDensity, &
+          getFPSemiCoreDensity, &
           getDeepCoreDensityDerivative,&
           getSemiCoreDensityDerivative,&
+          getFPSemiCoreDensityDeriv, &
           getDeepCoreEnergy,  &
           getDeepCoreKineticEnergy,  &
+          getDeepCoreStates,  &
           getSemiCoreEnergy,  &
           getSemiCoreKineticEnergy,  &
+          getSemiCoreStates,  &
           getCoreVPCharge,    &
           getCoreMTCharge,    &
           getCoreVPMoment,    &
@@ -34,7 +39,8 @@ public :: initCoreStates,     &
           writeCoreDensity,   &
           getCoreSplitTable,     &
           getCoreNumStatesTable, &
-          getCoreDescriptionTable
+          getCoreDescriptionTable, &
+          getCoreDensityRmeshSize
 !
    interface getDeepCoreEnergy
       module procedure getDeepCoreE0, getDeepCoreE1
@@ -52,12 +58,20 @@ public :: initCoreStates,     &
       module procedure getSCD0, getSCD1, getSCD2
    end interface
 !
+   interface getFPSemiCoreDensity
+      module procedure getFPSCD0, getFPSCD1
+   end interface
+!
    interface getDeepCoreDensityDerivative
       module procedure getDCDDer0, getDCDDer1, getDCDDer2
    end interface
 !
    interface getSemiCoreDensityDerivative
       module procedure getSCDDer0, getSCDDer1, getSCDDer2
+   end interface
+!
+   interface getFPSemiCoreDensityDeriv
+      module procedure getFPSCDDeriv0, getFPSCDDeriv1
    end interface
 !
    interface getCoreVPCharge
@@ -82,11 +96,15 @@ private
       integer (kind=IntKind) :: MaxNumc
       integer (kind=IntKind) :: rsize
       integer (kind=IntKind) :: jcore
+      integer (kind=IntKind) :: jmax_rho
       integer (kind=IntKind), pointer :: numc_below(:)
       integer (kind=IntKind), pointer :: numc(:)
       integer (kind=IntKind), pointer :: nc(:,:)
       integer (kind=IntKind), pointer :: lc(:,:)
       integer (kind=IntKind), pointer :: kc(:,:)
+      integer (kind=IntKind), pointer :: core_status(:,:,:) ! 0. deep core;
+                                                            ! 1. semi core; 
+                                                            ! 2. shallow core (treated as valence).
       real (kind=RealKind), pointer :: ec(:,:,:)
       real (kind=RealKind), pointer :: ecorv(:,:)
       real (kind=RealKind), pointer :: esemv(:,:)
@@ -113,6 +131,10 @@ private
       real (kind=RealKind), pointer :: qsemws(:)
       real (kind=RealKind), pointer :: qcorws(:)
       real (kind=RealKind), pointer :: qcorout(:)
+!
+      complex (kind=CmplxKind), pointer :: fp_semden(:,:,:,:) ! full semi core density, without r^2
+      complex (kind=CmplxKind), pointer :: fp_dsemden(:,:,:,:) ! derivative of full semi core density, without r^2
+!
       type (GridStruct), pointer :: Grid
    end type CoreStruct
    type (CoreStruct), allocatable, target :: Core(:)
@@ -142,6 +164,7 @@ private
    integer (kind=IntKind) :: MyPEinGroup
    integer (kind=IntKind) :: LargeRsMult
    integer (kind=IntKind) :: lmax_core = 0
+   integer (kind=IntKind) :: norm2inf = 0
 !
    real (kind=RealKind) :: MyLightSpeed
    real (kind=RealKind) :: cinv
@@ -157,13 +180,25 @@ private
    real (kind=RealKind), allocatable :: dftmp(:)
 !
    logical :: GlobalTable_Allocated = .false.
+   logical :: isFP_SemiCore = .false.
+!
    integer (kind=IntKind) :: maxnc_save = 0
    character (len=2), allocatable, target :: DescriptionTable(:,:)
    integer (kind=IntKind), allocatable :: TmpDesTable(:,:)
    integer (kind=IntKind), allocatable, target :: NumStatesTable(:)
+   integer (kind=IntKind), allocatable :: lmax_pot(:)
+   integer (kind=IntKind), allocatable :: lmax_kkr(:)
+   integer (kind=IntKind), allocatable :: lmax_rho(:)
+   integer (kind=IntKind), allocatable :: lmax_step(:)
+   integer (kind=IntKind), allocatable :: LocalNumSpecies(:)
+!
    real (kind=RealKind), allocatable, target :: SplitTable(:,:)
 !
+   complex (kind=CmplxKind), allocatable, target :: ws_prod(:), ws_den(:)
+!
 contains
+!
+   include '../lib/arrayTools.F90'
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine initCoreStates(na,evb,ns,isNonRel,istop,iprint)
@@ -180,6 +215,7 @@ contains
                                        RealType, ComplexType, &
                                        RealMark, ComplexMark
    use AtomModule, only : getAtomCoreRad, setAtomCoreRad, getMuffinTinRadius
+   use AtomModule, only : getKKRLmax, getRhoLmax, getStepFuncLmax, getPotLmax
    use PolyhedraModule, only : getVolume, getInscrSphRadius, getOutscrSphRadius
 !
    use GroupCommModule, only : GlobalSumInGroup
@@ -187,7 +223,14 @@ contains
    use Atom2ProcModule, only : getLocalIndex, getAtom2ProcInGroup
    use Atom2ProcModule, only : getMaxLocalNumAtoms, getGlobalIndex
 !
-   use PotentialTypeModule, only : isFullPotential
+   use PotentialTypeModule, only : isFullPotential, isASAPotential
+!
+   use PolyhedraModule, only : getWignerSeitzRadius
+!
+   use InputModule, only : getKeyValue
+!
+   use SMatrixPolesModule, only : initSMatrixPoles
+   use SMatrixPolesModule, only : isSMatrixPolesInitialized
 !
    implicit none
 !
@@ -199,12 +242,14 @@ contains
    integer (kind=IntKind), intent(in) :: iprint
    integer (kind=IntKind), intent(in) :: ns
    integer (kind=IntKind) :: id, jcore, jend, ig, nlrs, ntmp, last
-   integer (kind=IntKind) :: g2last
+   integer (kind=IntKind) :: g2last, rstatus, jmax_prod, jmax_rho
+   integer (kind=IntKind) :: fp_semicore, norm_semicore
    integer (kind=IntKind), allocatable :: DataSize(:)
 !
    real (kind=RealKind), intent(in) :: evb
 !
    real (kind=RealKind), pointer :: r_mesh(:)
+   real (kind=RealKind) :: rc
 !
    interface
       subroutine hunt(n,xx,x,jlo)
@@ -234,6 +279,29 @@ contains
 !
    stop_routine = istop
    print_level = iprint
+!
+   if (getKeyValue(1,'Full-potential Semi-core',fp_semicore) /= 0) then
+      fp_semicore = 0
+   endif
+   if (fp_semicore == 0) then
+      isFP_SemiCore = .false.
+   else if (fp_semicore == 1) then
+      isFP_SemiCore = isFullPotential()
+   else
+!     ----------------------------------------------------------------
+      call ErrorHandler('initCoreStates','Invalid fp_semicore parameter',fp_semicore)
+!     ----------------------------------------------------------------
+   endif
+!
+!  ===================================================================
+!  Normalizing to infinity seems problematic for heavy elements,
+!  so we make it as a non-default setting. That is, by default, the
+!  core states will be normalized to the bounding sphere radius
+!  ===================================================================
+   if (getKeyValue(1,'Core States Normalization Range',norm2inf) /= 0) then
+      norm2inf = 0
+   endif
+!  ===================================================================
 !
    TotalInterstitialCoreVol = ZERO
 !
@@ -266,22 +334,29 @@ contains
 !     otherwise, the value is chosen to be either the inscribed sphere radius 
 !     or the circumscribed sphere radius of the atomic cell.
 !     ================================================================
-      if ( getAtomCoreRad(id) < ZERO .and. isFullPotential()) then
+      if (isASAPotential()) then
+         rc = getWignerSeitzRadius(id)
+      else
+         rc = getAtomCoreRad(id)
+      endif
+      if ( rc < ZERO .and. isFullPotential()) then
          jcore = getRadialGridPoint(id, getOutscrSphRadius(id))
-      else if ( getAtomCoreRad(id) < 0.10d0 ) then
+      else if ( rc < TEN2m6 ) then
 !012620===============================
 !012620  jcore = Core(id)%Grid%jmt
 !        jcore = Core(id)%Grid%jinsc
-         if (isFullPotential() .or. getMuffinTinRadius(id) < 0.10d0) then
+         if (isFullPotential() .or. getMuffinTinRadius(id) < ONE) then
             jcore = getRadialGridPoint(id, getInscrSphRadius(id))
          else
             jcore = getRadialGridPoint(id, getMuffinTinRadius(id))
          endif
 !012620===============================
+      else if ( rc < ONE ) then
+         jcore = getRadialGridPoint(id, rc*getInscrSphRadius(id))
       else
 !012620===============================
 !        jcore = Core(id)%Grid%jmt
-!        Core(id)%rcore_mt = getAtomCoreRad(id)
+!        Core(id)%rcore_mt = rc
 !        Find the first point on the radial grid that is smaller
 !        than the input rcore_mt
 !        jend = Core(id)%Grid%jend
@@ -293,7 +368,7 @@ contains
 !           Core(id)%rcore_mt = r_mesh(jcore)
 !           Core(id)%jcore = jcore
 !        endif
-         jcore = getRadialGridPoint(id,getAtomCoreRad(id))
+         jcore = getRadialGridPoint(id,rc)
 !012620===============================
       endif
       Core(id)%rcore_mt = r_mesh(jcore)
@@ -419,6 +494,38 @@ contains
 !
    call GlobalSumInGroup(GroupID,TotalInterstitialCoreVol)
 !
+   if (isFP_SemiCore) then
+      allocate(lmax_kkr(LocalNumAtoms), lmax_rho(LocalNumAtoms))
+      allocate(lmax_pot(LocalNumAtoms), lmax_step(LocalNumAtoms))
+      allocate(localNumSpecies(LocalNumAtoms))
+      jmax_rho = 1
+      jmax_prod = 1
+      do id = 1, LocalNumAtoms
+         lmax_kkr(id) = getKKRLmax(id)
+         lmax_rho(id) = getRhoLmax(id)
+         lmax_pot(id) = getPotLmax(id)
+         lmax_step(id) = getStepFuncLmax(id)
+         LocalNumSpecies(id) = Core(id)%NumSpecies
+         Core(id)%jmax_rho = (lmax_rho(id)+1)*(lmax_rho(id)+2)/2
+         jmax_rho = max(jmax_rho,Core(id)%jmax_rho)
+         allocate(Core(id)%fp_semden(Core(id)%rsize,Core(id)%jmax_rho,n_spin_pola,Core(id)%NumSpecies))
+         allocate(Core(id)%fp_dsemden(Core(id)%rsize,Core(id)%jmax_rho,n_spin_pola,Core(id)%NumSpecies))
+         jmax_prod = max(jmax_prod, (lmax_rho(id)+lmax_pot(id)+1)*(lmax_rho(id)+lmax_pot(id)+2)/2)
+      enddo
+      if (.not.isSMatrixPolesInitialized()) then
+!        -------------------------------------------------------------
+         call initSMatrixPoles(LocalNumAtoms,n_spin_pola,LocalNumSpecies,&
+                               lmax_kkr,lmax_rho,iprint)
+!        -------------------------------------------------------------
+      endif
+      allocate(ws_prod(g2last*jmax_prod), ws_den(g2last*jmax_rho))
+   else
+      do id = 1, LocalNumAtoms
+         Core(id)%jmax_rho = 0
+         nullify(Core(id)%fp_semden, Core(id)%fp_dsemden)
+      enddo
+   endif
+!
    end subroutine initCoreStates
 !  ===================================================================
 !
@@ -442,9 +549,11 @@ contains
    character (len=MaxLenOfAtomName) :: an
    character (len=10) :: acc
 !
-   integer (kind=IntKind) :: id, ia
-   integer (kind=IntKind) :: MaxNumc, ic
+   integer (kind=IntKind) :: id, ia, ic, is
+   integer (kind=IntKind) :: MaxNumc, ndeep, nz
    integer (kind=IntKind), parameter :: funit=92
+!
+   real (kind=RealKind) :: fac1
 !
    do id = 1, LocalNumAtoms
       MaxNumc = 0
@@ -457,10 +566,12 @@ contains
       allocate( Core(id)%lc(1:MaxNumc,Core(id)%NumSpecies) )
       allocate( Core(id)%kc(1:MaxNumc,Core(id)%NumSpecies) )
       allocate( Core(id)%ec(1:MaxNumc,1:n_spin_pola,Core(id)%NumSpecies) )
+      allocate( Core(id)%core_status(1:MaxNumc,1:n_spin_pola,Core(id)%NumSpecies) )
       Core(id)%nc = 0
       Core(id)%lc = 0
       Core(id)%kc = 0
       Core(id)%ec = ZERO
+      Core(id)%core_status = 0
 !
       if (getInPotFileForm(id) == 'FORMATTED') then
          acc = 'SEQUENTIAL'
@@ -490,6 +601,24 @@ contains
          Core(id)%zsemss(ia)=getZsem(an)
          Core(id)%zcorss(ia)=getZcor(an)
          Core(id)%numc(ia)=getNumCoreStates(an)
+!
+!        =============================================================
+!        nz = number of deep core electrons based on zcorss
+         nz=int(Core(id)%zcorss(ia)/n_spin_pola+HALF,IntKind)
+         do is = 1, n_spin_pola
+            ndeep = 0
+            do ic = 1, Core(id)%numc(ia)
+               fac1=(3-n_spin_pola)*abs(Core(id)%kc(ic,ia))
+               ndeep=ndeep+fac1
+               if (ndeep > nz) then
+                  Core(id)%core_status(ic,is,ia) = 1
+               else
+                  Core(id)%core_status(ic,is,ia) = 0
+               endif
+            enddo
+         enddo
+!        =============================================================
+!
       enddo
 !
 !     do ia = 1, Core(id)%NumSpecies
@@ -825,19 +954,21 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine endCoreStates()
 !  ===================================================================
+   use SMatrixPolesModule, only : isSMatrixPolesInitialized
+   use SMatrixPolesModule, only : endSMatrixPoles
+!
    integer (kind=IntKind) :: id
 !
    do id = 1, LocalNumAtoms
       deallocate( Core(id)%nc, Core(id)%lc, Core(id)%kc, Core(id)%ec )
-      deallocate( Core(id)%numc, Core(id)%numc_below )
-!      deallocate( Core(id)%corden, Core(id)%semden, Core(id)%OldCore)
+      deallocate( Core(id)%numc, Core(id)%numc_below, Core(id)%core_status )
       nullify( Core(id)%corden, Core(id)%semden, Core(id)%OldCore)
       nullify( Core(id)%dcorden, Core(id)%dsemden )
       deallocate( Core(id)%ecorv, Core(id)%esemv, Core(id)%r_mesh )
       deallocate( Core(id)%core_ke, Core(id)%semi_ke )
       nullify(Core(id)%Grid)
    enddo
-   deallocate(qmp, tmp, Core, ftmp, dftmp)
+   deallocate(qmp, tmp, ftmp, dftmp)
 !
    if (GlobalTable_Allocated) then
       deallocate(NumStatesTable)
@@ -846,6 +977,21 @@ contains
    endif
    GlobalTable_Allocated = .false.
    maxnc_save = 0
+!
+   if (isFP_SemiCore) then
+      do id = 1, LocalNumAtoms
+         deallocate( Core(id)%fp_semden, Core(id)%fp_dsemden)
+      enddo
+      deallocate(lmax_kkr, lmax_rho)
+      deallocate(lmax_pot, lmax_step, LocalNumSpecies)
+      deallocate(ws_prod, ws_den)
+      if (isSMatrixPolesInitialized()) then
+!        -------------------------------------------------------------
+         call endSMatrixPoles()
+!        -------------------------------------------------------------
+      endif
+   endif
+   deallocate(Core)
 !
    end subroutine endCoreStates
 !  ===================================================================
@@ -872,7 +1018,7 @@ contains
    character (len=*), intent(in) :: fname
 !
    integer (kind=IntKind) :: integer4_size,real8_size
-   integer (kind=IntKind) :: cunit, i, id, ia, ic, ig, is, fp_pos
+   integer (kind=IntKind) :: cunit, i, id, ia, ic, ig, is, fp_pos, jg
    integer (kind=IntKind) :: isize, fsize, imsgbuf_size, fmsgbuf_size
    integer (kind=IntKind) :: num_clients, proc_client, present_atom
 !
@@ -880,7 +1026,7 @@ contains
    integer (kind=IntKind) :: msgid1, msgid2
 !
 !  Assuming that the size of the core density file does not exceed 2**31 bytes.
-   integer (kind=IntKind) :: file_loc(GlobalNumAtoms+1) 
+   integer (kind=IntKind) :: offset(GlobalNumAtoms+1) 
    integer (kind=IntKind) :: block_size(2,GlobalNumAtoms)
 !
    integer (kind=IntKind), allocatable :: imsgbuf(:)
@@ -924,6 +1070,7 @@ contains
       call recvMessage(block_size,2,GlobalNumAtoms,212232,getMyInputProc())
 !     ----------------------------------------------------------------
    endif
+   fp_pos = 2*GlobalNumAtoms*integer4_size
 !
 !  ===================================================================
 !  Determine the address of the core density data for each atomic site
@@ -932,18 +1079,10 @@ contains
    imsgbuf_size = 0
    fmsgbuf_size = 0
    do ig = 1, GlobalNumAtoms
-      file_loc(ig) = block_size(1,ig)*integer4_size + block_size(2,ig)*real8_size
+      offset(ig) = block_size(1,ig)*integer4_size + block_size(2,ig)*real8_size
       imsgbuf_size = max(block_size(1,ig),imsgbuf_size)
       fmsgbuf_size = max(block_size(2,ig),fmsgbuf_size)
    enddo
-   do ig = 2, GlobalNumAtoms
-      file_loc(ig) = file_loc(ig) + file_loc(ig-1)
-   enddo
-   do ig = GlobalNumAtoms+1, 2, -1
-      file_loc(ig) = file_loc(ig-1) + 1
-   enddo
-   file_loc(1) = 1
-   file_loc = file_loc + 2*GlobalNumAtoms*integer4_size
 !
    allocate(imsgbuf(imsgbuf_size), fmsgbuf(fmsgbuf_size))
    do id = 1, LocalNumAtoms
@@ -951,15 +1090,17 @@ contains
       if ( isInputProc() ) then
 !        =============================================================
 !        read in the core density data...................................
-!        =============================================================
-         fp_pos=file_loc(ig)
 !        -------------------------------------------------------------
          call c_fseek(cunit,fp_pos,0)
+!        -------------------------------------------------------------
+         do jg = 1, ig-1
+!           ----------------------------------------------------------
+            call c_fseek(cunit,offset(jg),1)
+!           ----------------------------------------------------------
+         enddo
+!        -------------------------------------------------------------
          call c_read_integer(cunit,imsgbuf,block_size(1,ig))
 !        -------------------------------------------------------------
-         fp_pos = fp_pos + block_size(1,ig)*integer4_size
-!        -------------------------------------------------------------
-         call c_fseek(cunit,fp_pos,0)
          call c_read_double(cunit,fmsgbuf,block_size(2,ig))
 !        -------------------------------------------------------------
 !
@@ -967,14 +1108,16 @@ contains
          do i = 1, num_clients
             proc_client = getInputClient(i)
             present_atom = getGlobalIndex(id,proc_client)
-            fp_pos=file_loc(present_atom)
 !           ----------------------------------------------------------
             call c_fseek(cunit,fp_pos,0)
+!           ----------------------------------------------------------
+            do jg = 1, present_atom-1
+!              -------------------------------------------------------
+               call c_fseek(cunit,offset(jg),1)
+!              -------------------------------------------------------
+            enddo
+!           ----------------------------------------------------------
             call c_read_integer(cunit,imsgbuf,block_size(1,present_atom))
-!           ----------------------------------------------------------
-            fp_pos = fp_pos + block_size(1,present_atom)*integer4_size
-!           ----------------------------------------------------------
-            call c_fseek(cunit,fp_pos,0)
             call c_read_double(cunit,fmsgbuf,block_size(2,present_atom))
 !           ----------------------------------------------------------
             call sendMessage(imsgbuf,block_size(1,present_atom),212233,proc_client)
@@ -1169,7 +1312,7 @@ contains
    character (len=*), intent(in) :: fname
 !
    integer (kind=IntKind) :: integer4_size,real8_size
-   integer (kind=IntKind) :: cunit, i, id, ia, ic, ig, is, fp_pos
+   integer (kind=IntKind) :: cunit, i, id, ia, ic, ig, is, fp_pos, jg
    integer (kind=IntKind) :: isize, fsize, imsgbuf_size, fmsgbuf_size
    integer (kind=IntKind) :: num_clients, proc_client, present_atom
 !
@@ -1177,7 +1320,7 @@ contains
    integer (kind=IntKind) :: msgid1, msgid2
 !
 !  Assuming that the size of the core density file does not exceed 2**31 bytes.
-   integer (kind=IntKind) :: file_loc(GlobalNumAtoms+1) 
+   integer (kind=IntKind) :: offset(GlobalNumAtoms) 
    integer (kind=IntKind) :: block_size(2,GlobalNumAtoms)
 !
    integer (kind=IntKind), allocatable :: imsgbuf(:)
@@ -1229,7 +1372,6 @@ contains
 !     real (kind=RealKind) :: Core(id)%rcore_mt
 !     ================================================================
       ig = getGlobalIndex(id)
-!     file_loc(ig) = file_loc(ig) + 6*integer4_size + 6*real8_size
       isize = 6
       fsize = 6
 !
@@ -1262,7 +1404,6 @@ contains
 !        real (kind=RealKind) :: Core(id)%qcorws(:)
 !        real (kind=RealKind) :: Core(id)%qcorout(:)
 !        =============================================================
-!        file_loc(ig) = file_loc(ig) + 2*integer4_size + (n_spin_pola*4+12)*real8_size
          isize = isize + 2
          fsize = fsize + (n_spin_pola*4+12)
 !
@@ -1275,7 +1416,6 @@ contains
 !           integer :: Core(id)%kc(:,:)
 !           real (kind=RealKind) :: Core(id)%ec(:,:,:)
 !           ==========================================================
-!           file_loc(ig) = file_loc(ig) + 3*integer4_size + n_spin_pola*real8_size
             isize = isize + 3
             fsize = fsize + n_spin_pola
          enddo
@@ -1285,7 +1425,6 @@ contains
 !        real (kind=RealKind) :: Core(id)%corden(:,:,:)
 !        real (kind=RealKind) :: Core(id)%semden(:,:,:)
 !        =============================================================
-!        file_loc(ig) = file_loc(ig) + 2*Core(id)%rsize*n_spin_pola*real8_size
          fsize = fsize + 2*Core(id)%rsize*n_spin_pola
       enddo
       imsgbuf_size = max(isize,imsgbuf_size)
@@ -1310,22 +1449,15 @@ contains
       call c_write_integer(cunit,block_size,2*GlobalNumAtoms)
 !     ----------------------------------------------------------------
    endif
+   fp_pos = 2*GlobalNumAtoms*integer4_size+1
 !
 !  ===================================================================
 !  Determine the address of the core density data for each atomic site
 !  in the core density file.
 !  ===================================================================
    do ig = 1, GlobalNumAtoms
-      file_loc(ig) = block_size(1,ig)*integer4_size + block_size(2,ig)*real8_size
+      offset(ig) = block_size(1,ig)*integer4_size + block_size(2,ig)*real8_size
    enddo
-   do ig = 2, GlobalNumAtoms
-      file_loc(ig) = file_loc(ig) + file_loc(ig-1)
-   enddo
-   do ig = GlobalNumAtoms+1, 2, -1
-      file_loc(ig) = file_loc(ig-1) + 1
-   enddo
-   file_loc(1) = 1
-   file_loc = file_loc + 2*GlobalNumAtoms*integer4_size
 !  ===================================================================
 !
 !  ===================================================================
@@ -1421,7 +1553,7 @@ contains
 !        -------------------------------------------------------------
          call ErrorHandler('writeCoreDensity','Inconsistent real data size')
 !        -------------------------------------------------------------
-      else if (fsize*real8_size+isize*integer4_size /= file_loc(ig+1)-file_loc(ig)) then
+      else if (fsize*real8_size+isize*integer4_size /= offset(ig)) then
 !        -------------------------------------------------------------
          call ErrorHandler('writeCoreDensity','Inconsistent data location and size')
 !        -------------------------------------------------------------
@@ -1430,15 +1562,14 @@ contains
       if ( isOutputProc() ) then
 !        =============================================================
 !        write out imsgbuf of the present local atom..................
-!        =============================================================
-         fp_pos=file_loc(ig)
 !        -------------------------------------------------------------
          call c_fseek(cunit,fp_pos,0)
+!        -------------------------------------------------------------
+         do jg = 1, ig-1
+            call c_fseek(cunit,offset(jg),1)
+         enddo
+!        -------------------------------------------------------------
          call c_write_integer(cunit,imsgbuf,isize)
-!        -------------------------------------------------------------
-         fp_pos = fp_pos + isize*integer4_size
-!        -------------------------------------------------------------
-         call c_fseek(cunit,fp_pos,0)
          call c_write_double(cunit,fmsgbuf,fsize)
 !        -------------------------------------------------------------
 !
@@ -1455,15 +1586,14 @@ contains
 !
 !           ==========================================================
 !           Write clients data
-!           ==========================================================
-            fp_pos=file_loc(present_atom)
 !           ----------------------------------------------------------
             call c_fseek(cunit,fp_pos,0)
+!           ----------------------------------------------------------
+            do jg = 1, present_atom-1
+               call c_fseek(cunit,offset(jg),1)
+            enddo
+!           ----------------------------------------------------------
             call c_write_integer(cunit,imsgbuf,isize)
-!           ----------------------------------------------------------
-            fp_pos = fp_pos + isize*integer4_size
-!           ----------------------------------------------------------
-            call c_fseek(cunit,fp_pos,0)
             call c_write_double(cunit,fmsgbuf,fsize)
 !           ----------------------------------------------------------
          enddo
@@ -1493,12 +1623,17 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine calCoreStates(evb)
 !  ===================================================================
+   use MPPModule, only : syncAllPEs, MyPE
+!
    use GroupCommModule, only : GlobalMaxInGroup, GlobalSumInGroup
+!
+   use InputModule, only : getKeyValue
 !
    use Atom2ProcModule, only : getLocalIndex, getAtom2ProcInGroup,     &
                                getMaxLocalNumAtoms
 !
-   use AtomModule, only : getLocalSpeciesContent
+   use AtomModule, only : getLocalSpeciesContent, getLocalNumSpecies
+   use AtomModule, only : getLocalAtomicNumber
 !
    use SystemVolumeModule, only : getSystemVolume, getAtomicMTVolume
 !
@@ -1507,7 +1642,7 @@ contains
    use PotentialTypeModule, only : isMuffinTinPotential, isASAPotential, &
                                    isMuffinTinASAPotential, isFullPotential
 !
-   use PotentialModule, only : getSphPotr
+   use PotentialModule, only : getSphPotr, getPotential, getPotentialRmeshSize
 !
    use DataServiceCenterModule, only : createDataStorage,     &
                                        getDataStorage,        &
@@ -1522,6 +1657,20 @@ contains
 !
    use RadialGridModule, only : getRadialGridPoint
 !
+   use StepFunctionModule, only : getVolumeIntegration
+!
+   use SSSolverModule, only : initSSSolver, endSSSolver, isInitialized
+!
+   use SMatrixPolesModule, only : findSMatrixPoles, computeBoundStateDensity, &
+                                  getBoundStateDensity, getNumBoundStates,    &
+                                  getBoundStateEnergy, getBoundStateChargeInCell,&
+                                  getNumBoundStateDegen,                      &
+                                  printSMatrixPoleInfo, printBoundStateDensity
+!
+   use IntegerFactorsModule, only : lofj, mofj
+!
+   use ScfDataModule, only : CurrentScfIteration
+!
    implicit   none
 !
    character (len=13), parameter ::  sname='calCoreStates'
@@ -1529,12 +1678,17 @@ contains
    integer (kind=IntKind), parameter :: formula = 0
 !
    integer (kind=IntKind) :: id, ia
-   integer (kind=IntKind) :: is, ig, i, j, ir
+   integer (kind=IntKind) :: is, ig, i, j, ir, numc, ib, nb, jl, jmax_rho
    integer (kind=IntKind) :: nr, nws, nend, last, last2, nmult, jmt, jend_plus_n
+   integer (kind=IntKind) :: lmax_prod, jmax_prod, kmax_prod
    integer (kind=IntKind) :: DataSize(LocalNumAtoms)
    integer (kind=IntKind), pointer :: pc0(:,:,:)
+   integer (kind=IntKind), allocatable :: atom_print_level(:)
 !
    real (kind=RealKind), optional, intent(out) :: evb
+!
+   logical :: sss_init = .false.
+!
    real (kind=RealKind), allocatable :: wrk1(:),wrk2(:)
    real (kind=RealKind), parameter :: tolch=TEN2m5
    real (kind=RealKind) :: h, hout, efact, dps, rws
@@ -1543,12 +1697,28 @@ contains
    real (kind=RealKind), allocatable :: memtemp(:,:)
    real (kind=RealKind), pointer :: ec0(:,:,:)
    real (kind=RealKind), pointer :: vp(:)
+   real (kind=RealKind), pointer :: ecs(:)
    real (kind=RealKind), parameter :: PI8 = PI4*TWO
-   real (kind=RealKind) :: msemmt, mcormt, msemws, mcorws
+   real (kind=RealKind) :: msemmt, mcormt, msemws, mcorws, vint_vp, vint_mt
+   real (kind=RealKind) :: estep, e1, e2, fac, qws, qmt, occ, norm_fac
 !
    real (kind=RealKind), allocatable :: sqrt_r(:)
    real (kind=RealKind), allocatable :: r_mesh_t(:)
    real (kind=RealKind), allocatable :: sqrt_r_t(:)
+!
+   complex (kind=CmplxKind), pointer :: fden(:,:), dfden(:,:)
+   complex (kind=CmplxKind), pointer :: fsem(:,:), dfsem(:,:)
+   complex (kind=CmplxKind), pointer :: prod(:,:), fpot(:,:)
+!
+   interface
+      subroutine computeProdExpan(n,lf,f,lg,g,lh,h)
+        use KindParamModule, only : IntKind, CmplxKind
+        integer (kind=IntKind), intent(in) :: n, lf, lg, lh
+        complex (kind=CmplxKind), intent(in) :: f(:,:), g(:,:)
+        complex (kind=CmplxKind), intent(out) :: h(:,:)
+      end subroutine computeProdExpan
+   end interface
+!
 !  ===================================================================
 !  setup single grids for r_mesh...................................
 !  I chhose a large last value to make this code agree with the older version
@@ -1573,6 +1743,31 @@ contains
 !     ---------------------------------------------------------------
    endif
 !
+   if (isFP_SemiCore) then
+      allocate(atom_print_level(LocalNumAtoms))
+      atom_print_level = print_level
+!     ================================================================
+!     Here we apply a non-relativistic full-potential single-site
+!     solver by setting relativistic flag to 0
+!     ================================================================
+      if (.not.isInitialized()) then
+!        -------------------------------------------------------------
+         call initSSSolver(LocalNumAtoms, getLocalNumSpecies, getLocalAtomicNumber, &
+                           lmax_kkr, lmax_kkr, lmax_pot, lmax_step, lmax_rho,  &
+                           n_spin_pola, 1, 0, stop_routine, atom_print_level)
+!        -------------------------------------------------------------
+         sss_init = .true.
+      else
+         sss_init = .false.
+      endif
+      estep = ZERO
+      i = getKeyValue(1,'Pole Search Step (>0.0)',estep)
+      if (estep < TEN2m6 .or. estep >= 0.05d0) then
+         estep = 0.01d0
+      endif
+      deallocate(atom_print_level)
+   endif
+!
    msgbuf(1:2) = ZERO
    etopcor=-10.0d+20
    do id =1, LocalNumAtoms
@@ -1584,6 +1779,9 @@ contains
       nws = getRadialGridPoint(id,rws)
 !012620===============================
       last=Core(id)%rsize      ! Definition of last: the final mesh point.
+      if (print_level >= 1) then
+         write(6,'(a,4i5,2x,f12.8)')'id,jmt,nws,last,rws = ',id,jmt,nws,last,rws
+      endif
 !
 !     ----------------------------------------------------------------
       call dcopy(jend_plus_n,Core(id)%Grid%r_mesh,1,Core(id)%r_mesh,1)
@@ -1684,6 +1882,107 @@ contains
                call corslv(id,ia,is,nws,last,nend,h,r_mesh_t,sqrt_r_t(0:last),vr_t)
 !              -------------------------------------------------------
 !
+               fac = 3.0d0-n_spin_pola ! if non-spin-polarized, a factor of 2 is needed.
+               ecs => getSemiCoreStates(id,ia,is,numc)
+!
+!=====================================================================
+! By printing out the potential at each iteration, I find that
+! running a 1-atom per unit cell full-potential KKR job on 4 MPI processes (with 4 processes 
+! parallelizing the k-space integration) and 8 MPI processes (with 4 processes
+! parallelizing the k-space integration and 2 processes parallelizing the 
+! energy integration) produces slightly different new potential at each iteration. 
+! It could be caused by the numerical algorithm that is depdendent on the number of processes.
+! We will come to this problem later. -- Jan. 21, 2022.
+!=====================================================================
+if (.false.) then
+fpot => getPotential(id,ia,is)
+do jl = 1, 45
+if (mod(lofj(jl),2) == 0 .and. lofj(jl) /= 2 .and. mod(mofj(jl),4) == 0) then
+do ir = 1, Core(id)%Grid%jend, 40
+write(6,'(a,3i5,2d20.13)')'l,m,ir,fpot = ',lofj(jl),mofj(jl),ir,fpot(ir,jl)
+enddo
+endif
+enddo
+endif
+!=====================================================================
+               if (isFP_SemiCore .and. numc > 0) then
+                  e1 = ecs(1) - HALF
+                  e2 = ecs(numc) + HALF
+                  if (e2 > ZERO) then
+                     e2 = -TEN2m6
+                  endif
+!                 ---------------------------------------------------
+                  call findSMatrixPoles(id,ia,is,e1,e2,estep,CheckPoles =.false.)
+!                 ---------------------------------------------------
+                  call computeBoundStateDensity(id,ia,is)
+!                 ---------------------------------------------------
+                  fsem => Core(id)%fp_semden(:,:,is,ia)
+                  dfsem => Core(id)%fp_dsemden(:,:,is,ia)
+                  fsem = CZERO; dfsem = CZERO
+                  nb = getNumBoundStates(id,ia,is)
+                  do ib = 1, nb
+                     fden => getBoundStateDensity(id,ia,is,ib,NumRs=nr,jmax_rho=jmax_rho,derivative=dfden)
+!                    dfden => getBoundStateDensity(id,ia,is,ib,derivative=.true.)
+                     if (norm2inf == 0) then
+                        norm_fac = getNumBoundStateDegen(id,ia,is,ib)/getBoundStateChargeInCell(id,ia,is,ib)
+                     else
+                        norm_fac = ONE
+                     endif
+                     if (Core(id)%jmax_rho /= jmax_rho) then
+                        call ErrorHandler('calCoreStates','Core(id)%jmax_rho <> jmax_rho', &
+                                          Core(id)%jmax_rho, jmax_rho)
+                     else if (nr == Core(id)%rsize) then
+                        fsem = fsem + norm_fac*fden
+                        dfsem = dfsem + norm_fac*dfden
+                     else
+                        nr = min(nr,Core(id)%rsize)
+                        do jl = 1, jmax_rho
+                           do ir = 1, nr
+                              fsem(ir,jl) = fsem(ir,jl) + norm_fac*fden(ir,jl)
+                           enddo
+                           do ir = 1, nr
+                              dfsem(ir,jl) = dfsem(ir,jl) + norm_fac*dfden(ir,jl)
+                           enddo
+                        enddo
+                     endif
+                  enddo
+                  fsem = fac*fsem
+                  dfsem = fac*dfsem
+                  if (nb > 0) then
+                     Core(id)%semden(:,is,ia) = ZERO
+                     Core(id)%dsemden(:,is,ia) = ZERO
+                     do ir = 1, nr
+                        Core(id)%semden(ir,is,ia) = real(fsem(ir,1),kind=RealKind)*Y0
+                     enddo
+                     do ir = 1, nr
+                        Core(id)%dsemden(ir,is,ia) = real(dfsem(ir,1),kind=RealKind)*Y0
+                     enddo
+!                    =================================================
+!                    recalculate the total semi-core energy: esemv
+!                    However, Core(id)%ec is not updated. Due to the fact
+!                    that full-potential will break the spherical symmetry, 
+!                    the degeneracy associated with each semi-core state
+!                    will be lifted, so that the number of semi-core states,
+!                    numc, will increase. We will implement the code
+!                    for updating Core(id)%ec and Core%numc in the future.
+!                    =================================================
+                     Core(id)%esemv(is,ia) = ZERO
+                     do ib = 1, nb
+                        occ = fac*getNumBoundStateDegen(id,ia,is,ib)
+                        Core(id)%esemv(is,ia) = Core(id)%esemv(is,ia) + &
+                                                occ*getBoundStateEnergy(id,ia,is,ib)
+                        etopcor=max(etopcor,getBoundStateEnergy(id,ia,is,ib))
+                     enddo
+                  endif
+                  if (print_level >= 0) then
+!                    ------------------------------------------------
+                     call printSMatrixPoleInfo(id,ia,is)
+!                    ------------------------------------------------
+!                    call printBoundStateDensity(id,ia,is)
+!                    ------------------------------------------------
+                  endif
+               endif
+!
 !              =======================================================
 !              The following two lines were added by Yang on 11/23/2018
 !              =======================================================
@@ -1697,28 +1996,43 @@ contains
                etopcor=max(Core(id)%ec(Core(id)%numc_below(ia),is,ia),etopcor)
 !
 !              =======================================================
-!              check the charge of semi-cores.........................
+!              compute the charge of semi-cores.......................
 !              -------------------------------------------------------
-               wrk2(0)=ZERO
-               do j = 1, last2
-                  wrk2(j)=Core(id)%semden(j,is,ia)*Core(id)%r_mesh(j)
-               enddo
-!              -------------------------------------------------------
-               call FitInterp( 4, sqrt_r(1:4), wrk2(1:4), ZERO, wrk2(0), dps )
-!              -------------------------------------------------------
-!              call calIntegration(0,last2,Core(id)%r_mesh,wrk2,wrk1)
-               call calIntegration(last2+1,sqrt_r(0:last2),wrk2(0:last2),wrk1(0:last2),3)
-!              -------------------------------------------------------
-!              wrk1(jmt) = (wrk1(jmt) + HALF*wrk2(1)*Core(id)%r_mesh(1))*PI4
-!              wrk1(last2) = (wrk1(last2) + HALF*wrk2(1)*Core(id)%r_mesh(1))*PI4
-               Core(id)%qsemmt(ia)=Core(id)%qsemmt(ia)+wrk1(jmt)*PI8
-               Core(id)%qsemws(ia)=Core(id)%qsemws(ia)+wrk1(last2)*PI8
-               msemmt=msemmt+(n_spin_pola+1-2*is)*wrk1(jmt)*PI8
-               msemws=msemws+(n_spin_pola+1-2*is)*wrk1(last2)*PI8
+               if (isFP_SemiCore .and. numc > 0) then
+                  nb = getNumBoundStates(id,ia,is)
+                  do ib = 1, nb
+                     qws = getBoundStateChargeInCell(id,ia,is,ib,qmt)
+                     if (norm2inf == 0) then
+                        qmt = getNumBoundStateDegen(id,ia,is,ib)*qmt/qws
+                        qws = getNumBoundStateDegen(id,ia,is,ib)
+                     endif
+                     Core(id)%qsemmt(ia)=Core(id)%qsemmt(ia)+fac*qmt
+                     Core(id)%qsemws(ia)=Core(id)%qsemws(ia)+fac*qws
+                     msemmt=msemmt+(n_spin_pola+1-2*is)*qmt
+                     msemws=msemws+(n_spin_pola+1-2*is)*qws
+                  enddo
+               else
+                  wrk2(0)=ZERO
+                  do j = 1, last2
+                     wrk2(j)=Core(id)%semden(j,is,ia)*Core(id)%r_mesh(j)
+                  enddo
+!                 ----------------------------------------------------
+                  call FitInterp( 4, sqrt_r(1:4), wrk2(1:4), ZERO, wrk2(0), dps )
+!                 ----------------------------------------------------
+!                 call calIntegration(0,last2,Core(id)%r_mesh,wrk2,wrk1)
+                  call calIntegration(last2+1,sqrt_r(0:last2),wrk2(0:last2),wrk1(0:last2),3)
+!                 ----------------------------------------------------
+!                 wrk1(jmt) = (wrk1(jmt) + HALF*wrk2(1)*Core(id)%r_mesh(1))*PI4
+!                 wrk1(last2) = (wrk1(last2) + HALF*wrk2(1)*Core(id)%r_mesh(1))*PI4
+                  Core(id)%qsemmt(ia)=Core(id)%qsemmt(ia)+wrk1(jmt)*PI8
+                  Core(id)%qsemws(ia)=Core(id)%qsemws(ia)+wrk1(last2)*PI8
+                  msemmt=msemmt+(n_spin_pola+1-2*is)*wrk1(jmt)*PI8
+                  msemws=msemws+(n_spin_pola+1-2*is)*wrk1(last2)*PI8
+               endif
 !              =======================================================
 !
 !              =======================================================
-!              check the charge of deep-cores.........................
+!              compute the charge of deep-cores.......................
 !              -------------------------------------------------------
                wrk2(0)=ZERO
                do j = 1, last2
@@ -1736,22 +2050,53 @@ contains
                Core(id)%qcorws(ia)=Core(id)%qcorws(ia)+wrk1(last2)*PI8
                mcormt=mcormt+(n_spin_pola+1-2*is)*wrk1(jmt)*PI8
                mcorws=mcorws+(n_spin_pola+1-2*is)*wrk1(last2)*PI8
+!              =======================================================
 !
 !              =======================================================
-!              Compute the kinetic energy
+!              Compute the kinetic energy of semi-core
+!              -------------------------------------------------------
+               if (isFP_SemiCore .and. numc > 0) then
+                  fpot => getPotential(id,ia,is)
+                  nr = getPotentialRmeshSize(id)
+                  if (Core(id)%rsize < nr) then
+                     call ErrorHandler('calCoreStates','Core rsize < Potential rsize', &
+                                       Core(id)%rsize, nr)
+                  endif
+                  fden => aliasArray2_c(ws_den,nr,Core(id)%jmax_rho)
+                  do jl = 1, Core(id)%jmax_rho
+                     do ir = 1, nr
+                        fden(ir,jl) = Core(id)%fp_semden(ir,jl,is,ia)
+                     enddo
+                  enddo
+                  lmax_prod = lmax_rho(id) + lmax_pot(id)
+                  jmax_prod = (lmax_prod+1)*(lmax_prod+2)/2
+                  kmax_prod = (lmax_prod+1)**2
+                  prod => aliasArray2_c(ws_prod,nr,jmax_prod)
+                  prod = CZERO
+!                 ----------------------------------------------------
+                  call computeProdExpan(nr,lmax_rho(id),fden,         &
+                                        lmax_pot(id),fpot,lmax_prod,prod)
+                  vint_vp = getVolumeIntegration(id,nr,Core(id)%r_mesh, &
+                                                 kmax_prod,jmax_prod,0,prod,vint_mt)
+!                 ----------------------------------------------------
+                  Core(id)%semi_ke(is,ia)=Core(id)%esemv(is,ia)-vint_vp
+               else
+                  wrk2(0)=ZERO
+                  do j = 1, last2
+                     wrk2(j)=Core(id)%semden(j,is,ia)*vp(j)
+                  enddo
+!                 ----------------------------------------------------
+                  call FitInterp( 4, sqrt_r(1:4), wrk2(1:4), ZERO, wrk2(0), dps )
+!                 ----------------------------------------------------
+                  call calIntegration(last2+1,sqrt_r(0:last2),wrk2(0:last2),wrk1(0:last2),3)
+!                 ----------------------------------------------------
+                  Core(id)%semi_ke(is,ia)=Core(id)%esemv(is,ia)-wrk1(last2)*PI8
+               endif
 !              =======================================================
-               wrk2(0)=ZERO
-               do j = 1, last2
-                  wrk2(j)=Core(id)%semden(j,is,ia)*vp(j)
-               enddo
-!              -------------------------------------------------------
-               call FitInterp( 4, sqrt_r(1:4), wrk2(1:4), ZERO, wrk2(0), dps )
-!              -------------------------------------------------------
-               call calIntegration(last2+1,sqrt_r(0:last2),wrk2(0:last2),wrk1(0:last2),3)
-!              -------------------------------------------------------
-!write(6,'(a,2d15.8)')'Semi core energy and int[rho*v] =',Core(id)%esemv(is,ia),wrk1(last2)*PI8
-               Core(id)%semi_ke(is,ia)=Core(id)%esemv(is,ia)-wrk1(last2)*PI8
 !
+!              =======================================================
+!              Compute the kinetic energy of deep-core
+!              -------------------------------------------------------
                if (formula == 0) then
                   wrk2(0)=ZERO
                   do j = 1, last2
@@ -1762,7 +2107,6 @@ contains
 !                 ----------------------------------------------------
                   call calIntegration(last2+1,sqrt_r(0:last2),wrk2(0:last2),wrk1(0:last2),3)
 !                 ----------------------------------------------------
-!write(6,'(a,2d15.8)')'Deep core energy and int[rho*v] =',Core(id)%ecorv(is,ia),wrk1(last2)*PI8
                   Core(id)%core_ke(is,ia)=Core(id)%ecorv(is,ia)-wrk1(last2)*PI8
                else
 !                 ---------------------------------------------------
@@ -1777,6 +2121,7 @@ contains
 !                 ---------------------------------------------------
                   Core(id)%core_ke(is,ia)=wrk1(jmt)*PI4
                endif
+!              =======================================================
             enddo
             Core(id)%mcpsc_mt(ia)= msemmt+mcormt
             Core(id)%mcpsc_ws(ia)= msemws+mcorws
@@ -1793,13 +2138,13 @@ contains
          if(abs(Core(id)%qsemws(ia)-Core(id)%zsemss(ia)) > tolch     &
             .and. print_level >= 0) then
             write(6,'(/,10x,''Lost semi-core charge'')')
-            write(6,'(10x,''z='',d17.8,'' q='',f17.8)') &
+            write(6,'(10x,''z='',f17.8,'' q='',f17.8)') &
                              Core(id)%zsemss(ia), Core(id)%qsemws(ia)
          endif
          if(abs(Core(id)%qcorws(ia)-Core(id)%zcorss(ia)) > tolch     &
             .and. print_level >= 0) then
             write(6,'(/,10x,''Lost      core charge'')')
-            write(6,'(10x,''z='',d17.8,'' q='',f17.8)') &
+            write(6,'(10x,''z='',f17.8,'' q='',f17.8)') &
                              Core(id)%zcorss(ia), Core(id)%qcorws(ia)
          endif
          msgbuf(1) = msgbuf(1) + (Core(id)%zsemss(ia)-Core(id)%qsemmt(ia))*&
@@ -1808,6 +2153,12 @@ contains
                      getLocalSpeciesContent(id,ia)/real(GlobalNumAtoms,kind=Realkind)
       enddo
    enddo
+!
+   if (sss_init) then
+!     ----------------------------------------------------------------
+      call endSSSolver()
+!     ----------------------------------------------------------------
+   endif
 !
    do id = 1,LocalNumAtoms
       if (Core(id)%MaxNumc >= 1) then
@@ -1833,7 +2184,7 @@ contains
 !  ===================================================================
    deallocate(vr_t)
    deallocate(wrk1, wrk2, sqrt_r, sqrt_r_t, r_mesh_t)
-   nullify(ec0, vp)
+   nullify(ec0, vp, fden, fpot, dfden, fsem, dfsem)
 !  ===================================================================
 !
    msgbuf(1:2) = msgbuf(1:2)
@@ -1854,6 +2205,18 @@ contains
       call WarningHandler('calCoreStates','reset evbot to a new value',etopcor-0.2d0)
       evbot = etopcor - 0.2d0
    endif
+!
+   do id = 1,LocalNumAtoms
+      do ia = 1, Core(id)%NumSpecies
+         do is = 1, n_spin_pola
+            do i = 1,Core(id)%numc(ia)
+               if (Core(id)%ec(i,is,ia) >= evbot) then
+                  Core(id)%core_status(i,is,ia) = 2
+               endif
+            enddo
+         enddo
+      enddo
+   enddo
 !
    if (present(evb)) then
       evb = evbot
@@ -1971,9 +2334,12 @@ contains
    call updateGlobalCoreStatesTable()
 !
    if(stop_routine.eq.sname) then
-      do id =1, LocalNumAtoms
-         call printCoreStates(id)
-      enddo
+      if (print_level >= 0) then
+         do id =1, LocalNumAtoms
+            call printCoreStates(id)
+         enddo
+      endif
+      call syncAllPEs()
       call StopHandler(sname)
    endif
 !
@@ -2003,7 +2369,7 @@ contains
 !
    write(6,'(''Local Atom Index: '',i6)')id
    write(6,'(''jend, jcore     : '',2i6)')Core(id)%Grid%jend,Core(id)%jcore
-   write(6,'(''Core radius     : '',f12.8)')Core(id)%Rcore_mt
+   write(6,'(''Core radius     : '',f12.8)')Core(id)%rcore_mt
    write(6,'(''Upper limit of core level'',t31,''='',f20.11)')etopcor
    do ia = 1, Core(id)%NumSpecies
       write(6,'(80(''=''))')
@@ -2016,13 +2382,31 @@ contains
          write(6,                                                        &
             '(''Eigenvalues: '',t20,''n'',t25,''l'',t30,''k'',t41,''energy'')')
          do i=1,Core(id)%numc(ia)
-            if (Core(id)%ec(i,is,ia) <= evbot) then
-               write(6,'(t18,i3,t23,i3,t28,i3,t32,f20.11)')                 &
-                  Core(id)%nc(i,ia),Core(id)%lc(i,ia),Core(id)%kc(i,ia),Core(id)%ec(i,is,ia)
-            else
-               write(6,'(t18,i3,t23,i3,t28,i3,t32,f20.11,a)')               &
+!           if (Core(id)%ec(i,is,ia) < evbot) then
+!              write(6,'(t18,i3,t23,i3,t28,i3,t32,f20.11)')                 &
+!                 Core(id)%nc(i,ia),Core(id)%lc(i,ia),Core(id)%kc(i,ia),Core(id)%ec(i,is,ia)
+!           else
+!              write(6,'(t18,i3,t23,i3,t28,i3,t32,f20.11,a)')               &
+!                 Core(id)%nc(i,ia),Core(id)%lc(i,ia),Core(id)%kc(i,ia),    &
+!                 Core(id)%ec(i,is,ia),'--- treated as valence state ---'
+!           endif
+            if (Core(id)%core_status(i,is,ia) == 0) then
+               write(6,'(t18,i3,t23,i3,t28,i3,t32,f20.11,4x,a)')            &
                   Core(id)%nc(i,ia),Core(id)%lc(i,ia),Core(id)%kc(i,ia),    &
-                  Core(id)%ec(i,is,ia),'--- treated as valence state ---'
+                  Core(id)%ec(i,is,ia),'--- deep-core ---'
+            else if (Core(id)%core_status(i,is,ia) == 1) then
+               write(6,'(t18,i3,t23,i3,t28,i3,t32,f20.11,4x,a)')            &
+                  Core(id)%nc(i,ia),Core(id)%lc(i,ia),Core(id)%kc(i,ia),    &
+                  Core(id)%ec(i,is,ia),'--- semi-core ---'
+            else if (Core(id)%core_status(i,is,ia) == 2) then
+               write(6,'(t18,i3,t23,i3,t28,i3,t32,f20.11,4x,a)')            &
+                  Core(id)%nc(i,ia),Core(id)%lc(i,ia),Core(id)%kc(i,ia),    &
+                  Core(id)%ec(i,is,ia),'--- shallow-core (valence) ---'
+            else
+!              -------------------------------------------------------
+               call ErrorHandler('printCoreStatus','Unknown core status', &
+                                 Core(id)%core_status(i,is,ia))
+!              -------------------------------------------------------
             endif
          enddo
          write(6,'(/)')
@@ -2180,7 +2564,7 @@ contains
 !     ================================================================
 !     Check if the core state energy is above the bottom of the valence contour
 !     ================================================================
-      if (Core(id)%ec(i,is,ia) > evbot) then
+      if (Core(id)%ec(i,is,ia) >= evbot) then
 !        if (is == 2) then
 !           call ErrorHandler(sname,                                  &
 !                             'The bottom of the contour is between the spin up/down states of core electron', &
@@ -2205,22 +2589,30 @@ contains
 !     ----------------------------------------------------------------
       call calIntegration(last2+1,sqrt_r(0:last2),ftmp(0:last2),qmp(0:last2),3)
 !     ----------------------------------------------------------------
-#ifndef CoreNorm2Rc
-      call IntegrateSphHankelSq(Core(id)%lc(i,ia),r(last2),Core(id)%ec(i,is,ia),norm_frac)
-!     ----------------------------------------------------------------
-      if (print_level >= 0) then
-!        write(6,'(a,3i4,2(a,d15.8),a,2d15.8)')'nc, lc, kc = ',       &
-         write(6,'(a,3i4,a,d15.8)')'nc, lc, kc = ',                   &
-               Core(id)%nc(i,ia),Core(id)%lc(i,ia),Core(id)%kc(i,ia), &
-               ', Int[Rho] to Infinity/Int[Rho] to Rc = ',HALF*norm_frac*h2nrm/qmp(last2)
-!              ', Int[rho] beyond Rc = ', PI4*norm_frac*h2nrm,        &
-!              ', Int[Rho] within Rc = ',TWO*PI4*qmp(last2),          &
-!              ', norm_frac, h2nrm = ',norm_frac,h2nrm
+      if (norm2inf == 1) then
+!        =============================================================
+!        Normalizing to infinity
+!        -------------------------------------------------------------
+         call IntegrateSphHankelSq(Core(id)%lc(i,ia),r(last2),Core(id)%ec(i,is,ia),norm_frac)
+!        -------------------------------------------------------------
+         if (print_level >= 0) then
+!           write(6,'(a,3i4,2(a,d15.8),a,2d15.8)')'nc, lc, kc = ',       &
+            write(6,'(a,3i4,a,d15.8)')'nc, lc, kc = ',                   &
+                  Core(id)%nc(i,ia),Core(id)%lc(i,ia),Core(id)%kc(i,ia), &
+                  ', [Int[Rho] from Rc to Inf.]/[Int[Rho] from 0 to Rc] = ', &
+                  HALF*norm_frac*h2nrm/qmp(last2)
+!                 ', Int[rho] beyond Rc = ', PI4*norm_frac*h2nrm,        &
+!                 ', Int[Rho] within Rc = ',TWO*PI4*qmp(last2),          &
+!                 ', norm_frac, h2nrm = ',norm_frac,h2nrm
+         endif
+         gnrm=ONE/(TWO*PI4*qmp(last2)+PI4*norm_frac*h2nrm) ! Normalized to R = infinity
+!        =============================================================
+      else
+!        =============================================================
+!        Normalizing to R = r(last2)
+!        =============================================================
+         gnrm=ONE/(TWO*PI4*qmp(last2))
       endif
-      gnrm=ONE/(TWO*PI4*qmp(last2)+PI4*norm_frac*h2nrm) ! Normalized to R = infinity
-#else
-      gnrm=ONE/(TWO*PI4*qmp(last2)) ! Normalized to R = r(last2)
-#endif
       do j=1,last2
          ftmp(j)=ftmp(j)*gnrm/r(j)    ! get rid off another factor r so that
                                       ! at this stage, ftmp is just density
@@ -2271,11 +2663,16 @@ contains
          else
             spin_string = '_SpinDown'
          endif
+!        =============================================================
+!        This is an output of the density, with r^2 included, for each 
+!        core state. The output does NOT include a factor for the number 
+!        of degeneracies.
 !        -------------------------------------------------------------
          call writeFunction('Core_'//trim(state_string)//spin_string,last2,r,ftmp(1:),2)
 !        -------------------------------------------------------------
       endif
-      if(ndeep > ndeepz)then
+      if (ndeep > ndeepz)then
+         Core(id)%core_status(i,is,ia) = 1
          do j=1,Core(id)%Grid%jmt
             Core(id)%semden(j,is,ia)=Core(id)%semden(j,is,ia) + fac1*ftmp(j)
          enddo
@@ -2303,6 +2700,7 @@ contains
          endif
          Core(id)%esemv(is,ia)=Core(id)%esemv(is,ia)+Core(id)%ec(i,is,ia)*fac1
       else
+         Core(id)%core_status(i,is,ia) = 0
          do j=1,Core(id)%Grid%jmt
             Core(id)%corden(j,is,ia)= Core(id)%corden(j,is,ia) + fac1*ftmp(j)
          enddo
@@ -2428,7 +2826,7 @@ contains
 !
    real (kind=RealKind) :: drg(ipdeq2)
    real (kind=RealKind) :: drf(ipdeq2)
-   real (kind=RealKind) :: rg(last), der_rg(last)
+   real (kind=RealKind), allocatable :: rg(:), der_rg(:)
    real (kind=RealKind) :: dk
    real (kind=RealKind) :: dm
    real (kind=RealKind) :: gam
@@ -2452,6 +2850,8 @@ contains
                         nws+ipdeq2,last)
 !     ----------------------------------------------------------------
    endif
+!
+   allocate(rg(last), der_rg(last))
 !
 !  ===================================================================
 !  initialize quantities
@@ -2652,6 +3052,8 @@ contains
 !
    h2nrm = fnrm**2
 !
+   deallocate(rg, der_rg)
+!
    if (sname == stop_routine) then
       call StopHandler(sname,'Forced to stop')
    endif
@@ -2845,7 +3247,7 @@ contains
    real (kind=RealKind), intent(in) :: rv(last2)
    real (kind=RealKind), intent(in) :: r(last2)
    real (kind=RealKind), intent(in) :: sqrt_r(0:last2)
-   real (kind=RealKind) :: rg(last2), der_rg(last2)
+   real (kind=RealKind), allocatable :: rg(:), der_rg(:)
    real (kind=RealKind) :: drg(ipdeq*2)
    real (kind=RealKind) :: drf(ipdeq*2)
    real (kind=RealKind) :: fnrm
@@ -2886,6 +3288,8 @@ contains
 !  no. of nodes for the current states big component
 !  ===================================================================
    nodes=nqn-lqn
+!
+   allocate( rg(last2), der_rg(last2) )
 !
 !  ===================================================================
 !  first power of small r expansion
@@ -3059,6 +3463,8 @@ contains
    enddo
 !
    h2nrm = fnrm**2
+!
+   deallocate( rg, der_rg )
 !
    end subroutine semcst
 !  ===================================================================
@@ -3325,12 +3731,12 @@ contains
    real (kind=RealKind), intent(in) :: slp
    real (kind=RealKind), intent(in) :: dk
    real (kind=RealKind), intent(in) :: dm
-   real (kind=RealKind), intent(in) :: r(:)
-   real (kind=RealKind), intent(in) :: rv(:)
-   real (kind=RealKind), intent(out) :: rg(:)
-   real (kind=RealKind), intent(out) :: rf(:)
-   real (kind=RealKind), intent(out) :: der_rg(:)
-   real (kind=RealKind), intent(out) :: der_rf(:)
+   real (kind=RealKind), intent(in) :: r(nws)
+   real (kind=RealKind), intent(in) :: rv(nws)
+   real (kind=RealKind), intent(out) :: rg(nws)
+   real (kind=RealKind), intent(out) :: rf(nws)
+   real (kind=RealKind), intent(out) :: der_rg(nws)
+   real (kind=RealKind), intent(out) :: der_rf(nws)
    real (kind=RealKind), intent(out) :: drf(ipdeq2)
    real (kind=RealKind), intent(out) :: drg(ipdeq2)
    real (kind=RealKind) :: vor
@@ -3423,9 +3829,19 @@ contains
       endif
 !
 !     ================================================================
+!     The following 3 lines of code are trying to fool gfortran 10.1.0,
+!     which is found problematic when compiling LOOP_j2: for some reason
+!     it sometimes skips the loop without executing it.
+!     ****************************************************************
+      if (invp <= ipdeq) then
+         write(6,'(a,2i5)')'start LOOP_j2: ',ipdeq, invp
+      endif
+!     ****************************************************************
+!
+!     ================================================================
 !     solve dirac eqs. now
 !     ================================================================
-      LOOP_j2 : do j=ipdeq+1,invp
+      LOOP_j2: do j=ipdeq+1,invp
 !        =============================================================
 !        5 points predictor
 !        =============================================================
@@ -3483,8 +3899,10 @@ contains
 !        =============================================================
 !        check number of nodes
 !        =============================================================
-         if( rg(j-1) /= ZERO .and. rg(j)/rg(j-1) <= ZERO ) then
-            nd=nd+1
+         if( rg(j-1) /= ZERO) then
+            if ( rg(j)/rg(j-1) <= ZERO ) then
+               nd=nd+1
+            endif
          endif
          if( nd .gt. nodes ) then
 !            =========================================================
@@ -3600,6 +4018,35 @@ contains
    endif
 !
    end subroutine richnk
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getCoreDensityRmeshSize(id) result(nr)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: id
+   integer (kind=IntKind) :: nr
+!
+   nr = Core(id)%rsize
+!
+   end function getCoreDensityRmeshSize
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isFullPotentialSemiCore() result(y)
+!  ===================================================================
+   implicit none
+!
+   logical :: y
+!
+   y = isFP_SemiCore
+!
+   end function isFullPotentialSemiCore
 !  ===================================================================
 !
 !  *******************************************************************
@@ -3878,6 +4325,114 @@ contains
    scdp => Core(id)%dsemden(:,:,:)
 !
    end function getSCDDer2
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getFPSCD0(id,jmax_rho) result(scdp)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: id
+   integer (kind=IntKind), intent(out), optional :: jmax_rho
+!
+   complex (kind=CmplxKind), pointer :: scdp(:,:,:,:)
+!
+   if (id < 1 .or. id > LocalNumAtoms) then
+      call ErrorHandler('getFPSemiCoreDensity','Invalid local atom index',id)
+   endif
+!
+   scdp => Core(id)%fp_semden(:,:,:,:)
+!
+   if (present(jmax_rho)) then
+      jmax_rho = Core(id)%jmax_rho
+   endif
+!
+   end function getFPSCD0
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getFPSCD1(id,ia,is,jmax_rho) result(scdp)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: id, ia, is
+   integer (kind=IntKind), intent(out), optional :: jmax_rho
+!
+   complex (kind=CmplxKind), pointer :: scdp(:,:)
+!
+   if (id < 1 .or. id > LocalNumAtoms) then
+      call ErrorHandler('getFPSemiCoreDensity','Invalid local atom index',id)
+   else if (ia < 1 .or. ia > Core(id)%NumSpecies) then
+      call ErrorHandler('getFPSemiCoreDensity','Invalid local species index',ia)
+   else if (is < 1 .or. is > n_spin_pola) then
+      call ErrorHandler('getFPSemiCoreDensity','Invalid spin index',is)
+   endif
+!
+   scdp => Core(id)%fp_semden(:,:,is,ia)
+!
+   if (present(jmax_rho)) then
+      jmax_rho = Core(id)%jmax_rho
+   endif
+!
+   end function getFPSCD1
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getFPSCDDeriv0(id,jmax_rho) result(scdp)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: id
+   integer (kind=IntKind), intent(out), optional :: jmax_rho
+!
+   complex (kind=CmplxKind), pointer :: scdp(:,:,:,:)
+!
+   if (id < 1 .or. id > LocalNumAtoms) then
+      call ErrorHandler('getFPSemiCoreDensityDeriv','Invalid local atom index',id)
+   endif
+!
+   scdp => Core(id)%fp_dsemden(:,:,:,:)
+!
+   if (present(jmax_rho)) then
+      jmax_rho = Core(id)%jmax_rho
+   endif
+!
+   end function getFPSCDDeriv0
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getFPSCDDeriv1(id,ia,is,jmax_rho) result(scdp)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: id, ia, is
+   integer (kind=IntKind), intent(out), optional :: jmax_rho
+!
+   complex (kind=CmplxKind), pointer :: scdp(:,:)
+!
+   if (id < 1 .or. id > LocalNumAtoms) then
+      call ErrorHandler('getFPSemiCoreDensityDeriv','Invalid local atom index',id)
+   else if (ia < 1 .or. ia > Core(id)%NumSpecies) then
+      call ErrorHandler('getFPSemiCoreDensityDeriv','Invalid local species index',ia)
+   else if (is < 1 .or. is > n_spin_pola) then
+      call ErrorHandler('getFPSemiCoreDenDeri','Invalid spin index',is)
+   endif
+!
+   scdp => Core(id)%fp_dsemden(:,:,is,ia)
+!
+   if (present(jmax_rho)) then
+      jmax_rho = Core(id)%jmax_rho
+   endif
+!
+   end function getFPSCDDeriv1
 !  ===================================================================
 !
 !  *******************************************************************
@@ -4217,6 +4772,7 @@ contains
    use InterpolationModule, only : FitInterp
    use Atom2ProcModule, only : getGlobalIndex
    use WriteFunctionModule, only : writeFunction
+   use SMatrixPolesModule, only : printSMatrixPoleInfo, printBoundStateDensity
 !
    implicit none
 !
@@ -4373,6 +4929,18 @@ contains
    endif
    nullify(den, der_den)
 !
+   if (isFP_SemiCore) then
+      do ia = 1, Core(id)%NumSpecies
+         do is = 1, n_spin_pola
+!           ----------------------------------------------------------
+            call printSMatrixPoleInfo(id,ia,is)
+!           ----------------------------------------------------------
+            call printBoundStateDensity(id,ia,is)
+!           ----------------------------------------------------------
+         enddo
+      enddo
+   endif
+!
    if (sname == stop_routine) then
       call StopHandler(sname)
    endif
@@ -4426,6 +4994,131 @@ contains
    ke = Core(id)%semi_ke(is,ia)
 !
    end function getSemiCoreKineticEnergy
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getDeepCoreStates(id,ia,is,numc,nc,lc,kc) result(pe)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: id, ia, is
+   integer (kind=IntKind), intent(out) :: numc
+   integer (kind=IntKind), intent(out), pointer, optional :: nc(:), lc(:), kc(:)
+   integer (kind=IntKind) :: ndeepz, ndeep, i, fac1
+!
+   real (kind=RealKind), pointer :: pe(:)
+!
+   ndeepz=int(Core(id)%zcorss(ia)/n_spin_pola+HALF,IntKind)
+   ndeep = 0
+   numc = 0
+   LOOP_i: do i = 1, Core(id)%numc(ia)
+      fac1=(3-n_spin_pola)*abs(Core(id)%kc(i,ia))
+      ndeep=ndeep+fac1
+      if (ndeep > ndeepz) then
+         exit LOOP_i
+      else
+         numc = i
+      endif
+   enddo LOOP_i
+!
+   if (numc < 1) then
+      call WarningHandler('getDeepCoreStates','Deep core does not exist')
+      nullify(pe)
+   else
+      pe => Core(id)%ec(1:numc,is,ia)
+   endif
+!
+   if (present(nc)) then
+      if (numc > 0) then
+         nc => Core(id)%nc(1:numc,ia)
+      else
+         nullify(nc)
+      endif
+   endif
+!
+   if (present(lc)) then
+      if (numc > 0) then
+         lc => Core(id)%lc(1:numc,ia)
+      else
+         nullify(lc)
+      endif
+   endif
+! 
+   if (present(kc)) then
+      if (numc > 0) then
+         kc => Core(id)%kc(1:numc,ia)
+      else
+         nullify(kc)
+      endif
+   endif
+!
+   end function getDeepCoreStates
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getSemiCoreStates(id,ia,is,numc,nc,lc,kc) result(pe)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: id, ia, is
+   integer (kind=IntKind), intent(out) :: numc
+   integer (kind=IntKind), intent(out), pointer, optional :: nc(:), lc(:), kc(:)
+   integer (kind=IntKind) :: ndeepz, ndeep, i, fac1, n
+!
+   real (kind=RealKind), pointer :: pe(:)
+!
+   ndeepz=int(Core(id)%zcorss(ia)/n_spin_pola+HALF,IntKind)
+   ndeep = 0
+   numc = 0
+   LOOP_i: do i = 1, Core(id)%numc(ia)
+      fac1=(3-n_spin_pola)*abs(Core(id)%kc(i,ia))
+      ndeep=ndeep+fac1
+      if (ndeep > ndeepz) then
+         exit LOOP_i
+      else
+         numc = i
+      endif
+   enddo LOOP_i
+!
+   n = Core(id)%numc(ia)
+   if (n-numc < 1) then
+      call WarningHandler('getSemiCoreStates','Semi core does not exist')
+      nullify(pe)
+   else
+      pe => Core(id)%ec(numc+1:n,is,ia)
+   endif
+!
+   if (present(nc)) then
+      if (n > numc) then
+         nc => Core(id)%nc(numc+1:n,ia)
+      else
+         nullify(nc)
+      endif
+   endif
+!
+   if (present(lc)) then
+      if (n > numc) then
+         lc => Core(id)%lc(numc+1:n,ia)
+      else
+         nullify(lc)
+      endif
+   endif
+! 
+   if (present(kc)) then
+      if (n > numc) then
+         kc => Core(id)%kc(numc+1:n,ia)
+      else
+         nullify(kc)
+      endif
+   endif
+!
+   numc = n - numc
+!
+   end function getSemiCoreStates
 !  ===================================================================
 !
 !  *******************************************************************

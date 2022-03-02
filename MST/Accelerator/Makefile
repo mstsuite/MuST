@@ -4,7 +4,7 @@
 #    Book-keeping:      date                       note
 #                     04-3-13
 #*********************************************************************
-VPATH = $(ODIR)/../Accelerator
+VPATH = $(TOP_DIR)/Accelerator
 INC_PATH = $(VPATH)
 
 .SUFFIXES:	.o .f .F .f90 .F90 .c .cu .cpp

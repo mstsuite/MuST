@@ -47,7 +47,8 @@ contains
    use InputModule, only : getKeyValue, getTableIndex, getKeyIndexValue
    use InputModule, only : isKeyExisting
 !
-   use ScfDataModule, only : isKKRCPA, isEmbeddedCluster
+   use ScfDataModule, only : isKKRCPA,  isKKRCPASRO,  &
+                            isEmbeddedCluster
 !
    use SystemModule, only : getNumAtoms, getLmaxKKR, getLmaxPhi,      &
                             getBravaisLattice,                        &
@@ -66,7 +67,7 @@ contains
 !
    real (kind=RealKind) :: c
 !
-   if (isKKRCPA()) then
+   if (isKKRCPA() .or. isKKRCPASRO()) then
       NumSites = getNumAtoms()
       GroupID = getGroupID('Unit Cell')
       MyPEinGroup = getMyPEinGroup(GroupID)
@@ -86,7 +87,7 @@ contains
    allocate(num_species(NumSites), lmax_kkr(NumSites), lmax_phi(NumSites))
    allocate(site_position(3,NumSites))
 !
-   if (isKKRCPA()) then
+   if (isKKRCPA() .or. isKKRCPASRO()) then
       global_index = -1
       do pe = 0, NumPEsInGroup-1
         NumLocalSites(pe+1) = getLocalNumAtoms(pe)
@@ -115,7 +116,7 @@ contains
    allocate(species_Z(max_species,NumSites))
 !
    species_content = ZERO
-   if (isKKRCPA()) then
+   if (isKKRCPA() .or. isKKRCPASRO()) then
       do ig = 1, NumSites
          c = ZERO
          do ia = 1, num_species(ig)

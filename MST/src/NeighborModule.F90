@@ -19,7 +19,9 @@ public :: initNeighbor,            &
           setMaxReceives,          &
           setSendTable,            &
           getSendTable,            &
+          getShellRadius,          &
           getRecvTable,            &
+          getNumAtomsOnShell,      &
           printNeighbor,           &
           printCommunicationTable
 !
@@ -108,6 +110,7 @@ contains
          deallocate( Neighbor(id)%GlobalIndex, Neighbor(id)%Position )
          deallocate( Neighbor(id)%IndexMN, Neighbor(id)%Rmunu )
          deallocate( Neighbor(id)%ShellIndex, Neighbor(id)%ShellRad )
+         deallocate( Neighbor(id)%NAsOnShell )
          Neighbor(id)%NumAtoms = 0
          Neighbor(id)%NumReceives = 0
          Neighbor(id)%NumShells = 0
@@ -121,6 +124,7 @@ contains
          deallocate( NeighborEIZ(id)%GlobalIndex )
          deallocate( NeighborEIZ(id)%Position )
          deallocate( NeighborEIZ(id)%ShellIndex,NeighborEIZ(id)%ShellRad )
+         deallocate( NeighborEIZ(id)%NAsOnShell )
          NeighborEIZ(id)%NumAtoms = 0
          NeighborEIZ(id)%NumReceives = 0
          NeighborEIZ(id)%NumShells = 0
@@ -208,7 +212,7 @@ contains
       call ErrorHandler('setNeighbor','Need to initialize the module first')
    else if (id < 1 .or. id > LocalNumAtoms) then
       call ErrorHandler('setNeighbor','invalid local atom index',id)
-   else if (n < 1) then
+   else if (n < 0) then
       call ErrorHandler('setNeighbor','invalid number of neighbor atoms',n)
    endif
 !
@@ -217,6 +221,7 @@ contains
       deallocate( Neighbor(id)%ProcIndex, Neighbor(id)%LocalIndex )
       deallocate( Neighbor(id)%GlobalIndex, Neighbor(id)%Position )
       deallocate( Neighbor(id)%ShellIndex, Neighbor(id)%ShellRad )
+      deallocate( Neighbor(id)%NAsOnShell )
       deallocate( Neighbor(id)%IndexMN )
       deallocate( Neighbor(id)%Rmunu )
    endif
@@ -230,6 +235,7 @@ contains
    allocate( Neighbor(id)%ShellIndex(n))
    Neighbor(id)%NumShells = nshells
    allocate( Neighbor(id)%ShellRad(nshells))
+   allocate( Neighbor(id)%NAsOnShell(nshells))
 !
    nsa = getNumAtoms()
 !   nsa = size( nb%IndexMN, dim=1 )
@@ -256,6 +262,7 @@ contains
    Neighbor(id)%NumShells = nb%NumShells
    do i=1,nshells
       Neighbor(id)%ShellRad(i)=nb%ShellRad(i)
+      Neighbor(id)%NAsOnShell(i) = nb%NAsOnShell(i)
    enddo
 !
 !  -------------------------------------------------------------------
@@ -298,6 +305,7 @@ contains
       deallocate( NeighborEIZ(id)%ProcIndex, NeighborEIZ(id)%LocalIndex )
       deallocate( NeighborEIZ(id)%GlobalIndex, NeighborEIZ(id)%Position )
       deallocate( NeighborEIZ(id)%ShellIndex, NeighborEIZ(id)%ShellRad )
+      deallocate( NeighborEIZ(id)%NAsOnShell )
    endif
    NeighborEIZ(id)%NumAtoms = n
    allocate( NeighborEIZ(id)%Z(n) )
@@ -308,6 +316,8 @@ contains
    allocate( NeighborEIZ(id)%Position(3,n) )
    allocate( NeighborEIZ(id)%ShellIndex(n) )
    NeighborEIZ(id)%NumShells = nshells
+   allocate( NeighborEIZ(id)%ShellRad(nshells) )
+   allocate( NeighborEIZ(id)%NAsOnShell(nshells) )
 !
    do i=1,n
       NeighborEIZ(id)%Z(i) = nb%Z(i)
@@ -323,6 +333,7 @@ contains
    NeighborEIZ(id)%NumShells = nb%NumShells
    do i=1,nshells
       NeighborEIZ(id)%ShellRad(i)=nb%ShellRad(i)
+      NeighborEIZ(id)%NAsOnShell(i)=nb%NAsOnShell(i)
    enddo
 !
    end subroutine setNeighborEIZ
@@ -415,23 +426,32 @@ contains
    allocate(nat(nshells))
    nat=0
    do j=1,nshells
-   do i=1, n
-    if(Neighbor(id)%ShellIndex(i) == j) then
-      write(6,'(x,i3,5x,i2,4x,i5,5x,i5,4x,i5,3x,i4,x,3f10.5)')     &
-            Neighbor(id)%Z(i), Neighbor(id)%Lmax(i),               &
-            Neighbor(id)%ProcIndex(i), Neighbor(id)%LocalIndex(i), &
-            Neighbor(id)%GlobalIndex(i),Neighbor(id)%ShellIndex(i),&
-            Neighbor(id)%Position(1:3,i)
-      nat(j)=nat(j)+1
-    endif
-   enddo
+      do i=1, n
+         if (Neighbor(id)%ShellIndex(i) == j) then
+            if (Neighbor(id)%Z(i) > 1000) then
+               write(6,'(2x,a3,4x,i2,4x,i5,5x,i5,4x,i5,3x,i4,x,3f10.5)')    &
+                     'CPA', Neighbor(id)%Lmax(i),                           &
+                     Neighbor(id)%ProcIndex(i), Neighbor(id)%LocalIndex(i), &
+                     Neighbor(id)%GlobalIndex(i),Neighbor(id)%ShellIndex(i),&
+                     Neighbor(id)%Position(1:3,i)
+            else
+               write(6,'(x,i3,5x,i2,4x,i5,5x,i5,4x,i5,3x,i4,x,3f10.5)')     &
+                     Neighbor(id)%Z(i), Neighbor(id)%Lmax(i),               &
+                     Neighbor(id)%ProcIndex(i), Neighbor(id)%LocalIndex(i), &
+                     Neighbor(id)%GlobalIndex(i),Neighbor(id)%ShellIndex(i),&
+                     Neighbor(id)%Position(1:3,i)
+            endif
+            nat(j)=nat(j)+1
+         endif
+      enddo
    enddo
    write(6,'(a)')   &
 ' ============================================================================'
    write(6,'(a,i5)')' Number of shells: ', nshells
    do i=1,nshells
     write(6,'(a,i3,a,3x,a,f12.5,5x,a,i5)')' shell ',i,':','radius:', &
-      Neighbor(id)%ShellRad(i),'atoms: ',nat(i)
+      Neighbor(id)%ShellRad(i),'atoms: ',Neighbor(id)%NAsOnShell(i)
+!     Neighbor(id)%ShellRad(i),'atoms: ',nat(i)
    enddo
    deallocate(nat)
 !
@@ -898,6 +918,48 @@ contains
    ptbl => SendTable(id)
 !
    end function getSendTable
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getShellRadius(id, nshell) result (shell_rad)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: id, nshell
+   real (kind=RealKind) :: shell_rad
+
+   if (id < 1 .or. id > LocalNumAtoms) then
+     call ErrorHandler('getShellRadius', 'invalid local atom index', id)
+   else if (nshell < 1 .or. nshell > Neighbor(id)%NumShells) then
+     call ErrorHandler('getShellRadius', 'invalid shell index', nshell)
+   endif
+
+   shell_rad = Neighbor(id)%ShellRad(nshell)
+
+   end function getShellRadius
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getNumAtomsOnShell(id, nshell) result (na)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: id, nshell
+   integer (kind=IntKind) :: na
+
+   if (id < 1 .or. id > LocalNumAtoms) then
+     call ErrorHandler('getNumAtomsOnShell', 'invalid local atom index', id)
+   else if (nshell < 1 .or. nshell > Neighbor(id)%NumShells) then
+     call ErrorHandler('getNumAtomsOnShell', 'invalid shell index', nshell)
+   endif
+
+   na = Neighbor(id)%NAsOnShell(nshell)
+
+   end function getNumAtomsOnShell
 !  ===================================================================
 !
 !  *******************************************************************

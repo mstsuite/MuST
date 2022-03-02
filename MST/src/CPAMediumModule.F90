@@ -1,6 +1,6 @@
 module CPAMediumModule
    use KindParamModule, only : IntKind, RealKind, CmplxKind
-   use MathParamModule, only : ZERO, ONE, CZERO, CONE, SQRTm1, TEN2m6, TEN2m8
+   use MathParamModule, only : ZERO, HALF, ONE, TWO, CZERO, CONE, SQRTm1, TEN2m6, TEN2m8
    use ErrorHandlerModule, only : ErrorHandler, WarningHandler
 !
 public :: initCPAMedium,            &
@@ -9,6 +9,9 @@ public :: initCPAMedium,            &
           isSubLatticeCPAMedium,    &
           getNumSpeciesInCPAMedium, &
           getCPAMatrix,             &
+          populateBigTCPA,          &
+          getSingleSiteMatrix,      &
+          getSingleSiteTmat,        &
           getImpurityMatrix
 !
 private
@@ -17,10 +20,12 @@ private
 !
    integer (kind=IntKind) :: GlobalNumSites, LocalNumSites
    integer (kind=IntKind) :: nSpinCant
-   integer (kind=IntKind) :: NumPEsInGroup, MyPEinGroup, GroupID
+   integer (kind=IntKind) :: NumPEsInGroup, MyPEinGroup, mGID, akGID
    integer (kind=IntKind) :: kmax_kkr_max
    integer (kind=IntKind) :: ndim_Tmat
    integer (kind=IntKind) :: print_instruction
+   integer (kind=IntKind) :: InitialMixingType
+   integer (kind=IntKind) :: sro_scf = 0
 !
    type CPAMatrixStruct
       real (kind=RealKind) :: content
@@ -57,12 +62,18 @@ private
    complex (kind=CmplxKind), allocatable, target :: TauA(:)
    complex (kind=CmplxKind), allocatable, target :: KauA(:)
    complex (kind=CmplxKind), allocatable, target :: Tmat_global(:,:)
-   complex (kind=CmplxKind), allocatable, target :: WORK0(:), WORK1(:), WORK2(:)
+   complex (kind=CmplxKind), allocatable, target :: WORK0(:), WORK1(:), WORK2(:), WORK3(:)
 !
    real (kind=RealKind) :: CPA_tolerance = TEN2m8
    real (kind=RealKind) :: CPA_alpha = 0.10d0
    real (kind=RealKind) :: CPA_slow_alpha = 0.02d0
    real (kind=RealKind) :: CPA_switch_param = 0.003d0
+!
+   integer (kind=IntKind) :: SRO_mixing_type
+   integer (kind=IntKind) :: SRO_max_iter
+   real (kind=RealKind) :: SRO_alpha
+   real (kind=RealKind) :: SRO_slow_alpha
+   real (kind=RealKind) :: SRO_tolerance
 !
 contains
 !
@@ -70,7 +81,7 @@ contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine initCPAMedium(cant, lmax_kkr, rel, cpa_mix_type, cpa_max_iter,  &
-                            cpa_mix_0, cpa_mix_1, cpa_eswitch, cpa_tol, istop, iprint)
+                            cpa_mix_0, cpa_mix_1, cpa_eswitch, cpa_tol, istop, iprint, is_sro)
 !  ===================================================================
    use GroupCommModule, only : getGroupID, getNumPEsInGroup, getMyPEinGroup
    use GroupCommModule, only : getNumGroups, getGroupLabel, isGroupExisting
@@ -82,6 +93,7 @@ contains
    use AccelerateCPAModule, only : initAccelerateCPA
 !
    use EmbeddedClusterModule, only : initEmbeddedCluster
+   use ScfDataModule, only : isSROSCF, retrieveSROSCFParams
 !
    implicit none
 !
@@ -90,8 +102,9 @@ contains
    integer (kind=IntKind), intent(in) :: cant, rel, cpa_mix_type, cpa_max_iter
    integer (kind=IntKind), intent(in) :: iprint(:)
    integer (kind=IntKind), intent(in) :: lmax_kkr(:)
+   logical, intent(in), optional :: is_sro
    integer (kind=IntKind) :: i, ig, kmaxi, ic, n, NumImpurities
-   integer (kind=IntKind) :: aid, num, dsize, lmaxi, nsize
+   integer (kind=IntKind) :: aid, num, dsize, lmaxi, nsize, mixing_type
 !
    real (kind=RealKind), intent(in) :: cpa_mix_0, cpa_mix_1, cpa_eswitch, cpa_tol
 !
@@ -107,18 +120,16 @@ contains
 !  This needs to be further thought through for whether it needs to 
 !  create a Medium Cell communicator.
 !  ===================================================================
+   akGID = getGroupID('A-K Plane')
+   NumPEsInGroup = getNumPEsInGroup(akGID)
+   MyPEinGroup = getMyPEinGroup(akGID)
+!
    if (isGroupExisting('Medium Cell')) then
-      GroupID = getGroupID('Medium Cell')
-      NumPEsInGroup = getNumPEsInGroup(GroupID)
-      MyPEinGroup = getMyPEinGroup(GroupID)
-   else if (isGroupExisting('Unit Cell')) then
-      GroupID = getGroupID('Unit Cell')
-      NumPEsInGroup = getNumPEsInGroup(GroupID)
-      MyPEinGroup = getMyPEinGroup(GroupID)
+      mGID = getGroupID('Medium Cell')
    else
-      GroupID = -1
-      NumPEsInGroup = 1
-      MyPEinGroup = 0
+      mGID = -1
+!     NumPEsInGroup = 1
+!     MyPEinGroup = 0
    endif
 !
    if (rel>1) then
@@ -142,7 +153,8 @@ contains
 !
    allocate(WORK0(kmax_kkr_max*nSpinCant*kmax_kkr_max*nSpinCant))
    allocate(WORK1(kmax_kkr_max*nSpinCant*kmax_kkr_max*nSpinCant))
-   allocate(WORK2(kmax_kkr_max*nSpinCant*kmax_kkr_max*nSpinCant))
+   allocate(WORK2(2*kmax_kkr_max*nSpinCant*kmax_kkr_max*nSpinCant))
+   allocate(WORK3(kmax_kkr_max*nSpinCant*kmax_kkr_max*nSpinCant))
    allocate(isCPAMedium(LocalNumSites))
 !
    NumImpurities = 0
@@ -231,13 +243,26 @@ contains
 !
    iteration = 0
    print_instruction = maxval(iprint)
+   InitialMixingType = cpa_mix_type
+   mixing_type = mod(InitialMixingType,4)
 !
 !  -------------------------------------------------------------------
-   call initCrystalMatrix(LocalNumSites, cant, lmax_kkr, rel, istop, iprint)
+   if(present(is_sro)) then
+      call initCrystalMatrix(nla=LocalNumSites, cant=cant, lmax_kkr=lmax_kkr,   &
+                        rel=rel, istop=istop, iprint=iprint, is_sro=is_sro)
+      sro_scf = isSROSCF()
+      if (sro_scf == 1) then
+         call retrieveSROSCFParams(mix_type=SRO_mixing_type, alpha_0=SRO_alpha, &
+                         alpha_1=SRO_slow_alpha,tol=SRO_tolerance,max_iter=SRO_max_iter)
+      endif
+   else
+      call initCrystalMatrix(nla=LocalNumSites, cant=cant, lmax_kkr=lmax_kkr,   &
+                        rel=rel, istop=istop, iprint=iprint)
+   endif
 !  -------------------------------------------------------------------
    call initEmbeddedCluster(cant, istop, print_instruction)
 !  -------------------------------------------------------------------
-   call initAccelerateCPA(cpa_mix_type, cpa_max_iter, cpa_mix_0, cpa_tol,  &
+   call initAccelerateCPA(mixing_type, cpa_max_iter, cpa_mix_0, cpa_tol, &
                           kmax_kkr_max)
 !  -------------------------------------------------------------------
 !
@@ -257,7 +282,7 @@ contains
 !
    integer (kind=IntKind) :: n, ic
 !
-   deallocate(WORK0, WORK1, WORK2, isCPAMedium)
+   deallocate(WORK0, WORK1, WORK2, WORK3, isCPAMedium)
 !
    do n = 1, LocalNumSites
       nullify(CPAMedium(n)%tau_c, CPAMedium(n)%Tcpa, CPAMedium(n)%TcpaInv)
@@ -317,23 +342,28 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine computeCPAMedium(e)
+   subroutine computeCPAMedium(e, do_sro)
 !  ===================================================================
-   use PublicParamDefinitionsModule, only : SimpleMixing, AndersonMixing, BroydenMixing
+   use PublicParamDefinitionsModule, only : SimpleMixing, AndersonMixing, &
+                                            BroydenMixing, AndersonMixingOld
 !
    use MatrixInverseModule, only : MtxInv_LU
+   use MediumHostModule, only : getNumSpecies
+!
+   use MPPModule, only : GlobalMax, syncAllPEs, MyPE
 !
    use GroupCommModule, only : GlobalMaxInGroup
 !
    use SSSolverModule, only : getScatteringMatrix
 !
-!  use CrystalMatrixModule, only : calCrystalMatrix
+   use CrystalMatrixModule, only : calCrystalMatrix, retrieveTauSRO
 !  use CrystalMatrixModule, only : getCPAMediumTau => getTau
 !
    use AccelerateCPAModule, only : initializeAcceleration, accelerateCPA
    use AccelerateCPAModule, only : setAccelerationParam, getAccelerationType
 !
    use EmbeddedClusterModule, only : setupHostMedium, getTau
+   use SROModule, only : calSpeciesTauMatrix, calculateSCFSpeciesTerm, calculateNewTCPA
 !
    use WriteMatrixModule,  only : writeMatrix
 !
@@ -345,10 +375,13 @@ contains
 !
    character (len=12) :: description
 !
-   integer (kind=IntKind) :: ia, id, nsize, n, dsize
-   integer (kind=IntKind) :: ns, is, js, switch
+   logical :: used_Anderson, used_Broyden, used_AndersonOld
+!
+   integer (kind=IntKind) :: ia, id, nsize, n, dsize, mixing_type
+   integer (kind=IntKind) :: ns, is, js, switch, nt
    integer (kind=IntKind) :: site_config(LocalNumSites)
 !
+   logical :: use_sro
 !  ===================================================================
 !  CPA iteration acceleration parameters...
 !  These parameters are taken from the mkkrcpa code
@@ -357,17 +390,21 @@ contains
    real (kind=RealKind), parameter ::  ctol=1.0d-08, cmix=0.15d0, cw0=5.0d-03
 !  ===================================================================
 !
-   real (kind=RealKind) :: err, max_err
+   real (kind=RealKind) :: err, max_err, err_prev, alpha
 !
    complex (kind=CmplxKind), intent(in) :: e
+   logical, intent(in), optional :: do_sro
+!
    complex (kind=CmplxKind) :: kappa
-   complex (kind=CmplxKind), pointer :: tau_a(:,:,:)
-   complex (kind=CmplxKind), pointer :: mat_a(:,:)
-   complex (kind=CmplxKind), pointer :: kau_a(:,:)
-   complex (kind=CmplxKind), pointer :: Jost(:,:), OH(:,:), Tinv(:,:), Jinv(:,:)
-   complex (kind=CmplxKind), pointer :: SinvL(:,:), SinvR(:,:)
    complex (kind=CmplxKind), pointer :: tm1(:,:), tm2(:,:), tm0(:,:)
-!  
+   complex (kind=CmplxKind), allocatable :: t_proj(:,:)
+!
+   if(present(do_sro)) then
+      use_sro = do_sro
+   else
+      use_sro = .false.
+   endif
+  
    if (nSpinCant == 1) then
       do n = 1, LocalNumSites
          id = CPAMedium(n)%local_index
@@ -410,13 +447,14 @@ contains
 !       CPAMedium(n)%Tcpa_old(:,:,:) is an alias of Tcpa_old(:)
 !       CPAMedium(n)%TcpaInv_old(:,:,:) is an alias of TcpaInv_old(:)
 !  ===================================================================
+   mixing_type = mod(InitialMixingType,4)
    if (aimag(e) >= CPA_switch_param .or. real(e) < ZERO) then
 !     ----------------------------------------------------------------
-      call setAccelerationParam(CPA_alpha)
+      call setAccelerationParam(acc_mix=CPA_alpha,acc_type=mixing_type)
 !     ----------------------------------------------------------------
    else
 !     ----------------------------------------------------------------
-      call setAccelerationParam(CPA_slow_alpha)
+      call setAccelerationParam(acc_mix=CPA_slow_alpha,acc_type=mixing_type)
 !     ----------------------------------------------------------------
    endif
 !
@@ -425,18 +463,46 @@ contains
          site_config(id) = 0 ! Set the site to be the CPA medium site
       else
 !        site_config(id) = id   ! Modified on 2/23/2020
-         site_config(id) = 1
-      endif
+         site_config(id) = 1    ! This is the species index of the atom on the site
+      endif                     ! For crystal, this value = 1.
    enddo
 !
+   nt = 0
    switch = 0
    iteration = 0 
-   LOOP_iter: do while (iteration < MaxIterations)
+   err_prev = 1.0d+10
+   if (print_instruction >= 0) then
+      write(6,'(/,a,2f13.8)')' ------ In computeCPAMedium: Start CPA iteration for energy = ',e
+      if (getAccelerationType() == AndersonMixing) then
+         write(6,'(a)')'Acceleration type: Anderson mixing'
+      else if (getAccelerationType() == SimpleMixing) then
+         write(6,'(a)')'Acceleration type: Simple mixing'
+      else if (getAccelerationType() == BroydenMixing) then
+         write(6,'(a)')'Acceleration type: Broyden mixing'
+      else if (getAccelerationType() == AndersonMixingOld) then
+         write(6,'(a)')'Acceleration type: Anderson mixing - old scheme'
+      endif
+   endif
+!
+   used_Anderson = .false.
+   used_AndersonOld = .false.
+   used_Broyden = .false.
+   if (getAccelerationType() == AndersonMixing) then
+      used_Anderson = .true.
+   else if (getAccelerationType() == BroydenMixing) then
+      used_Broyden = .true.
+   else if (getAccelerationType() == AndersonMixingOld) then
+      used_AndersonOld = .true.
+   endif
+!
+   alpha = CPA_slow_alpha
+   LOOP_iter: do while (nt <= 5*MaxIterations)
+      nt = nt + 1
       iteration = iteration + 1
 !     write(6,'(a,i5)')'At iteration: ',iteration
       max_err = ZERO
 !     ----------------------------------------------------------------
-      call setupHostMedium(e,getSingleSiteTmat,configuration=site_config)   
+      call setupHostMedium(e,getSingleSiteTmat,configuration=site_config) 
 !     ----------------------------------------------------------------
       do n = 1, LocalNumSites
          if (isCPAMedium(n)) then
@@ -469,7 +535,7 @@ contains
             call checkCPAMedium(n,err)
 !           ----------------------------------------------------------
             if (print_instruction >= 0) then
-               write(6,'(a,2i4,2x,d15.8)')'In computeCPAMedium: iter, medium, err = ', &
+               write(6,'(a,2i4,2x,d15.8)')' Iteration, medium, err = ', &
                      iteration, n, err   
             endif
 !
@@ -486,45 +552,217 @@ contains
          endif
       enddo
 !     ----------------------------------------------------------------
-      call GlobalMaxInGroup(GroupID,max_err)
+      call GlobalMaxInGroup(akGID,max_err)
 !     ----------------------------------------------------------------
+!     write(6,'(a,3i5,2x,3d15.8)')'MyPE, ig, nt, e, max_err = ',      &
+!           MyPE, CPAMedium(1)%global_index, nt, e, max_err
 !
       if (max_err < CPA_tolerance) then
          exit LOOP_iter
-      else if (iteration > MaxIterations/2) then
-         if (switch <= 1) then
-            if (getAccelerationType() == AndersonMixing .or.          &
-                getAccelerationType() == SimpleMixing) then
-!              -------------------------------------------------------
-               call setAccelerationParam(acc_mix=CPA_slow_alpha,acc_type=BroydenMixing)
-!              -------------------------------------------------------
-               if (print_instruction >= 0) then
-                  write(6,'(a)')'Switch to Broyden Mixing Scheme.'
-               endif
-            else if (getAccelerationType() == BroydenMixing .or.      &
-                     getAccelerationType() == SimpleMixing) then
-!              -------------------------------------------------------
-               call setAccelerationParam(CPA_slow_alpha,acc_type=AndersonMixing)
-!              -------------------------------------------------------
-               if (print_instruction >= 0) then
-                  write(6,'(a)')'Switch to Anderson Mixing Scheme.'
-               endif
-            endif
-            iteration = 0
-            switch = switch + 1
-         else if (switch == 2) then
+!     ================================================================
+!     Set 25 to be the maximum number of iterations for the fast mixing method.
+!     If the method does not converge, switch to a different method
+!     ================================================================
+      else if (mixing_type /= SimpleMixing .and. iteration > min(50,MaxIterations) &
+               .and. max_err > 0.6*err_prev) then
+!        -------------------------------------------------------------
+         call setAccelerationParam(acc_mix=alpha,acc_type=SimpleMixing)
+!        -------------------------------------------------------------
+         if (print_instruction >= 0) then
+            write(6,'(a,f10.5)')'Switch to Simple Mixing Scheme with mixing param = ',alpha
+         endif
+         mixing_type = SimpleMixing
+         iteration = 0
+         switch = switch + 1
+         alpha = alpha*HALF
+      else if (mixing_type == SimpleMixing .and. iteration > MaxIterations .and. switch < 4) then
+         if ((used_Broyden .and. InitialMixingType <= 3) .or.         &
+             (.not.used_Broyden .and. InitialMixingType > 3)) then
 !           ----------------------------------------------------------
-            call setAccelerationParam(acc_mix=CPA_alpha,acc_type=SimpleMixing)
+            call setAccelerationParam(acc_mix=alpha,acc_type=BroydenMixing)
 !           ----------------------------------------------------------
             if (print_instruction >= 0) then
-               write(6,'(a)')'Switch to Simple Mixing Scheme.'
+               write(6,'(a,f10.5)')'Switch to Broyden Mixing Scheme with mixing param = ',alpha
             endif
-            iteration = 0
-            switch = switch + 1
+            mixing_type = BroydenMixing
+            used_Broyden = .true.
+         else if ((used_Anderson .and. InitialMixingType <= 3) .or.   &
+                  (.not.used_Anderson .and. InitialMixingType > 3)) then
+!           ----------------------------------------------------------
+            call setAccelerationParam(acc_mix=alpha,acc_type=AndersonMixing)
+!           ----------------------------------------------------------
+            if (print_instruction >= 0) then
+               write(6,'(a,f10.5)')'Switch to Anderson Mixing Scheme with mixing param = ',alpha
+            endif
+            mixing_type = AndersonMixing
+            used_Anderson = .true.
+         else if ((used_AndersonOld .and. InitialMixingType <= 3) .or.   &
+                  (.not.used_AndersonOld .and. InitialMixingType > 3)) then
+!           ----------------------------------------------------------
+            call setAccelerationParam(acc_mix=alpha,acc_type=AndersonMixingOld)
+!           ----------------------------------------------------------
+            if (print_instruction >= 0) then
+               write(6,'(a,f10.5)')'Switch to Anderson Mixing Old Scheme with mixing param = ',alpha
+            endif
+            mixing_type = AndersonMixingOld
+            used_AndersonOld = .true.
          endif
+         iteration = 0
+         switch = switch + 1
       endif
+      err_prev = max_err
    enddo LOOP_iter
-!
+
+!  ===================================================================
+!  Doing additional iterations for SRO, if that option is chosen
+!  ===================================================================
+   if (sro_scf == 1) then
+      used_Anderson = .false.
+      used_AndersonOld = .false.
+      used_Broyden = .false. 
+      if (aimag(e) >= CPA_switch_param .or. real(e) < ZERO) then 
+!        -------------------------------------------------------------
+         call setAccelerationParam(acc_mix=SRO_alpha,acc_type=SRO_mixing_type)
+!        -------------------------------------------------------------
+      else
+!        -------------------------------------------------------------
+         call setAccelerationParam(acc_mix=SRO_slow_alpha,acc_type=AndersonMixing)
+!        -------------------------------------------------------------
+      endif 
+      if (getAccelerationType() == AndersonMixing) then
+          used_Anderson = .true.
+      else if (getAccelerationType() == BroydenMixing) then
+          used_Broyden = .true.
+      else if (getAccelerationType() == AndersonMixingOld) then
+          used_AndersonOld = .true.
+      endif
+      allocate(t_proj(nsize, nsize))
+      nt = 0
+      iteration = 0
+      alpha = SRO_slow_alpha
+ !    call writeMatrix('t-cpa-init', CPAMedium(1)%Tcpa, nsize, nsize, TEN2m8)
+      LOOP_iter2 : do while (nt <= 5*SRO_max_iter)
+         nt = nt + 1
+         iteration = iteration + 1
+!        write(6,'(a,i5)')'At SRO iteration: ',iteration
+         max_err = ZERO
+!        ==========================================================
+!        Calculate Block Tau_CPA, Block TCPA and Ta matrices
+!        ==========================================================
+         call calCrystalMatrix(e,getSingleSiteTmat,use_tmat=.true.,   &
+                  tau_needed=.true.,use_sro=use_sro)
+!        ----------------------------------------------------------
+         call retrieveTauSRO()
+!        ----------------------------------------------------------
+         call populateBigTCPA()
+         call calSpeciesTauMatrix()
+!        ----------------------------------------------------------
+         do n = 1, LocalNumSites
+           if (isCPAMedium(n)) then
+               dsize = CPAMedium(n)%dsize
+               nsize = dsize*nSpinCant
+               CPAMedium(n)%Tcpa_old = CPAMedium(n)%Tcpa
+               CPAMedium(n)%TcpaInv_old = CPAMedium(n)%TcpaInv
+!              ----------------------------------------------------------
+               call initializeAcceleration(CPAMedium(n)%Tcpa,nsize*nsize,iteration)
+!              ----------------------------------------------------------
+!              ==========================================================
+!              Calculate for projection matrix for each species 
+!              ==========================================================
+               do ia = 1, CPAMedium(n)%num_species
+!                 ----------------------------------------------------------
+                  call calculateSCFSpeciesTerm(n, ia, CPAMedium(n)%CPAMatrix(ia)%content)
+!                 ----------------------------------------------------------
+               enddo
+               t_proj = calculateNewTCPA(n)
+               CPAMedium(n)%TcpaInv = CPAMedium(n)%TcpaInv + t_proj
+               CPAMedium(n)%Tcpa = CPAMedium(n)%TcpaInv
+!              ----------------------------------------------------------
+               call MtxInv_LU(CPAMedium(n)%Tcpa,nsize)
+!              ----------------------------------------------------------
+               call checkCPAMedium(n,err)
+!              ----------------------------------------------------------
+               if (print_instruction >= 0) then
+                  write(6,'(a,2i4,2x,d15.8)')' SRO Iteration, medium, err = ', &
+                       iteration, n, err   
+               endif
+!              ----------------------------------------------------------
+               call accelerateCPA(CPAMedium(n)%Tcpa,nsize*nsize,iteration)
+!              ----------------------------------------------------------
+               CPAMedium(n)%TcpaInv = CPAMedium(n)%Tcpa
+!              ----------------------------------------------------------
+               call MtxInv_LU(CPAMedium(n)%TcpaInv,nsize)
+!              ----------------------------------------------------------
+               max_err = max(max_err,err)
+!              ----------------------------------------------------------
+               call GlobalMaxInGroup(akGID,max_err)
+!              ----------------------------------------------------------
+!              call writeMatrix('t-cpa', CPAMedium(n)%Tcpa, nsize, nsize, TEN2m8)
+!              ----------------------------------------------------------
+               if (max_err < SRO_tolerance) then
+                 exit LOOP_iter2
+!              ================================================================
+!              Set 25 to be the maximum number of iterations for the fast mixing method.
+!              If the method does not converge, switch to a different method
+!              ================================================================
+               else if (mixing_type /= SimpleMixing .and. iteration > 2*SRO_max_iter &
+                      .and. max_err > 0.6*err_prev) then
+                   alpha=alpha*HALF
+!                  -------------------------------------------------------------
+                   call setAccelerationParam(acc_mix=alpha,acc_type=AndersonMixing)
+!                  -------------------------------------------------------------
+                   if (print_instruction >= 0) then
+                     write(6,'(a,f10.5)')'Switch to Anderson Mixing Scheme with mixing param = ',alpha
+                   endif
+                   mixing_type = SimpleMixing
+                   iteration = 0
+                   switch = switch + 1
+!                  alpha = alpha*HALF
+               else if (mixing_type == SimpleMixing .and. iteration > MaxIterations .and. switch < 4) then
+                   if ((used_Broyden .and. InitialMixingType <= 3) .or.         &
+                      (.not.used_Broyden .and. InitialMixingType > 3)) then
+!                     ----------------------------------------------------------
+                      call setAccelerationParam(acc_mix=alpha,acc_type=BroydenMixing)
+!                     ----------------------------------------------------------
+                      if (print_instruction >= 0) then
+                        write(6,'(a,f10.5)')'Switch to Broyden Mixing Scheme with mixing param = ',alpha
+                      endif
+                      mixing_type = BroydenMixing
+                      used_Broyden = .true.
+                   else if ((used_Anderson .and. InitialMixingType <= 3) .or.   &
+                      (.not.used_Anderson .and. InitialMixingType > 3)) then
+!                     ----------------------------------------------------------
+                      call setAccelerationParam(acc_mix=alpha,acc_type=AndersonMixing)
+!                     ----------------------------------------------------------
+                      if (print_instruction >= 0) then
+                         write(6,'(a,f10.5)')'Switch to Anderson Mixing Scheme with mixing param = ',alpha
+                      endif
+                      mixing_type = AndersonMixing
+                      used_Anderson = .true.
+                   else if ((used_AndersonOld .and. InitialMixingType <= 3) .or.   &
+                      (.not.used_AndersonOld .and. InitialMixingType > 3)) then
+!                     ----------------------------------------------------------
+                      call setAccelerationParam(acc_mix=alpha,acc_type=AndersonMixingOld)
+!                     ----------------------------------------------------------
+                      if (print_instruction >= 0) then
+                         write(6,'(a,f10.5)')'Switch to Anderson Mixing Old Scheme with mixing param = ',alpha
+                      endif
+                      mixing_type = AndersonMixingOld
+                      used_AndersonOld = .true.
+                   endif
+                   iteration = 0
+                   switch = switch + 1
+               endif
+           endif
+           err_prev = max_err
+         enddo
+      enddo LOOP_iter2
+   endif
+
+!  ----------------------------------------------------------------
+!  call setupHostMedium(e,getSingleSiteTmat,configuration=site_config)
+!  ----------------------------------------------------------------
+
    if (print_instruction >= 1) then
       do n = 1, LocalNumSites
          dsize = CPAMedium(n)%dsize
@@ -538,73 +776,199 @@ contains
          call writeMatrix('Final t-cpa-inv',CPAMedium(n)%TcpaInv,nsize,nsize,TEN2m8)
       enddo
    endif
-!  
+!
+   if (.not. use_sro) then
+      do n = 1, LocalNumSites
+         call computeImpurityMatrix(energy=e, site=n, kau_method=0)
+      enddo
+   endif
+!
+   end subroutine computeCPAMedium
 !  ===================================================================
-!  Calculate Tau_a and Kau_a for each species in local spin framework
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine computeImpurityMatrix(energy,site,kau_method)
 !  ===================================================================
-   do n = 1, LocalNumSites
-      id = CPAMedium(n)%local_index
-      dsize = CPAMedium(n)%dsize
-      nsize = dsize*nSpinCant
-      do ia = 1, CPAMedium(n)%num_species
-         tau_a => getTau(local_id=1) ! Associated tau_a space with the space
-                                     ! allocated in EmbeddedCluster module
-!        =============================================================
-!        Substitute one CPA medium site by a real atom. The returning
-!        xmat_a is the tau_a matrix.
-!        Note: This needs to be carefully checked in the spin-canted case
-!              for which tau_a needs to be transformed from the global
-!              spin framework to the local spin framework in subroutine
-!              substituteTcByTa
-!        -------------------------------------------------------------
-         call substituteTcByTa(id,ia,spin=1,mat_a=tau_a(:,:,1))
-!        -------------------------------------------------------------
-         CPAMedium(n)%CPAMatrix(ia)%tau_a = tau_a
-         ns = 0
-         do js = 1, nSpinCant
-            Jinv => getScatteringMatrix('JostInv-Matrix',spin=js,site=id,atom=ia)
-            Tinv => getScatteringMatrix('TInv-Matrix',spin=js,site=id,atom=ia)
-            SinvL => aliasArray2_c(WORK0,dsize,dsize)
-!           ==========================================================
-!           S^{-1} = Jost^{-1}*tmat_a^{-1}/kappa
-!           ----------------------------------------------------------
-            call zgemm( 'n', 'n', dsize, dsize, dsize, CONE/kappa,    &
-                        Jinv, dsize, Tinv, dsize, CZERO, SinvL, dsize)
-!           ----------------------------------------------------------
-            do is = 1, nSpinCant
-               Jost => getScatteringMatrix('Jost-Matrix',spin=is,site=id,atom=ia)
-               OH => getScatteringMatrix('OmegaHat-Matrix',spin=is,site=id,atom=ia)
-               SinvR => aliasArray2_c(WORK1,dsize,dsize)
-!              =======================================================
-!              OmegaHat = S^{-1} * tmat_a * S^{-T*}/kappa
-!              S^{-T*} = Jost*OmegaHat
+!
+!  This routine calculates Tau_a and Kau_a for each species in local 
+!  spin framework at the specified site.
+!  ===================================================================
+   use SSSolverModule, only : getScatteringMatrix
+!
+   use EmbeddedClusterModule, only : getTau, getTmatInvDiff
+!
+   use WriteMatrixModule,  only : writeMatrix
+!
+   use MatrixModule,  only : computeUAU, computeUAUts, computeUtsAU,  &
+                             setupUnitMatrix, computeABprojC
+!
+   use MatrixInverseModule, only : MtxInv_LU, MtxInv_GE
+!
+   use IBZRotationModule, only : symmetrizeMatrix, checkMatrixSymmetry
+!
+   use PotentialTypeModule, only : isFullPotential
+!
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: site, kau_method
+   integer (kind=IntKind) :: dsize, nsize
+   integer (kind=IntKind) :: n, id, ia, ns, js, is
+!
+   complex (kind=CmplxKind), intent(in) :: energy
+   complex (kind=CmplxKind) :: e, kappa
+   complex (kind=CmplxKind), pointer :: tau_a(:,:,:)
+   complex (kind=CmplxKind), pointer :: mat_a(:,:)
+   complex (kind=CmplxKind), pointer :: kau_a(:,:)
+   complex (kind=CmplxKind), pointer :: Jost(:,:), JostL(:,:), JostR(:,:)
+   complex (kind=CmplxKind), pointer :: OH(:,:), OHL(:,:)
+   complex (kind=CmplxKind), pointer :: tau_c(:,:)
+   complex (kind=CmplxKind), pointer :: Amat(:,:), Bmat(:,:), tmat_a(:,:)
+   complex (kind=CmplxKind), pointer :: Sine(:,:), SinvL(:,:), SinvR(:,:)
+!
+   e = energy
+   kappa = sqrt(energy)
+   n = site
+!
+   id = CPAMedium(n)%local_index
+   dsize = CPAMedium(n)%dsize
+   nsize = dsize*nSpinCant
+   do ia = 1, CPAMedium(n)%num_species
+      tau_a => getTau(local_id=1) ! Associated tau_a space with the space
+                                  ! allocated in EmbeddedCluster module
+!     ================================================================
+!     Substitute one CPA medium site by a real atom. The returning
+!     xmat_a is the tau_a matrix.
+!     Note: This needs to be carefully checked in the spin-canted case
+!           for which tau_a needs to be transformed from the global
+!           spin framework to the local spin framework in subroutine
+!           substituteTcByTa
+!     ----------------------------------------------------------------
+      call substituteTcByTa(id,ia,spin=1,mat_a=tau_a(:,:,1))
+!     ----------------------------------------------------------------
+      CPAMedium(n)%CPAMatrix(ia)%tau_a = tau_a
+!
+!     ================================================================
+!     Calculate Kau_a = e * sine^{-1} * (tau_a - tmat_a) * sine^{-T*} <= kau_method = 0
+!                     = kappa*[kappa*OmegaHat*Jost^{T*} * tau_a * Jost - 1] * OmegaHat <= kau_method = 1
+!     ================================================================
+      ns = 0
+      do js = 1, nSpinCant
+         if (kau_method == 0) then
+            Sine => getScatteringMatrix('Sine-Matrix',spin=js,site=id,atom=ia)
+!           call checkMatrixSymmetry('Sine',Sine,dsize,TEN2m6)
+            SinvR => aliasArray2_c(WORK3,dsize,dsize)
+            SinvR = Sine
+            if (isFullPotential()) then
+               call symmetrizeMatrix(SinvR,dsize)
+            endif
+            call MtxInv_LU(SinvR,dsize)
+!           call checkMatrixSymmetry('Sinv',SinvR,dsize,TEN2m6)
+         else
+            OH => getScatteringMatrix('OmegaHat-Matrix',spin=js,site=id,atom=ia)
+            Jost => getScatteringMatrix('Jost-Matrix',spin=js,site=id,atom=ia)
+!           call checkMatrixSymmetry('Jost',Jost,dsize,TEN2m8)
+            if (isFullPotential()) then
+               JostR => aliasArray2_c(WORK3,dsize,dsize)
+               JostR = Jost
+               call symmetrizeMatrix(JostR,dsize)
+            else
+               JostR => Jost
+            endif
+         endif
+         do is = 1, nSpinCant
+            ns = ns + 1
+            if (print_instruction >= 1) then
+               call writeMatrix('Tau_a',CPAMedium(n)%CPAMatrix(ia)%tau_a(:,:,ns), &
+                                dsize,dsize,TEN2m6)
+            endif
+            kau_a => CPAMedium(n)%CPAMatrix(ia)%kau_a(:,:,ns)
+            mat_a => CPAMedium(n)%CPAMatrix(ia)%tau_a(:,:,ns)
+            if (kau_method == 0) then
+               Amat => aliasArray2_c(WORK0,dsize,dsize)
+               if (is == js) then
+                  tmat_a => getScatteringMatrix('T-Matrix',spin=js,site=id,atom=ia)
+                  Amat = mat_a - tmat_a
+               else
+                  Amat = mat_a
+               endif
+               if (nSpinCant == 1) then
+                  SinvL => SinvR
+               else
+                  Sine => getScatteringMatrix('Sine-Matrix',spin=is,site=id,atom=ia)
+                  SinvL => aliasArray2_c(WORK1,dsize,dsize)
+                  SinvL = Sine
+                  if (isFullPotential()) then
+                     call symmetrizeMatrix(SinvL,dsize)
+                  endif
+                  call MtxInv_LU(SinvL,dsize)
+               endif
 !              -------------------------------------------------------
-               call zgemm( 'n', 'n', dsize, dsize, dsize, CONE,       &
-                           Jost, dsize, OH, dsize, CZERO, SinvR, dsize)
+               call computeUAUts(SinvL,dsize,dsize,SinvR,dsize,e,     &
+                                 Amat,dsize,CZERO,kau_a,dsize,WORK2)
+!              -------------------------------------------------------
+            else
+               if (nSpinCant == 1) then
+                  OHL => OH
+                  JostL => JostR
+               else
+                  OHL => getScatteringMatrix('OmegaHat-Matrix',spin=is,site=id,atom=ia)
+                  Jost => getScatteringMatrix('Jost-Matrix',spin=is,site=id,atom=ia)
+                  if (isFullPotential()) then
+                     JostL => aliasArray2_c(WORK1,dsize,dsize)
+                     JostL = Jost
+                     call symmetrizeMatrix(JostL,dsize)
+                  else
+                     JostL => Jost
+                  endif
+               endif
+               Amat => aliasArray2_c(WORK0,dsize,dsize)
+!              =======================================================
+!              compute Amat = Jost^{T*} * tau_a * Jost
+!              -------------------------------------------------------
+               call computeUtsAU(JostL,dsize,dsize,JostR,dsize,CONE,  &
+                                 mat_a,dsize,CZERO,Amat,dsize,WORK2)
 !              -------------------------------------------------------
 !
-               ns = ns + 1
-               if (print_instruction >= 1) then
-                  call writeMatrix('Tau_a',CPAMedium(n)%CPAMatrix(ia)%tau_a(:,:,ns), &
-                                   dsize,dsize,TEN2m8)
-               endif
-               kau_a => CPAMedium(n)%CPAMatrix(ia)%kau_a(:,:,ns)
-               mat_a => CPAMedium(n)%CPAMatrix(ia)%tau_a(:,:,ns)
 !              =======================================================
-!              kau_a = energy * S^{-1} * tau_a * S^{-T*}
-!              -------------------------------------------------------
-               call computeUAU(SinvL,dsize,dsize,SinvR,dsize,e,       &
-                               mat_a,dsize,CZERO,kau_a,dsize,WORK2)
-!              -------------------------------------------------------
+!              compute Bmat = energy * Omega * Jost^{T*} * tau_a * Jost - kappa
+!              =======================================================
+               Bmat => aliasArray2_c(WORK1,dsize,dsize)
                if (is == js) then
-                  kau_a = kau_a - kappa*OH
+!                 ----------------------------------------------------
+                  call setupUnitMatrix(dsize,Bmat)
+!                 ----------------------------------------------------
+                  call zgemm('n','n',dsize,dsize,dsize,e,OHL,dsize,   &
+                             Amat,dsize,-kappa,Bmat,dsize)
+!                 ----------------------------------------------------
+               else
+!                 ----------------------------------------------------
+                  call zgemm('n','n',dsize,dsize,dsize,e,OHL,dsize,   &
+                             Amat,dsize,CZERO,Bmat,dsize)
+!                 ----------------------------------------------------
                endif
-            enddo
+!
+!              =======================================================
+!              compute kau_a = [energy * OH * Jost^{T*} * tau_a * Jost - kappa] * OH
+!              -------------------------------------------------------
+               call zgemm('n','n',dsize,dsize,dsize,CONE,Bmat,dsize,  &
+                          OH,dsize,CZERO,kau_a,dsize)
+!              -------------------------------------------------------
+            endif
+            if (isFullPotential()) then
+               call symmetrizeMatrix(kau_a,dsize)  ! symmetrize kau_a according to the crystal symmetry.
+!              call checkMatrixSymmetry('Kau',kau_a,dsize,TEN2m6)
+            endif
+            if (print_instruction >= 1) then
+               call writeMatrix('Kau_a',CPAMedium(n)%CPAMatrix(ia)%kau_a(:,:,ns), &
+                                dsize,dsize,TEN2m6)
+            endif
          enddo
       enddo
    enddo
 !
-   end subroutine computeCPAMedium
+   end subroutine computeImpurityMatrix
 !  ===================================================================
 !
 !  *******************************************************************
@@ -666,7 +1030,7 @@ contains
    integer (kind=IntKind) :: num, n
 !
    if (site < 1 .or. site > LocalNumSites) then
-      call ErrorHandler('getNumSpeciesInCPAMedium',                   &
+      call ErrorHandler('getNumSpeciesInCPAMedium',           &
                         'The local atom index is out of range',site)
    endif
 !
@@ -1108,4 +1472,21 @@ contains
 !
    end subroutine checkCPAMedium
 !  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine populateBigTCPA()
+!  ===================================================================
+
+   use SROModule, only : generateBigTCPAMatrix
+!
+   integer(kind=IntKind) :: n, dsize
+!
+   do n = 1, LocalNumSites
+!     ---------------------------------------   
+      call generateBigTCPAMatrix(n, CPAMedium(n)%TcpaInv)
+!     ---------------------------------------
+   enddo
+
+   end subroutine populateBigTCPA
+!  ==================================================================
 end module CPAMediumModule

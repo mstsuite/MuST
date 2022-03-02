@@ -1,0 +1,169 @@
+================================================================================
+                           Input parameter data file
+                            LSMS code (version 2.0)
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                           System-related Parameters
+===========================+====================================================
+Text Identification        ::  NbH
+Alloy System Description   ::  NbH, NaCl structure
+No. Atoms in System (> 0)  ::  2
+Radical Plane Ratio        ::  1  1.000
+Radical Plane Ratio        ::  2  2.41421356
+   Note: "Ratio" here is the radical plane distance from atom ralative to a 
+         universal value applied to the entire system. This universal value does 
+         not have to be specified, so long as all the atoms in the system have 
+         the same denominator when choosing this value. If all atoms have the same
+         radical plane ratio (RPR), a radical plane is set at half way between two
+         atoms. If each atom has its own RPR, which is in effect treated as a 
+         "weight" for the atom when setting up a radical plane. Specifically, a 
+         radical plane between atom i and atom j, separated by distance D, will be 
+         set at distance from atom i at D*RPR(i)/(RPR(i)+RPR(j)), and at distance 
+         from atom j at D*RPR(j)/(RPR(i)+RPR(j))
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                       Position and Potential Data Files
+===========================+====================================================
+Atomic Position File Name  :: position.dat
+# Default Potential Input File Name  ::  Nb_mt_v, H_mt_v, Va_mt_v
+Default Potential Input File Name  ::  NbHVa_mt_v
+Default Potential Input File Form  ::  1
+   = 0: ASCII Format       ----------
+   = 1: XDR Format         ----------
+   = 2: HDF Format         ----------
+   = 3: Machine Dependent Binary ----
+Default Potential Output File Name ::  NbHVa_mt_w
+Default Potential Output File Form ::  1
+   = 0: ASCII Format       ----------
+   = 1: XDR Format         ----------
+   = 2: HDF Format         ----------
+   = 3: Machine Dependent Binary ----
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                            SCF-related Parameters
+===========================+====================================================
+Stop-at Routine Name       :: main
+No. Iterations (> 0)       ::  100
+Method of SCF Calculation  ::  3
+   -2. Single Site         -----------
+   -1. ScreenKKR-LSMS      -----------(To be implemented)
+    0. Screen-KKR          -----------(To be implemented)
+    1. LSMS                -----------
+    2. KKR                 -----------
+    3. KKR-CPA             -----------
+Output to Screen (y/n)     ::  n
+Temperature Parameter (K)  ::  0.000
+Val. Electron Rel (>= 0)   ::  0
+     0. Non-relativitic    ---------
+     1. Scalar-relativitic ---------
+     2. Full-relativitic   ---------
+Core Electron Rel (>= 0)   ::  1
+     0. Non-relativitic    ---------
+     1. Full-relativitic   ---------
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                       LDA Potential-related Parameters
+===========================+====================================================
+Potential Type (>= 0)      ::  0
+     0. Muffin-tin         ----------
+     1. ASA                ----------
+     2. Muffin-tin ASA     ----------
+     3. Full               ----------
+     4. Muffin-Tin Test    ----------
+     5. Empty Lattice      ----------
+     6. Mathieu Potential  ----------
+Exch-Corr. LDA Type (>= 0) ::  4
+   Note: The input can be either one of the following numbers or, e.g.,
+         LDA_X+LDA_C_HL for Hedin-Lundqvist LDA functional, or GGA_X_PBE+GGA_C_PBE
+         for PBE GGA function, etc.. The naming convention here follows the definition
+         given in LibXC.
+     0. Barth-Hedin        ---------
+     1. Vosk-Wilk-Nusair   ---------
+     2. Perdew-Zunger      ---------
+     3. Perdew-Wang GGA    ---------
+     4. PBE                ---------
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                        Energy (Ryd.) Contour Parameters
+===========================+====================================================
+Read E-mesh from emeshs.inp :: 0
+     0. No                 ---------
+     1. Yes. In this case, the following data have no effect
+No. Energy Grids           ::  40 
+Real Axis Bottom, erbot    ::  -0.80
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                         Magnetism-related Parameters    
+===========================+====================================================
+# Moment Direction File Name ::  Evec_input.dat
+Spin Index Param (>= 1)    ::  1
+     1. No Spin            ---------
+     2. Spin-polarized     ---------
+     3. Spin-canted        ---------
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                  Scattering Theory-related Parameters
+===========================+====================================================
+Default Lmax-T matrix      ::  4
+Default Muffin-tin Radius  ::  0
+   = 0: Using the inscribed sphere radius
+   = 1: Using the internal muffin-tin radius defined in ChemElementModule
+   = A specific real value (> 0.0, in atomic units)
+Default Radial Grid Exponential Step :: 0.005
+   = 0.0: Not specified;
+   > 0.0: 0.005 - 0.02 is recommended. Note: r(j) = exp(j*hin), here hin is the 
+          exponential step
+Default No. Rad Points ndivin  :: 2001
+   = 0: Not specified ---------------
+   > 0: Speciflied. Note:  0  < r(j)=exp(j*hin) <= rmt, j=1,2,...,ndivin
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+                      R-space or K-space Related Parameters
+===========================+====================================================
+Scheme to Generate K (>=0) ::  0
+     0. Special K-points ---------
+     1. Tetrahedron      ---------
+     2. Direction        ---------
+Kx, Ky, Kz Division (> 0)  ::  16  16  16
+Symmetrize BZ Integration  ::   1
+     0. No                 ---------
+     1. Yes                ---------                             
+    -2. Yes(Equiv. points) ---------
+===========================+====================================================
+                  * * *              * * *              * * *
+================================================================================
+                     Mixing and Tolerance Parameters
+===========================+====================================================
+Mixing algorithm           ::  2
+     0. Simple Mixing      ---------
+     1. D.G.A. Mixing      ---------
+     2. Broyden Mixing     ---------
+Mixing quantity type       ::  1
+     0. Charge mixing      ---------
+     1. Potential mixing   ---------
+Default Mixing Parameter   ::  0.1000
+Energy (Ryd) Tol (> 0)     ::  0.000005
+Potential Tol (> 0)        ::  0.0000001
+================================================================================
+                  * * *              * * *              * * *
+================================================================================
+            Mixing and Tolerance Parameters for Effective Medium
+===========================+====================================================
+Maximum Effective Medium Iterations   :: 80
+Effective Medium Mixing Scheme        :: 2
+     = 0: Simple mixing; = 1: Anderson mixing; = 2: Broyden mixing; = 3: Anderson Mixing by Messina group
+Effective Medium Mixing Parameters    :: 0.1000  0.1000
+     Note: The first mixing value is for the energy points in standard mixing mode; the second mixing value
+           is for the energy points in conservative mixing mode
+Effective Medium Mixing eSwitch Value :: 0.003
+     Note: If Re[E] > 0 and Im[E] < eSwitch, the effective medium iteration is switched to the conservative mode
+Effective Medium T-matrix Tol (> 0)   ::  0.0000001
+===========================+====================================================

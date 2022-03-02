@@ -52,6 +52,7 @@ public :: initSystem,             &
           getLmaxPot,             &
           getLmaxMax,             &
           getUniformGridParam,    &
+          getSystemCenter,        &
           printSystem,            &
           updateSystem,           &
           getMomentDirectionMixingParam, &
@@ -189,9 +190,9 @@ contains
    subroutine initSystem(tbl_id)
 !  ===================================================================
    use MPPModule, only : MyPE
-   use ChemElementModule, only : getZtot, getZval, getName
+   use ChemElementModule, only : getZtot, getZval, getName, getAtomicRadius
 !
-   use MathParamModule, only : TEN2m8, THIRD, ONE
+   use MathParamModule, only : TEN2m6, TEN2m8, THIRD, ONE
 !
    use DataServiceCenterModule, only : isDataStorageExisting,         &
                                        createDataStorage,             &
@@ -206,14 +207,18 @@ contains
 !
    use PublicParamDefinitionsModule, only : ASA, MuffinTin, MuffinTinASA
 !
+   use TimerModule, only : getTime, storeTime
+!
    implicit none
 !
    character (len=50) :: info_table
    character (len=80) :: svalue
    character (len=80), allocatable :: value(:)
 !
+   logical :: theSame
+!
    integer (kind=IntKind), intent(in) :: tbl_id
-   integer (kind=IntKind) :: i, info_id, ig, j, reset_lmax, pot_type
+   integer (kind=IntKind) :: i, info_id, ig, j, k, kg, kn, reset_lmax, pot_type
    integer (kind=IntKind) :: lig
    integer (kind=IntKind), allocatable :: lmax_kkr(:), ind_lmax_kkr(:)
    integer (kind=IntKind), allocatable :: lmax_phi(:), ind_lmax_phi(:)
@@ -229,7 +234,7 @@ contains
    real (kind=RealKind), allocatable :: radplane(:)
 !
    real (kind=RealKind) :: volume
-   real (kind=RealKind) :: evt(3), em, alpev, cn
+   real (kind=RealKind) :: evt(3), em, alpev, an, t0, t_inp
 !
    interface
       function nocaseCompare(s1,s2) result(t)
@@ -257,7 +262,8 @@ contains
       end subroutine copyCharArray2String
    end interface
 !
-   alat = 0.0d0
+   alat = ZERO
+   t_inp = ZERO
 !
 !  -------------------------------------------------------------------
    rstatus = getKeyValue(tbl_id,'Text Identification',SystemID)
@@ -306,9 +312,11 @@ contains
    fposi_out = trim(fposi_in)//'_out'
 !
    if ( len_trim(fposi_in) > 0 .and. .not.nocaseCompare(fposi_in,'None') ) then
+      t0 = getTime()
 !     ----------------------------------------------------------------
       call readPositionData(trim(file_path)//trim(fposi_in),NumAtomsIn=NumAtoms)
 !     ----------------------------------------------------------------
+      t_inp = t_inp + (getTime() - t0)
    endif
 !
    if ( nspin > 2 ) then
@@ -322,10 +330,12 @@ contains
          fevec_in ='None'
       endif
       if ( len_trim(fevec_in) > 0 .and. .not.nocaseCompare(fevec_in,'None') ) then
+         t0 = getTime()
 !        -------------------------------------------------------------
          call readMomentDirectionData(trim(file_path)//trim(fevec_in), &
                                       NumAtoms)
 !        -------------------------------------------------------------
+         t_inp = t_inp + (getTime() - t0)
          fevec_out = trim(fevec_in)//'_out'
       else
          fevec_out = 'Evec_out.dat'
@@ -426,7 +436,19 @@ contains
          reset_lmax = 1
       endif
       LmaxPot(i) = lmax_pot(ind_lmax_pot(i))
-      RadicalPlaneRatio(i) = radplane(ind_radplane(i))
+      if (radplane(ind_radplane(i)) < ZERO) then
+         call ErrorHandler('initSystem','Radical Plane Ration < 0',radplane(ind_radplane(i)))
+      else if (radplane(ind_radplane(i)) < TEN2m6) then
+!        =============================================================
+!        For the sublattice with CPA medium, its atomic radius is set 
+!        to 0. In this case, the radical plane ratio value will be
+!        recalculated later by taking the averaged atomic radius value
+!        from the atomic species.
+!        =============================================================
+         RadicalPlaneRatio(i) = getAtomicRadius(AtomicNum(i))
+      else
+         RadicalPlaneRatio(i) = radplane(ind_radplane(i))
+      endif
    enddo
    if (MyPE == 0 .and. reset_lmax > 0) then
       call WarningHandler('initSystem','LmaxPhi and LmaxRho are set to new values')
@@ -512,12 +534,79 @@ contains
             AlloyElementAN(lig) = p_AlloyElement(j,i)
             AlloyElementContent(lig) = p_AlloyContent(j,i)
          enddo
+!        =============================================================
+!        For the sublattice with CPA medium, if its radical plane ratio
+!        was set to ZERO, it needs to be set the maximum atomic radius value
+!        of the sublattice.
+!        =============================================================
+         if (RadicalPlaneRatio(ig) < TEN2m6) then
+            RadicalPlaneRatio(ig) = ZERO
+            do j = 1, NumAlloyElements(ig)
+               RadicalPlaneRatio(ig) = RadicalPlaneRatio(ig) +        &
+                    p_AlloyContent(j,i)*getAtomicRadius(p_AlloyElement(j,i))
+            enddo
+         endif
+!        =============================================================
       enddo
    else
       do ig = 1, NumAtoms
          AlloyElementName(ig) = AtomName(ig)
          AlloyElementAN(ig) = AtomicNum(ig)
          AlloyElementContent(ig) = ONE
+      enddo
+   endif
+!
+!  ===================================================================
+!  Give each CPA site, a unique "atomic number" so to distinguish CPA
+!  mediums on different sub-lattices
+!  ===================================================================
+   if (isAlloy) then
+      do i = 1, NumAlloySubLatts
+         ig = p_AlloySublattIndex(i)
+         if (AtomicNum(ig) == -1) then
+            if (NumAlloyElements(ig) == 1) then
+               AtomicNum(ig) = p_AlloyElement(1,i)
+            else
+               an = ZERO
+               do j = 1, NumAlloyElements(ig)
+                  an = an + p_AlloyElement(j,i)*p_AlloyContent(j,i)
+               enddo
+               AtomicNum(ig) = 1000 + int(an,kind=IntKind) ! set the CPA site to a new atomic number
+!              =======================================================
+!              Check the uniqness of the new atomic number assignment.
+!              =======================================================
+               do k = 1, i-1
+                  kg = p_AlloySublattIndex(k)
+                  if (AtomicNum(ig) == AtomicNum(kg)) then
+                     if (NumAlloyElements(ig) == NumAlloyElements(kg)) then
+                        LOOP_kn: do kn = 1, NumAlloyElements(kg)
+                           theSame = .false.
+                           LOOP_j: do j = 1, NumAlloyElements(ig)
+                              if (p_AlloyContent(j,i) == p_AlloyContent(kn,i) .and. &
+                                  p_AlloyElement(j,i) == p_AlloyElement(kn,i)) then
+                                  theSame = .true.
+                                  exit LOOP_j
+                              endif
+                           enddo LOOP_j
+                           if (.not.theSame) then
+                              exit LOOP_kn
+                           endif
+                        enddo LOOP_kn
+                     else
+                        theSame = .false.
+                     endif
+                     if (.not.theSame) then
+                        AtomicNum(ig) = AtomicNum(ig) + 1000
+                     endif
+                  endif
+               enddo
+            endif
+         else if (NumAlloyElements(ig) > 1) then
+!           ----------------------------------------------------------
+            call ErrorHandler('initSystem','Z = -1 is expected for CPA', &
+                              AtomicNum(ig))
+!           ----------------------------------------------------------
+         endif
       enddo
    endif
 !
@@ -569,9 +658,18 @@ contains
             Evec(1:3,i) = evt(1:3)
          enddo
       else
+         do i=1,NumAtoms
+            Evec(1:3,i) = evt(1:3)
+         enddo
+         if (MyPE == 0) then
+!           ----------------------------------------------------------
+            call WarningHandler('initSystem',                              &
+                 'Moment directions are not specified from input, so they are set to default.')
+!           ----------------------------------------------------------
+         endif
 !        -------------------------------------------------------------
-         call ErrorHandler('initSystem',                              &
-                           'Not able to identify Moment Direction Data')
+!        call ErrorHandler('initSystem',                              &
+!                          'Not able to identify Moment Direction Data')
 !        -------------------------------------------------------------
       endif
    endif
@@ -582,14 +680,14 @@ contains
    if (nspin > 2) then
       do i=1,NumAtoms
          em = sqrt(Evec(1,i)*Evec(1,i)+Evec(2,i)*Evec(2,i)+Evec(3,i)*Evec(3,i))
-         if (abs(em-ONE) > TEN2m8) then
-            Evec(1,i)=Evec(1,i)/em
-            Evec(2,i)=Evec(2,i)/em
-            Evec(3,i)=Evec(3,i)/em
-         else if (em < TEN2m8) then
+         if (em < TEN2m8) then
             Evec(1,i)=ZERO
             Evec(2,i)=ZERO
             Evec(3,i)=ONE
+         else if (abs(em-ONE) > TEN2m8) then
+            Evec(1,i)=Evec(1,i)/em
+            Evec(2,i)=Evec(2,i)/em
+            Evec(3,i)=Evec(3,i)/em
          endif
       enddo
    endif
@@ -628,9 +726,18 @@ contains
             ConstrainField(1:3,i) = evt(1:3)
          enddo
       else
+         do i=1,NumAtoms
+            ConstrainField(1:3,i) = evt(1:3)
+         enddo
+         if (MyPE == 0) then
+!           ----------------------------------------------------------
+            call WarningHandler('initSystem',                              &
+                 'Constraint fields are not specified from input, so they are set to dedault')
+!           ----------------------------------------------------------
+         endif
 !        -------------------------------------------------------------
-         call ErrorHandler('initSystem',                              &
-                           'Not able to identify Constrain Field Data')
+!        call ErrorHandler('initSystem',                              &
+!                          'Not able to identify Constrain Field Data')
 !        -------------------------------------------------------------
       endif
    endif
@@ -716,6 +823,10 @@ contains
    LmaxRhoMax = maxval(LmaxRho(1:NumAtoms))
    LmaxPhiMax = maxval(LmaxPhi(1:NumAtoms))
    LmaxMax = max(LmaxPotMax, LmaxKKRMax, LmaxRhoMax, LmaxPhiMax)
+!
+!  -------------------------------------------------------------------
+   call storeTime(t_inp)
+!  -------------------------------------------------------------------
 !
    end subroutine initSystem
 !  ===================================================================
@@ -2108,5 +2219,27 @@ contains
    endif
 !
    end subroutine resetSystemMovie
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ===================================================================
+   function getSystemCenter() result(vc)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind) :: i, ic
+!
+   real (kind=RealKind) :: vc(3)
+!
+   vc = ZERO
+   do i = 1,NumAtoms
+      do ic = 1, 3
+         vc(ic) = vc(ic) + AtomPosition(ic,i)
+      enddo
+   enddo
+   vc = vc/real(NumAtoms,kind=RealKind)
+!
+   end function getSystemCenter
 !  ===================================================================
 end module SystemModule

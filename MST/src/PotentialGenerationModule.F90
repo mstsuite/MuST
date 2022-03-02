@@ -4,7 +4,7 @@ Module PotentialGenerationModule
    use MathParamModule, only : CZERO, ZERO, ONE, TWO, THREE, FOUR,    &
                                FIVE, SIX, THIRD, HALF, SQRTM1, PI,    &
                                PI2, PI4, SQRT_PI, TEN2m6, TEN2m7,     &
-                               TEN2m8, TEN2m9, TEN2m10, TEN2m12, TEN2m13, Y0
+                               TEN2m5, TEN2m8, TEN2m9, TEN2m10, TEN2m12, TEN2m13, Y0
    use IntegerFactorsModule, only : lofk, mofk, lofj, mofj, kofj, m1m
    use PublicTypeDefinitionsModule, only : GridStruct, UniformGridStruct
    use TimerModule, only : getTime
@@ -46,7 +46,9 @@ private
 !11920integer (kind=IntKind) :: ifit_XC
       integer (kind=IntKind) :: NumFlagJl
       real (kind=RealKind) :: Madelung_Shift
-      real (kind=RealKind) :: VcoulombR0(3)
+      real (kind=RealKind), allocatable :: VIntraR0(:)
+      real (kind=RealKind) :: VInterR0
+      real (kind=RealKind) :: VPseudoR0
 !
       type (GridStruct), pointer :: Grid
 !
@@ -93,8 +95,11 @@ private
    integer (kind=IntKind) :: jmax_max
    integer (kind=IntKind) :: lmax_rho_max
    integer (kind=IntKind) :: LocalNumAtoms
+!
    integer (kind=IntKind) :: GlobalNumAtoms
    integer (kind=IntKind) :: NumPEsInGroup, MyPEinGroup, GroupID
+   integer (kind=IntKind) :: NumPEsInEKGroup, MyPEinEKGroup, ekGID
+!
    integer (kind=IntKind) :: n_spin_pola
    integer (kind=IntKind) :: PotentialType
    integer (kind=IntKind) :: node_print_level
@@ -138,7 +143,7 @@ private
       integer (kind=IntKind) :: n_theta
       integer (kind=IntKind) :: n_phi
       integer (kind=IntKind) :: ngl
-      real (kind=RealKind), pointer:: radial_data(:,:,:,:,:)
+      real (kind=RealKind), pointer:: radial_data(:)
       real (kind=RealKind), pointer :: theta(:), phi(:)
       real (kind=RealKind), pointer :: wght_the(:), wght_phi(:)
       complex (kind=CmplxKind), pointer :: ylm_ngl(:,:)
@@ -158,7 +163,7 @@ private
    type (ChebyshevStruct), allocatable, target :: chebv_struct(:)
 !
    interface
-      subroutine constructDataOnGrid(grid_name, value_name, value_type, getData, den, lmax, spin)
+      subroutine constructDataOnGrid(grid_name, value_name, value_type, getData, den, lmax, spin, tol_in)
          use KindParamModule, only : IntKind, RealKind
          use PublicTypeDefinitionsModule, only : UniformGridStruct
          implicit none
@@ -166,15 +171,16 @@ private
          character (len=*), intent(in) :: value_name
          character (len=*), intent(in) :: value_type
          real (kind=RealKind), intent(out) :: den(:)
+         real (kind=RealKind), intent(in), optional :: tol_in
          integer (kind=IntKind), intent(in), optional :: lmax, spin
 !
          interface
-            function getData( dname, id, ia, r, jmax_in, n, grad ) result(v)
+            function getData( dname, id, ia, r, tol, jmax_in, n, grad ) result(v)
                use KindParamModule, only : IntKind, RealKind
                implicit none
                character (len=*), intent(in) :: dname
                integer (kind=IntKind), intent(in) :: id, ia
-               real (kind=RealKind), intent(in) :: r(3)
+               real (kind=RealKind), intent(in) :: r(3), tol
                real (kind=RealKind), intent(out), optional :: grad(3)
                integer (kind=IntKind), intent(in), optional :: jmax_in, n
                real (kind=RealKind) :: v
@@ -235,18 +241,27 @@ contains
 !
    use SystemModule, only : getLmaxRho, getLmaxMax
    use SystemModule, only : getUniformGridParam, getBravaisLattice
+   use SystemModule, only : getSystemCenter, getAtomPosition
 !
    use Atom2ProcModule, only : getGlobalIndex
 !
    use AtomModule, only : getLocalNumSpecies
    use AtomModule, only : getLocalAtomPosition
 !
-   use ScfDataModule, only : isChargeSymm
+   use ScfDataModule, only : isChargeSymm, isChargeCorr
+!
+   use InputModule, only : getKeyValue
 !
    use Uniform3DGridModule, only : initUniform3DGrid
    use Uniform3DGridModule, only : isUniform3DGridInitialized, createUniform3DGrid, printUniform3DGrid
    use Uniform3DGridModule, only : createProcessorMesh, getUniform3DGrid
    use Uniform3DGridModule, only : distributeUniformGrid, insertAtomsInGrid
+!
+   use ChargeDistributionModule, only : getGlobalTableLine
+!
+   use ChargeDensityModule, only : getSphChargeDensity, getSphMomentDensity
+!
+   use ChargeScreeningModule, only : initChargeScreeningModule
 !
    implicit none
 !
@@ -263,15 +278,17 @@ contains
    integer (kind=IntKind), allocatable :: DataSize(:), DataSizeL(:)
    integer (kind=IntKind), allocatable :: SpeciesDataSize(:), SpeciesDataSizeL(:)
 !
+   integer (kind=IntKind), pointer :: global_table_line(:)
+!
    type (GridStruct), pointer :: Grid
 !
-   integer (kind=IntKind) :: jl, kl, l, m, ig, id, nr, ir
+   integer (kind=IntKind) :: jl, kl, l, m, ig, id, nr, ir, ugo, gsize
    integer (kind=IntKind) :: kmax_max, lmax_pot, jmax_pot
    integer (kind=IntKind) :: jmt, jend, num_species
    integer (kind=IntKind) :: grid_start(3), grid_end(3), gir(3,3), ng_uniform(3)
 !
    real (kind=RealKind) :: alpha, r, alpha_min, alpha_max
-   real (kind=RealKind) :: bravais(3,3)
+   real (kind=RealKind) :: bravais(3,3), vc(3)
    real (kind=RealKind), pointer :: madmat(:), r_mesh(:)
    real (kind=RealKind), allocatable :: radius(:)
 !
@@ -298,6 +315,10 @@ contains
    GroupID = getGroupID('Unit Cell')
    NumPEsInGroup = getNumPEsInGroup(GroupID)
    MyPEinGroup = getMyPEinGroup(GroupID)
+!
+   ekGID = getGroupID('E-K Plane')
+   NumPEsInEKGroup = getNumPEsInGroup(ekGID)
+   MyPEinEKGroup = getMyPEinGroup(ekGID)
 !
    allocate(Print_Level(nlocal))
    Print_Level(1:nlocal) = iprint(1:nlocal)
@@ -493,6 +514,7 @@ contains
    do id = 1,LocalNumAtoms
       num_species = getLocalNumSpecies(id)
       Potential(id)%NumSpecies = num_species
+      allocate(Potential(id)%VIntraR0(num_species))
       p_Pot => Potential(id)
       lmax_pot = lmax_p(id)
       Grid => getGrid(id)
@@ -572,9 +594,11 @@ contains
       p_Pot%n_Rpts = jend
    enddo
 !
+   global_table_line => getGlobalTableLine(nsize=gsize)
+!
    allocate( alpha_mad(LocalNumAtoms), GlobalIndex(LocalNumAtoms) )
    allocate( LocalAtomPosi(3,LocalNumAtoms) )
-   allocate( MadelungShiftTable(GlobalNumAtoms) )
+   allocate( MadelungShiftTable(gsize) )
    allocate( radius(LocalNumAtoms) )
 !
    alpha_min =  1.0d+20
@@ -646,8 +670,17 @@ contains
       endif
       ng_uniform(1:3) = getUniformGridParam()
       bravais = getBravaisLattice()
+      if (getKeyValue(1,'Uniform Grid Origin',ugo) /= 0) then
+         ugo = 0
+      endif
+      if (ugo == 1) then
+         vc = getSystemCenter() ! set the uniform grid origin to the cell center.
+      else
+         vc = ZERO ! set the uniform grid origin to the cell corner.
+      endif
 !     ----------------------------------------------------------------
-      call createUniform3DGrid('FFT', ng_uniform(1), ng_uniform(2), ng_uniform(3), bravais)
+      call createUniform3DGrid('FFT', ng_uniform(1), ng_uniform(2), ng_uniform(3), &
+                               bravais, cell_origin=vc)
 !     ----------------------------------------------------------------
       call initParallelFFT()
 !     ----------------------------------------------------------------
@@ -660,8 +693,14 @@ contains
 !     ----------------------------------------------------------------
       call distributeUniformGrid('FFT',grid_start,grid_end)
 !     ----------------------------------------------------------------
+!
+!     ================================================================
+!     I set tol_in = 10^{-5} after testing several cases, which include
+!     atom displacement. The test can be performed using testFFTGrid tool
+!     under driver/ directory.
+!     ----------------------------------------------------------------
       call insertAtomsInGrid('FFT', LocalNumAtoms, LocalAtomPosi,     &
-                             getPointLocationFlag, radius)
+                             getPointLocationFlag, radius, tol_in=TEN2m8)
 !     ----------------------------------------------------------------
       if (node_print_level >= 0) then
          call printUniform3DGrid('FFT')
@@ -681,7 +720,16 @@ contains
    Initialized = .true.
    EmptyTable = .true.
    isFirstExchg = .true.
-!
+
+!  Initialize the Charge Screening Module
+   if (isChargeCorr()) then
+!    --------------------------------------------------
+     call initChargeScreeningModule(nlocal, num_atoms)
+!    --------------------------------------------------
+   endif
+   
+   nullify(global_table_line)
+
    end subroutine initPotentialGeneration
 !  ===================================================================
 !
@@ -697,6 +745,9 @@ contains
 !
    use ParallelFFTModule, only : endParallelFFT
 !
+   use ChargeScreeningModule, only : endChargeScreeningModule
+   use ScfDataModule, only : isChargeCorr  
+!
    implicit none
 !
    integer (kind=IntKind) :: n
@@ -709,6 +760,7 @@ contains
       deallocate( Potential(n)%potL_Coulomb_flag )
       deallocate( Potential(n)%potL_Exch_flag )
       deallocate( Potential(n)%potL_XCHat_flag )
+      deallocate( Potential(n)%VIntraR0 )
       nullify( Potential(n)%potr_sph)
       nullify( Potential(n)%Grid )
       nullify( Potential(n)%potL )
@@ -765,7 +817,12 @@ contains
    Initialized = .false.
    EmptyTable = .true.
    isChargeSymmOn = .false.
-!
+   if (isChargeCorr()) then
+!    -----------------------------------------
+     call endChargeScreeningModule()
+!    -----------------------------------------
+   endif
+
    end subroutine endPotentialGeneration
 !  ===================================================================
 !
@@ -855,15 +912,17 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getVcoulomb_R0(id) result(vc_0)
+   function getVcoulomb_R0(id,ia) result(vc_0)
 !  ===================================================================
    implicit none
 !
-   integer (kind=IntKind), intent(in) :: id
+   integer (kind=IntKind), intent(in) :: id, ia
 !
    real (kind=RealKind) :: vc_0(3)
 !
-   vc_0 = Potential(id)%VcoulombR0
+   vc_0(1) = Potential(id)%VIntraR0(ia)
+   vc_0(2) = Potential(id)%VInterR0
+   vc_0(3) = Potential(id)%VPseudoR0
 !
    end function getVcoulomb_R0
 !  ===================================================================
@@ -981,7 +1040,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getPotentialAtPosi(potentialType,site,atom,is,posi) result(pot)
+   function getPotentialAtPosi(potentialType,site,atom,tol,is,posi) result(pot)
 !  ===================================================================
    implicit none
 !
@@ -990,6 +1049,7 @@ contains
    integer (kind=IntKind), intent(in) :: site, atom, is
 !
    real (kind=RealKind), intent(in) :: posi(3)
+   real (kind=RealKind), intent(in) :: tol
    real (kind=RealKind) :: pot
 !
    complex (kind=CmplxKind), pointer :: pot_l(:,:)
@@ -1014,7 +1074,7 @@ contains
    endif
 !
    if ( PotentialType=="Total" .or. PotentialType=="Potential" ) then
-      if ( sqrt(posi(1)**2+posi(2)**2+posi(3)**2) < TEN2m8 ) then
+      if ( sqrt(posi(1)**2+posi(2)**2+posi(3)**2) < tol ) then
          pot = -1.0d12
          return
       endif
@@ -1024,7 +1084,7 @@ contains
    else if ( PotentialType=="Tilda" ) then
       pot_l => Potential(site)%potL_Tilda(:,:,atom)
    else if ( PotentialType=="Coulomb" ) then
-      if ( sqrt(posi(1)**2+posi(2)**2+posi(3)**2) < TEN2m8 ) then
+      if ( sqrt(posi(1)**2+posi(2)**2+posi(3)**2) < tol ) then
          pot = -1.0d12
          return
       endif
@@ -1150,7 +1210,7 @@ contains
    subroutine computeNewPotential(isMT)
 !  ===================================================================
    use MPPModule, only : MyPE
-   use GroupCommModule, only : GlobalSumInGroup
+   use GroupCommModule, only : GlobalSumInGroup, getGroupID
    use Atom2ProcModule, only : getMaxLocalNumAtoms
    use Atom2ProcModule, only : getLocalIndex, getAtom2ProcInGroup
    use AtomModule, only : getLocalSpeciesContent
@@ -1163,8 +1223,11 @@ contains
                                    isMuffintinPotential, isASAPotential
 !
    use ChargeDistributionModule, only : getInterstitialElectronDensity
+   use ChargeDistributionModule, only : getGlobalTableLine
 !
    use StepFunctionModule, only : getVolumeIntegration
+!
+   use SystemModule, only : getNumAlloyElements
 !
    use SystemVolumeModule, only : getSystemVolume, getTotalInterstitialVolume
 !
@@ -1172,15 +1235,20 @@ contains
 !
    use PolyhedraModule, only : getVolume, getInscrSphVolume
 !
+   use ChargeScreeningModule, only : getSpeciesPotentialCorrection
+!
+   use ScfDataModule, only : isChargeCorr
+!
    implicit   none
 !
    logical, optional :: isMT
    logical :: isMTon = .false.
 !
-   integer (kind=IntKind) :: id, ia, ig, ip, is, jl, jmt, ir, nRpts, jend, l
-   integer (kind=IntKind) :: jmax, lmax, kmax
+   integer (kind=IntKind) :: id, ia, ig, ip, is, jl, jmt, ir, nRpts, jend, l, lig
+   integer (kind=IntKind) :: jmax, lmax, kmax, gsize, nsize, ekGID
    integer (kind=IntKind) :: MaxLocalAtoms
    integer (kind=IntKind), pointer :: flag_jl(:), p_flags(:)
+   integer (kind=IntKind), pointer :: global_table_line(:)
 !
    real (kind=RealKind) :: pot_r, pot_i, vol_ints, vtmp, vs, vs_mt, rfac
 #ifdef POT_DEBUG
@@ -1204,6 +1272,9 @@ contains
    else
       isMTon = .false.
    endif
+!
+   global_table_line => getGlobalTableLine(nsize=gsize)
+!
    if ( .not.isFullPot .or. isMTon ) then
 !
       rhoint_sav = getInterstitialElectronDensity()
@@ -1249,12 +1320,26 @@ contains
       enddo
 !
       MadelungShiftTable = ZERO
-      do id = 1,LocalNumAtoms
-         ig = GlobalIndex(id)
-         MadelungShiftTable(ig) = Potential(id)%Madelung_Shift
-      enddo
+      if (isChargeCorr()) then
+         do id = 1,LocalNumAtoms
+            ig = GlobalIndex(id)
+            do ia = 1, getNumAlloyElements(ig)
+               lig = global_table_line(ig) + ia
+               MadelungShiftTable(lig) = Potential(id)%Madelung_Shift +  &
+                  getSpeciesPotentialCorrection(id,ia,Potential(id)%Madelung_Shift)
+            enddo
+         enddo
+      else
+         do id = 1,LocalNumAtoms
+            ig = GlobalIndex(id)
+            do ia = 1, getNumAlloyElements(ig)
+               lig = global_table_line(ig) + ia
+               MadelungShiftTable(lig) = Potential(id)%Madelung_Shift
+            enddo
+         enddo
+      endif
 !     ----------------------------------------------------------------
-      call GlobalSumInGroup(GroupID,MadelungShiftTable,GlobalNumAtoms)
+      call GlobalSumInGroup(GroupID,MadelungShiftTable,gsize)
 !     ----------------------------------------------------------------
       EmptyTable = .false.
 #ifdef TIMING
@@ -1264,7 +1349,7 @@ contains
    else 
       V0_inter = ZERO
       do id = 1,LocalNumAtoms
-         Potential(id)%VcoulombR0 = ZERO
+         Potential(id)%VIntraR0 = ZERO
       enddo
       if (isMTFP) then
 !        -------------------------------------------------------------
@@ -1281,7 +1366,7 @@ contains
          call calIntraPot()
 !        -------------------------------------------------------------
          if (MyPE == 0) then
-            write(6,'(/,a,f10.5,/)')'Time:: calIntraPot: ',getTime()-t1
+            write(6,'(/,a,f10.5)')'Time:: calIntraPot: ',getTime()-t1
          endif
          t1 = getTime()
 !        -------------------------------------------------------------
@@ -1295,7 +1380,7 @@ contains
          call calFFTPseudoPot()
 !        -------------------------------------------------------------
          if (MyPE == 0) then
-            write(6,'(/,a,f10.5,/)')'Time:: calFFTPseudoPot: ',getTime()-t1
+            write(6,'(/,a,f10.5)')'Time:: calFFTPseudoPot: ',getTime()-t1
          endif
       endif
 !
@@ -1314,9 +1399,9 @@ contains
       t1 = getTime()
       do id = 1,LocalNumAtoms
          nRpts = Potential(id)%n_Rpts
+         Potential(id)%potL = CZERO
+         r_mesh => Potential(id)%Grid%r_mesh(1:nRpts)
          do ia = 1, Potential(id)%NumSpecies
-            Potential(id)%potL = CZERO
-            Potential(id)%potr_sph = ZERO
             do is = 1,n_spin_pola
                do jl = 1,Potential(id)%jmax
                   if ( is==1 ) then
@@ -1335,8 +1420,44 @@ contains
                                 Potential(id)%potL_Coulomb(1:nRpts,jl,ia) +  &
                                 Potential(id)%potL_Exch(1:nRpts,jl,is,ia)
                enddo
+               if (node_print_level >= 1) then
+                  write(6,'(a,4d15.8)')'r,v_til,v_mad,v_pse = ',r_mesh(50),       &
+                     real(Potential(id)%potL_Tilda(50,1,ia),kind=RealKind),       &
+                     real(Potential(id)%potL_Madelung(50,1),kind=RealKind),       &
+                     real(Potential(id)%potL_Pseudo(50,1),kind=RealKind)
+                  write(6,'(a,4d15.8)')'r,v_til,v_mad,v_pse = ',r_mesh(100),      &
+                     real(Potential(id)%potL_Tilda(100,1,ia),kind=RealKind),      &
+                     real(Potential(id)%potL_Madelung(100,1),kind=RealKind),      &
+                     real(Potential(id)%potL_Pseudo(100,1),kind=RealKind)
+                  write(6,'(a,4d15.8)')'r,v_til,v_mad,v_pse = ',r_mesh(nRpts/10), &
+                     real(Potential(id)%potL_Tilda(nRpts/10,1,ia),kind=RealKind), &
+                     real(Potential(id)%potL_Madelung(nRpts/10,1),kind=RealKind), &
+                     real(Potential(id)%potL_Pseudo(nRpts/10,1),kind=RealKind)
+                  write(6,'(a,4d15.8)')'r,v_til,v_mad,v_pse = ',r_mesh(nRpts/2),  &
+                     real(Potential(id)%potL_Tilda(nRpts/2,1,ia),kind=RealKind),  &
+                     real(Potential(id)%potL_Madelung(nRpts/2,1),kind=RealKind),  &
+                     real(Potential(id)%potL_Pseudo(nRpts/2,1),kind=RealKind)
+                  write(6,'(a,4d15.8)')'r,v_til,v_mad,v_pse = ',r_mesh(nRpts-10), &
+                     real(Potential(id)%potL_Tilda(nRpts-10,1,ia),kind=RealKind), &
+                     real(Potential(id)%potL_Madelung(nRpts-10,1),kind=RealKind), &
+                     real(Potential(id)%potL_Pseudo(nRpts-10,1),kind=RealKind)
+               endif
+            enddo
+         enddo
 !
-               r_mesh => Potential(id)%Grid%r_mesh(1:nRpts)
+!        =============================================================
+!        Make sure that all the processes that the current atom mapped
+!        onto have the exact same potential value.
+!        =============================================================
+         ekGID = getGroupID('E-K Plane')
+         nsize = Potential(id)%jend*Potential(id)%jmax*n_spin_pola*Potential(id)%NumSpecies
+!        -------------------------------------------------------------
+         call averageCFuncXProc(ekGID,nsize,Potential(id)%potL)
+!        -------------------------------------------------------------
+!
+         Potential(id)%potr_sph = ZERO
+         do ia = 1, Potential(id)%NumSpecies
+            do is = 1,n_spin_pola
                do ir = 1,nRpts
                   pot_r = real(Potential(id)%potL(ir,1,is,ia),kind=RealKind)
                   Potential(id)%potr_sph(ir,is,ia) = Y0*r_mesh(ir)*pot_r
@@ -1345,7 +1466,7 @@ contains
          enddo
       enddo
       if (MyPE == 0) then
-         write(6,'(/,a,f10.5,/)')'Time:: computeNewPotentail:: Loop_id 1: ',getTime()-t1
+         write(6,'(a,f10.5)')'Time:: computeNewPotentail:: Loop_id 1: ',getTime()-t1
       endif
 !
 #ifdef POT_DEBUG
@@ -1753,7 +1874,7 @@ contains
          Potential(id)%Madelung_Shift = ZERO
       enddo
       if (MyPE == 0) then
-         write(6,'(/,a,f10.5,/)')'Time:: computeNewPotentail:: Loop_id 2: ',getTime()-t1
+         write(6,'(/,a,f10.5)')'Time:: computeNewPotentail:: Loop_id 2: ',getTime()-t1
       endif
 !
       if (isMTFP) then
@@ -1786,7 +1907,7 @@ contains
          enddo
       enddo
       if (MyPE == 0) then
-         write(6,'(/,a,f10.5,/)')'Time:: computeNewPotentail:: Loop_id 3: ',getTime()-t1
+         write(6,'(/,a,f10.5)')'Time:: computeNewPotentail:: Loop_id 3: ',getTime()-t1
       endif
       v_shift(1:n_spin_pola) = V0_inter(1:n_spin_pola)
 !
@@ -1874,6 +1995,8 @@ contains
    use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies
    use AtomModule, only : getLocalSpeciesContent
 !
+   use Atom2ProcModule, only : getGlobalIndex
+!
    use SystemModule, only : getAtomicNumber, getAlloyElementContent, &
                             getNumAlloyElements
 !
@@ -1891,10 +2014,14 @@ contains
 !
    use ChargeDensityModule, only : getSphChargeDensity, getSphMomentDensity
 !
+   use ChargeScreeningModule, only : calChargeCorrection, getSpeciesPotentialCorrection
+!
    use ExchCorrFunctionalModule, only : calSphExchangeCorrelation
    use ExchCorrFunctionalModule, only : getExchCorrPot
 !
    use PotentialTypeModule, only : isMuffintinASAPotential
+!
+   use ScfDataModule, only : isChargeCorr
 !
    implicit   none
 !
@@ -1907,13 +2034,14 @@ contains
    integer (kind=IntKind) :: is
    integer (kind=IntKind) :: jmt, jmt_max
    integer (kind=IntKind) :: n_Rpts
+!
    integer (kind=IntKind), pointer :: global_table_line(:)
 !
    real (kind=RealKind) :: dps
    real (kind=RealKind) :: ztotss
    real (kind=RealKind) :: surfamt
    real (kind=RealKind) :: rmt
-   real (kind=RealKind) :: qsub, dq, dq_mt
+   real (kind=RealKind) :: qsub, dq, dq_mt, qtemp
    real (kind=RealKind) :: V2rmt
    real (kind=RealKind) :: sums(2)
    real (kind=RealKind) :: vsum, vmad_corr
@@ -1926,13 +2054,13 @@ contains
    real (kind=RealKind), pointer :: r_mesh(:)
    real (kind=RealKind), allocatable, target :: der_rho_ws(:), der_mom_ws(:)
 !
-!   real (kind=RealKind), allocatable :: vmt1(:)
+!  real (kind=RealKind), allocatable :: vmt1(:)
 !
    rhoint = getInterstitialElectronDensityOld()
-   global_table_line => getGlobalTableLine()
    Q_Table => getGlobalOnSiteElectronTableOld()
    Qmt_Table => getGlobalMTSphereElectronTableOld()
-!
+   global_table_line => getGlobalTableLine()
+
 !  ===================================================================
 !  vmt1_i = pi4*rho_0*Rmt_i^2 + 2*sum_j[madmat(j,i)*qsub_j], where:
 !
@@ -1946,7 +2074,7 @@ contains
 !         dq_i = Q_i - Qmt_i - rho_0*Omega0_i = dQ_i - Z_i + Q_i
 !         dq_int = sum_i[dq_i] = sum_i[Q_i - Z_i]
 !  ===================================================================
-!
+
    vsum = ZERO
    jmt_max = 0
    do na=1, LocalNumAtoms
@@ -1958,7 +2086,8 @@ contains
          qsub = ZERO
          do ia = 1, getNumAlloyElements(j)
             lig = global_table_line(j) + ia
-            qsub = qsub + getAlloyElementContent(j,ia)*(getAtomicNumber(j,ia)-Q_Table(lig))
+            qtemp = getAlloyElementContent(j,ia)*(getAtomicNumber(j,ia) - Q_Table(lig))
+            qsub = qsub + qtemp
          enddo
          qsub = qsub + rhoint*getAtomicVPVolume(j)
          vmt1(na) = vmt1(na) + madmat(j)*qsub
@@ -1969,7 +2098,13 @@ contains
    enddo
    allocate(der_rho_ws(jmt_max), der_mom_ws(jmt_max))
    der_rho_ws = ZERO; der_mom_ws = ZERO
-!
+
+!  Implementing Screening term to account for charge correlations in KKR-CPA
+   if (isChargeCorr()) then
+   !  -------------------------------------
+      call calChargeCorrection()
+   !  -------------------------------------
+   endif
 !  ===================================================================
 !  If vshift_switch_on is false, the unit cell summation of the Madelung
 !  shift is not zero. We will calculate the Madelung potential in
@@ -2119,11 +2254,19 @@ contains
          endif
          do is =1, n_spin_pola
             Vexc => getExchCorrPot(jmt,is)
-            do ir = 1, jmt
-               Potential(na)%potr_sph(ir,is,ia) =                                  &
+            if (isChargeCorr()) then
+               do ir = 1, jmt
+                  Potential(na)%potr_sph(ir,is,ia) =                                  &
+                     TWO*(-ztotss+PI8*(V1_r(ir)+(V2rmt-V2_r(ir))*r_mesh(ir))) + &
+                     (Vexc(ir) - vmt1(na) + getSpeciesPotentialCorrection(na, ia, -vmt1(na)))*r_mesh(ir)
+               enddo
+            else
+               do ir = 1, jmt
+                  Potential(na)%potr_sph(ir,is,ia) =                                  &
                      TWO*(-ztotss+PI8*(V1_r(ir)+(V2rmt-V2_r(ir))*r_mesh(ir))) + &
                      (Vexc(ir) - vmt1(na))*r_mesh(ir)
-            enddo
+               enddo
+            endif
             do ir = jmt+1, n_Rpts
                Potential(na)%potr_sph(ir,is,ia) = ZERO
             enddo
@@ -2197,9 +2340,10 @@ contains
    Q_Table => getGlobalOnSiteElectronTableOld()
 !
 !  ===================================================================
-!  vmt = [1/5*rhoint*sum_i(surf_i*tau_i) + sum_i(qsub_i*surf_i)
-!         + 2*sum_ij(madmat(i,j)*tau_i*qsub_j)]/Omega_0
+!  vmt = [1/5*rhoint*sum_i(surf_i*omt_i) + sum_i(qsub_i*surf_i)
+!         + 2*sum_ij(madmat(i,j)*omt_i*qsub_j)]/Omega_0
 !  where:
+!       omt_i  = pi4*Rmt_i^3/3
 !       surf_i = pi4*Rmt_i^2
 !       qsub_i = dQ_i + rho_0*Omega_i
 !         dQ_i = Z_i - (Qmt_i + rho_0*Omega0_i)
@@ -2503,7 +2647,7 @@ contains
       do is = 1,n_spin_pola
          sums(is) = sums(is) + getExchCorrPot(is)
       enddo
-      sums(3) = sums(3) + rhoint_tmp*getLocalSpeciesContent(na,ia)
+      sums(3) = sums(3) + rhoint_tmp
    enddo
 !
    sums(1:3) = sums(1:3)/real(GlobalNumAtoms,kind=RealKind)
@@ -2739,23 +2883,34 @@ contains
 !  ===================================================================
    use ChargeDistributionModule, only : getGlobalMTSphereElectronTableOld, &
                                         getGlobalOnSiteElectronTableOld, &
-                                        getGlobalTableLine
+                                        getGlobalTableLine, getNeighborChargeTable
 !
    use SystemModule, only : getAtomicNumber, getAtomName, getAtomEnergy
    use SystemModule, only : getNumAlloyElements
+   use SystemModule, only : getNumAtomTypes, getAtomType, getNumAtomsOfType, &
+                            getAtomTypeName
+!
+   use ScfDataModule, only : isLSMS, isKKR
 !
    implicit none
 !
    logical :: FileExist
+   logical :: printNeighbor = .false.
 !
    integer (kind=IntKind), intent(in) :: iter
    integer (kind=IntKind), intent(in) :: fu
-   integer (kind=IntKind) :: ig, ia, na, lig
+   integer (kind=IntKind) :: ig, ia, na, lig, nt, id, max_shells, j
    integer (kind=IntKind), pointer :: global_table_line(:)
+   integer (kind=IntKind), pointer :: p_type(:)
 !
    real (kind=RealKind), pointer :: Qmt_Table(:)
    real (kind=RealKind), pointer :: Q_Table(:)
    real (kind=RealKind), pointer :: atom_en(:,:)
+   real (kind=RealKind), pointer :: NeighborChargeTable(:,:)
+   real (kind=RealKind), allocatable :: dq_aver(:), dqnn_aver(:,:)
+   real (kind=RealKind), allocatable :: vmad_aver(:), dqv_aver(:),    &
+                                        a(:), b(:), dq2_aver(:), std_dev(:)
+   real (kind=RealKind) :: dq, v, dv2
 !
    if (.not.Initialized) then
       call ErrorHandler('printMadelungShiftTable',                    &
@@ -2787,11 +2942,6 @@ contains
    endif
 !
    write(fu,'(/,a,i5)')'# ITERATION :',iter
-   if (fu == 6) then
-      write(fu,'(80(''=''))')
-   else
-      write(fu,'(60(''=''))')
-   endif
 !
    na = 1
    LOOP_ig: do ig = 1, GlobalNumAtoms
@@ -2800,40 +2950,189 @@ contains
          exit LOOP_ig
       endif
    enddo LOOP_ig
-!
-   if (na == 1) then
-      write(fu,'(a)')' Atom   Index      Q          Qmt        dQ        Vmad        Local Energy'
-   else
-      write(fu,'(a)')' Atom  Site  Species    Q          Qmt        dQ        Vmad        Local Energy'
+   if ((isLSMS().or.isKKR()) .and. na > 1) then
+      call ErrorHandler('printMadelungShiftTable','In LSMS or KKR case, na > 1',na)
    endif
-   write(fu,'(80(''-''))')
+!
+   NeighborChargeTable => getNeighborChargeTable(max_shells)
+!
+   if ((isLSMS().or.isKKR()) .and. max_shells > 0 .and. printNeighbor) then
+      if (max_shells == 1) then
+         write(fu,'(87(''=''))')
+         write(fu,'(a)')' Atom   Index      Q          Qmt        dQ        Vmad        Local Energy     dQ(1nn)'
+!        write(fu,'(87(''-''))')
+      else
+         write(fu,'(99(''=''))')
+         write(fu,'(a)')' Atom   Index      Q          Qmt        dQ        Vmad        Local Energy     dQ(1nn)     dQ(2nn)'
+!        write(fu,'(99(''-''))')
+      endif
+   else if (na == 1) then
+      write(fu,'(75(''=''))')
+      write(fu,'(a)')' Atom   Index      Q          Qmt        dQ        Vmad        Local Energy'
+!     write(fu,'(75(''-''))')
+   else
+      write(fu,'(80(''=''))')
+      write(fu,'(a)')' Atom  Site  Species    Q          Qmt        dQ        Vmad        Local Energy'
+!     write(fu,'(80(''-''))')
+   endif
    global_table_line => getGlobalTableLine()
    Q_Table => getGlobalOnSiteElectronTableOld()
    Qmt_Table => getGlobalMTSphereElectronTableOld()
    atom_en => getAtomEnergy()
-   do ig = 1, GlobalNumAtoms
-      do ia = 1, getNumAlloyElements(ig)
-!        write(fu,'(2x,a3,2x,i6,4(2x,f20.16))')getAtomName(ig,ia), ig, ia,     &
-         if (na == 1) then
-            write(fu,'(2x,a3,2x,i6,4(2x,f9.5),6x,f12.5)')getAtomName(ig), ig,  &
-                                                 Q_Table(ig),Qmt_Table(ig),    &
-                                                 Q_Table(ig)-getAtomicNumber(ig), &
+   if ((isLSMS().or.isKKR()) .and. max_shells > 0 .and. printNeighbor) then
+      if (max_shells == 1) then
+         do ig = 1, GlobalNumAtoms
+            write(fu,'(2x,a3,2x,i6,4(2x,f9.5),6x,f12.5,2x,f10.5)')                     &
+                                                 getAtomName(ig), ig,                  &
+                                                 Q_Table(ig),Qmt_Table(ig),            &
+                                                 Q_Table(ig)-getAtomicNumber(ig),      &
+                                                 MadelungShiftTable(ig),atom_en(1,ig), &
+                                                 NeighborChargeTable(1,ig)
+         enddo
+         write(fu,'(87(''=''))')
+      else
+         do ig = 1, GlobalNumAtoms
+            write(fu,'(2x,a3,2x,i6,4(2x,f9.5),6x,f12.5,2(2x,f10.5))')                  &
+                                                 getAtomName(ig), ig,                  &
+                                                 Q_Table(ig),Qmt_Table(ig),            &
+                                                 Q_Table(ig)-getAtomicNumber(ig),      &
+                                                 MadelungShiftTable(ig),atom_en(1,ig), &
+                                                 NeighborChargeTable(1,ig),            &
+                                                 NeighborChargeTable(2,ig)
+         enddo
+         write(fu,'(99(''=''))')
+      endif
+   else if (na == 1) then
+      do ig = 1, GlobalNumAtoms
+         write(fu,'(2x,a3,2x,i6,4(2x,f9.5),6x,f12.5)')                                 &
+                                                 getAtomName(ig), ig,                  &
+                                                 Q_Table(ig),Qmt_Table(ig),            &
+                                                 Q_Table(ig)-getAtomicNumber(ig),      &
                                                  MadelungShiftTable(ig),atom_en(1,ig)
-         else
-            lig = global_table_line(ig) + ia
-            write(fu,'(2x,a3,2x,i6,2x,i2,4(2x,f9.5),6x,f12.5)')getAtomName(ig,ia), ig, ia,  &
-                                                 Q_Table(lig),Qmt_Table(lig),         &
-                                                 Q_Table(lig)-getAtomicNumber(ig,ia), &
-                                                 MadelungShiftTable(ig),atom_en(1,ig)
-         endif
       enddo
-   enddo
+      write(fu,'(75(''=''))')
+   else
+      do ig = 1, GlobalNumAtoms
+         do ia = 1, getNumAlloyElements(ig)
+!           write(fu,'(2x,a3,2x,i6,4(2x,f20.16))')getAtomName(ig,ia), ig, ia,     &
+            lig = global_table_line(ig) + ia
+            write(fu,'(2x,a3,2x,i6,2x,i2,4(2x,f9.5),6x,f12.5)')                        &
+                                                 getAtomName(ig,ia), ig, ia,           &
+                                                 Q_Table(lig),Qmt_Table(lig),          &
+                                                 Q_Table(lig)-getAtomicNumber(ig,ia),  &
+                                                 MadelungShiftTable(lig),atom_en(1,ig)
+         enddo
+      enddo
+      write(fu,'(80(''=''))')
+   endif
    if (fu == 6) then
-      write(fu,'(80(''=''),/)')
+      write(6,'(/)')
    else
       close(unit=fu)
    endif
-   nullify(global_table_line)
+!
+   if (isLSMS()) then
+      nt = getNumAtomTypes()
+      p_type => getAtomType()
+      allocate(dq_aver(nt), vmad_aver(nt), dqv_aver(nt), dq2_aver(nt))
+      allocate(a(nt), b(nt), std_dev(nt))
+      dq_aver = ZERO
+      vmad_aver = ZERO
+      dqv_aver = ZERO
+      dq2_aver = ZERO
+      do ig = 1, GlobalNumAtoms
+         ia = p_type(ig)
+         dq = Q_Table(ig)-getAtomicNumber(ig)
+         dq_aver(ia) = dq_aver(ia) + dq
+         vmad_aver(ia) = vmad_aver(ia) + MadelungShiftTable(ig)
+         dqv_aver(ia) = dqv_aver(ia) + dq*MadelungShiftTable(ig)
+         dq2_aver(ia) = dq2_aver(ia) + dq*dq
+      enddo
+      do ia = 1, nt
+         dq_aver(ia) = dq_aver(ia)/real(getNumAtomsOfType(ia),kind=RealKind)
+         vmad_aver(ia) = vmad_aver(ia)/real(getNumAtomsOfType(ia),kind=RealKind)
+         dqv_aver(ia) = dqv_aver(ia)/real(getNumAtomsOfType(ia),kind=RealKind)
+         dq2_aver(ia) = dq2_aver(ia)/real(getNumAtomsOfType(ia),kind=RealKind)
+         if (getNumAtomsOfType(ia) > 1 .and.                          &
+             abs(dq2_aver(ia)-dq_aver(ia)*dq_aver(ia)) > TEN2m6) then
+            a(ia) = (dqv_aver(ia) - dq_aver(ia)*vmad_aver(ia))/(dq2_aver(ia)-dq_aver(ia)*dq_aver(ia))
+         else
+            a(ia) = ZERO
+         endif
+         b(ia) = vmad_aver(ia) - a(ia)*dq_aver(ia)
+      enddo
+      if (max_shells > 0) then
+         allocate(dqnn_aver(max_shells,nt))
+         dqnn_aver = ZERO
+         do ig = 1, GlobalNumAtoms
+            ia = p_type(ig)
+            do j = 1, max_shells
+               dqnn_aver(j,ia) = dqnn_aver(j,ia) + NeighborChargeTable(j,ig)
+            enddo
+         enddo
+         write(6,'(/,a)') '=============================='
+         write(6,'(  a)') 'Species   Shell    Averaged dQ'
+         do ia = 1, nt
+            write(6,'(a)')'------------------------------'
+            j = 0
+            write(6,'(3x,a,5x,i3,6x,f10.5)')trim(getAtomTypeName(ia)),j,dq_aver(ia)
+            do j = 1, max_shells
+               dqnn_aver(j,ia) = dqnn_aver(j,ia)/real(getNumAtomsOfType(ia),kind=RealKind)
+               write(6,'(10x,i3,6x,f10.5)')j,dqnn_aver(j,ia)
+            enddo
+         enddo
+         write(6,'(a)')   '=============================='
+      endif
+!
+      std_dev = ZERO
+      do ig = 1, GlobalNumAtoms
+         ia = p_type(ig)
+         dq = Q_Table(ig)-getAtomicNumber(ig)
+          v = a(ia)*dq+b(ia)
+         dv2 = (MadelungShiftTable(ig) - v)**2
+         std_dev(ia) = std_dev(ia) + dv2
+      enddo
+      do ia = 1, nt
+         if (getNumAtomsOfType(ia) > 2) then
+            std_dev(ia) = sqrt(std_dev(ia)/real(getNumAtomsOfType(ia)-2,kind=RealKind))
+         else
+            std_dev(ia) = ZERO
+         endif
+      enddo
+!
+      write(6,'(/,a)')'  Fitting the qV relation: Vmad = A*dQ + B'
+      write(6,'(  a)')'  with the Least Squares Regression.'
+      if (max_shells > 1) then
+         write(6,'(  a)')'  In the following table, dQ_nn1 = the averaged total charge on the 1st nearest neighbor'
+         write(6,'(  a)')'                          dQ_nn2 = the averaged total charge on the 2nd nearest neighbor'
+         write(6,'(/,112(''=''))')
+         write(6,'(a)')                                                  &
+            'Atom Type   Number of Atoms     Average dQ     Average Vmad       A         B       StdDev     dQ_nn1     dQ_nn2'
+         write(6,'(112(''-''))')
+         do ia = 1, nt
+            write(6,'(2x,a3,10x,i6,4x,2(6x,f10.5),3x,3f10.5,2(1x,f10.5))')  &
+                getAtomTypeName(ia), getNumAtomsOfType(ia), dq_aver(ia),    &
+                vmad_aver(ia), a(ia), b(ia), std_dev(ia), dqnn_aver(1,ia), dqnn_aver(2,ia)
+         enddo
+         write(6,'(112(''=''),/)')
+      else
+         write(6,'(/,90(''=''))')
+         write(6,'(a)')                                                  &
+            'Atom Type   Number of Atoms     Average dQ     Average Vmad       A         B       StdDev'
+         write(6,'(90(''-''))')
+         do ia = 1, nt
+            write(6,'(2x,a3,10x,i6,4x,2(6x,f10.5),3x,3f10.5)')              &
+                getAtomTypeName(ia), getNumAtomsOfType(ia), dq_aver(ia),    &
+                vmad_aver(ia), a(ia), b(ia), std_dev(ia)
+         enddo
+         write(6,'(90(''=''),/)')
+      endif
+!
+      nullify(p_type)
+      deallocate(dq_aver, vmad_aver, dqv_aver, dq2_aver, a, b, std_dev)
+   endif
+!
+   nullify(global_table_line, NeighborChargeTable)
 !
    end subroutine printMadelungShiftTable
 !  ===================================================================
@@ -2961,13 +3260,17 @@ contains
    use MathParamModule, only : CZERO, ZERO, PI4, TWO, Y0inv
    use ErrorHandlerModule, only : ErrorHandler
 
+   use MPPModule, only : MyPE
 
    use PotentialModule, only: getPotential, getPotLmax
+!
    use ChargeDensityModule, only: getChargeDensity,          &
                                   getMomentDensity,          &
                                   getRhoLmax,                &
                                   getPseudoNumRPts
-   use AtomModule, only : getMaxLmax, getLocalAtomicNumber
+!
+   use AtomModule, only : getMaxLmax, getLocalAtomicNumber, getLocalSpeciesContent
+!
    use InterpolationModule, only : FitInterp
    use IntegrationModule, only : calIntegration
 !
@@ -3089,7 +3392,7 @@ contains
 !              Note: VcoulombR0 will be added to the total energy
 !                    calculation in the rho*v_coul term.
 !              =======================================================
-               Potential(id)%VcoulombR0(1) = FOUR*PI4*V2R0_r*Y0
+               Potential(id)%VIntraR0(ia) = FOUR*PI4*V2R0_r*Y0
             else if ( m == 0 ) then
                do ir = 1, nRpts_ps
                   potl(ir) = cmplx( (FOUR*PI4/(2*l+1))*                     &
@@ -3149,7 +3452,6 @@ contains
                                    getPseudoNumRPts
    use ChargeDistributionModule, only : getInterstitialElectronDensity
    use PolyhedraModule, only : getVolume, getInscrSphVolume, getInscrSphRadius
-   use StepFunctionModule, only : getVolumeIntegration
    use InterpolationModule, only : FitInterp
 !
    implicit none
@@ -3296,7 +3598,7 @@ contains
                                 PI4*THIRD*rho_neutral*r_mesh(ir)**2), &
                                 kind=RealKind), ZERO,kind=CmplxKind)
             enddo
-            Potential(local_id)%VcoulombR0(2) = TWO*sumjl*Y0
+            Potential(local_id)%VInterR0 = TWO*sumjl*Y0
          else if ( m_pot == 0 ) then
             do ir = 1,n_RPts
                v_tilt(ir,jl_pot) = v_tilt(ir,jl_pot) +                &
@@ -3335,6 +3637,7 @@ contains
 !  ===================================================================
    use MPPModule, only : NumPEs, MyPE
    use MPPModule, only : GlobalSum, setCommunicator, resetCommunicator
+   use GroupCommModule, only : GlobalSumInGroup
    use Uniform3DGridModule, only : getNumGridPoints
    use ParallelFFTModule, only : performTransformR2C, allocateFunctionSpace
    use ParallelFFTModule, only : getParaFFTCommunicator
@@ -3358,7 +3661,6 @@ contains
    real (kind=RealKind) :: pot_r, pseudo_fft, vc_0, dps
    real (kind=RealKind) :: dfp(3), dfp_total(3), dfp_corr(3), buf(2)
    real (kind=RealKind), pointer :: r_mesh(:)
-!  real (kind=RealKind), pointer :: p_den(:,:,:)
    real (kind=RealKind), pointer :: p_den(:)
 !
    complex (kind=CmplxKind), pointer :: v_jl(:,:)
@@ -3367,9 +3669,9 @@ contains
 !
 !type (UniformGridStruct), pointer :: gp
 !
-#ifdef TIMING
+!#ifdef TIMING
    t0 = getTime()
-#endif
+!#endif
 !  ng  = fft_grid%NumLocalGridPoints
    ng  = getNumGridPoints('FFT',local_grid=.true.)
    call allocateFunctionSpace( p_den, nlocal )
@@ -3379,10 +3681,12 @@ contains
 !  -------------------------------------------------------------------
    call constructDataOnGrid( 'FFT', 'Charge', 'Pseudo', getChargeDensityAtPoint, p_den )
 !  -------------------------------------------------------------------
-#ifdef TIMING
+!#ifdef TIMING
    t1 = getTime()
-   write(6,*) "calFFTPseudoPot:: Time in UniformGrid: ",t1-t0
-#endif
+   if (node_print_level >= 0) then
+      write(6,'(a,f10.5,/)') "calFFTPseudoPot:: Time in UniformGrid: ",t1-t0
+   endif
+!#endif
 !
 !  p_den => getDataStorage(StorageKey, nga, ngb, ngc, RealMark)
 !
@@ -3392,25 +3696,31 @@ contains
    do i = 1, ng
       pseudo_fft = pseudo_fft + p_den(i)
    enddo
-!  write(6,'(a,i5,2x,3d16.8)')'MyPE,p_den = ',MyPE,p_den(1),p_den(ng),pseudo_fft
+   if (node_print_level >= 1) then
+      write(6,'(/,a,i8,a)')'ng = ',ng,', p_den(1:ng):'
+      write(6,'(5d16.8)')(p_den(i),i=1,ng)
+      write(6,'(/)')
+   endif
 !
    buf(1) = ng
    buf(2) = pseudo_fft
    comm = getParaFFTCommunicator(MyProc=p,NumProcs=n)
-   if (comm > 0) then ! For serial FFT, comm = -1.
-      call setCommunicator(comm,p,n)
+!  if (comm > -1) then ! For serial FFT, comm = -1.
+   if (n > 1) then ! For serial FFT, comm = -1.
+      call setCommunicator(comm,p,n,sync=.true.)
       call GlobalSum(buf,2)
       call resetCommunicator()
    endif
 !  The following buf(1) should be the total number of FFT grids.
    pseudo_fft = buf(2)/buf(1)
 !
-   if ( maxval(print_level) >= 0 ) then
-      write(6,'(a,d16.8)') "Sum of pseudo charge density on uniform grid =",pseudo_fft
+   if ( node_print_level >= 0 ) then
+      write(6,'(a,d16.8,/)') "Sum of pseudo charge density on uniform grid =",pseudo_fft
    endif
 !
    pseudo_fft = ZERO ! In priciple, pseudo_fft should be zero since the pseudo charge
-!                    ! is neutral. Here I set it to zero -ywg
+!!                   ! is neutral. But, since the uniform grid is finite, this
+                     ! number will not be zero. Here I set it to zero -ywg
    do i = 1, ng
       p_den(i) = p_den(i) - pseudo_fft
    enddo
@@ -3422,13 +3732,13 @@ contains
 !j = getGridIndex(gp,i)
 !write(111,'(i8,2x,3f15.8,2x,3f15.8,2x,d16.8)')j,getGridPosition(gp,j),getGridPointCoord('R',i),p_den(i)
 !enddo
-!do i = 14, 15
-!j = getGridIndex(gp,i)
-!write(6,'(i8,2x,3f15.8,2x,3f15.8,2x,d16.8)')j,getGridPosition(gp,j),getGridPointCoord('R',i),p_den(i)
-!enddo
-! open(unit=111,file='den-2001-new.dat',status='unknown',form='formatted')
-! write(111,'(5d16.8)')(p_den(i),i=1,ng)
-! close(unit=111)
+!!do i = 14, 15
+!!j = getGridIndex(gp,i)
+!!write(6,'(i8,2x,3f15.8,2x,3f15.8,2x,d16.8)')j,getGridPosition(gp,j),getGridPointCoord('R',i),p_den(i)
+!!enddo
+!! open(unit=111,file='den-2001-new.dat',status='unknown',form='formatted')
+!! write(111,'(5d16.8)')(p_den(i),i=1,ng)
+!! close(unit=111)
 !nullify(gp)
 !
 !  -------------------------------------------------------------------
@@ -3439,19 +3749,28 @@ contains
 !write(112,'(i5,2x,3f15.8,2x,2d15.8)')k,getGridPointCoord('K',k),fft_c(k)
 !enddo
 !close(112)
+   if (node_print_level >= 1) then
+      write(6,'(/,a,i8,a)')'numk_local = ',numk_local,', fft_c(1:numk_local):'
+      write(6,'(6d16.8)')(p_den(i),i=1,numk_local)
+      write(6,'(/)')
+   endif
 !
-#ifdef TIMING
+!#ifdef TIMING
    t2 = getTime()
    t1 = t2 - t1
-   write(6,*) "calFFTPseudoPot:: Time in performTransformR2C: ",t1
-#endif
+   if (node_print_level >= 0) then
+      write(6,'(a,f10.5,/)') "calFFTPseudoPot:: Time in performTransformR2C: ",t1
+   endif
+!#endif
 !  -------------------------------------------------------------------
    call calPseudoDipoleField(fft_c, DF_Pseudo)
 !  -------------------------------------------------------------------
    dfp_total = ZERO
    do id = 1,LocalNumAtoms
       dfp_total(1:3) = dfp_total(1:3) + DF_Pseudo(1:3,id)
-!     write(6,'(a,3d16.8)'),'DF_Pseudo = ',DF_Pseudo(1:3,id)
+      if (node_print_level >= 0) then
+         write(6,'(a,3d16.8)')'DF_Pseudo = ',DF_Pseudo(1:3,id)
+      endif
    enddo
 !
 !  Correction is made to ensure total force acting on the unit cell is zero.
@@ -3461,11 +3780,13 @@ contains
    do id = 1,LocalNumAtoms
       DF_Pseudo(1:3,id) =  DF_Pseudo(1:3,id) + dfp_corr(1:3)
    enddo
-#ifdef TIMING
+!#ifdef TIMING
    t1 = getTime()
    t2 = t1 - t2
-   write(6,*) "calFFTPseudoPot:: Time in Dipole: ",t2
-#endif
+   if (node_print_level >= 0) then
+      write(6,'(/,a,f10.5,/)') "calFFTPseudoPot:: Time in Dipole: ",t2
+   endif
+!#endif
 !
 !  -------------------------------------------------------------------
    call calRadialInterpolation(fft_c,-2,60,iparam,v_interp)
@@ -3478,6 +3799,14 @@ contains
       jmin = min(jmax,jmax_rho)
       nr     = Potential(id)%jend
       r_mesh => Potential(id)%Grid%r_mesh(1:nr)
+      if (node_print_level >= 0) then
+         write(6,'(a,6d15.8,/)')'v_iterp = ',real(v_interp(  1,id),kind=RealKind), &
+                                             real(v_interp( 50,id),kind=RealKind), &
+                                             real(v_interp(100,id),kind=RealKind), &
+                                             real(v_interp(200,id),kind=RealKind), &
+                                             real(v_interp(300,id),kind=RealKind), &
+                                             real(v_interp(400,id),kind=RealKind)
+      endif
       v_jl => Potential(id)%potL_Pseudo(1:nr,1:jmax)
       v_jl = CZERO
 !     ----------------------------------------------------------------
@@ -3494,15 +3823,15 @@ contains
                V1_r(ir) = pot_r
             enddo
             call FitInterp(4,r_mesh(1:4),V1_r(1:4),ZERO,vc_0,dps)
-            Potential(id)%VcoulombR0(3) = vc_0*Y0
+            Potential(id)%VPseudoR0 = vc_0*Y0
 !ywg        Potential(id)%VcoulombR0 = Potential(id)%VcoulombR0 +    &
 !ywg                                   real(V_L0,kind=RealKind)*Y0
             if ( print_level(1) >=0 ) then
-               write(6,'(a,d15.8,a,d15.8)')'Extrapolation: r = ',ZERO,     'pot_pseudo_0 = ',vc_0
-               write(6,'(a,d15.8,a,d15.8)')'               r = ',r_mesh(1),'pot_pseudo_0 = ',V1_r(1)
-               write(6,'(a,d15.8,a,d15.8)')'               r = ',r_mesh(2),'pot_pseudo_0 = ',V1_r(2)
-               write(6,'(a,d15.8,a,d15.8)')'               r = ',r_mesh(3),'pot_pseudo_0 = ',V1_r(3)
-               write(6,'(a,d15.8,a,d15.8)')'               r = ',r_mesh(4),'pot_pseudo_0 = ',V1_r(4)
+               write(6,'(a,d15.8,a,d15.8)')'Extrapolation at r = ',ZERO,     ', pot_pseudo_0 = ',vc_0
+               write(6,'(a,d15.8,a,d15.8)')'                 r = ',r_mesh(1),', pot_pseudo_0 = ',V1_r(1)
+               write(6,'(a,d15.8,a,d15.8)')'                 r = ',r_mesh(2),', pot_pseudo_0 = ',V1_r(2)
+               write(6,'(a,d15.8,a,d15.8)')'                 r = ',r_mesh(3),', pot_pseudo_0 = ',V1_r(3)
+               write(6,'(a,d15.8,a,d15.8)')'                 r = ',r_mesh(4),', pot_pseudo_0 = ',V1_r(4)
                write(6,'(a,d15.8,a,d15.8)')'Pseudo Pot at Site = ',vc_0*Y0, &
                                            ', with extrapolation error = ',dps
 !ywg           write(6,'(a,d15.8,a,d15.8)')'Old Pseudo V0 = ',vc_0*Y0,  &
@@ -3518,12 +3847,14 @@ contains
    enddo
 !
    deallocate(p_den); nullify(p_den)
-#ifdef TIMING
+!#ifdef TIMING
    t2 = getTime()
    t1 = t2 - t1
-   write(6,*) "calFFTPseudoPot:: Time in BackProjection: ",t1
-   write(6,*) "calFFTPseudoPot:: Time : ",t2-t0
-#endif
+   if (node_print_level >= 0) then
+      write(6,'(/,a,f10.5)') "calFFTPseudoPot:: Time in BackProjection: ",t1
+!     write(6,'(a,f10.5)') "calFFTPseudoPot:: Time : ",t2-t0
+   endif
+!#endif
 !
    end subroutine calFFTPseudoPot
 !  ===================================================================
@@ -3540,6 +3871,8 @@ contains
    use ParallelFFTModule, only : getNumLocalGridPoints,               &
                                  getLocalIndexOfGridOrigin,           &
                                  getGridPointCoord, getParaFFTCommunicator
+!
+   use Uniform3DGridModule, only : getGridOrigin
 !
    use SystemModule, only : getAtomPosition
 !
@@ -3568,7 +3901,8 @@ contains
    cfact =  SQRTm1    ! 09/26/2018
 !
    comm = getParaFFTCommunicator(MyProc=p,NumProcs=n)
-   if (comm > 0) then ! For serial FFT, comm = -1.
+!  if (comm > -1) then ! For serial FFT, comm = -1.
+   if (n > 1) then ! For serial FFT, comm = -1.
       na = GlobalNumAtoms
       dfp_p => dfp_buf
    else
@@ -3578,10 +3912,11 @@ contains
 !
    dfp_p = ZERO
    do ig = 1, na
-      if (comm > 0) then ! For serial FFT, comm = -1.
-         posi = getAtomPosition(ig)
+!     if (comm > -1) then ! For serial FFT, comm = -1.
+      if (n > 1) then ! For serial FFT, comm = -1.
+         posi = getAtomPosition(ig) - getGridOrigin('FFT')
       else
-         posi = LocalAtomPosi(:,ig)
+         posi = LocalAtomPosi(:,ig) - getGridOrigin('FFT')
       endif
       do idk =idk0+1, numk_local
          kvec = getGridPointCoord('K',idk)
@@ -3591,9 +3926,10 @@ contains
          dfp_p(:,ig) = dfp_p(:,ig) + real(cfact*expikR*p_fft_c(idk),kind=RealKind)*kvec/kv2
       enddo
    enddo
-   if (comm > 0) then ! For serial FFT, comm = -1.
+!  if (comm > -1) then ! For serial FFT, comm = -1.
+   if (n > 1) then ! For serial FFT, comm = -1.
 !     ----------------------------------------------------------------
-      call setCommunicator(comm,p,n)
+      call setCommunicator(comm,p,n,sync=.true.)
       call GlobalSum(dfp_buf,3,GlobalNumAtoms)
       call resetCommunicator()
 !     ----------------------------------------------------------------
@@ -3646,10 +3982,12 @@ contains
 !                                                      caused by the calculation
 !                                                      of the ex-corr potential
    use MPPModule, only : MyPE
+   use GroupCommModule, only : GlobalSumInGroup
    use ChargeDensityModule, only : getChargeDensity, getMomentDensity, &
                                    getChargeDensityAtPoint,           &
                                    getMomentDensityAtPoint,           &
-                                   getRhoLmax
+                                   getRhoLmax,  &
+                                   startLocalTimer, checkLocalTimer, stopLocalTimer
    use ExchCorrFunctionalModule, only : calSphExchangeCorrelation
    use ExchCorrFunctionalModule, only : calExchangeCorrelation
    use ExchCorrFunctionalModule, only : getExchCorrEnDen
@@ -3662,12 +4000,16 @@ contains
    integer (kind=IntKind), intent(in) :: id, ia, lmax_in
 !
    integer (kind=IntKind) :: ir, it, ip, is, jend, ir_lastNeg, ir_fit
-   integer (kind=IntKind) :: l, m, kl, jl, lmax, jmax, kmax, n0
+   integer (kind=IntKind) :: l, m, kl, jl, lmax, jmax, kmax, n0, n0max
    integer (kind=IntKind) :: ngl_the, ngl_phi, ngl, ing, ip0, it0
+   integer (kind=IntKind) :: chgmom_size
+   integer (kind=IntKind), allocatable :: ip02ip(:), it02it(:)
 !
 !  integer (kind=IntKind), pointer :: flags_jl(:)
 !
-   real (kind=RealKind) :: posi(3), fact, sint, cost, sinp, cosp, r
+   real (kind=RealKind) :: posi(3), r, local_t(3)
+   real (kind=RealKind), allocatable :: sint(:), cost(:), sinp(:), cosp(:)
+   real (kind=RealKind), allocatable :: facp(:), upos(:,:)
    real (kind=RealKind) :: grad_rho(3), grad_mom(3)
    real (kind=RealKind) :: rho, mom, pXC_rtp, eXC_rtp, pXC_r0(2), eXC_r0(2)
    real (kind=RealKind), pointer :: r_mesh(:), V_tmp(:)
@@ -3676,7 +4018,7 @@ contains
    real (kind=RealKind), pointer :: chgmom_data(:,:,:,:,:)
    real (kind=RealKind), allocatable :: der_rho_tmp(:), der_mom_tmp(:)
 !#ifdef TIMING
-   real (kind=RealKind) :: t0, t1, t2, ts, tc1, tc2, tc3
+   real (kind=RealKind) :: t0, t1, t2, t3, ts, tc1, tc2, tc3
 !#endif
 !
    complex (kind=CmplxKind) :: a, b, y1, y2, x1, x2
@@ -3709,6 +4051,10 @@ contains
 #ifdef TIMING
    t0 = getTime()
 #endif
+!
+!  -------------------------------------------------------------------
+   call startLocalTimer(3)
+!  -------------------------------------------------------------------
 !
    if ( lmax_in<0 ) then
       lmax = Potential(id)%lmax
@@ -3810,57 +4156,100 @@ contains
    wght_the => AngularData%wght_the(1:ngl_the)
    ylm_ngl  => AngularData%ylm_ngl(1:kmax,1:ngl)
 !
-   chgmom_data => AngularData%radial_data(1:n_spin_pola,1:2,1:ngl_the,1:ngl_phi,1:jend)
+   chgmom_data => aliasArray5_r(AngularData%radial_data,n_spin_pola,2,ngl_the,ngl_phi,jend)
+   chgmom_size = n_spin_pola*2*ngl_the*ngl_phi*jend
 !
 #ifdef TIMING
     t1 = getTime()
     write(6,*) "calExchangeJl:: Init Time : ",t1-t0
 #endif
 !
+   allocate( sinp(ngl_phi), cosp(ngl_phi), facp(ngl_phi), ip02ip(ngl_phi) )
+   do ip0 = 1,ngl_phi
+      if ( mod(ip0,2)==0 ) then
+         ip = ngl_phi-ip0/2+1
+      else
+         ip = (ip0+1)/2
+      endif
+      cosp(ip0)  = cos(phi(ip))
+      sinp(ip0)  = sin(phi(ip))
+      facp(ip0)  = sinp(ip0)*wght_phi(ip)
+      ip02ip(ip0) = ip
+   enddo
+!
+   allocate( sint(ngl_the), cost(ngl_the), it02it(ngl_the) )
+   do it0 = 1,ngl_the
+      if ( mod(it0,2)==0 ) then
+         it = ngl_the-it0/2+1
+      else
+         it = (it0+1)/2
+      endif
+      sint(it0) = sin(theta(it))
+      cost(it0) = cos(theta(it))
+      it02it(it0) = it
+   enddo
+!
+   n0max = ngl_phi*ngl_the
+   allocate( upos(3,n0max) )
+   n0 = 0
+   do ip0 = 1,ngl_phi
+      do it0 = 1,ngl_the
+         n0 = n0 + 1
+         upos(1,n0) = cost(it0)*sinp(ip0)
+         upos(2,n0) = sint(it0)*sinp(ip0)
+         upos(3,n0) = cosp(ip0)
+      enddo
+   enddo
+!
+   chgmom_data = ZERO
    tc1 = ZERO; tc2 = ZERO; tc3 = ZERO
    ts = getTime()
    ir_lastNeg = 0
-   do ir = 1,jend
+   do ir = MyPEinEKGroup+1,jend,NumPEsInEKGroup
       isNegCharge = .false.
-!     pXC_r(1:jmax,1:n_spin_pola) = CZERO
-!     eXC_r(1:jmax,1:n_spin_pola) = CZERO
-      pXC_r = CZERO; eXC_r = CZERO
+      pXC_r(1,1) = CZERO; eXC_r(1,1) = CZERO
+      pXC_r(1,n_spin_pola) = CZERO; eXC_r(1,n_spin_pola) = CZERO
+      n0 = 0
       Loop_phi01: do ip0 = 1,ngl_phi
-         if ( mod(ip0,2)==0 ) then
-            ip = ngl_phi-ip0/2+1
-         else
-            ip = (ip0+1)/2
-         endif
-         cosp  = cos(phi(ip))
-         sinp  = sin(phi(ip))
-!        pXC_rphi(1:jmax,1:n_spin_pola) = CZERO
-!        eXC_rphi(1:jmax,1:n_spin_pola) = CZERO
-         pXC_rphi = CZERO; eXC_rphi = CZERO
+         ip = ip02ip(ip0)
+!1021    if ( mod(ip0,2)==0 ) then
+!1021       ip = ngl_phi-ip0/2+1
+!1021    else
+!1021       ip = (ip0+1)/2
+!1021    endif
+!1021    cosp  = cos(phi(ip))
+!1021    sinp  = sin(phi(ip))
+         pXC_rphi(1,1) = CZERO; eXC_rphi(1,1) = CZERO
+         pXC_rphi(1,n_spin_pola) = CZERO; eXC_rphi(1,n_spin_pola) = CZERO
          Loop_the01: do it0 = 1,ngl_the
-            if ( mod(it0,2)==0 ) then
-               it = ngl_the-it0/2+1
-            else
-               it = (it0+1)/2
-            endif
+            n0 = n0 + 1
+            it = it02it(it0)
+!1021       if ( mod(it0,2)==0 ) then
+!1021          it = ngl_the-it0/2+1
+!1021       else
+!1021          it = (it0+1)/2
+!1021       endif
 !
 ! The following code appears alright: theta corresonds to
 ! Phi, and phi corresponds to Theta. Just a bad way in naming the variables. -Yang Wang
 !
-            sint = sin(theta(it))
-            cost = cos(theta(it))
-            posi(1) = sint*sinp
-            posi(2) = cost*sinp
+!1021       sint = sin(theta(it))
+!1021       cost = cos(theta(it))
+!11/14/18   posi(1) = sint*sinp
+!11/14/18   posi(2) = cost*sinp
 !ywg 11/14/18
-  posi(1) = cost*sinp
-  posi(2) = sint*sinp
+!1021       posi(1) = cost*sinp
+!1021       posi(2) = sint*sinp
 !
-            posi(3) = cosp
-            posi(1:3) = r_mesh(ir)*posi(1:3)
+!1021       posi(3) = cosp
+!1021       posi(1:3) = r_mesh(ir)*posi(1:3)
+            posi(1:3) = r_mesh(ir)*upos(1:3,n0)
+!
             t2 = getTime()
             if (gga_functional) then
-               rho = getChargeDensityAtPoint( 'TotalNew', id, ia, posi, grad=grad_rho )
+               rho = getChargeDensityAtPoint( 'TotalNew', id, ia, posi, TEN2m8, grad=grad_rho )
             else
-               rho = getChargeDensityAtPoint( 'TotalNew', id, ia, posi )
+               rho = getChargeDensityAtPoint( 'TotalNew', id, ia, posi, TEN2m8 )
                grad_rho = ZERO
             endif
             tc1 = tc1 + (getTime()-t2)  ! cummulating time on getChargeDensityAtPoint
@@ -3870,12 +4259,12 @@ contains
             t2 = getTime()
             if ( n_spin_pola==2 ) then
                if (gga_functional) then
-                  mom = getMomentDensityAtPoint( 'TotalNew', id, ia, posi, grad=grad_mom )
+                  mom = getMomentDensityAtPoint( 'TotalNew', id, ia, posi, TEN2m8, grad=grad_mom )
 !                 ----------------------------------------------------
                   call calExchangeCorrelation(rho,grad_rho,mom,grad_mom)
 !                 ----------------------------------------------------
                else
-                  mom = getMomentDensityAtPoint( 'TotalNew', id, ia, posi )
+                  mom = getMomentDensityAtPoint( 'TotalNew', id, ia, posi, TEN2m8 )
 !                 ----------------------------------------------------
                   call calExchangeCorrelation(rho,mag_den=mom)
 !                 ----------------------------------------------------
@@ -3900,17 +4289,17 @@ contains
 !              -------------------------------------------------------
                chgmom_data(is,1,it0,ip0,ir) = pXC_rtp
                chgmom_data(is,2,it0,ip0,ir) = eXC_rtp
-               pXC_rtp = pXC_rtp*wght_the(it)
-               pXC_rphi(1,is) = pXC_rphi(1,is) + Y0*cmplx(pXC_rtp,ZERO,Kind=CmplxKind)
-               eXC_rtp = eXC_rtp*wght_the(it)
-               eXC_rphi(1,is) = eXC_rphi(1,is) + Y0*cmplx(eXC_rtp,ZERO,Kind=CmplxKind)
+               pXC_rtp = Y0*pXC_rtp*wght_the(it)
+               pXC_rphi(1,is) = pXC_rphi(1,is) + pXC_rtp ! cmplx(pXC_rtp,ZERO,Kind=CmplxKind)
+               eXC_rtp = Y0*eXC_rtp*wght_the(it)
+               eXC_rphi(1,is) = eXC_rphi(1,is) + eXC_rtp ! cmplx(eXC_rtp,ZERO,Kind=CmplxKind)
             enddo
             tc3 = tc3 + (getTime()-t2)  ! cummulating time on getExchCorrPot and getExchCorrEnDen
          enddo Loop_the01
-         fact = sinp*wght_phi(ip)
+!1021    fact = sinp(ip0)*wght_phi(ip)
          do is = 1,n_spin_pola
-            pXC_r(1,is) = pXC_r(1,is) + fact*pXC_rphi(1,is)
-            eXC_r(1,is) = eXC_r(1,is) + fact*eXC_rphi(1,is)
+            pXC_r(1,is) = pXC_r(1,is) + facp(ip0)*pXC_rphi(1,is)
+            eXC_r(1,is) = eXC_r(1,is) + facp(ip0)*eXC_rphi(1,is)
          enddo
       enddo Loop_phi01
 !
@@ -3925,13 +4314,26 @@ contains
 #endif
 !
       enddo
-!
    enddo
+   t3 = getTime()
+   if (NumPEsInEKGroup > 1) then
+      do is = 1,n_spin_pola
+!        -------------------------------------------------------------
+         call GlobalSumInGroup(ekGID,potL_Exch(:,1,is),jend)
+         call GlobalSumInGroup(ekGID,enL_Exch(:,1,is),jend)
+!        -------------------------------------------------------------
+      enddo
+!     ----------------------------------------------------------------
+      call GlobalSumInGroup(ekGID,AngularData%radial_data,chgmom_size)
+!     ----------------------------------------------------------------
+   endif
+!
    if (MyPE == 0) then
       write(6,'(/,a,f10.5)')'Time:: calExchangeJl::tc1: ',tc1
       write(6,'(  a,f10.5)')'Time:: calExchangeJl::tc2: ',tc2
       write(6,'(  a,f10.5)')'Time:: calExchangeJl::tc3: ',tc3
-      write(6,'(  a,f10.5/)')'Time:: calExchangeJl::Loop_ir 1: ',getTime()-ts
+      write(6,'(  a,f10.5)')'Time:: calExchangeJl::gsm: ',getTime()-t3
+      write(6,'(  a,f10.5)')'Time:: calExchangeJl::Loop_ir 1: ',getTime()-ts
    endif
 !
 #ifdef TIMING
@@ -3950,7 +4352,7 @@ contains
 !
       ts = getTime()
 !
-      do ir = jend,ir_fit,-1
+      do ir = MyPEinEKGroup+ir_fit, jend, NumPEsInEKGroup
          ing=0
          if ( ir < Potential(id)%jend ) then
             do is = 1,n_spin_pola
@@ -3961,31 +4363,42 @@ contains
             pXC_r0 = ZERO
             eXC_r0 = ZERO
          endif
-         pXC_r(1:jmax,1:n_spin_pola) = CZERO
-         eXC_r(1:jmax,1:n_spin_pola) = CZERO
+!        pXC_r(1:jmax,1:n_spin_pola) = CZERO
+!        eXC_r(1:jmax,1:n_spin_pola) = CZERO
+         pXC_r = CZERO; eXC_r = CZERO
+         n0 = 0
          Loop_phi1: do ip0 = 1,ngl_phi
-            if ( mod(ip0,2)==0 ) then
-               ip = ngl_phi-ip0/2+1
-            else
-               ip = (ip0+1)/2
-            endif
-            cosp  = cos(phi(ip))
-            sinp  = sin(phi(ip))
-            pXC_rphi(1:jmax,1:n_spin_pola) = CZERO
-            eXC_rphi(1:jmax,1:n_spin_pola) = CZERO
+            ip = ip02ip(ip0)
+!1021       if ( mod(ip0,2)==0 ) then
+!1021          ip = ngl_phi-ip0/2+1
+!1021       else
+!1021          ip = (ip0+1)/2
+!1021       endif
+!1021       cosp  = cos(phi(ip))
+!1021       sinp  = sin(phi(ip))
+!1021       pXC_rphi(1:jmax,1:n_spin_pola) = CZERO
+!1021       eXC_rphi(1:jmax,1:n_spin_pola) = CZERO
+            pXC_rphi = CZERO; eXC_rphi = CZERO
             Loop_the1: do it0 = 1,ngl_the
-               if ( mod(it0,2)==0 ) then
-                  it = ngl_the-it0/2+1
-               else
-                  it = (it0+1)/2
-               endif
+               n0 = n0 + 1
+               it = it02it(it0)
+!1021          if ( mod(it0,2)==0 ) then
+!1021             it = ngl_the-it0/2+1
+!1021          else
+!1021             it = (it0+1)/2
+!1021          endif
                ing = (ip-1)*ngl_the+it
-               sint = sin(theta(it))
-               cost = cos(theta(it))
-               posi(1) = sint*sinp
-               posi(2) = cost*sinp
-               posi(3) = cosp
-               posi(1:3) = r_mesh(ir)*posi(1:3)
+!1021          sint = sin(theta(it))
+!1021          cost = cos(theta(it))
+!1021          posi(1) = sint*sinp
+!1021          posi(2) = cost*sinp
+!ywg 06/24/20
+!1021          posi(1) = cost*sinp
+!1021          posi(2) = sint*sinp
+!
+!1021          posi(3) = cosp
+!1021          posi(1:3) = r_mesh(ir)*posi(1:3)
+               posi(1:3) = r_mesh(ir)*upos(1:3,n0)
                pylm => ylm_ngl(1:kmax,ing)
 !
                do is = 1,n_spin_pola
@@ -4002,12 +4415,11 @@ contains
                      l = lofj(jl)
                      m = mofj(jl)
                      kl = (l+1)*(l+1)-l+mofj(jl)
-                     fact = ONE
-                     pXC_rphi(jl,is) = pXC_rphi(jl,is) + fact*          &
+                     pXC_rphi(jl,is) = pXC_rphi(jl,is) +                &
 !                     cmplx(pXC_rtp,ZERO,Kind=CmplxKind)*m1m(m)*conjg(pylm(kl))/&
                      cmplx(pXC_rtp,ZERO,Kind=CmplxKind)*conjg(pylm(kl))/&
                      r_mesh(ir)**l
-                     eXC_rphi(jl,is) = eXC_rphi(jl,is) + fact*          &
+                     eXC_rphi(jl,is) = eXC_rphi(jl,is) +                &
 !                     cmplx(eXC_rtp,ZERO,Kind=CmplxKind)*m1m(m)*conjg(pylm(kl))/&
                      cmplx(eXC_rtp,ZERO,Kind=CmplxKind)*conjg(pylm(kl))/&
                      r_mesh(ir)**l
@@ -4017,11 +4429,11 @@ contains
 !
             enddo Loop_the1
 !
-            fact = sinp*wght_phi(ip)
+!1021       fact = sinp*wght_phi(ip)
             do is = 1,n_spin_pola
                do jl = 2,jmax
-                  pXC_r(jl,is) = pXC_r(jl,is) + fact*pXC_rphi(jl,is)
-                  eXC_r(jl,is) = eXC_r(jl,is) + fact*eXC_rphi(jl,is)
+                  pXC_r(jl,is) = pXC_r(jl,is) + facp(ip0)*pXC_rphi(jl,is)
+                  eXC_r(jl,is) = eXC_r(jl,is) + facp(ip0)*eXC_rphi(jl,is)
               enddo
             enddo
 !
@@ -4051,10 +4463,17 @@ contains
                endif
             enddo
          enddo
-!
       enddo
+      if (NumPEsInEKGroup > 1) then
+         do is = 1, n_spin_pola
+!           ----------------------------------------------------------
+            call GlobalSumInGroup(ekGID,potL_Exch(:,2:,is),jend,jmax-1)
+            call GlobalSumInGroup(ekGID,enL_Exch(:,2:,is),jend,jmax-1)
+!           ----------------------------------------------------------
+         enddo
+      endif
       if (MyPE == 0) then
-         write(6,'(/,a,f10.5/)')'Time:: calExchangeJl::Loop_ir 2: ',getTime()-ts
+         write(6,'(/,a,f10.5)')'Time:: calExchangeJl::Loop_ir 2: ',getTime()-ts
       endif
 !
       ts = getTime()
@@ -4088,9 +4507,21 @@ contains
          enddo
       enddo
       if (MyPE == 0) then
-         write(6,'(/,a,f10.5/)')'Time:: calExchangeJl::Loop_is : ',getTime()-ts
+         write(6,'(/,a,f10.5)')'Time:: calExchangeJl::Loop_is  : ',getTime()-ts
       endif
 !
+   endif
+!
+   deallocate(sint, cost, sinp, cosp, upos, facp, it02it, ip02ip)
+!
+!  -------------------------------------------------------------------
+   call checkLocalTimer(3,local_t)
+   call stopLocalTimer()
+!  -------------------------------------------------------------------
+   if (MyPE == 0) then
+      write(6,'(/,a,f10.5)')'Local Time:: getChargeDensityAtPoint::t1: ',local_t(1)
+      write(6,'(/,a,f10.5)')'Local Time:: getChargeDensityAtPoint::t2: ',local_t(2)
+      write(6,'(/,a,f10.5)')'Local Time:: getChargeDensityAtPoint::t3: ',local_t(3)
    endif
 !
 #ifdef TIMING
@@ -4173,7 +4604,7 @@ contains
       enddo
    endif
 !
-   allocate(AngularData%radial_data(ns,2,nt,np,nr))
+   allocate(AngularData%radial_data(ns*2*nt*np*nr))
 !
    end subroutine setAngularData
 !  ===================================================================
@@ -4433,7 +4864,8 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getPotentialAtPoint( potType, id, ia, posi, jmax_in, spin, grad ) result(pot)
+   function getPotentialAtPoint( potType, id, ia, posi, tol,          &
+                                 jmax_in, spin, grad ) result(pot)
 !  ===================================================================
    use SphericalHarmonicsModule, only : calYlm
 !
@@ -4453,7 +4885,7 @@ contains
    integer (kind=IntKind), intent(in), optional :: jmax_in
    integer (kind=IntKind), intent(in), optional :: spin
 !
-   real (kind=RealKind), intent(in) :: posi(3)
+   real (kind=RealKind), intent(in) :: posi(3), tol
    real (kind=RealKind), intent(out), optional :: grad(3) ! So far it is not used
 !
    integer (kind=IntKind) :: iend, irp, ir, l, kl, jl, ns, jmt, jmax
@@ -4498,7 +4930,7 @@ contains
 !
    pot = ZERO
 !
-   if ( isExternalPoint(id,posi(1),posi(2),posi(3)) ) then
+   if ( isExternalPoint(id,posi(1),posi(2),posi(3),tol_in=tol) ) then
       return
    endif
 !
@@ -4639,6 +5071,8 @@ contains
                                  getLocalIndexOfGridOrigin,  &
                                  getGridPointCoord, getParaFFTCommunicator
 !
+   use Uniform3DGridModule, only : getGridOrigin
+!
    use MPPModule, only : GlobalSum, setCommunicator, resetCommunicator
    use GroupCommModule, only : getGroupID, GlobalSumInGroup
 !
@@ -4761,7 +5195,8 @@ contains
 !
    comm = getParaFFTCommunicator(MyProc=p,NumProcs=n)
 !
-   if (comm > 0) then
+!  if (comm > -1) then
+   if (n > 1) then
       na = GlobalNumAtoms
       iparam_global = 0
       do id = 1, LocalNumAtoms
@@ -4812,12 +5247,13 @@ contains
    endif
 !
    do ia = 1, na
-      if (comm > 0) then
+!     if (comm > -1) then
+      if (n > 1) then
 !        =============================================================
 !        In this case, pv_interp is to be calculated for all the atoms
 !        on the local processor
 !        =============================================================
-         posi = getAtomPosition(ia)
+         posi = getAtomPosition(ia) - getGridOrigin('FFT')
          lmax = iparam_global(1,ia)
          n_interp = iparam_global(2,ia)
          n_interp_in = iparam_global(3,ia)
@@ -4835,7 +5271,7 @@ contains
 !        In this case, pv_interp is to be calculated for the local atoms
 !        on the local processor
 !        =============================================================
-         posi = LocalAtomPosi(:,ia)
+         posi = LocalAtomPosi(:,ia) - getGridOrigin('FFT')
          lmax = iparam_out(1,ia)
          n_interp = iparam_out(2,ia)
          n_interp_in = iparam_out(3,ia)
@@ -4910,12 +5346,13 @@ contains
 !  In parallel FFT case, a summation over all k-points, which are
 !  distributed across pocessors, needs to be performed.
 !  ===================================================================
-   if (comm > 0) then
+!  if (comm > -1) then
+   if (n > 1) then
 !     ================================================================
 !     In this case, w_interp_global is summed across all processors, 
 !     which, in effect, sums over the reciprocal uniform grid points.
 !     ----------------------------------------------------------------
-      call setCommunicator(comm,p,n)
+      call setCommunicator(comm,p,n,sync=.true.)
       call GlobalSum(w_interp_global,nmax,GlobalNumAtoms)
       call resetCommunicator()
 !     ----------------------------------------------------------------
@@ -4943,6 +5380,8 @@ contains
                                endChebyshevSeries
 !
    use InterpolationModule, only : LeastSqFitInterp, FitInterp
+!
+   use GroupCommModule, only : GlobalSumInGroup
 !
    implicit none
 !
@@ -4985,6 +5424,7 @@ contains
 !
    pv_jl = CZERO
    do jl = 1, jmax
+!! do jl = MyPEinEKGroup+1, jmax, NumPEsInEKGroup
       l = lofj(jl)
       if (l <= 4) then
          pv => pv_interp(1:n_interp,jl)
@@ -5013,6 +5453,7 @@ contains
 !
    if (nr_int > 1) then
       do jl = 1,jmax
+!!    do jl = MyPEinEKGroup+1, jmax, NumPEsInEKGroup
          l = lofj(jl)
          if ( l<=4 ) then
             ir_lsq = d_ir(1)
@@ -5036,12 +5477,18 @@ contains
       enddo
    else
       do jl = 1,jmax
+!!    do jl = MyPEinEKGroup+1, jmax, NumPEsInEKGroup
          l = lofj(jl)
          do i = 1, n_rmesh
             pv_jl(i,jl) = pv_jl(i,jl)*(rmesh(i)**l)
          enddo
       enddo
    endif
+!! if (NumPEsInEKGroup > 1) then
+!!    ----------------------------------------------------------------
+!!    call GlobalSumInGroup(ekGID,pv_jl,n_rmesh,jmax)
+!!    ----------------------------------------------------------------
+!! endif
 !
    nullify( pv_interp, pv, pv0 )
 !

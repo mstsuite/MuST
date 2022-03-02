@@ -30,7 +30,7 @@ program SingleSiteKrein
    use StepFunctionModule, only : getVolumeIntegration
 !
    use PotentialModule, only : initPotential, endPotential
-   use PotentialModule, only : readPotential, setPotentialOutsideMT, getPotential
+   use PotentialModule, only : readPotential, getPotential
    use PotentialModule, only : getPotEf, setV0, setPotential, isPotComponentZero, getSphPotr
 !
    use ScfDataModule, only : ngaussr, ngaussq
@@ -44,6 +44,7 @@ program SingleSiteKrein
                                    isMuffinTinASAPotential, isFullPotential
 !
    use SystemModule, only : getNumAtoms, getAtomPosition, getBravaisLattice
+   use SystemModule, only : getAlloySpeciesIndex, getNumAlloyElements, getAlloyTableSize
 !
    use InputModule, only : getKeyValue
 !
@@ -58,7 +59,7 @@ program SingleSiteKrein
 !
    use AtomModule, only : getStepFuncLmax, setTruncPotLmax, setPotLmax
    use AtomModule, only : getPotLmax, getKKRLmax, getPhiLmax, getRhoLmax
-   use AtomModule, only : getGridData, getMuffinTinRadius
+   use AtomModule, only : getRadialGridData, getMuffinTinRadius
    use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies
 !
    use SphericalHarmonicsModule, only : initSphericalHarmonics
@@ -101,8 +102,8 @@ program SingleSiteKrein
    character (len=8)  :: exec_date
    character (len=10) :: exec_time
    character (len=10) :: string_rb
-   character (len=35), allocatable :: filename(:,:)
-   character (len=50), allocatable :: filename1(:,:), filename2(:,:)
+   character (len=35) :: filename
+   character (len=50) :: filename1, filename2
 !
    logical :: NeedPDOS = .false.
    logical, allocatable :: checked(:,:,:)
@@ -110,13 +111,13 @@ program SingleSiteKrein
    integer (kind=IntKind) :: def_id, info_id, eGID, aGID, NumPEsInGroup, comm
    integer (kind=IntKind) :: i, j, k, id, ig, nstep, is, lmax_max, nw, ldp, ie_loc, ie_glb, jl, l, m, kl, nfit, je, n
    integer (kind=IntKind) :: lmax_step_max, lmax_kkr_max, lmax_phi_max, lmax_rho_max, lmax_pot_max, lmax_green_max
-   integer (kind=IntKind) :: ndivin, ndivout, nmult, kmax_kkr, klp, mp, INFO
+   integer (kind=IntKind) :: ndivin, ndivout, nmult, kmax_kkr, klp, ia, jg, lid, INFO
    integer (kind=IntKind) :: jmax_dos, kmax_dos, jmax_pot, lmax_gaunt
    integer (kind=IntKind) :: LocalNumAtoms, NumAtoms, NumEsOnMyProc, NumEs
+   integer (kind=IntKind) :: table_size, local_table_size, remote_table_size
    integer (kind=IntKind) :: RelativisticFlag
    integer (kind=IntKind) :: node_print_level
    integer (kind=IntKind) :: num_poles
-   integer (kind=IntKind), allocatable :: AtomicNumber(:)
    integer (kind=IntKind), allocatable :: atom_print_level(:)
    integer (kind=IntKind), allocatable :: lmax_pot(:)
    integer (kind=IntKind), allocatable :: lmax_kkr(:)
@@ -130,6 +131,7 @@ program SingleSiteKrein
    integer (kind=IntKind), allocatable :: IPVT(:), npi(:,:)
 !
    integer (kind=IntKind), parameter :: funit = 11
+   integer (kind=IntKind), allocatable :: uval1(:,:), uval2(:,:)
 !
    real (kind=RealKind) :: bravais(3,3)
    real (kind=RealKind), pointer :: AtomPosition(:,:)
@@ -141,9 +143,8 @@ program SingleSiteKrein
    real (kind=RealKind), allocatable, target :: deriv_dos_int(:,:), integr_dos_e(:,:), deriv_feidos(:,:)
    real (kind=RealKind), allocatable, target :: integr_dos_corr(:,:), integr_dos_corr_rb(:,:)
    real (kind=RealKind), pointer :: r_mesh(:), p_val(:)
-   real (kind=RealKind), pointer :: potr_0(:)
 !
-   real (kind=RealKind) :: re, vol, de
+   real (kind=RealKind) :: re, vol, de, hin
    real (kind=RealKind) :: t0, t1, t2, t3
    real (kind=RealKind) :: rmt, rend, rws, rinsc, Rb, si, sr
    real (kind=RealKind) :: dos, sfac, dos_mt, dos_tmp, intdos, intdos0, intdos1, corr, corr_rb, phase
@@ -177,16 +178,20 @@ program SingleSiteKrein
    t0 = getTime()
    NumAtoms = getNumAtoms()
    LocalNumAtoms=getLocalNumAtoms()
+   table_size = getAlloyTableSize()
+   local_table_size = 0
+   do id = 1, LocalNumAtoms
+      local_table_size = local_table_size + getLocalNumSpecies(id)
+   enddo
    bravais = getBravaisLattice()
    AtomPosition => getAtomPosition()
 !
    node_print_level = getStandardOutputLevel()
 !
-   allocate(AtomicNumber(LocalNumAtoms))
    allocate(GlobalIndex(LocalNumAtoms), atom_print_level(1:LocalNumAtoms))
    do i=1,LocalNumAtoms
-      AtomicNumber(i) = getLocalAtomicNumber(i)
       atom_print_level(i) = getStandardOutputLevel(i)
+      GlobalIndex(i)=getGlobalIndex(i)
    enddo
 !
 !  ===================================================================
@@ -255,78 +260,9 @@ program SingleSiteKrein
 !  ===================================================================
 !  initialize radial grid
 !  -------------------------------------------------------------------
-   call initRadialGrid(LocalNumAtoms, istop, node_print_level)
+   call setupRadGridAndCell(NumAtoms,lmax_max)
 !  -------------------------------------------------------------------
 !
-   do i=1,LocalNumAtoms
-      ig=getGlobalIndex(i)
-      GlobalIndex(i)=ig
-!     ----------------------------------------------------------------
-      call getGridData(i,ndivin,ndivout,nmult)
-!     ----------------------------------------------------------------
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printPolyhedron(i)
-!        -------------------------------------------------------------
-      endif
-      rend =  getOutscrSphRadius(i)
-      if (isMuffinTinPotential()) then
-         rmt = getMuffinTinRadius(i)
-         rinsc = getInscrSphRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = rinsc
-         endif
-         rws = getWignerSeitzRadius(i)
-         if (getSingleSiteSolverType()==1) then
-            rend=rws
-         endif
-!        -------------------------------------------------------------
-         call genRadialGrid(i,xstart, rmt, rinsc, rend, ndivin)
-!        -------------------------------------------------------------
-      else if ( isASAPotential() ) then
-         rend =  getWignerSeitzRadius(i)
-         rmt = getMuffinTinRadius(i)
-         rinsc = getWignerSeitzRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = rinsc
-         endif
-!        -------------------------------------------------------------
-         call genRadialGrid(i,xstart, rmt, rinsc, rend, ndivin )
-!        -------------------------------------------------------------
-      else if (isMuffinTinASAPotential()) then
-         rend =  getWignerSeitzRadius(i)
-         rmt = getMuffinTinRadius(i)
-         rinsc = getWignerSeitzRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = rinsc
-         endif
-!        -------------------------------------------------------------
-         call genRadialGrid( i, xstart, rmt, rinsc, rend, ndivin )
-!        -------------------------------------------------------------
-      else
-         if (getNeighborDistance(i,1)-getOutscrSphRadius(i) < TEN2m8) then
-!           ----------------------------------------------------------
-            call WarningHandler('testSSSolver',                       &
-                     'Ill condition found: Neighbor distance <= Rcs', &
-                     getNeighborDistance(i,1),getOutscrSphRadius(i))
-!           ----------------------------------------------------------
-         endif
-         rmt = getMuffinTinRadius(i)
-         rinsc = getInscrSphRadius(i)
-         if ( rmt < 0.010d0 ) then
-            rmt = getInscrSphRadius(i)
-         endif
-         rws = getWignerSeitzRadius(i)
-!        -------------------------------------------------------------
-         call genRadialGrid( i, rmt, rinsc, rws, rend, ndivin, ndivout, nmult)
-!        -------------------------------------------------------------
-      endif
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printRadialGrid(i)
-!        -------------------------------------------------------------
-      endif
-   enddo
    if (MyPE == 0) then
       if (getKeyValue(1,'Large sphere radius (a.u.)',Rb) > 0) then
          Rb = 500.0d0
@@ -337,32 +273,6 @@ program SingleSiteKrein
       string_rb(1:3)='_Rb'
    endif
    call bcastMessage(Rb,0)
-!
-!  ===================================================================
-!  initialize step function module
-!  ===================================================================
-   allocate( ngr(LocalNumAtoms), ngt(LocalNumAtoms) )
-   do i=1,LocalNumAtoms
-      ngr(i) = ngaussr
-      ngt(i) = ngaussq
-   enddo
-!
-!  -------------------------------------------------------------------
-   call initStepFunction(LocalNumAtoms, lmax_max, lmax_step, ngr, ngt, &
-                         istop,node_print_level)
-!  -------------------------------------------------------------------
-   deallocate( ngr, ngt )
-!
-   do i=1,LocalNumAtoms
-      if (atom_print_level(i) >= 0) then
-!        -------------------------------------------------------------
-         call printStepFunction(i)
-!        -------------------------------------------------------------
-      endif
-!     ----------------------------------------------------------------
-      call testStepFunction(i)
-!     ----------------------------------------------------------------
-   enddo
 !
 !  ===================================================================
 !  initialize potential module
@@ -393,8 +303,6 @@ program SingleSiteKrein
    call readPotential()
 !  -------------------------------------------------------------------
    do id = 1, LocalNumAtoms
-      Grid => getGrid(id)
-      ig = GlobalIndex(id)
       do is = 1,n_spin_pola
          jl = 0
          do l = 0, lmax_pot(id)
@@ -405,7 +313,6 @@ program SingleSiteKrein
                endif
             enddo
          enddo
-         potr_0 =>  getSphPotr(id,1,is)
       enddo
    enddo
 !
@@ -439,59 +346,63 @@ program SingleSiteKrein
    aGID = getGroupID('Unit Cell')
    eGID = getGroupID('Energy Mesh')
    if (getMyPEinGroup(eGID) == 0) then
-      allocate(filename(LocalNumAtoms,n_spin_pola), filename1(LocalNumAtoms,n_spin_pola),  &
-               filename2(LocalNumAtoms,n_spin_pola))
-!     allocate(filename3(LocalNumAtoms,n_spin_pola), filename4(LocalNumAtoms,n_spin_pola))
+      allocate(uval1(table_size,n_spin_pola))
+      allocate(uval2(table_size,n_spin_pola))
       do is = 1, n_spin_pola
          do id = 1, LocalNumAtoms
             ig = GlobalIndex(id)
-            write(filename(id,is),'(5i6,i3)')100000+lmax_step(id),100000+lmax_kkr(id),100000+lmax_phi(id), &
-                                             100000+ig, 100000+NumEs,100+is
-            filename(id,is)(1:4)='_stp'; filename(id,is)(7:10)='_kkr'; filename(id,is)(13:16)='_phi'
-            filename(id,is)(19:21)='_at'; filename(id,is)(25:26)='_e'; filename(id,is)(31:32)='_s'
-            filename1(id,is) = 'smd'//trim(filename(id,is))
-            filename2(id,is) = 'del'//trim(filename(id,is))   ! //trim(string_rb)
-            open(unit=is*200+funit+id,file=filename1(id,is),form='formatted',status='unknown')
-            open(unit=is*300+funit+id,file=filename2(id,is),form='formatted',status='unknown')
-            write(is*200+funit+id,'(5x,a,$)')'Energy(Ryd)        total-phase'
-            do l = 0, lmax_kkr(id)
-               if (l < 10) then
-                  do m = -l, l
-                     if (m < -9) then
-                        write(is*200+funit+id,'(9x,a,i1,a,i3,a,$)')'(',l,',',m,')  '
-                     else if (m < 0 .or. m > 9) then
-                        write(is*200+funit+id,'(9x,a,i1,a,i2,a,$)')'(',l,',',m,')   '
-                     else
-                        write(is*200+funit+id,'(9x,a,i1,a,i1,a,$)')'(',l,',',m,')    '
-                     endif
-                  enddo
-               else
-                  do m = -l, l
-                     if (m < -9) then
-                        write(is*200+funit+id,'(9x,a,i2,a,i3,a,$)')'(',l,',',m,')  '
-                     else if (m < 0 .or. m > 9) then
-                        write(is*200+funit+id,'(9x,a,i2,a,i2,a,$)')'(',l,',',m,')   '
-                     else
-                        write(is*200+funit+id,'(9x,a,i2,a,i1,a,$)')'(',l,',',m,')    '
-                     endif
-                  enddo
-               endif
+            do ia = 1, getNumAlloyElements(ig)
+               jg = getAlloySpeciesIndex(ig,ia)
+               write(filename,'(5i6,i3)')100000+lmax_step(id),100000+lmax_kkr(id),100000+lmax_phi(id), &
+                                         100000+jg, 100000+NumEs,100+is
+               filename(1:4)='_stp'; filename(7:10)='_kkr'; filename(13:16)='_phi'
+               filename(19:21)='_at'; filename(25:26)='_e'; filename(31:32)='_s'
+               filename1 = 'smd'//trim(filename)
+               filename2 = 'del'//trim(filename)   ! //trim(string_rb)
+               uval1(jg,is) = is*2000+funit+id*100+ia
+               uval2(jg,is) = uval1(jg,is) + 5000
+               open(unit=uval1(jg,is),file=filename1,form='formatted',status='unknown')
+               open(unit=uval2(jg,is),file=filename2,form='formatted',status='unknown')
+               write(uval1(jg,is),'(5x,a,$)')'Energy(Ryd)        total-phase'
+               do l = 0, lmax_kkr(id)
+                  if (l < 10) then
+                     do m = -l, l
+                        if (m < -9) then
+                           write(uval1(jg,is),'(9x,a,i1,a,i3,a,$)')'(',l,',',m,')  '
+                        else if (m < 0 .or. m > 9) then
+                           write(uval1(jg,is),'(9x,a,i1,a,i2,a,$)')'(',l,',',m,')   '
+                        else
+                           write(uval1(jg,is),'(9x,a,i1,a,i1,a,$)')'(',l,',',m,')    '
+                        endif
+                     enddo
+                  else
+                     do m = -l, l
+                        if (m < -9) then
+                           write(uval1(jg,is),'(9x,a,i2,a,i3,a,$)')'(',l,',',m,')  '
+                        else if (m < 0 .or. m > 9) then
+                           write(uval1(jg,is),'(9x,a,i2,a,i2,a,$)')'(',l,',',m,')   '
+                        else
+                           write(uval1(jg,is),'(9x,a,i2,a,i1,a,$)')'(',l,',',m,')    '
+                        endif
+                     enddo
+                  endif
+               enddo
+               write(uval1(jg,is),'(a)')' '
+               write(uval2(jg,is),'(5x,3a)')  &
+               'Energy(Ryd)        Krein_DOS         FE_DOS         Delta_DOS       Delta_DOS_Rb      Green_DOS        ',&
+               'Krein_Cell_DOS      Krein_IDOS       ', &
+               'FE_IDOS         Delta_IDOS        Delta_IDOS_Rb       Green_IDOS        Krein_Cell_IDOS'
             enddo
-            write(is*200+funit+id,'(a)')' '
-            write(is*300+funit+id,'(5x,3a)')  &
-            'Energy(Ryd)        Krein_DOS         FE_DOS         Delta_DOS       Delta_DOS_Rb      Green_DOS        ',&
-            'Krein_Cell_DOS      Krein_IDOS       ', &
-            'FE_IDOS         Delta_IDOS        Delta_IDOS_Rb       Green_IDOS        Krein_Cell_IDOS'
          enddo
       enddo
-      allocate( dos_mt_e(NumAtoms,NumEs,n_spin_pola), dos_e(NumAtoms,NumEs,n_spin_pola), &
-                dos_int(NumAtoms,NumEs,n_spin_pola) )
-      allocate( dos_corr(NumAtoms,NumEs,n_spin_pola), dos_corr_rb(NumAtoms,NumEs,n_spin_pola) )
-      allocate( checked(NumAtoms,NumEs,n_spin_pola) ); checked = .false.
-      allocate( phase_e(NumAtoms,NumEs,n_spin_pola), diags_e(kmax_kkr,NumAtoms,NumEs,n_spin_pola) )
-      allocate( detS_e(NumAtoms,NumEs,n_spin_pola) )
+      allocate( dos_mt_e(table_size,NumEs,n_spin_pola), dos_e(table_size,NumEs,n_spin_pola), &
+                dos_int(table_size,NumEs,n_spin_pola) )
+      allocate( dos_corr(table_size,NumEs,n_spin_pola), dos_corr_rb(table_size,NumEs,n_spin_pola) )
+      allocate( checked(table_size,NumEs,n_spin_pola) ); checked = .false.
+      allocate( phase_e(table_size,NumEs,n_spin_pola), diags_e(kmax_kkr,table_size,NumEs,n_spin_pola) )
+      allocate( detS_e(table_size,NumEs,n_spin_pola) )
       if (NeedPDOS) then
-         allocate( pdos_mt_e(kmax_kkr,NumAtoms,NumEs,n_spin_pola), pdos_e(kmax_kkr,NumAtoms,NumEs,n_spin_pola) )
+         allocate( pdos_mt_e(kmax_kkr,table_size,NumEs,n_spin_pola), pdos_e(kmax_kkr,table_size,NumEs,n_spin_pola) )
       endif
    endif
 !
@@ -537,31 +448,37 @@ program SingleSiteKrein
       kappa_mesh(ie_glb) = sqrt(e_mesh(ie_glb))
    enddo
 !
-   allocate( si_ref(kmax_kkr,LocalNumAtoms), sr_ref(kmax_kkr,LocalnumAtoms), &
-             phase_ref(kmax_kkr,LocalNumAtoms), npi(kmax_kkr,LocalNumAtoms) )
+   allocate( si_ref(kmax_kkr,local_table_size), sr_ref(kmax_kkr,local_table_size), &
+             phase_ref(kmax_kkr,local_table_size), npi(kmax_kkr,local_table_size) )
 !
    do is = 1, n_spin_pola
 !
 !     ================================================================
 !     Set up the reference partial phase shift near e = 0
 !     ================================================================
+      lid = 0
       do id = 1, LocalNumAtoms
-!        -------------------------------------------------------------
-         call solveSingleScattering(is, id, e_ref, CZERO)
-         S_matrix => getSMatrix()
-!        -------------------------------------------------------------
          kmax_kkr = (lmax_kkr(id)+1)**2
-!        =============================================================
-!        Triangularize the S_matrix WITHOUT pivoting the matrix!!!
-!        -------------------------------------------------------------
-         call ZGETRF_nopivot(kmax_kkr, kmax_kkr, S_matrix, kmax_kkr, IPVT, INFO)
-!        -------------------------------------------------------------
-         do kl = 1, kmax_kkr
-            smdexp = log(S_matrix(kl,kl))
-            si_ref(kl,id) = aimag(S_matrix(kl,kl))
-            sr_ref(kl,id) = real(S_matrix(kl,kl), kind=RealKind)
-            phase_ref(kl,id) = aimag(smdexp)/TWO
-            npi(kl,id) = 0
+         do ia = 1, getLocalNumSpecies(id)
+            lid = lid + 1
+!           ----------------------------------------------------------
+            call solveSingleScattering(is, id, e_ref, CZERO, atom=ia)
+!           ----------------------------------------------------------
+            S_matrix => getSMatrix(spin=is,site=id,atom=ia)
+!           ----------------------------------------------------------
+!
+!           ==========================================================
+!           Triangularize the S_matrix WITHOUT pivoting the matrix!!!
+!           ----------------------------------------------------------
+            call ZGETRF_nopivot(kmax_kkr, kmax_kkr, S_matrix, kmax_kkr, IPVT, INFO)
+!           ----------------------------------------------------------
+            do kl = 1, kmax_kkr
+               smdexp = log(S_matrix(kl,kl))
+               si_ref(kl,lid) = aimag(S_matrix(kl,kl))
+               sr_ref(kl,lid) = real(S_matrix(kl,kl), kind=RealKind)
+               phase_ref(kl,lid) = aimag(smdexp)/TWO
+               npi(kl,lid) = 0
+            enddo
          enddo
       enddo
 !     ================================================================
@@ -572,286 +489,296 @@ program SingleSiteKrein
          kappa = kappa_mesh(ie_glb)
          if (getMyPEinGroup(eGID) > 0) then
             call packMessage(ie_glb)
+            call packMessage(local_table_size)
          endif
+         lid = 0
          do id = 1, LocalNumAtoms
             ig = GlobalIndex(id)
-            t0 = getTime()
-!           ----------------------------------------------------------
-            call solveSingleScattering(is, id, energy, CZERO)
-!           ----------------------------------------------------------
-            kmax_kkr = (lmax_kkr(id)+1)**2
-!           ----------------------------------------------------------
-!           jost_mat => getJostMatrix()
-            sin_mat => getSineMatrix()
-!           call writeMatrix('Sine matrix',sin_mat,kmax_kkr,kmax_kkr,TEN2m6)
-            cos_mat => getCosineMatrix()
-!           call writeMatrix('Cosine matrix',cos_mat,kmax_kkr,kmax_kkr,TEN2m6)
-!           ----------------------------------------------------------
-            ci_mat => aliasArray2_c(space_t1,kmax_kkr,kmax_kkr)
-            ci_mat = cos_mat
-!           ----------------------------------------------------------
-            call MtxInv_LU(ci_mat,kmax_kkr)
-!           ----------------------------------------------------------
-            xi_mat => aliasArray2_c(space_t2,kmax_kkr,kmax_kkr)
-            xi_mat = CZERO
-            do kl = 1, kmax_kkr
-               xi_mat(kl,kl) = CONE
-            enddo
-!           ----------------------------------------------------------
-            call zgemm( 'n', 'n', kmax_kkr, kmax_kkr, kmax_kkr, SQRTm1,       &
-                       sin_mat, kmax_kkr, ci_mat, kmax_kkr, CONE, xi_mat, kmax_kkr)
-!           ----------------------------------------------------------
-            call MtxDet(kmax_kkr,xi_mat,deto)
-!           call MtxDet(kmax_kkr,jost_mat,delta_p)
-!           ----------------------------------------------------------
-            dets = conjg(deto)
-!           intdos = aimag(log(deto)-log(dets))/(n_spin_pola*PI)
-!           ==========================================================
-!           Determine the integrated DOS based on Krein's formula
-!           Note: Fortran Im[log(r*e^{i*x})] gives -PI <= x <= PI
-!           ==========================================================
-            intdos0 = aimag(log(deto/dets))/(TWO*PI)
-!           if (intdos0 < ZERO) then
-!              intdos = sfac*(intdos0+HALF)
-!           else
-               intdos = sfac*intdos0
-!           endif
-!
-!           ==========================================================
-!           Calculate the S-matrix
-!           ==========================================================
-            xic_mat => aliasArray2_c(space_t3,kmax_kkr,kmax_kkr)
-            xic_mat = CZERO
-            do kl = 1, kmax_kkr
-               xic_mat(kl,kl) = CONE
-            enddo
-!           ----------------------------------------------------------
-            call zgemm( 'n', 'n', kmax_kkr, kmax_kkr, kmax_kkr, -SQRTm1,      &
-                       sin_mat, kmax_kkr, ci_mat, kmax_kkr, CONE, xic_mat, kmax_kkr)
-!           ----------------------------------------------------------
-            call MtxInv_LU(xic_mat,kmax_kkr)
-!           ----------------------------------------------------------
-            S_matrix => aliasArray2_c(space_t4,kmax_kkr,kmax_kkr)
-!           ----------------------------------------------------------
-            call zgemm( 'n', 'n', kmax_kkr, kmax_kkr, kmax_kkr, CONE,         &
-                       xi_mat, kmax_kkr, xic_mat, kmax_kkr, CZERO, S_matrix, kmax_kkr)
-!           ----------------------------------------------------------
-   !!       S_matrix => getSMatrix()
-!
-!           ==========================================================
-!           An alternative way to calculate the integrated DOS
-!           delta_p = det[S-matrix]
-!           ==========================================================
-            call MtxDet(kmax_kkr,S_matrix,delta_p)
-            intdos = sfac*aimag(log(delta_p))/(TWO*PI)
-!           write(6,'(a,f12.5,2x,2d16.8)')'energy, detS = ',real(energy,RealKind),delta_p
-!           ==========================================================
-!
-!           ==========================================================
-!           ==========================================================
-!           ==========================================================
-!           A correction term needs to be added to the Krein formula's DOS
-!           due to the DOS outside the atomic cell.
-!           ----------------------------------------------------------
-!           t_mat => getTMatrix()
-!
-!           Check different ways of calculting the t-matrix if needed
-!           ----------------------------------------------------------
-!           call checkTmatrix(kmax_kkr,energy,sin_mat,cos_mat,t_mat,S_matrix)
-!           ----------------------------------------------------------
-            t_mat => aliasArray2_c(space_t5,kmax_kkr,kmax_kkr)
-            t_mat = -S_matrix
-            do kl = 1, kmax_kkr
-               t_mat(kl,kl) = CONE + t_mat(kl,kl)
-            enddo
-            t_mat = t_mat/(TWO*kappa*SQRTm1)
-!
-!           Firstly, add the contribution from a bounding sphere to infinity
-!           ----------------------------------------------------------
-!           if (isMuffinTinPotential()) then
-!              rend = getInscrSphRadius(id)
-!           else if (isASAPotential() .or. isMuffinTinASAPotential()) then
-!              rend = getWignerSeitzRadius(id)
-!           else
-!              rend =  getOutscrSphRadius(id)
-!           endif
-            if (isASAPotential() .or. isMuffinTinASAPotential()) then
-               rend = getWignerSeitzRadius(id)
-            else  ! In both muffin-tin and full-potential cases, the integration is carried out 
-                  ! from muffin-tin radius to infinity
-               rend = getInscrSphRadius(id)
-            endif
-!           ----------------------------------------------------------
-            call calIntSphHankelSq0(lmax_kkr(id),rend,energy,fint)
-!           ----------------------------------------------------------
-            corr = ZERO
-            do kl = kmax_kkr, 1, -1
-               l = lofk(kl)
-!!             corr = corr + TWO*real(kappa,kind=RealKind)*aimag(t_mat(kl,kl)*fint(l))
-               corr = corr + real((S_matrix(kl,kl)-CONE)*fint(l),kind=RealKind)
-            enddo
-!
-!           Now subtract the contribution from the region inside the cell
-!           but outside the muffin-tin sphere
-!           ----------------------------------------------------------
-            if (isFullPotential()) then
-               rmt =  getInscrSphRadius(id)
-               rend =  getOutscrSphRadius(id)
+            do ia = 1, getLocalNumSpecies(id)
+!              write(6,'(a,i4,a,i2)')'atomic site: ',jg, ', species: ',ia
+               lid = lid + 1
+               t0 = getTime()
 !              -------------------------------------------------------
-               call calIntSphHankelSq1(id,lmax_kkr(id),rmt,rend,energy,gint)
+               call solveSingleScattering(is, id, energy, CZERO, atom=ia)
 !              -------------------------------------------------------
+               kmax_kkr = (lmax_kkr(id)+1)**2
+!              -------------------------------------------------------
+!              jost_mat => getJostMatrix(spin=is,site=id,atom=ia)
+               sin_mat => getSineMatrix(spin=is,site=id,atom=ia)
+!              call writeMatrix('Sine matrix',sin_mat,kmax_kkr,kmax_kkr,TEN2m6)
+               cos_mat => getCosineMatrix(spin=is,site=id,atom=ia)
+!              call writeMatrix('Cosine matrix',cos_mat,kmax_kkr,kmax_kkr,TEN2m6)
+!              -------------------------------------------------------
+               ci_mat => aliasArray2_c(space_t1,kmax_kkr,kmax_kkr)
+               ci_mat = cos_mat
+!              -------------------------------------------------------
+               call MtxInv_LU(ci_mat,kmax_kkr)
+!              -------------------------------------------------------
+               xi_mat => aliasArray2_c(space_t2,kmax_kkr,kmax_kkr)
+               xi_mat = CZERO
                do kl = 1, kmax_kkr
-                  do klp = 1, kmax_kkr
-!!                   corr = corr - TWO*real(kappa,kind=RealKind)*aimag(t_mat(klp,kl)*gint(klp,kl))
-                     if (klp == kl) then
-                        corr = corr - real((S_matrix(kl,kl)-CONE)*gint(kl,kl),kind=RealKind)
-                     else
-                        corr = corr - real(S_matrix(klp,kl)*gint(klp,kl),kind=RealKind)
-                     endif
-                  enddo
+                  xi_mat(kl,kl) = CONE
                enddo
-!              write(6,'(a,2f12.5)')'t*int[hl*hl] for full pot = ',real(energy,kind=RealKind),corr
-            else
-!              write(6,'(a,2f12.5)')'t*int[hl*hl] for sphe pot = ',real(energy,kind=RealKind),corr
-            endif
+!              -------------------------------------------------------
+               call zgemm( 'n', 'n', kmax_kkr, kmax_kkr, kmax_kkr, SQRTm1,       &
+                          sin_mat, kmax_kkr, ci_mat, kmax_kkr, CONE, xi_mat, kmax_kkr)
+!              -------------------------------------------------------
+               call MtxDet(kmax_kkr,xi_mat,deto)
+!              call MtxDet(kmax_kkr,jost_mat,delta_p)
+!              -------------------------------------------------------
+               dets = conjg(deto)
+!              intdos = aimag(log(deto)-log(dets))/(n_spin_pola*PI)
+!              =======================================================
+!              Determine the integrated DOS based on Krein's formula
+!              Note: Fortran Im[log(r*e^{i*x})] gives -PI <= x <= PI
+!              =======================================================
+               intdos0 = aimag(log(deto/dets))/(TWO*PI)
+!              if (intdos0 < ZERO) then
+!                 intdos = sfac*(intdos0+HALF)
+!              else
+                  intdos = sfac*intdos0
+!              endif
 !
-            corr = sfac*real(kappa,kind=RealKind)*corr/(TWO*PI)
-!           write(6,'(a,2f12.5)')'energy, corr = ',real(energy,kind=RealKind),corr
+!              =======================================================
+!              Calculate the S-matrix
+!              =======================================================
+               xic_mat => aliasArray2_c(space_t3,kmax_kkr,kmax_kkr)
+               xic_mat = CZERO
+               do kl = 1, kmax_kkr
+                  xic_mat(kl,kl) = CONE
+               enddo
+!              -------------------------------------------------------
+               call zgemm( 'n', 'n', kmax_kkr, kmax_kkr, kmax_kkr, -SQRTm1,      &
+                          sin_mat, kmax_kkr, ci_mat, kmax_kkr, CONE, xic_mat, kmax_kkr)
+!              -------------------------------------------------------
+               call MtxInv_LU(xic_mat,kmax_kkr)
+!              -------------------------------------------------------
+               S_matrix => aliasArray2_c(space_t4,kmax_kkr,kmax_kkr)
+!              -------------------------------------------------------
+               call zgemm( 'n', 'n', kmax_kkr, kmax_kkr, kmax_kkr, CONE,         &
+                          xi_mat, kmax_kkr, xic_mat, kmax_kkr, CZERO, S_matrix, kmax_kkr)
+!              -------------------------------------------------------
+   !!          S_matrix => getSMatrix(spin=is,site=id,atom=ia)
 !
-!           now check for the correction term up to a large radius
-!           ----------------------------------------------------------
-            call calIntSphHankelSq0(lmax_kkr(id),Rb,energy,fint)
-!           ----------------------------------------------------------
-            corr_rb = ZERO
-            do kl = 1, kmax_kkr
-               l = lofk(kl)
-!!             corr_rb = corr_rb + aimag(t_mat(kl,kl)*fint(l))
-               corr_rb = corr_rb + real((S_matrix(kl,kl)-CONE)*fint(l),kind=RealKind)
-            enddo
-!!          corr_rb = corr - sfac*real(energy,kind=RealKind)*corr_rb/PI
-            corr_rb = corr - sfac*real(kappa,kind=RealKind)*corr_rb/(TWO*PI)
-!           ==========================================================
+!              =======================================================
+!              An alternative way to calculate the integrated DOS
+!              delta_p = det[S-matrix]
+!              =======================================================
+               call MtxDet(kmax_kkr,S_matrix,delta_p)
+               intdos = sfac*aimag(log(delta_p))/(TWO*PI)
+!              write(6,'(a,f12.5,2x,2d16.8)')'energy, detS = ',real(energy,RealKind),delta_p
+!              =======================================================
 !
-!           ==========================================================
-!           Triangularize the S_matrix WITHOUT pivoting the matrix!!!
-!           ----------------------------------------------------------
-            call ZGETRF_nopivot(kmax_kkr, kmax_kkr, S_matrix, kmax_kkr, IPVT, INFO)
-!           ----------------------------------------------------------
+!              =======================================================
+!              =======================================================
+!              =======================================================
+!              A correction term needs to be added to the Krein formula's DOS
+!              due to the DOS outside the atomic cell.
+!              -------------------------------------------------------
+!              t_mat => getTMatrix(spin=is,site=id,atom=ia)
 !
-!           ==========================================================
-!           Determine the generialized partial phase shift based on
-!           triangularized S_matrix (Due to Balazs Gyorffy)
-!           The partial phase shifts are stored in diags array
-!           Notes: adding or subtracting a PI to the partial phase 
+!              Check different ways of calculting the t-matrix if needed
+!              -------------------------------------------------------
+!              call checkTmatrix(kmax_kkr,energy,sin_mat,cos_mat,t_mat,S_matrix)
+!              -------------------------------------------------------
+               t_mat => aliasArray2_c(space_t5,kmax_kkr,kmax_kkr)
+               t_mat = -S_matrix
+               do kl = 1, kmax_kkr
+                  t_mat(kl,kl) = CONE + t_mat(kl,kl)
+               enddo
+               t_mat = t_mat/(TWO*kappa*SQRTm1)
+!
+!              Firstly, add the contribution from a bounding sphere to infinity
+!              -------------------------------------------------------
+!              if (isMuffinTinPotential()) then
+!                 rend = getInscrSphRadius(id)
+!              else if (isASAPotential() .or. isMuffinTinASAPotential()) then
+!                 rend = getWignerSeitzRadius(id)
+!              else
+!                 rend =  getOutscrSphRadius(id)
+!              endif
+               if (isASAPotential() .or. isMuffinTinASAPotential()) then
+                  rend = getWignerSeitzRadius(id)
+               else  ! In both muffin-tin and full-potential cases, the integration is carried out 
+                     ! from muffin-tin radius to infinity
+                  rend = getInscrSphRadius(id)
+               endif
+!              -------------------------------------------------------
+               call calIntSphHankelSq0(lmax_kkr(id),rend,energy,fint)
+!              -------------------------------------------------------
+               corr = ZERO
+               do kl = kmax_kkr, 1, -1
+                  l = lofk(kl)
+!!                corr = corr + TWO*real(kappa,kind=RealKind)*aimag(t_mat(kl,kl)*fint(l))
+                  corr = corr + real((S_matrix(kl,kl)-CONE)*fint(l),kind=RealKind)
+               enddo
+!
+!              Now subtract the contribution from the region inside the cell
+!              but outside the muffin-tin sphere
+!              -------------------------------------------------------
+               if (isFullPotential()) then
+                  rmt =  getInscrSphRadius(id)
+                  rend =  getOutscrSphRadius(id)
+!                 ----------------------------------------------------
+                  call calIntSphHankelSq1(id,lmax_kkr(id),rmt,rend,energy,gint)
+!                 ----------------------------------------------------
+                  do kl = 1, kmax_kkr
+                     do klp = 1, kmax_kkr
+!!                      corr = corr - TWO*real(kappa,kind=RealKind)*aimag(t_mat(klp,kl)*gint(klp,kl))
+                        if (klp == kl) then
+                           corr = corr - real((S_matrix(kl,kl)-CONE)*gint(kl,kl),kind=RealKind)
+                        else
+                           corr = corr - real(S_matrix(klp,kl)*gint(klp,kl),kind=RealKind)
+                        endif
+                     enddo
+                  enddo
+!                 write(6,'(a,2f12.5)')'t*int[hl*hl] for full pot = ',real(energy,kind=RealKind),corr
+               else
+!                 write(6,'(a,2f12.5)')'t*int[hl*hl] for sphe pot = ',real(energy,kind=RealKind),corr
+               endif
+!
+               corr = sfac*real(kappa,kind=RealKind)*corr/(TWO*PI)
+!              write(6,'(a,2f12.5)')'energy, corr = ',real(energy,kind=RealKind),corr
+!
+!              now check for the correction term up to a large radius
+!              -------------------------------------------------------
+               call calIntSphHankelSq0(lmax_kkr(id),Rb,energy,fint)
+!              -------------------------------------------------------
+               corr_rb = ZERO
+               do kl = 1, kmax_kkr
+                  l = lofk(kl)
+!!                corr_rb = corr_rb + aimag(t_mat(kl,kl)*fint(l))
+                  corr_rb = corr_rb + real((S_matrix(kl,kl)-CONE)*fint(l),kind=RealKind)
+               enddo
+!!             corr_rb = corr - sfac*real(energy,kind=RealKind)*corr_rb/PI
+               corr_rb = corr - sfac*real(kappa,kind=RealKind)*corr_rb/(TWO*PI)
+!              =======================================================
+!
+!              =======================================================
+!              Triangularize the S_matrix WITHOUT pivoting the matrix!!!
+!              -------------------------------------------------------
+               call ZGETRF_nopivot(kmax_kkr, kmax_kkr, S_matrix, kmax_kkr, IPVT, INFO)
+!              -------------------------------------------------------
+!
+!              =======================================================
+!              Determine the generialized partial phase shift based on
+!              triangularized S_matrix (Due to Balazs Gyorffy)
+!              The partial phase shifts are stored in diags array
+!              Notes: adding or subtracting a PI to the partial phase 
 !                  shift is necessary when a diagnonal element of
 !                  the S-matrix passes the real energy axis from the
 !                  2nd quadrant to the 3rd quadrant, or from from the
 !                  3rd quadrant to the 2nd quadrant.
-!           For a given (l,m), S_matrix(kl,kl) = (sr,si),
+!              For a given (l,m), S_matrix(kl,kl) = (sr,si),
 !                              2*phase*i = log(S_matrix(kl,kl)).
-!           If phase stays positive, which is likely the case for l > 0(?),
-!           as energy increases, the phase changes anti-clockwise and may jumps
-!           from postive to
-!           negative if S_matrix crosses from the 2nd quadrant into 
-!           the 3rd quadrant. In this happes, a PI needs to be added to phase.
-!           In the case of l = 0, as energy increases, the phase changes clockwisely
-!           and may enter from the 3rd quadrant into the 2nd quadrant. If this happens
-!           the phase needs to be subtracted by a PI.
+!              If phase stays positive, which is likely the case for l > 0(?),
+!              as energy increases, the phase changes anti-clockwise and may jumps
+!              from postive to
+!              negative if S_matrix crosses from the 2nd quadrant into 
+!              the 3rd quadrant. In this happes, a PI needs to be added to phase.
+!              In the case of l = 0, as energy increases, the phase changes clockwisely
+!              and may enter from the 3rd quadrant into the 2nd quadrant. If this happens
+!              the phase needs to be subtracted by a PI.
 !
-!           The following scheme still needs to be checked...
-!           ==========================================================
-            phase = ZERO
-            do kl = 1, kmax_kkr
-               smdexp = log(S_matrix(kl,kl))
-               si = aimag(S_matrix(kl,kl)); sr = real(S_matrix(kl,kl),kind=RealKind)
-               diags(kl) = aimag(smdexp)/TWO - phase_ref(kl,id)
-               if (npi(kl,id) == 0 .and. AtomicNumber(id) > 0) then
-                  if (lofk(kl) == 0 .and. (sr < ZERO .and. si > ZERO)) then
-                     npi(kl,id) = -1
-                  else if (lofk(kl) == 2 .and. si < ZERO) then ! This happens to Zn: the phase of S matrix jumps from 2nd quadrant to 4th quadrant
-write(6,'(a,2i5,2x,3d15.8)')'n = 1 takes place at id, kl, e = ',id,kl,real(energy),sr,si
-                     npi(kl,id) = 1
-                  endif
-               endif
-               diags(kl) = diags(kl) + npi(kl,id)*PI
-               phase = phase + diags(kl)
-            enddo
-!
-!           ==========================================================
-!           determine the integrated DOS (relative to the free
-!           electron integrated DOS) using total phase
-!           ==========================================================
-            intdos = sfac*phase/PI
-!           ==========================================================
-!
-            write(6,'(/,a,f12.5,a,i3)') 'solveSS time: ',getTime() - t0,' sec., ie = ',ie_loc
-!
-            t0 = getTime()
-!           ----------------------------------------------------------
-            call computeDOS()
-!           ----------------------------------------------------------
-            write(6,'(/,a,f12.5,a)') 'compDOS time: ',getTime() - t0,' sec.'
-            dos_r_jl => getDOS()
-            Grid => getGrid(id)
-            jmax_dos = (lmax_green(id)+1)*(lmax_green(id)+2)/2
-            kmax_dos = (lmax_green(id)+1)**2
-!           t0 = getTime()
-!           ----------------------------------------------------------
-            dos = sfac*getVolumeIntegration( id, Grid%jend, Grid%r_mesh,   &
-                                             jmax_dos, 2, dos_r_jl, dos_mt)
-!           ----------------------------------------------------------
-            dos_mt = sfac*dos_mt
-            if (isMuffinTinPotential()) then
-               dos = dos_mt
-            endif
-!           write(6,'(/,a,f12.5,a)') 'getVInt time: ',getTime() - t0,' sec.'
-            if (getMyPEinGroup(eGID) > 0) then
-               call packMessage(ig)
-               call packMessage(dos_mt)
-               call packMessage(dos)
-               call packMessage(intdos)
-               call packMessage(corr)
-               call packMessage(corr_rb)
-               call packMessage(phase)
-               call packMessage(delta_p)
-               call packMessage(diags,kmax_kkr)
-            else
-               checked(ig,ie_glb,is)=.true.
-               dos_e(ig,ie_glb,is) = dos
-               dos_mt_e(ig,ie_glb,is) = dos_mt
-               dos_int(ig,ie_glb,is) = intdos
-               dos_corr(ig,ie_glb,is) = corr
-               dos_corr_rb(ig,ie_glb,is) = corr_rb
-               phase_e(ig,ie_glb,is) = phase
-               detS_e(ig,ie_glb,is) = delta_p
-               diags_e(1:kmax_kkr,ig,ie_glb,is) =  diags(1:kmax_kkr)
-            endif
-!
-            if (NeedPDOS) then
-!              -------------------------------------------------------
-               call computePDOS()
-!              -------------------------------------------------------
-               dos_r_jl_kl => getPDOS()
-               kl = 0
-               do l = 0, lmax_kkr(id)
-                  do m = -l, l
-                     kl = kl + 1
-                     pdos => dos_r_jl_kl(:,:,kl)
-!                    -------------------------------------------------
-                     dos = sfac*getVolumeIntegration( id, Grid%jend, Grid%r_mesh,   &
-                                                      jmax_dos, 2, pdos, dos_mt )
-!                    -------------------------------------------------
-                     dos_mt = sfac*dos_mt
-                     if (getMyPEinGroup(eGID) > 0) then
-                        call packMessage(dos_mt)
-                        call packMessage(dos)
-                     else
-                        pdos_e(kl,ig,ie_glb,is)=dos
-                        pdos_mt_e(kl,ig,ie_glb,is)=dos_mt
+!              The following scheme still needs to be checked...
+!              =======================================================
+               phase = ZERO
+               do kl = 1, kmax_kkr
+                  smdexp = log(S_matrix(kl,kl))
+                  si = aimag(S_matrix(kl,kl)); sr = real(S_matrix(kl,kl),kind=RealKind)
+                  diags(kl) = aimag(smdexp)/TWO - phase_ref(kl,lid)
+                  if (npi(kl,lid) == 0 .and. getLocalAtomicNumber(id,ia) > 0) then
+                     if (lofk(kl) == 0 .and. (sr < ZERO .and. si > ZERO)) then
+                        npi(kl,lid) = -1
+                     else if (lofk(kl) == 2 .and. si < ZERO) then ! This happens to Zn: the phase of S matrix jumps 
+                                                                  ! from 2nd quadrant to 4th quadrant
+                        write(6,'(a,2i5,2x,3d15.8)')'n = 1 takes place at id, kl, e = ',id,kl,real(energy),sr,si
+                        npi(kl,lid) = 1
                      endif
-                  enddo
+                  endif
+                  diags(kl) = diags(kl) + npi(kl,lid)*PI
+                  phase = phase + diags(kl)
                enddo
-            endif
+!
+!              =======================================================
+!              determine the integrated DOS (relative to the free
+!              electron integrated DOS) using total phase
+!              =======================================================
+               intdos = sfac*phase/PI
+!              =======================================================
+!
+               write(6,'(/,a,f12.5,a,i3)') 'solveSS time: ',getTime() - t0,' sec., ie = ',ie_loc
+!
+               t0 = getTime()
+!              -------------------------------------------------------
+               call computeDOS(spin=is,site=id,atom=ia)
+!              -------------------------------------------------------
+               write(6,'(/,a,f12.5,a)') 'compDOS time: ',getTime() - t0,' sec.'
+               dos_r_jl => getDOS(spin=is,site=id,atom=ia)
+               Grid => getGrid(id)
+               jmax_dos = (lmax_green(id)+1)*(lmax_green(id)+2)/2
+               kmax_dos = (lmax_green(id)+1)**2
+!              t0 = getTime()
+!              -------------------------------------------------------
+               dos = sfac*getVolumeIntegration( id, Grid%jend, Grid%r_mesh,   &
+                                                jmax_dos, 2, dos_r_jl, dos_mt)
+!              -------------------------------------------------------
+               dos_mt = sfac*dos_mt
+               if (isMuffinTinPotential()) then
+                  dos = dos_mt
+               endif
+!              write(6,'(/,a,f12.5,a)') 'getVInt time: ',getTime() - t0,' sec.'
+!
+               jg = getAlloySpeciesIndex(ig,ia)
+               if (getMyPEinGroup(eGID) > 0) then
+                  call packMessage(jg)
+                  call packMessage(kmax_kkr)
+                  call packMessage(dos_mt)
+                  call packMessage(dos)
+                  call packMessage(intdos)
+                  call packMessage(corr)
+                  call packMessage(corr_rb)
+                  call packMessage(phase)
+                  call packMessage(delta_p)
+                  call packMessage(diags,kmax_kkr)
+               else
+                  checked(jg,ie_glb,is)=.true.
+                  dos_e(jg,ie_glb,is) = dos
+                  dos_mt_e(jg,ie_glb,is) = dos_mt
+                  dos_int(jg,ie_glb,is) = intdos
+                  dos_corr(jg,ie_glb,is) = corr
+                  dos_corr_rb(jg,ie_glb,is) = corr_rb
+                  phase_e(jg,ie_glb,is) = phase
+                  detS_e(jg,ie_glb,is) = delta_p
+                  diags_e(1:kmax_kkr,jg,ie_glb,is) =  diags(1:kmax_kkr)
+               endif
+!
+               if (NeedPDOS) then
+!                 ----------------------------------------------------
+                  call computePDOS(spin=is,site=id,atom=ia)
+!                 ----------------------------------------------------
+                  dos_r_jl_kl => getPDOS(spin=is,site=id,atom=ia)
+                  kl = 0
+                  do l = 0, lmax_kkr(id)
+                     do m = -l, l
+                        kl = kl + 1
+                        pdos => dos_r_jl_kl(:,:,kl)
+!                       ----------------------------------------------
+                        dos = sfac*getVolumeIntegration( id, Grid%jend, Grid%r_mesh,   &
+                                                         jmax_dos, 2, pdos, dos_mt )
+!                       ----------------------------------------------
+                        dos_mt = sfac*dos_mt
+                        if (getMyPEinGroup(eGID) > 0) then
+                           call packMessage(dos_mt)
+                           call packMessage(dos)
+                        else
+                           pdos_e(kl,jg,ie_glb,is)=dos
+                           pdos_mt_e(kl,jg,ie_glb,is)=dos_mt
+                        endif
+                     enddo
+                  enddo
+               endif
+            enddo
          enddo
       enddo
    enddo
@@ -861,11 +788,17 @@ write(6,'(a,2i5,2x,3d15.8)')'n = 1 takes place at id, kl, e = ',id,kl,real(energ
          call recvPackage(101,AnyPE)
          do is = 1, n_spin_pola
             do ie_loc = 1, NumEsOnMyProc
+!              -------------------------------------------------------
                call unpackMessage(ie_glb)
-               do id = 1, LocalNumAtoms
-                  kmax_kkr = (lmax_kkr(id)+1)**2
-                  call unpackMessage(ig)
-                  if (checked(ig,ie_glb,is)) then
+               call unpackMessage(remote_table_size)
+!              -------------------------------------------------------
+               do j = 1, remote_table_size
+!                 ----------------------------------------------------
+                  call unpackMessage(jg)
+                  call unpackMessage(kmax_kkr)
+!                 ----------------------------------------------------
+                  if (checked(jg,ie_glb,is)) then
+!                    -------------------------------------------------
                      call unpackMessage(dos_mt)
                      call unpackMessage(dos)
                      call unpackMessage(intdos)
@@ -874,28 +807,35 @@ write(6,'(a,2i5,2x,3d15.8)')'n = 1 takes place at id, kl, e = ',id,kl,real(energ
                      call unpackMessage(phase)
                      call unpackMessage(delta_p)
                      call unpackMessage(diags,kmax_kkr)
+!                    -------------------------------------------------
                      if (NeedPDOS) then
-                        do kl = 0, (lmax_kkr(id)+1)**2
+                        do kl = 0, kmax_kkr
+!                          -------------------------------------------
                            call unpackMessage(dos_mt)
                            call unpackMessage(dos)
+!                          -------------------------------------------
                         enddo
                      endif
                   else
-                     call unpackMessage(dos_mt_e(ig,ie_glb,is))
-                     call unpackMessage(dos_e(ig,ie_glb,is))
-                     call unpackMessage(dos_int(ig,ie_glb,is))
-                     call unpackMessage(dos_corr(ig,ie_glb,is))
-                     call unpackMessage(dos_corr_rb(ig,ie_glb,is))
-                     call unpackMessage(phase_e(ig,ie_glb,is))
-                     call unpackMessage(detS_e(ig,ie_glb,is))
-                     call unpackMessage(diags_e(1:kmax_kkr,ig,ie_glb,is),kmax_kkr)
+!                    -------------------------------------------------
+                     call unpackMessage(dos_mt_e(jg,ie_glb,is))
+                     call unpackMessage(dos_e(jg,ie_glb,is))
+                     call unpackMessage(dos_int(jg,ie_glb,is))
+                     call unpackMessage(dos_corr(jg,ie_glb,is))
+                     call unpackMessage(dos_corr_rb(jg,ie_glb,is))
+                     call unpackMessage(phase_e(jg,ie_glb,is))
+                     call unpackMessage(detS_e(jg,ie_glb,is))
+                     call unpackMessage(diags_e(1:kmax_kkr,jg,ie_glb,is),kmax_kkr)
+!                    -------------------------------------------------
                      if (NeedPDOS) then
                         do kl = 0, (lmax_kkr(id)+1)**2
-                           call unpackMessage(pdos_mt_e(kl,ig,ie_glb,is))
-                           call unpackMessage(pdos_e(kl,ig,ie_glb,is))
+!                          -------------------------------------------
+                           call unpackMessage(pdos_mt_e(kl,jg,ie_glb,is))
+                           call unpackMessage(pdos_e(kl,jg,ie_glb,is))
+!                          -------------------------------------------
                         enddo
                      endif
-                     checked(ig,ie_glb,is)=.true.
+                     checked(jg,ie_glb,is)=.true.
                   endif
                enddo
             enddo
@@ -908,9 +848,9 @@ write(6,'(a,2i5,2x,3d15.8)')'n = 1 takes place at id, kl, e = ',id,kl,real(energ
 !
    if (getMyPEinGroup(eGID) == 0) then
 !
-      allocate( deriv_dos_int(NumEs,LocalNumAtoms), integr_dos_e(NumEs,LocalNumAtoms) )
+      allocate( deriv_dos_int(NumEs,local_table_size), integr_dos_e(NumEs,local_table_size) )
       allocate( val_tmp(NumEs), deriv_feidos(NumEs,LocalNumAtoms), dos_int_fe(NumEs,LocalNumAtoms) )
-      allocate( integr_dos_corr(NumEs,LocalNumAtoms), integr_dos_corr_rb(NumEs,LocalNumAtoms), cval_tmp(NumEs) )
+      allocate( integr_dos_corr(NumEs,local_table_size), integr_dos_corr_rb(NumEs,local_table_size), cval_tmp(NumEs) )
 !
       do id = 1, LocalNumAtoms
          if (isMuffinTinPotential()) then
@@ -939,53 +879,58 @@ write(6,'(a,2i5,2x,3d15.8)')'n = 1 takes place at id, kl, e = ',id,kl,real(energ
 !              dos_int is calculated based on Krein's formula and is
 !              relative to the free electron IDOS
 !        =============================================================
+         lid = 0
          do id = 1, LocalNumAtoms
             ig = GlobalIndex(id)
+            do ia = 1, getLocalNumSpecies(id)
+               jg = getAlloySpeciesIndex(ig,ia)
+               lid = lid + 1
 !
-!           ==========================================================
-!           Add free-electron integrated DOS to the Krein theorem formula
-!           ==========================================================
-!           do ie_glb = 1, NumEs
-!              dos_int(ig,ie_glb,is) = dos_int(ig,ie_glb,is) + dos_int_fe(ie_glb,id)
-!           enddo
+!              =======================================================
+!              Add free-electron integrated DOS to the Krein theorem formula
+!              =======================================================
+!              do ie_glb = 1, NumEs
+!                 dos_int(jg,ie_glb,is) = dos_int(jg,ie_glb,is) + dos_int_fe(ie_glb,id)
+!              enddo
 !
-            do ie_glb = 1, NumEs
-               val_tmp(ie_glb) = dos_corr(ig,ie_glb,is)
-            enddo
-            p_val => integr_dos_corr(1:NumEs,id)
-            if (NumEs == 1) then
-               p_val(1) = ZERO
-            else if (NumEs == 2) then
-               p_val(1) = ZERO
-               p_val(2) = (val_tmp(1)+val_tmp(2))*(e_mesh(2)-e_mesh(1))*HALF
-            else if (NumEs > 2) then
-!              -------------------------------------------------------
-               call calIntegration(0,NumEs,e_mesh,val_tmp,p_val)
-!              -------------------------------------------------------
-            endif
-            do ie_glb = 1, NumEs
-               val_tmp(ie_glb) = dos_corr_rb(ig,ie_glb,is)
-            enddo
-            p_val => integr_dos_corr_rb(1:NumEs,id)
-            if (NumEs == 1) then
-               p_val(1) = ZERO
-            else if (NumEs == 2) then
-               p_val(1) = ZERO
-               p_val(2) = (val_tmp(1)+val_tmp(2))*(e_mesh(2)-e_mesh(1))*HALF
-            else if (NumEs > 2) then
-!              -------------------------------------------------------
-               call calIntegration(0,NumEs,e_mesh,val_tmp,p_val)
-!              -------------------------------------------------------
-            endif
+               do ie_glb = 1, NumEs
+                  val_tmp(ie_glb) = dos_corr(jg,ie_glb,is)
+               enddo
+               p_val => integr_dos_corr(1:NumEs,lid)
+               if (NumEs == 1) then
+                  p_val(1) = ZERO
+               else if (NumEs == 2) then
+                  p_val(1) = ZERO
+                  p_val(2) = (val_tmp(1)+val_tmp(2))*(e_mesh(2)-e_mesh(1))*HALF
+               else if (NumEs > 2) then
+!                 ----------------------------------------------------
+                  call calIntegration(0,NumEs,e_mesh,val_tmp,p_val)
+!                 ----------------------------------------------------
+               endif
+               do ie_glb = 1, NumEs
+                  val_tmp(ie_glb) = dos_corr_rb(jg,ie_glb,is)
+               enddo
+               p_val => integr_dos_corr_rb(1:NumEs,lid)
+               if (NumEs == 1) then
+                  p_val(1) = ZERO
+               else if (NumEs == 2) then
+                  p_val(1) = ZERO
+                  p_val(2) = (val_tmp(1)+val_tmp(2))*(e_mesh(2)-e_mesh(1))*HALF
+               else if (NumEs > 2) then
+!                 ----------------------------------------------------
+                  call calIntegration(0,NumEs,e_mesh,val_tmp,p_val)
+!                 ----------------------------------------------------
+               endif
 !
-!           ==========================================================
-!           Determine the integrated DOS
-!           Another approach is to set dos_int = sfac*phase_e/PI
-!           ==========================================================
-            intdos0 = ZERO
-!           intdos0 = dos_int(ig,1,is)
-            do ie_glb = 1, NumEs
-               dos_int(ig,ie_glb,is) = dos_int(ig,ie_glb,is)-intdos0
+!              =======================================================
+!              Determine the integrated DOS
+!              Another approach is to set dos_int = sfac*phase_e/PI
+!              =======================================================
+               intdos0 = ZERO
+!              intdos0 = dos_int(jg,1,is)
+               do ie_glb = 1, NumEs
+                  dos_int(jg,ie_glb,is) = dos_int(jg,ie_glb,is)-intdos0
+               enddo
             enddo
          enddo
 !        =============================================================
@@ -998,62 +943,67 @@ write(6,'(a,2i5,2x,3d15.8)')'n = 1 takes place at id, kl, e = ',id,kl,real(energ
 !              deriv_dos_int (derivative of dos_int) is DOS calculated
 !              from Krein's formula and is relative to the free electron DOS
 !        =============================================================
+         lid = 0
          do id = 1, LocalNumAtoms
             ig = GlobalIndex(id)
-            do ie_glb = 1, NumEs
-               val_tmp(ie_glb) = dos_e(ig,ie_glb,is)
-            enddo
-            p_val => integr_dos_e(1:NumEs,id)
-            if (NumEs == 1) then
-               p_val(1) = ZERO
-            else if (NumEs == 2) then
-               p_val(1) = ZERO
-               p_val(2) = (val_tmp(1)+val_tmp(2))*(e_mesh(2)-e_mesh(1))*HALF
-            else if (NumEs > 2) then
-!              -------------------------------------------------------
-               call calIntegration(0,NumEs,e_mesh,val_tmp,p_val)
-!              -------------------------------------------------------
-            endif
-            p_val = p_val + dos_e(ig,1,is)*ErBottom*0.5d0
+            do ia = 1, getLocalNumSpecies(id)
+               jg = getAlloySpeciesIndex(ig,ia)
+               lid = lid + 1
+               do ie_glb = 1, NumEs
+                  val_tmp(ie_glb) = dos_e(jg,ie_glb,is)
+               enddo
+               p_val => integr_dos_e(1:NumEs,lid)
+               if (NumEs == 1) then
+                  p_val(1) = ZERO
+               else if (NumEs == 2) then
+                  p_val(1) = ZERO
+                  p_val(2) = (val_tmp(1)+val_tmp(2))*(e_mesh(2)-e_mesh(1))*HALF
+               else if (NumEs > 2) then
+!                 ----------------------------------------------------
+                  call calIntegration(0,NumEs,e_mesh,val_tmp,p_val)
+!                 ----------------------------------------------------
+               endif
+               p_val = p_val + dos_e(jg,1,is)*ErBottom*0.5d0
 !
-!           ==========================================================
-!           Calculate the derivative of the det[S-matrix] and calculate
-!           the derivative of the integrated DOS in Krein's formula
-!           ==========================================================
-            do ie_glb = 1, NumEs
-               val_tmp(ie_glb) = dos_int(ig,ie_glb,is)
-            enddo
-            p_val => deriv_dos_int(1:NumEs,id)
-            if (NumEs == 1) then
-               p_val(1) = ZERO
-            else if (NumEs == 2) then
-               p_val(1) = ZERO
-               p_val(2) = (val_tmp(2)-val_tmp(1))/(kappa_mesh(2)-kappa_mesh(1))
-            else if (NumEs == 3) then
-               p_val(1) = ZERO
-               p_val(2) = (val_tmp(2)-val_tmp(1))/(kappa_mesh(2)-kappa_mesh(1))
-               p_val(3) = (val_tmp(3)-val_tmp(2))/(kappa_mesh(3)-kappa_mesh(2))
-            else if (NumEs == 4) then
-               p_val(1) = ZERO
-               p_val(2) = (val_tmp(2)-val_tmp(1))/(kappa_mesh(2)-kappa_mesh(1))
-               p_val(3) = (val_tmp(3)-val_tmp(2))/(kappa_mesh(3)-kappa_mesh(2))
-               p_val(4) = (val_tmp(4)-val_tmp(3))/(kappa_mesh(4)-kappa_mesh(3))
-            else if (NumEs > 4) then
+!              =======================================================
+!              Calculate the derivative of the det[S-matrix] and calculate
+!              the derivative of the integrated DOS in Krein's formula
+!              =======================================================
+               do ie_glb = 1, NumEs
+                  val_tmp(ie_glb) = dos_int(jg,ie_glb,is)
+               enddo
+               p_val => deriv_dos_int(1:NumEs,lid)
+               if (NumEs == 1) then
+                  p_val(1) = ZERO
+               else if (NumEs == 2) then
+                  p_val(1) = ZERO
+                  p_val(2) = (val_tmp(2)-val_tmp(1))/(kappa_mesh(2)-kappa_mesh(1))
+               else if (NumEs == 3) then
+                  p_val(1) = ZERO
+                  p_val(2) = (val_tmp(2)-val_tmp(1))/(kappa_mesh(2)-kappa_mesh(1))
+                  p_val(3) = (val_tmp(3)-val_tmp(2))/(kappa_mesh(3)-kappa_mesh(2))
+               else if (NumEs == 4) then
+                  p_val(1) = ZERO
+                  p_val(2) = (val_tmp(2)-val_tmp(1))/(kappa_mesh(2)-kappa_mesh(1))
+                  p_val(3) = (val_tmp(3)-val_tmp(2))/(kappa_mesh(3)-kappa_mesh(2))
+                  p_val(4) = (val_tmp(4)-val_tmp(3))/(kappa_mesh(4)-kappa_mesh(3))
+               else if (NumEs > 4) then
+!                 ----------------------------------------------------
+!                 call newder(val_tmp,p_val,e_mesh,NumEs)
+                  call derv5(val_tmp,p_val,kappa_mesh,NumEs)
+!                 ----------------------------------------------------
+               endif
+               do ie_glb = 1, NumEs
+                  deriv_dos_int(ie_glb,lid) = HALF*deriv_dos_int(ie_glb,lid)/kappa_mesh(ie_glb)
+               enddo
 !              -------------------------------------------------------
-!              call newder(val_tmp,p_val,e_mesh,NumEs)
-               call derv5(val_tmp,p_val,kappa_mesh,NumEs)
+!!             call derv5(detS_e(1:NumEs,ie_glb,is),cval_tmp,e_mesh,NumEs)
 !              -------------------------------------------------------
-            endif
-            do ie_glb = 1, NumEs
-               deriv_dos_int(ie_glb,id) = HALF*deriv_dos_int(ie_glb,id)/kappa_mesh(ie_glb)
+!!             do ie_glb = 1, NumEs
+!!                deriv_dos_int(ie_glb,lid) = sfac*aimag(cval_tmp(ie_glb)/detS_e(jg,ie_glb,is))/PI2 &
+!!                deriv_dos_int(ie_glb,lid) = deriv_dos_int(ie_glb,lid) - dos_corr(jg,ie_glb,is)
+!!             enddo
             enddo
-!           ----------------------------------------------------------
-!!          call derv5(detS_e(1:NumEs,ie_glb,is),cval_tmp,e_mesh,NumEs)
-!           ----------------------------------------------------------
-!!          do ie_glb = 1, NumEs
-!!             deriv_dos_int(ie_glb,id) = sfac*aimag(cval_tmp(ie_glb)/detS_e(ig,ie_glb,is))/PI2 &
-!!             deriv_dos_int(ie_glb,id) = deriv_dos_int(ie_glb,id) - dos_corr(ig,ie_glb,is)
-!!          enddo
 !
             if (NumEs == 1) then
                deriv_feidos(1,id) = ZERO
@@ -1086,39 +1036,44 @@ write(6,'(a,2i5,2x,3d15.8)')'n = 1 takes place at id, kl, e = ',id,kl,real(energ
 !        =============================================================
          do ie_glb = 1, NumEs
             energy = e_mesh(ie_glb)
+            lid = 0
             do id = 1, LocalNumAtoms
                ig = GlobalIndex(id)
                kmax_kkr = (lmax_kkr(id)+1)**2
-               write(is*200+funit+id,'(2x,d16.8,2x,d16.8,$)')real(energy,kind=RealKind),phase_e(ig,ie_glb,is)
-               do kl = 1, kmax_kkr-1
-                  write(is*200+funit+id,'(2x,d16.8,$)') diags_e(kl,ig,ie_glb,is)
-               enddo
-               write(is*200+funit+id,'(2x,d16.8)') diags_e(kmax_kkr,ig,ie_glb,is)
+               do ia = 1, getNumAlloyElements(ig)
+                  jg = getAlloySpeciesIndex(ig,ia)
+                  lid = lid + 1
+                  write(uval1(jg,is),'(2x,d16.8,2x,d16.8,$)')real(energy,kind=RealKind),phase_e(jg,ie_glb,is)
+                  do kl = 1, kmax_kkr-1
+                     write(uval1(jg,is),'(2x,d16.8,$)') diags_e(kl,jg,ie_glb,is)
+                  enddo
+                  write(uval1(jg,is),'(2x,d16.8)') diags_e(kmax_kkr,jg,ie_glb,is)
 !
-               write(is*300+funit+id,'(2x,d16.8,5(1x,d16.8),2x,6(2x,d16.8),5x,d16.8)')e_mesh(ie_glb),              &
-                     deriv_dos_int(ie_glb,id), sfac*getVolume(id)*sqrt(abs(e_mesh(ie_glb)))/(4.0d0*PI**2),         &
-                     dos_corr(ig,ie_glb,is), dos_corr_rb(ig,ie_glb,is), dos_e(ig,ie_glb,is),                       &
-                     deriv_dos_int(ie_glb,id)+sfac*getVolume(id)*sqrt(abs(e_mesh(ie_glb)))/(4.0d0*PI**2)-          &
-                     dos_corr(ig,ie_glb,is), dos_int(ig,ie_glb,is), dos_int_fe(ie_glb,id),                         &
-                     integr_dos_corr(ie_glb,id), integr_dos_corr_rb(ie_glb,id), integr_dos_e(ie_glb,id),           &
-                     dos_int(ig,ie_glb,is)+dos_int_fe(ie_glb,id)-integr_dos_corr(ie_glb,id)
+                  write(uval2(jg,is),'(2x,d16.8,5(1x,d16.8),2x,6(2x,d16.8),5x,d16.8)')e_mesh(ie_glb),      &
+                     deriv_dos_int(ie_glb,lid), sfac*getVolume(id)*sqrt(abs(e_mesh(ie_glb)))/(4.0d0*PI**2), &
+                     dos_corr(jg,ie_glb,is), dos_corr_rb(jg,ie_glb,is), dos_e(jg,ie_glb,is),               &
+                     deriv_dos_int(ie_glb,lid)+sfac*getVolume(id)*sqrt(abs(e_mesh(ie_glb)))/(4.0d0*PI**2)-  &
+                     dos_corr(jg,ie_glb,is), dos_int(jg,ie_glb,is), dos_int_fe(ie_glb,id),                 &
+                     integr_dos_corr(ie_glb,lid), integr_dos_corr_rb(ie_glb,lid), integr_dos_e(ie_glb,lid),   &
+                     dos_int(jg,ie_glb,is)+dos_int_fe(ie_glb,id)-integr_dos_corr(ie_glb,lid)
 !
-               if (getMyPEinGroup(aGID) == 0) then
-                  write(6,'(1x,i2,4x,i2,6x,d16.8,6x,d16.8,4x,d16.8)')is,ig,real(energy,kind=RealKind),             &
-                                                                     dos_e(ig,ie_glb,is),dos_int(ig,ie_glb,is)
-                  if (NeedPDOS) then
-                     dos_tmp = ZERO
-                     kl = 0
-                     do l = 0, lmax_kkr(id)
-                        do m = -l, l
-                           kl = kl + 1
-                           write(6,'(34x,i3,1x,i3,f14.8)')l,m,pdos_e(kl,ig,ie_glb,is)
-                           dos_tmp = dos_tmp + pdos_e(kl,ig,ie_glb,is)
+                  if (getMyPEinGroup(aGID) == 0) then
+                     write(6,'(1x,i2,4x,i2,6x,d16.8,6x,d16.8,4x,d16.8)')is,jg,real(energy,kind=RealKind),  &
+                                                                        dos_e(jg,ie_glb,is),dos_int(jg,ie_glb,is)
+                     if (NeedPDOS) then
+                        dos_tmp = ZERO
+                        kl = 0
+                        do l = 0, lmax_kkr(id)
+                           do m = -l, l
+                              kl = kl + 1
+                              write(6,'(34x,i3,1x,i3,f14.8)')l,m,pdos_e(kl,jg,ie_glb,is)
+                              dos_tmp = dos_tmp + pdos_e(kl,jg,ie_glb,is)
+                           enddo
                         enddo
-                     enddo
-                     write(6,'(34x,a,f14.8)')'Total =',dos_tmp
+                        write(6,'(34x,a,f14.8)')'Total =',dos_tmp
+                     endif
                   endif
-               endif
+               enddo
             enddo
          enddo
       enddo
@@ -1126,8 +1081,11 @@ write(6,'(a,2i5,2x,3d15.8)')'n = 1 takes place at id, kl, e = ',id,kl,real(energ
 !
       do is = 1, n_spin_pola
          do ig = 1, NumAtoms
-            close(unit=is*200+funit+ig)
-            close(unit=is*300+funit+ig)
+            do ia = 1, getNumAlloyElements(ig)
+               jg = getAlloySpeciesIndex(ig,ia)
+               close(unit=uval1(jg,is))
+               close(unit=uval2(jg,is))
+            enddo
          enddo
       enddo
 !
@@ -1144,10 +1102,7 @@ write(6,'(a,2i5,2x,3d15.8)')'n = 1 takes place at id, kl, e = ',id,kl,real(energ
 !  clean up the allocated spaces.
 !  ===================================================================
    nullify(dos_r_jl, AtomPosition)
-   if (getMyPEinGroup(eGID) == 0) then
-      deallocate( filename, filename1, filename2 )
-   endif
-   deallocate( atom_print_level, e_mesh, kappa_mesh, AtomicNumber)
+   deallocate( atom_print_level, e_mesh, kappa_mesh)
    deallocate( lmax_kkr,lmax_phi,lmax_rho,lmax_pot )
    deallocate( lmax_step, lmax_green, GlobalIndex, dos_jl )
    deallocate( IPVT)

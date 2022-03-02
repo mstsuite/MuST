@@ -1,0 +1,10 @@
+5.58
+# Bravais lattice
+     0.50000000000    0.50000000000   -0.50000000000
+     0.50000000000   -0.50000000000    0.50000000000
+    -0.50000000000    0.50000000000    0.50000000000
+# Atomic position data
+# Format: For random alloy calculations using CPA, use 'CPA' as the virtual atom 
+# name, followed by the Cartition coordinates (x,y,z) of the 'atom' and by atomic
+# species name and its concentration on the atomic site.
+CPA  0.00000000000    0.00000000000    0.00000000000  Cu  0.50000  Zn  0.50000

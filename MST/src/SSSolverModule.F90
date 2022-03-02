@@ -3,7 +3,7 @@ module SSSolverModule
 !
    use MathParamModule, only : TEN2m12, TEN2m10, TEN2m8, TEN2m6, TEN2m4, TEN2m11
    use MathParamModule, only : ZERO, ONE, TWO, THREE, FOUR, FIVE, SIX, NINE, TEN
-   use MathParamModule, only : PI, PI2, SQRT_PI, HALF, TEN2m5, TEN2m16
+   use MathParamModule, only : PI, PI2, SQRT_PI, HALF, TEN2m5, TEN2m7, TEN2m16
    use MathParamModule, only : CZERO, CONE, SQRTm1, Y0
 !
    use ErrorHandlerModule, only : ErrorHandler, StopHandler, WarningHandler
@@ -42,7 +42,10 @@ public :: initSSSolver,          &
           getGreenFunction,      &
           getDOSDerivative,      &
           getRegSolutionDerivative, &
-          getGreenFunctionDerivative
+          getGreenFunctionDerivative, &
+          getFreeElectronHighLDOS, &
+          getFreeElectronDOS,    &
+          isInitialized
 !
 !tmat_global          convertTmatToGlobalFrame
 !
@@ -304,6 +307,8 @@ private
    complex (kind=CmplxKind), allocatable, target :: wks_scvphi(:,:)
    complex (kind=CmplxKind), allocatable, target :: cpotstep(:,:)
 !
+   real (kind=RealKind), allocatable, target :: DOSSpace(:)
+!
    integer (kind=IntKind) :: NumPEsInGroup, MyPEinGroup, kGID
 !
    logical :: isDosSymmOn = .false.
@@ -550,8 +555,8 @@ contains
          jmax_trunc = ((lmax_trunc+1)*(lmax_trunc+2))/2
          jmax_trunc_max = max(jmax_trunc_max,jmax_trunc)
       else
-         jmax_trunc = -1
-         jmax_trunc_max = -1
+         jmax_trunc = 1
+         jmax_trunc_max = 1
       endif
 !
       if (SSSMethod == -1) then
@@ -604,8 +609,12 @@ contains
 !
       Scatter(ia)%numrs    = iend
       Scatter(ia)%numrs_cs = Grid%jend
-      Scatter(ia)%numrs_mt = Grid%jmt
-      Scatter(ia)%numrs_trunc = Grid%jend-Grid%jmt+1 ! includes the muffin-tin point
+      if ( FullSolver ) then
+         Scatter(ia)%numrs_mt = Grid%jinsc
+      else
+         Scatter(ia)%numrs_mt = Grid%jmt
+      endif
+      Scatter(ia)%numrs_trunc = Grid%jend-Grid%jinsc+1 ! includes the inscribed radius point
       Scatter(ia)%lmax_phi = lphi(ia)
       Scatter(ia)%lmax_kkr = lkkr(ia)
       Scatter(ia)%lmax_pot = lmax_pot
@@ -792,7 +801,7 @@ contains
    allocate( dbjl(iend_max,0:lmax_phi), dbnl(iend_max,0:lmax_phi),    &
              dbhl(iend_max,0:lmax_phi) )
    allocate( bjtmp(0:lmax_phi+1), bntmp(0:lmax_phi+1) )
-   allocate( TmpSpace(1:5*iend_max) )
+   allocate( TmpSpace(1:5*iend_max), DOSSpace(iend_max) )
    allocate( flags_jl(jmax_max) )
 !
    if ( FullSolver ) then
@@ -1060,7 +1069,7 @@ use MPPModule, only : MyPE, syncAllPEs
    deallocate( bjl, bnl, bhl )
    deallocate( dbjl, dbnl, dbhl )
    deallocate( bjtmp, bntmp )
-   deallocate( TmpSpace )
+   deallocate( TmpSpace, DOSSpace )
    deallocate(flags_jl)
 !
    if ( FullSolver ) then
@@ -1154,6 +1163,7 @@ use MPPModule, only : MyPE, syncAllPEs
    numrs_trunc = Scatter(site)%numrs_trunc
 !
    TmpSpace = CZERO
+   DOSSpace = ZERO
 !
    end subroutine initGlobalVariables
 !  ===================================================================
@@ -1946,7 +1956,7 @@ use MPPModule, only : MyPE, syncAllPEs
          endif
 !        call writeMatrix('Sine Matrix',sin_mat,kmax_int,kmax_kkr,5.0d0*TEN2m8)
 !        call writeMatrix('Cosine Matrix',cos_mat,kmax_int,kmax_kkr,5.0d0*TEN2m8)
-!        call writeMatrix('OmegaHatInv Matrix',OmegaHatInv_mat,kmax_kkr,kmax_kkr,5.0d0*TEN2m8)
+!        call writeMatrix('OmegaHatInv Matrix',OmegaHatInv_mat,kmax_kkr,kmax_kkr,TEN2m7)
 !        -------------------------------------------------------------
          OmegaHat_mat = OmegaHatInv_mat
          call MtxInv_LU(OmegaHat_mat,kmax_kkr)
@@ -6018,6 +6028,180 @@ use MPPModule, only : MyPE, syncAllPEs
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getFreeElectronHighLDOS(site,gfac,derivative) result(hl_dos)
+!  ===================================================================
+   use RadialGridModule, only : getGrid
+   use BesselModule, only : SphericalBessel, SphericalHankel
+!
+   implicit none
+!
+   integer (kind=IntKind), intent(in), optional :: site
+   integer (kind=IntKind) :: id, l, ir, nr, lmax_loc
+!
+   complex (kind=CmplxKind), intent(in), optional :: gfac
+!
+   complex (kind=CmplxKind) :: gmul, x
+   complex (kind=CmplxKind) :: jltmp(0:lmax_max_kkr), djltmp(0:lmax_max_kkr)
+   complex (kind=CmplxKind) :: hltmp(0:lmax_max_kkr), dhltmp(0:lmax_max_kkr)
+   complex (kind=CmplxKind) :: bjl_site(iend_max,0:lmax_max_kkr), dbjl_site(iend_max,0:lmax_max_kkr)
+   complex (kind=CmplxKind) :: bhl_site(iend_max,0:lmax_max_kkr), dbhl_site(iend_max,0:lmax_max_kkr)
+!
+   real (kind=RealKind), intent(out), optional :: derivative(:)
+   real (kind=RealKind), pointer :: hl_dos(:)
+   real (kind=RealKind) :: rfac
+!
+   if (present(site)) then
+      id = site
+   else
+      id = LocalIndex
+   endif
+!
+   if (present(gfac)) then
+      gmul = gfac
+   else
+      gmul = CONE
+   endif
+!
+   nr = Scatter(id)%numrs_cs
+   Grid => getGrid(id)
+   lmax_loc = lofk(Scatter(id)%kmax_kkr)
+!
+!  ===================================================================
+!  Set up Riccatti bessel functions
+!      bjl_site(x) = x*jl(x), dbjl_site(x) = x*djl(x)
+!      bhl_site(x) = x*hl(x), dbhl_site(x) = x*dhl(x)
+!  ===================================================================
+   do ir = 1, nr
+      x=kappa*Grid%r_mesh(ir)
+!     ----------------------------------------------------------------
+      call SphericalBessel(lmax_loc,x,jltmp,djltmp)
+      call SphericalHankel(lmax_loc,x,hltmp,dhltmp)
+!     ----------------------------------------------------------------
+      do l = 0, lmax_loc
+         bjl_site(ir,l)=x*jltmp(l)
+         dbjl_site(ir,l)=x*djltmp(l)
+         bhl_site(ir,l)=x*hltmp(l)
+         dbhl_site(ir,l)=x*dhltmp(l)
+      enddo
+   enddo
+!
+   rfac = sqrt(PI)/(2.0d0*PI**2) ! = 1/(4.0d0*PI**2)/Y00
+!
+   hl_dos => DOSSpace(1:nr)
+   hl_dos = ZERO
+   do l = lmax_loc, 0, -1
+      do ir = 1, nr
+         hl_dos(ir) = hl_dos(ir) + (2*l+1)*real(gmul*bjl_site(ir,l)*bhl_site(ir,l)/kappa,kind=RealKind)
+      enddo
+   enddo
+   do ir = 1, nr
+      hl_dos(ir) = rfac*(real(kappa,kind=RealKind)*Grid%r_mesh(ir)**2-hl_dos(ir))
+   enddo
+!
+   if (present(derivative)) then
+      derivative = ZERO
+      do l = lmax_loc, 0, -1
+         do ir = 1, nr
+            derivative(ir) = derivative(ir) +                         &
+               (2*l+1)*real(gmul*(dbjl_site(ir,l)*bhl_site(ir,l)+     &
+                                  bjl_site(ir,l)*dbhl_site(ir,l))/kappa,kind=RealKind)
+         enddo
+      enddo
+      derivative = -rfac*derivative
+   endif
+!
+   end function getFreeElectronHighLDOS
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getFreeElectronDOS(site,gfac,derivative) result(fe_dos)
+!  ===================================================================
+   use RadialGridModule, only : getGrid
+   use BesselModule, only : SphericalBessel, SphericalHankel
+!
+   implicit none
+!
+   integer (kind=IntKind), intent(in), optional :: site
+   integer (kind=IntKind) :: id, l, ir, nr, lmax_loc
+!
+   complex (kind=CmplxKind), intent(in), optional :: gfac
+!
+   complex (kind=CmplxKind) :: gmul, x
+   complex (kind=CmplxKind) :: jltmp(0:lmax_max_kkr), djltmp(0:lmax_max_kkr)
+   complex (kind=CmplxKind) :: hltmp(0:lmax_max_kkr), dhltmp(0:lmax_max_kkr)
+   complex (kind=CmplxKind) :: bjl_site(iend_max,0:lmax_max_kkr), dbjl_site(iend_max,0:lmax_max_kkr)
+   complex (kind=CmplxKind) :: bhl_site(iend_max,0:lmax_max_kkr), dbhl_site(iend_max,0:lmax_max_kkr)
+!
+   real (kind=RealKind), intent(out), optional :: derivative(:)
+   real (kind=RealKind), pointer :: fe_dos(:)
+   real (kind=RealKind) :: rfac
+!
+   if (present(site)) then
+      id = site
+   else
+      id = LocalIndex
+   endif
+!
+   if (present(gfac)) then
+      gmul = gfac
+   else
+      gmul = CONE
+   endif
+!
+   nr = Scatter(id)%numrs_cs
+   Grid => getGrid(id)
+   lmax_loc = lofk(Scatter(id)%kmax_kkr)
+!
+!  ===================================================================
+!  Set up Riccatti bessel functions
+!      bjl_site(x) = x*jl(x), dbjl_site(x) = x*djl(x)
+!      bhl_site(x) = x*hl(x), dbhl_site(x) = x*dhl(x)
+!  ===================================================================
+   do ir = 1, nr
+      x=kappa*Grid%r_mesh(ir)
+!     ----------------------------------------------------------------
+      call SphericalBessel(lmax_loc,x,jltmp,djltmp)
+      call SphericalHankel(lmax_loc,x,hltmp,dhltmp)
+!     ----------------------------------------------------------------
+      do l = 0, lmax_loc
+         bjl_site(ir,l)=x*jltmp(l)
+         dbjl_site(ir,l)=x*djltmp(l)
+         bhl_site(ir,l)=x*hltmp(l)
+         dbhl_site(ir,l)=x*dhltmp(l)
+      enddo
+   enddo
+!
+   rfac = sqrt(PI)/(2.0d0*PI**2) ! = 1/(4.0d0*PI**2)/Y00
+!
+   fe_dos => DOSSpace(1:nr)
+   fe_dos = ZERO
+   do l = lmax_loc, 0, -1
+      do ir = 1, nr
+         fe_dos(ir) = fe_dos(ir) + (2*l+1)*real(gmul*bjl_site(ir,l)*bhl_site(ir,l)/kappa,kind=RealKind)
+      enddo
+   enddo
+   fe_dos = rfac*fe_dos
+!
+   if (present(derivative)) then
+      derivative = ZERO
+      do l = lmax_loc, 0, -1
+         do ir = 1, nr
+            derivative(ir) = derivative(ir) +                         &
+               (2*l+1)*real(gmul*(dbjl_site(ir,l)*bhl_site(ir,l)+     &
+                                  bjl_site(ir,l)*dbhl_site(ir,l))/kappa,kind=RealKind)
+         enddo
+      enddo
+      derivative = rfac*derivative
+   endif
+!
+   end function getFreeElectronDOS
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine printWronskian(kl1,kl2,wfr1,dwfr1,wfr2,dwfr2,n0,n1,ns)
 !  ===================================================================
    use RadialGridModule, only : getGrid
@@ -6606,7 +6790,7 @@ use MPPModule, only : MyPE, syncAllPEs
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine computeGF0(spin,site,atom)
+   subroutine computeGF0(spin,site,atom,noIrrTerm)
 !  ===================================================================
    use SystemSymmetryModule, only : getSymmetryFlags
 !
@@ -6620,6 +6804,9 @@ use MPPModule, only : MyPE, syncAllPEs
    integer (kind=IntKind) :: kmax_green_loc, kmax_kkr_loc, kmax_phi_loc
    integer (kind=IntKind), pointer :: green_flags(:)
 !
+   logical, intent(in), optional :: noIrrTerm
+   logical :: withIrrTerm
+!
    complex (kind=CmplxKind) :: cmat, cfac
    complex (kind=CmplxKind), pointer :: green(:,:)
    complex (kind=CmplxKind), pointer :: der_green(:,:)
@@ -6632,7 +6819,13 @@ use MPPModule, only : MyPE, syncAllPEs
    complex (kind=CmplxKind), pointer :: mat(:,:), sin_t(:,:), sin_mat(:,:)
    complex (kind=CmplxKind), pointer :: p1c(:)
 !
-   if (IrrSolType /= 'H' .and. IrrSolType /= 'h') then
+   if ( present(noIrrTerm) ) then
+      withIrrTerm = .not. noIrrTerm
+   else
+      withIrrTerm = .true.
+   endif
+!
+   if (withIrrTerm .and. IrrSolType /= 'H' .and. IrrSolType /= 'h') then
       call ErrorHandler('computeGF0',                  &
               'Green function is not yet implemented for this bounday condition',IrrSolType)
    endif
@@ -6691,9 +6884,12 @@ use MPPModule, only : MyPE, syncAllPEs
    kmax_green_loc = Scatter(id)%kmax_green
    kmax_kkr_loc = Scatter(id)%kmax_kkr
    kmax_phi_loc = Scatter(id)%kmax_phi
-   sin_t => aliasArray2_c(wks_mtx1,kmax_phi,kmax_kkr)
-   mat => aliasArray2_c(wks_mtx2,kmax_kkr,kmax_phi)
    nr = Scatter(id)%numrs_cs
+!
+   if (withIrrTerm) then
+      sin_t => aliasArray2_c(wks_mtx1,kmax_phi,kmax_kkr)
+      mat => aliasArray2_c(wks_mtx2,kmax_kkr,kmax_phi)
+   endif
 !
    LOOP_ic: do ic = 1, Scatter(id)%NumSpecies
       if (present(atom)) then
@@ -6702,34 +6898,45 @@ use MPPModule, only : MyPE, syncAllPEs
          endif
       endif
       wfr_reg => Scatter(id)%Solutions(ic,is)%reg_sol
-      wfr_irr => Scatter(id)%Solutions(ic,is)%irr_sol
+      if (withIrrTerm) then
+         wfr_irr => Scatter(id)%Solutions(ic,is)%irr_sol
+      else
+         wfr_irr => Scatter(id)%Solutions(ic,is)%reg_sol
+      endif
       green => Scatter(id)%Solutions(ic,is)%green
       green = CZERO
       if (rad_deriv) then
          der_wfr_reg => Scatter(id)%Solutions(ic,is)%reg_dsol
-         der_wfr_irr => Scatter(id)%Solutions(ic,is)%irr_dsol
+         if (withIrrTerm) then
+            der_wfr_irr => Scatter(id)%Solutions(ic,is)%irr_dsol
+         else
+            der_wfr_irr => Scatter(id)%Solutions(ic,is)%reg_dsol
+         endif
          der_green => Scatter(id)%Solutions(ic,is)%der_green
          der_green = CZERO
       endif
 !
 !     ================================================================
-!     compute [i*S - C]^{-1} 
+!     compute [i*S - C]^{-1} if withIrrTerm is true
 !     ================================================================
-      sin_mat => Scatter(id)%Solutions(ic,is)%sin_mat
-      do kl = 1,kmax_kkr
-         m = mofk(kl)
-         do klp = 1,kmax_phi
-            mp = mofk(klp)
-            sin_t(klp,kl) = m1m(m+mp)*sin_mat(klp-2*mp,kl-2*m)
+      if (withIrrTerm) then
+         sin_mat => Scatter(id)%Solutions(ic,is)%sin_mat
+         do kl = 1,kmax_kkr
+            m = mofk(kl)
+            do klp = 1,kmax_phi
+               mp = mofk(klp)
+               sin_t(klp,kl) = m1m(m+mp)*sin_mat(klp-2*mp,kl-2*m)
+            enddo
          enddo
-      enddo
-      OmegaHat_mat => Scatter(id)%Solutions(ic,is)%OmegaHat_mat
-!     ----------------------------------------------------------------
-      call zgemm( 'n', 't', kmax_kkr, kmax_phi, kmax_kkr, CONE,       &
-                  OmegaHat_mat, kmax_kkr, sin_t, kmax_phi, CZERO, mat, kmax_kkr)
-!     ----------------------------------------------------------------
+         OmegaHat_mat => Scatter(id)%Solutions(ic,is)%OmegaHat_mat
+!        -------------------------------------------------------------
+         call zgemm( 'n', 't', kmax_kkr, kmax_phi, kmax_kkr, CONE,       &
+                     OmegaHat_mat, kmax_kkr, sin_t, kmax_phi, CZERO, mat, kmax_kkr)
+!        -------------------------------------------------------------
+      else
+         mat => Scatter(id)%Solutions(ic,is)%OmegaHat_mat
+      endif
 !
-!     if ( SphericalSolver .or. isSphPotZeroOutsideRmt ) then
       if (isSphericalSolverOn) then
          do kl1 = 1, kmax_kkr_loc
             do i = 1, nj3(kl1,kl1)
@@ -6755,14 +6962,6 @@ use MPPModule, only : MyPE, syncAllPEs
             q_tmp => aliasArray2_c(wks_qlhat,Scatter(id)%numrs,kmax_phi_loc)
          endif
          do kl2 = 1, kmax_kkr_loc
-!!          p_tmp = CZERO
-!!          do kl1 = 1, kmax_kkr_loc
-!!             do kl1p = 1, kmax_phi_loc
-!!                do ir = 1, nr
-!!                   p_tmp(ir,kl1p) = p_tmp(ir,kl1p) + mat(kl1,kl2)*wfr_reg(ir,kl1p,kl1)
-!!                enddo
-!!             enddo
-!!          enddo
 !           ----------------------------------------------------------
             call zgemv('n',Scatter(id)%numrs*kmax_phi_loc,kmax_kkr_loc, &
                        CONE,wfr_reg,Scatter(id)%numrs*kmax_phi_loc,     &
@@ -6801,7 +7000,13 @@ use MPPModule, only : MyPE, syncAllPEs
          enddo
          nullify( p_tmp, q_tmp )
       endif
-      cfac = -SQRTm1*kappa
+!
+      if (withIrrTerm) then
+         cfac = -SQRTm1*kappa
+      else
+         cfac = kappa
+      endif
+!
       green = cfac*green
       if (rad_deriv) then
          der_green = cfac*der_green
@@ -7016,6 +7221,9 @@ use MPPModule, only : MyPE, syncAllPEs
    complex (kind=CmplxKind), pointer :: Omega_mat(:,:)
    complex (kind=CmplxKind), pointer :: OmegaHat_mat(:,:)
    complex (kind=CmplxKind), pointer :: p1c(:)
+!
+   real (kind=RealKind), pointer :: high_l_fedos(:)
+   real (kind=RealKind) :: der_hlfedos(iend_max)
 !
    if (present(spin)) then
       is = min(NumSpins,spin)
@@ -7307,25 +7515,18 @@ use MPPModule, only : MyPE, syncAllPEs
 !
       if ( present(add_highl_fec) ) then
          if (add_highl_fec) then
-            TmpSpace = CZERO
-            do l = lofk(kmax_kkr_loc), 0, -1
-               do ir = 1, nr
-                  TmpSpace(ir) = TmpSpace(ir) + (2*l+1)*bjl(ir,l)**2/kappa**2
-               enddo
-            enddo
-            cfac = kappa*sqrt(PI)/(2.0d0*PI**2) ! = kappa/(4.0d0*PI**2)/Y00
-            do ir = 1, nr
-               dos(ir,1) = dos(ir,1) + cfac*(Grid%r_mesh(ir)**2-TmpSpace(ir))
-            enddo
             if (rad_deriv) then
-               TmpSpace = CZERO
-               do l = lofk(kmax_kkr_loc), 0, -1
-                  do ir = 1, nr
-                     TmpSpace(ir) = TmpSpace(ir) + (2*l+1)*dbjl(ir,l)**2/kappa**2
-                  enddo
+               high_l_fedos => getFreeElectronHighLDOS(site=id,derivative=der_hlfedos)
+               do ir = 1, nr
+                  dos(ir,1) = dos(ir,1) + high_l_fedos(ir)
                enddo
                do ir = 1, nr
-                  der_dos(ir,1) = der_dos(ir,1) - cfac*TmpSpace(ir)
+                  der_dos(ir,1) = der_dos(ir,1) + der_hlfedos(ir)
+               enddo
+            else
+               high_l_fedos => getFreeElectronHighLDOS(site=id)
+               do ir = 1, nr
+                  dos(ir,1) = dos(ir,1) + high_l_fedos(ir)
                enddo
             endif
          endif
@@ -7694,5 +7895,19 @@ use MPPModule, only : MyPE, syncAllPEs
    enddo
 !  
    end subroutine calIntSphHankelSq1
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isInitialized() result(y)
+!  ===================================================================
+   implicit none
+!
+   logical :: y
+!
+   y = Initialized
+!
+   end function isInitialized
 !  ===================================================================
 end module SSSolverModule

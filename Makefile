@@ -26,17 +26,39 @@ ArchName = $(MAKECMDGOALS)
 
 MuST_PATH = $(shell pwd)
 
+ifndef SUFFIX
+   ifdef suffix
+      SUFFIX = $(suffix)
+      SUFFIX_d = $(suffix)
+   else
+      SUFFIX = .
+   endif
+else
+   SUFFIX_d = $(SUFFIX)
+endif
+
 %:
 	@if [ ! -e ./architecture/$(ArchName) ]; then echo "Architecture file" \"$(ArchName)\" "does not exist under ./architecture directory"; \
 exit 1; fi
 	@if [ ! -d bin ]; then @echo "bin folder does not exist and I am creating one ..."; mkdir bin; fi
-	@cd external; ln -fs ../architecture/$(ArchName) architecture.h; make "EXTERNAL=1"
-	@cd lsms; ln -fs ../architecture/$(ArchName) architecture.h; make "EXTERN_LIB_PATH=$(MuST_PATH)/external" "ArchName=$(ArchName)"
-	@cd MST; ln -fs ../architecture/$(ArchName) architecture.h; make "MST=1" "EXTERN_LIB_PATH=$(MuST_PATH)/external" "ArchName=$(ArchName)"
+	@if [ "${SUFFIX_d}" ] && [ ! -d bin/$(SUFFIX_d) ]; then @echo "creating subdirectory $(SUFFIX_d) under bin ..."; mkdir bin/$(SUFFIX_d); fi
+	@if [ "${SUFFIX_d}" ]; then echo $(SUFFIX_d) | tee bin/.SUFFIX; else echo "." | tee bin/.SUFFIX; fi
+	@cd external; ln -fs ../architecture/$(ArchName) architecture.h; make "EXTERNAL=1" "SUFFIX=$(SUFFIX)"
+	@cd MST; ln -fs ../architecture/$(ArchName) architecture.h; make "MST=1" "EXTERN_LIB_PATH=$(MuST_PATH)/external" "ArchName=$(ArchName)" \
+"SUFFIX=$(SUFFIX)"
+	@cd KUBO; ln -fs ../architecture/$(ArchName) architecture.h; make "KUBO=1" "EXTERN_LIB_PATH=$(MuST_PATH)/external" "ArchName=$(ArchName)" \
+"SUFFIX=$(SUFFIX)"
+# We temporarily disabled buidling lsms package, since it is not needed at the moment --2/18/2022
+# @cd lsms; ln -fs ../architecture/$(ArchName) architecture.h; make "EXTERN_LIB_PATH=$(MuST_PATH)/external" "ArchName=$(ArchName)" \
+"SUFFIX=$(SUFFIX)"
+	
 
 install:
-	cd lsms; make "PREFIX=$(MuST_PATH)" install
-	cd MST; make "PREFIX=$(MuST_PATH)" install
+	$(eval SUFFIX := "$(shell tail -n 1 bin/.SUFFIX)")
+	cd MST; make "PREFIX=$(MuST_PATH)" "SUFFIX=$(SUFFIX)" install
+	cd KUBO; make "PREFIX=$(MuST_PATH)" "SUFFIX=$(SUFFIX)" install
+# We temporarily disabled buidling lsms package, since it is not needed at the moment --2/18/2022
+# cd lsms; make "PREFIX=$(MuST_PATH)" "SUFFIX=$(SUFFIX)" install
 	@echo
 	@echo '----------------------------------------------------------------------------------------------'
 	@echo '*** Generic links pointing to the generated executables are created under ./bin directory *** '
@@ -44,26 +66,28 @@ install:
 	@echo
 
 mst MST:
-	@cd MST; make "MST=1" "EXTERN_LIB_PATH=$(MuST_PATH)/external"
+	@cd MST; make "MST=1" "EXTERN_LIB_PATH=$(MuST_PATH)/external" "SUFFIX=$(SUFFIX)"
 
 lsms:
-	@cd lsms; make "EXTERN_LIB_PATH=$(MuST_PATH)/external"
+	@cd lsms; make "EXTERN_LIB_PATH=$(MuST_PATH)/external" "SUFFIX=$(SUFFIX)"
 
 clean: clean-lsms clean-MST clean-external
-	rm -f bin/*
+	$(eval SUFFIX := "$(shell tail -n 1 bin/.SUFFIX)")
+	@if [ "${SUFFIX}" ]; then rm -f bin/$(SUFFIX)/*; else rm -f bin/*; fi
 
 clean-external:
-	cd external; make "EXTERN_LIB_PATH=$(MuST_PATH)/external" clean
+	cd external; make "EXTERN_LIB_PATH=$(MuST_PATH)/external" "SUFFIX=$(SUFFIX)" clean
 
 clean-lsms:
-	cd lsms; make clean
-	rm -f bin/lsms bin/wl-lsms
+	cd lsms; make "SUFFIX=$(SUFFIX)" clean
+	@if [ "${SUFFIX}" ]; then rm -f bin/$(SUFFIX)/lsms bin/$(SUFFIX)/wl-lsms; else rm -f bin/lsms bin/wl-lsms; fi
 
 clean-MST:
-	cd MST; make deepclean
+	cd MST; make "SUFFIX=$(SUFFIX)" distclean
 
 distclean:
-	@cd external; make distclean
-	@cd lsms; make distclean
-	@cd MST; make distclean
-	@rm -f bin/*
+	@cd external; make "SUFFIX=$(SUFFIX)" distclean
+# We temporarily disabled buidling lsms package, since it is not needed at the moment --2/18/2022
+# @cd lsms; make "SUFFIX=$(SUFFIX)" distclean
+	@cd MST; make "SUFFIX=$(SUFFIX)" distclean
+	rm -rf bin
