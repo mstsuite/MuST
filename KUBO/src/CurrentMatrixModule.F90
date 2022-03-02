@@ -43,7 +43,7 @@ private
                              lmax_sigma, lmax_sigma_2, lmax_cg
    integer (kind=IntKind) :: kmax_phi_max, kmax_green_max, iend_max, &
                              kmax_sigma, kmax_sigma_2, kmax_max, kmax_cg
-   integer (kind=IntKind) :: NumSpecies, NumClusterSize
+   integer (kind=IntKind) :: NumSpecies
    logical :: vertex_corr
 
    type CGCoeff
@@ -94,10 +94,8 @@ contains
    use AtomModule, only : getLocalNumSpecies
    use PolyhedraModule, only : getNumPolyhedra
    use WriteMatrixModule, only : writeMatrix
-   use ScfDataModule, only : isKKR, isLSMS, isKKRCPA, isKKRCPASRO
    use GauntFactorsModule, only : initGauntFactors, endGauntFactors
    use GauntFactorsModule, only : getK3, getNumK3, getGauntFactor
-   use SROModule, only : getNeighSize
 
    integer (kind=IntKind), intent(in) :: num_atoms
    integer (kind=IntKind), intent(in) :: lmaxkkr(num_atoms)
@@ -114,7 +112,7 @@ contains
 
    integer (kind=LongIntKind) :: wspace_size, gspace_size
    integer (kind=IntKind) :: i, lmax_max, jmax, iend, kmax, NumSpecies, NumPolyhedra
-   integer (kind=IntKind) :: lmax, kl, jl, m, n, l, j, jsize, sro_size
+   integer (kind=IntKind) :: lmax, kl, jl, m, n, l, j, jsize
    integer (kind=IntKind) :: klp1, klp2, i3, klg
    integer (kind=IntKind), pointer :: nj3(:,:), kj3(:,:,:)
 
@@ -127,11 +125,6 @@ contains
    n_spin_pola = pola
    n_spin_cant = cant
    NumPolyhedra = getNumPolyhedra()
-   
-   if (mode == 4) then
-   ! SRO has only been tested for single sublattice calculations.
-     NumClusterSize = getNeighSize(1)
-   endif
 
    allocate( print_instruction(LocalNumAtoms) ) 
    allocate( lmax_kkr(LocalNumAtoms) )
@@ -209,12 +202,6 @@ contains
        Jtk2(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
        Jtk3(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
        Jtk4(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3))
-   else if (mode == 4) then
-     sro_size = NumClusterSize*jsize
-     allocate(Jtk(sro_size*sro_size, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
-       Jtk2(sro_size*sro_size, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
-       Jtk3(sro_size*sro_size, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
-       Jtk4(sro_size*sro_size, LocalNumAtoms, NumSpecies, n_spin_pola, 3))
    endif
    Jtk = CZERO; Jtk2 = CZERO; Jtk3 = CZERO; Jtk4 = CZERO
 
@@ -1046,7 +1033,6 @@ contains
 !  ===================================================================
    use SSSolverModule, only : getScatteringMatrix
    use CPAMediumModule, only : getSingleSiteTmat, getCPAMatrix
-   use SROModule, only : getSROMatrix
    use MatrixInverseModule, only : MtxInv_LU
    use MatrixModule, only : computeAprojB
    use WriteMatrixModule, only : writeMatrix
@@ -1187,91 +1173,6 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine cal1DCurrentMatrixSRO(n, ic, is)
-!  ===================================================================
-
-   use SSSolverModule, only : getScatteringMatrix
-   use CPAMediumModule, only : getSingleSiteTmat, getCPAMatrix
-   use SROModule, only : getSROMatrix
-   use MatrixModule, only : computeAprojB
-   use WriteMatrixModule, only : writeMatrix
-
-   integer (kind=IntKind), intent(in) :: n, ic, is
-
-   integer (kind=IntKind) :: dir, l, m, L1, L4, Lp, Lpp, K1, C1, CK1, i, j
-   complex (kind=CmplxKind), pointer :: Tc(:,:), Ta(:,:), tauc(:,:)
-   complex (kind=CmplxKind) :: Tcc(kmax_kkr_max*NumClusterSize, &
-     kmax_kkr_max*NumClusterSize), Tac(kmax_kkr_max*NumClusterSize, &
-     kmax_kkr_max*NumClusterSize), taucc(kmax_kkr_max*NumClusterSize, &
-     kmax_kkr_max*NumClusterSize), tdiff(kmax_kkr_max*NumClusterSize, &
-     kmax_kkr_max*NumClusterSize), tdiffc(kmax_kkr_max*NumClusterSize, &
-     kmax_kkr_max*NumClusterSize)
-   complex (kind=CmplxKind) :: Dt(kmax_kkr_max*NumClusterSize, &
-     kmax_kkr_max*NumClusterSize), Dt1(kmax_kkr_max*NumClusterSize, &
-     kmax_kkr_max*NumClusterSize), D(kmax_kkr_max*NumClusterSize, &
-     kmax_kkr_max*NumClusterSize), D1(kmax_kkr_max*NumClusterSize, &
-     kmax_kkr_max*NumClusterSize)
-   tdiff = CZERO; tdiffc = CZERO
-   Tcc = CZERO; Tac = CZERO; taucc = CZERO
-   Dt = CZERO; Dt1 = CZERO; D = CZERO; D1 = CZERO
-
-   Tc => getSROMatrix('blk-tinv', n=n, ic=0, is=is)
-   Ta => getSROMatrix('blk-tinv', n=n, ic=ic, is=is)
-   tauc => getSROMatrix('blk-tau', n=n, ic=0, is=is)
-   
-!  Constructing negatives
-   Tcc = conjg(Tc); Tac = conjg(Ta)
-   tdiff = Ta - Tc; tdiffc = Tac - Tcc
-
-   do L4 = 1, kmax_kkr_max
-     do L1 = 1, kmax_kkr_max
-       do l = 1, NumClusterSize
-         do m = 1, NumClusterSize
-           Lp = kmax_kkr_max*(l - 1) + L1
-           Lpp = kmax_kkr_max*(m - 1) + L4
-           taucc(Lp, Lpp) = (-1.0)**(lofk(L1) - lofk(L4)) * conjg(tauc(Lpp, Lp))
-         enddo
-       enddo
-     enddo
-   enddo
-
-!  Constructing D matrices   
-   call computeAprojB('N', kmax_kkr_max*NumClusterSize, tdiff, tauc, Dt)
-   call computeAprojB('N', kmax_kkr_max*NumClusterSize, tdiffc, taucc, Dt1)
-   call computeAprojB('N', kmax_kkr_max*NumClusterSize, tauc, tdiff, D)
-   call computeAprojB('N', kmax_kkr_max*NumClusterSize, taucc, tdiffc, D1)
-
-!  Constructing 1D current matrix
-   do dir = 1, 3
-     do l = 1, NumClusterSize
-       do m = 1, NumClusterSize 
-         do L1 = 1, kmax_kkr_max
-           do L4 = 1, kmax_kkr_max
-             CK1 = (kmax_kkr_max**2)*(NumClusterSize*(l - 1) + m - 1) + kmax_kkr_max*(L1 - 1) + L4
-               i = kmax_kkr_max*(l - 1) + L1
-               j = kmax_kkr_max*(m - 1) + L4
-             do Lp = 1, kmax_kkr_max
-               do Lpp = 1, kmax_kkr_max
-                 Jtk(CK1,n,ic,is,dir) = Jtk(CK1,n,ic,is,dir) + &
-                                Dt(i,Lp)*jspace(Lp,Lpp,n,ic,is,dir)*D(Lpp,j)
-                 Jtk2(CK1,n,ic,is,dir) = Jtk2(CK1,n,ic,is,dir) + &
-                                Dt(i,Lp)*jspace2(Lp,Lpp,n,ic,is,dir)*D1(Lpp,j)
-                 Jtk3(CK1,n,ic,is,dir) = Jtk3(CK1,n,ic,is,dir) + &
-                                Dt1(i,Lp)*jspace3(Lp,Lpp,n,ic,is,dir)*D(Lpp,j)
-                 Jtk4(CK1,n,ic,is,dir) = Jtk4(CK1,n,ic,is,dir) + &
-                                Dt1(i,Lp)*jspace4(Lp,Lpp,n,ic,is,dir)*D1(Lpp,j)
-               enddo
-             enddo
-           enddo
-         enddo
-       enddo
-     enddo
-   enddo
-
-   end subroutine cal1DCurrentMatrixSRO
-!  ===================================================================
-
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine calCurrentMatrix(n, is, eval, pot_type, mode)
 !  ===================================================================
 
@@ -1318,15 +1219,7 @@ contains
        call cal1DCurrentMatrixCPA(n, ic, is)
 !      ------------------------------------------------------
      enddo
-   else if (mode == 4) then
-   !  Under development
-     do ic = 1, num_species(n)
-!      ------------------------------------------------------
-       call cal1DCurrentMatrixSRO(n, ic, is)
-!      ------------------------------------------------------
-     enddo
    endif
-
 
    end subroutine calCurrentMatrix
 !  ===================================================================
