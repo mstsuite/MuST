@@ -46,7 +46,7 @@ program kubo
    use ScfDataModule, only : NumEs, ContourType, eGridType
    use ScfDataModule, only : Temperature
    use ScfDataModule, only : istop, NumKMeshs, kGenScheme, Kdiv, Symmetrize
-   use ScfDataModule, only : isKKRCPA, getSingleSiteSolverType
+   use ScfDataModule, only : isKKRCPA, isKKRCPASRO, getSingleSiteSolverType
 
    use LatticeModule, only : initLattice, endLattice, getLatticeType
 
@@ -384,7 +384,7 @@ program kubo
 !     ----------------------------------------------------------------
    endif
 
-   if (isKKRCPA()) then
+   if (isKKRCPA() .or. isKKRCPASRO()) then
 !     ----------------------------------------------------------------
       call initMediumHost(def_id)
 !     ----------------------------------------------------------------
@@ -592,7 +592,7 @@ program kubo
                       n_spin_pola,n_spin_cant,istop,atom_print_level)
 !  -------------------------------------------------------------------
 
-   if (isKKRCPA()) then
+   if (isKKRCPA() .or. isKKRCPASRO()) then
 !     ================================================================
 !     initialize IBZ rotation matrix module
 !     ----------------------------------------------------------------
@@ -727,7 +727,7 @@ program kubo
    call endAtom2Proc()
    call endParallelIO()
    call endProcMapping()
-   if (isKKRCPA()) then
+   if (isKKRCPA() .or. isKKRCPASRO()) then
       call endMediumHost()
    endif
    call endSystem()
