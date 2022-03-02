@@ -1,4 +1,4 @@
-Welcome to Lumache's documentation!
+Welcome to the MuST documentation!
 ===================================
 
 **MuST** is a research project supported by National Science Fundation to build
