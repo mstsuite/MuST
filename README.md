@@ -29,7 +29,7 @@ This repository is actively developed and maintained - please check for regular 
 <ul>
 <li> <b>Potentials</b> folder contains the starting potential for selected elements.
 <li> <b>architecture</b> folder contains preset makefile parameters ("architecture files") for a wide variety of computer systems
-<li> <b>Documentation</b> folder contains install instructions, license information, and users guide.
+<li> <b>docs</b> folder contains install instructions, license information, and users guide.
   <li> <b>external</b> folder contains external libraries required or optionally required by MuST, e.g., FFTW, Lua, P3DFFT, and LibXC.
   <li> <b>Tutorials</b> folder contains hands-on exercises and training materials.
 <li> <b>ase_must</b> folder provides Atomic Simulation Environment (ASE) support for MuST.
