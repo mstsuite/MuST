@@ -20,7 +20,7 @@ This repository is actively developed and maintained - please check for regular 
 
 ## Available Scientific Packages
 <ul>
-  <li> <b>MST</b>: Perform KKR, LSMS, single-site and Cluster Averaged KKR-CPA 
+  <li> <b>MST</b>: Perform KKR, LSMS, single-site and Cluster Averaged KKR-CPA.
   <li> <b>lsms</b>: Peform LSMS and Wang-Landau LSMS. This package is built for extreme performance on petascale/exascale systems.
   <li> <b> KUBO </b>: Perform first-principles electrical conductivity calculation.
 </ul>
@@ -31,7 +31,8 @@ This repository is actively developed and maintained - please check for regular 
 <li> <b>architecture</b> folder contains preset makefile parameters ("architecture files") for a wide variety of computer systems
 <li> <b>Documentation</b> folder contains install instructions, license information, and users guide.
   <li> <b>external</b> folder contains external libraries required or optionally required by MuST, e.g., FFTW, Lua, P3DFFT, and LibXC.
-  <li> <b>Tutorials</b> folder contains hands-on exercises and training materials
+  <li> <b>Tutorials</b> folder contains hands-on exercises and training materials.
+<li> <b>ase_must</b> folder provides Atomic Simulation Environment (ASE) support for MuST.
 </ul>
 
 ## Selected references
