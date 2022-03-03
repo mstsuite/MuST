@@ -26,7 +26,7 @@ private
    complex (kind=CmplxKind) :: eval
    complex (kind=CmplxKind), pointer :: tau_c(:,:), tmat(:,:), tc(:,:)
    complex (kind=CmplxKind), allocatable :: tcc(:,:), tau_cc(:,:)
-   complex (kind=CmplxKind), allocatable :: tac(:,:), tau1(:,:), tau2(:,:)
+   complex (kind=CmplxKind), allocatable :: tac(:,:), tau1(:,:), tau2(:,:), tbc(:,:)
    complex (kind=CmplxKind), allocatable :: xa(:,:), xac(:,:)
    complex (kind=CmplxKind), allocatable :: temp1(:,:), temp2(:,:),  &
                                               temp3(:,:), temp4(:,:)
@@ -35,7 +35,8 @@ private
    complex (kind=CmplxKind), allocatable, target :: wtmp(:), wtmpsym(:), wint(:)
    complex (kind=CmplxKind), allocatable, target :: TMP_MatrixBand(:), WORK(:)
    complex (kind=CmplxKind), allocatable, target :: tmat_g(:)
-   complex (kind=CmplxKind), allocatable :: tmb(:,:), tmbsym(:,:) 
+   complex (kind=CmplxKind), allocatable :: tmb(:,:), tmbsym(:,:)
+
 
 #ifdef USE_SCALAPACK
 !  ===================================================================
@@ -76,6 +77,7 @@ contains
 
    integer (kind=IntKind), intent(in) :: n, is, kmax, LocalNumAtoms
    real (kind=RealKind), intent(in) :: efermi
+
    integer (kind=IntKind) :: ic, pot_type
    real (kind=RealKind) :: delta
 
@@ -93,7 +95,7 @@ contains
    num_species = getLocalNumSpecies(local_index)
    omega = getAtomicVPVolume(local_index)
    
-   vertex_corr = includeVertexCorrections()  
+   vertex_corr = includeVertexCorrections()
    delta = getFermiEnergyImagPart()
    pot_type = useStepFunctionForSigma()
 
@@ -105,36 +107,37 @@ contains
 
 !  -------------------------------------------------------------------------------
    call solveSingleScattering(spin=spin_pola,site=local_index,e=eval,vshift=CZERO)
-!  ------------------------------------------------------------------------------
+!  -------------------------------------------------------------------------------
    call computeCPAMedium(eval)
-!  ---------------------------------------------------------------
+!  ------------------------------------------------------------------
    call calCurrentMatrix(local_index,spin_pola,eval,pot_type,3)
-!  ---------------------------------------------------------------
-
+!  ------------------------------------------------------------------
+   
+   
    allocate(species_content(num_species))
    do ic = 1, num_species
      species_content(ic) = getLocalSpeciesContent(local_index, ic)
    enddo
-
+   
    tau_c => getCPAMatrix('Tau',site=local_index,atom=0)
    tc => getSingleSiteTmat('TInv-Matrix', spin=spin_pola, site=local_index, atom=0)
    tmat => getSingleSiteTmat('T-Matrix', spin=spin_pola, site=local_index, atom=0)
-
+   
    allocate(tau_cc(dsize, dsize), &
      tcc(dsize, dsize), tac(dsize, dsize), tau1(dsize, dsize), tau2(dsize, dsize), &
      xa(dsize, dsize), xac(dsize, dsize), temp1(dsize, dsize), temp2(dsize, dsize), &
      temp3(dsize, dsize), temp4(dsize, dsize), J1avg(dsize*dsize), J2avg(dsize*dsize))
-  
+   
    tau_cc = conjg(tau_c)
    tcc = conjg(tc)
    tac = CZERO; tau1 = CZERO; tau2 = CZERO; xa = CZERO; xac = CZERO
    temp1 = CZERO; temp2 = CZERO; temp3 = CZERO; temp4 = CZERO
    J1avg = CZERO; J2avg = CZERO
-
+   
    allocate(X(dsize*dsize, dsize*dsize, 4))
    allocate(A(dsize*dsize, dsize*dsize, 4))
    allocate(W(dsize*dsize, dsize*dsize, 4))
- 
+   
    X = CZERO; A = CZERO; W = CZERO
    
    allocate(wtmp(dsize*dsize), wtmpsym(dsize*dsize), wint(dsize*dsize))
@@ -609,15 +612,6 @@ contains
      endif
    enddo
    call GlobalSumInGroup(kGID,X,kkrsz*kkrsz,kkrsz*kkrsz,4)
-
-!  IF (isHost) THEN
-!    print*, "Target region executed on the host"
-!  ELSE
-!    print*, "Target region executed on the device"
-!  END IF
-
-!  call writeMatrix('chi',X(:,:,1), kkrsz*kkrsz, kkrsz*kkrsz)
-
 
    end subroutine calChiIntegral
 !  ===================================================================

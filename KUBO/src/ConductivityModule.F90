@@ -38,11 +38,9 @@ private
                              lmax_sigma, lmax_sigma_2, lmax_cg
    integer (kind=IntKind) :: kmax_phi_max, kmax_green_max, iend_max, &
                              kmax_sigma, kmax_sigma_2, kmax_max, kmax_cg
-   integer (kind=IntKind) :: NumSpecies, NumClusterSize
+   integer (kind=IntKind) :: NumSpecies
 
    complex (kind=CmplxKind), allocatable :: iden(:,:)
-   complex (kind=CmplxKind), allocatable :: wmatSRO(:,:,:)
-   complex (kind=CmplxKind), allocatable :: vcSRO(:,:,:)
 
    integer (kind=IntKind) :: NumPEsInGroup, MyPEinGroup, kGID
    logical :: Initialized = .false.
@@ -139,17 +137,6 @@ contains
    enddo
    
    iend_max = getMaxNumRmesh()
-   if (mode == 4) then
-     NumClusterSize = getNeighSize(1)
-     if (vertex_corr) then
-       allocate(wmatSRO(NumClusterSize*NumClusterSize*kmax_kkr_max*kmax_kkr_max, &
-         NumClusterSize*NumClusterSize*kmax_kkr_max*kmax_kkr_max, 4))
-       wmatSRO = CZERO
-     endif
-     allocate(vcSRO(NumClusterSize*NumClusterSize*kmax_kkr_max*kmax_kkr_max, &
-            NumClusterSize*NumClusterSize*kmax_kkr_max*kmax_kkr_max, 4))
-     vcSRO = CZERO
-   endif
 
 !  -------------------------------------------------------------------
 !  Initialize the arrays which store conductivity data
@@ -222,9 +209,8 @@ contains
      do dir1 = 1, dirnum
        int_val = CZERO
        do etype = 1, 4
-         int_val(etype) = &
-           calSigmaTilde1VC(dir, dir1, etype) + &
-           calSigmaTilde0(dir, dir1, etype)
+         int_val(etype) = calSigmaTilde1VC(dir, dir1, etype) + & 
+                          calSigmaTilde0(dir, dir1, etype)
        enddo
        sigmatilde(dir,dir1,is) = int_val(1)
        sigmatilde2(dir,dir1,is) = int_val(2)
@@ -255,11 +241,14 @@ contains
    integer (kind=IntKind) :: dir, dir1
    complex (kind=CmplxKind) :: int_val(4)
 
+   
+
    do dir = 1, dirnum
      do dir1 = 1, dirnum
-       int_val = CZERO
        do etype = 1, 4
-         int_val(etype) = 0 ! template code
+   !  
+   !     Under development! 
+   !     
        enddo
        sigmatilde(dir,dir1,is) = int_val(1)
        sigmatilde2(dir,dir1,is) = int_val(2)
@@ -301,20 +290,16 @@ contains
    do id = 1, LocalNumAtoms
      do is = 1, n_spin_pola
        if (mode == 3) then
-      !  ---------------------------------------------------------------
+      !  --------------------------------------------------------------
          call initCPAConductivity(id, is, kmax_kkr_max, efermi, LocalNumAtoms)
-      !  --------------------------------------------------------------- 
+      !  -------------------------------------------------------------- 
          call computeCPAConductivity(is, dirnum)
-      !  ---------------------------------------------------------------
+      !  --------------------------------------------------------------
          call endCPAConductivity()
       !  --------------------------------------------------------------
        else if (mode == 4) then
-      !  ---------------------------------------------------------------
-      !  call initSROConductivity( ------- )   
-      !  --------------------------------------------------------------- 
-         call computeSROConductivity(is, dirnum)
-!        --------------------------------------------------------------
-      !  call endSROConductivity(  ------- )
+      !  --------------------------------------------------------------
+      !  Under development
       !  --------------------------------------------------------------
        endif
      enddo
