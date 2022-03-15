@@ -441,7 +441,7 @@ contains
    endif
 !
    allocate( wk_green(green_size*4) )
-   allocate( wk_dos((nsize+4*MaxNumSpecies)*n_spin_cant*n_spin_pola+12*MaxNumSpecies) )
+   allocate( wk_dos((nsize+12*MaxNumSpecies)*n_spin_cant*n_spin_pola+12*MaxNumSpecies) )
 !
    wk_green = CZERO; wk_dos = CZERO
    if (rad_derivative) then
