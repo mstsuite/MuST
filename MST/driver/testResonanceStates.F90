@@ -179,7 +179,7 @@ program testResonanceStates
    enddo
 !
 !  -------------------------------------------------------------------
-   call initSMatrixPoles(LocalNumAtoms,n_spin_pola,LocalNumSpecies,   &
+   call initSMatrixPoles(LocalNumAtoms,n_spin_pola,n_spin_cant,LocalNumSpecies,   &
                          lmax_kkr,lmax_rho,iprint=0)
 !  -------------------------------------------------------------------
 !

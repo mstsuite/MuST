@@ -1300,6 +1300,7 @@ use MPPModule, only : MyPE, syncAllPEs
    use MPPModule, only : waitMessage, setCommunicator, resetCommunicator
 !
    use GroupCommModule, only : GlobalSumInGroup, getGroupCommunicator
+   use GroupCommModule, only : getGroupID, getNumPEsInGroup, getMyPEinGroup
 !
    use MatrixInverseModule, only : MtxInv_GE, MtxInv_LU
 !
@@ -1320,7 +1321,9 @@ use MPPModule, only : MyPE, syncAllPEs
    use PotentialModule, only : getPotential, isPotComponentZero, getPotComponentFlag
    use PotentialModule, only : getTruncatedPotential, getTruncatedPotComponentFlag
 !
-   use TimerModule, only : getTime
+   use TimerModule, only : getTime, checkinTiming
+!
+   use ScfDataModule, only : CurrentScfIteration
 !
    implicit none
 !
@@ -1344,7 +1347,7 @@ use MPPModule, only : MyPE, syncAllPEs
    integer (kind=IntKind) :: info, n_iter
    integer (kind=IntKind), pointer :: pflag(:)
 !
-   real (kind=RealKind) :: t0, t1
+   real (kind=RealKind) :: t0, t1, t_start
 !
    complex (kind=CmplxKind) :: vcorr, detJ
 !
@@ -1426,6 +1429,7 @@ use MPPModule, only : MyPE, syncAllPEs
 !*    Updated by Y. Wang, Apr 2001
 !* ===================================================================
 !
+   t_start = getTime()
 !  -------------------------------------------------------------------
    call initGlobalVariables(spin, site, e, vshift)
 !  -------------------------------------------------------------------
@@ -2112,6 +2116,10 @@ use MPPModule, only : MyPE, syncAllPEs
    if(stop_routine == sname) then
       call StopHandler(sname)
    endif
+!
+!  -------------------------------------------------------------------
+   call checkinTiming('solveSingleScattering',getTime()-t_start)
+!  -------------------------------------------------------------------
 !
    end subroutine solveSingleScattering
 !  ===================================================================
@@ -5997,13 +6005,15 @@ use MPPModule, only : MyPE, syncAllPEs
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getSolutionRmeshSize(site) result(nr)
+   function getSolutionRmeshSize(site,isCSRadius) result(nr)
 !  ===================================================================
    implicit none
 !
    integer (kind=IntKind), intent(in), optional :: site
    integer (kind=IntKind) :: id
    integer (kind=IntKind) :: nr
+!
+   logical, intent(in), optional :: isCSRadius
 !
    if (.not.Initialized) then
       call ErrorHandler('getSolutionRmeshSize','module not initialized')
@@ -6020,7 +6030,15 @@ use MPPModule, only : MyPE, syncAllPEs
       id = LocalIndex
    endif
 !
-   nr = Scatter(id)%numrs
+   if (present(isCSRadius)) then
+      if (isCSRadius) then
+         nr = Scatter(id)%numrs_cs
+      else
+         nr = Scatter(id)%numrs
+      endif
+   else
+      nr = Scatter(id)%numrs
+   endif
 !
    end function getSolutionRmeshSize
 !  ===================================================================

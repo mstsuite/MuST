@@ -40,8 +40,11 @@ SRC_OBJS =  \
 $(ODIR)/PublicTypeDefinitionsModule.o \
 $(ODIR)/PublicParamDefinitionsModule.o \
 $(ODIR)/AdaptIntegrationModule.o \
+$(ODIR)/adjustEnergy.o \
+$(ODIR)/getFermiDiracFunc.o \
 $(ODIR)/AtomModule.o \
 $(ODIR)/Atom2ProcModule.o \
+$(ODIR)/ExchCorrFunctionalModule.o \
 $(ODIR)/buildSendTable.o \
 $(ODIR)/BZoneModule.o \
 $(ODIR)/IBZRotationModule.o \
@@ -96,6 +99,8 @@ $(ODIR)/TriangleModule.o \
 $(ODIR)/calNicholsonPoles.o \
 $(ODIR)/polyfermi.o \
 $(ODIR)/SineMatrixZerosModule.o \
+$(ODIR)/setupSemiCircleContour.o \
+$(ODIR)/SingleScatteringDOSModule.o \
 $(ODIR)/SMatrixPolesModule.o \
 $(ODIR)/VPI_main.o
 
@@ -353,5 +358,5 @@ $(ODIR)/testBandStructure: testBandStructure.o $(SRC_OBJS) $(ODIR)/BandStructure
 	$(LD) -o $(ODIR)/testBandStructure testBandStructure.o $(ODIR)/BandStructureModule.o $(BASE_ROUTINES) $(SRC_OBJS) \
 $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
-$(ODIR)/testExchCorr: testExchCorr.o $(SRC_OBJS) $(ODIR)/ExchCorrFunctionalModule.o
-	$(LD) -o $(ODIR)/testExchCorr testExchCorr.o $(BASE_ROUTINES) $(SRC_OBJS) $(ODIR)/ExchCorrFunctionalModule.o $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
+$(ODIR)/testExchCorr: testExchCorr.o $(SRC_OBJS)
+	$(LD) -o $(ODIR)/testExchCorr testExchCorr.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)

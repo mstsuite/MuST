@@ -89,6 +89,9 @@
 !                     = 0: Solver does NOT USE the IrrSolulions; = 1: Solver does USE the IrrSolulions
    n = n + 1; Keys(n) = 'Pole Search Step (>0.0)';               Values(n) = '0.010'
 !             Note: Defaults to 0.01 for unspecified value, <= 0.0 or > 0.4
+   n = n + 1; Keys(n) = 'Bound State Contour Integration Radius (>0.0)'; Values(n) = '0.001'
+!             Note: This parameter defines the radius of the semi-circle contour integrating around the bound state
+!                   energy to get the bound state density.
    n = n + 1; Keys(n) = 'Resonance State Max Width (>0.0)';      Values(n) = '0.050'
 !             Note: If a pole is in the 4th quadrant and its distance from the real axis is less this value, 
 !                   the pole is considered as a resonance, and the imaginary part is the width of the resonance 
@@ -98,6 +101,9 @@
    n = n + 1; Keys(n) = 'No. Gauss Pts. along Resonance State Contour'; Values(n) = '5'
 !             Note: This parameter specifies the number of Gaussian Quadrature points used for the integration
 !                   along the semi-circle contour around the resonance energy.
+   n = n + 1; Keys(n) = 'No. Gauss Pts. along Bound State Contour'; Values(n) = '5'
+!             Note: This parameter specifies the number of Gaussian Quadrature points used for the integration
+!                   along the semi-circle contour around the bound energy.
    n = n + 1; Keys(n) = 'Solutions Lmax Cutoff';                 Values(n) = '-1'
 !                     = l<0: uses the lmax of the wave functions defined in info_table
 !                     = l: finite, the coupled integral solver is used up to this l, while beyond it 

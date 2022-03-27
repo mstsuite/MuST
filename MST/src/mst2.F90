@@ -7,7 +7,8 @@ program mst2
 !
    use ChemElementModule, only : getZval
 !
-   use TimerModule, only : initTimer, getTime, fetchStoredTime
+   use TimerModule, only : initTimer, endTimer, getTime, fetchStoredTime
+   use TimerModule, only : registerRoutine 
 !
    use ErrorHandlerModule, only : setErrorOutput, ErrorHandler, WarningHandler
 !
@@ -769,6 +770,12 @@ program mst2
 !  -------------------------------------------------------------------
    call initAtom(info_id,istop,node_print_level)
 !  -------------------------------------------------------------------
+!
+   if (isRelativisticValence()) then
+      call registerRoutine('SingleDiracScattering')
+   else
+      call registerRoutine('solveSingleScattering')
+   endif
 !
    do i = 1,LocalNumAtoms
       rmt   = getMuffinTinRadius(i)
@@ -2044,6 +2051,7 @@ stop 'Under construction...'
       write(6,'(a)')'End of a successful run......!'
    endif
 !
+   call endTimer()
    call endOutput()
 !
 end program mst2

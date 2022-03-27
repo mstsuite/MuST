@@ -562,6 +562,8 @@ include '../lib/arrayTools.F90'
    use PotentialModule, only : getTruncatedPotComponentFlag
    use PotentialModule, only : getPotential, getTruncatedPotential
 !
+   use TimerModule, only : getTime, checkinTiming
+!
    implicit none
 !
    integer (kind=IntKind), intent(in) :: ia
@@ -571,12 +573,14 @@ include '../lib/arrayTools.F90'
 !  integer (kind=IntKind) :: num_vl
    integer (kind=IntKind) :: lpot, jmax_pot, ir, jl, kl
    integer (kind=IntKind) :: lamax
-   real (kind=RealKind) :: evec(3)
+   real (kind=RealKind) :: evec(3), t_start
    complex (kind=CmplxKind), pointer :: pot_jl(:,:)
    complex (kind=CmplxKind), pointer :: pot_trunc_jl(:,:)
    integer (kind=IntKind), pointer :: pflag(:)
    integer (kind=IntKind) :: num_vl_new
    integer (kind=IntKind), allocatable :: list_vl_new(:)
+!
+   t_start = getTime()
 !
    list_vl=(/1,17,21,25,39,43,47,65,69,73,77,81/)
 
@@ -716,7 +720,7 @@ include '../lib/arrayTools.F90'
          Scatter(ia)%kyk_By(kl,:,:,:) = kyk_Bxyz_wks(kl,:,:,:,3)
       enddo
    endif
-   if (.not.Scatter(ia)%done ) then 
+   if (.not.Scatter(ia)%done .and. maxval(print_instruction) >= 0 ) then 
    ! output when the first time SingleDiracScattering is called for atom ia
    ! Scatter(ia)%done = .true. when SolveDirac is called
       write(6,'(/,80(''-''))')
@@ -771,6 +775,7 @@ include '../lib/arrayTools.F90'
    deallocate(kyk_wks,kyk_short_wks,kyk_Bxyz_wks,kyk_short_Bxyz_wks)
    deallocate(bjl, bnl)
    deallocate(list_vl_new)
+   call checkinTiming('SingleDiracScattering',getTime()-t_start)
    end subroutine SingleDiracScattering
 
    !=================================================================

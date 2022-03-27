@@ -41,7 +41,8 @@ private
 !
    integer (kind=IntKind) :: print_level
 !
-   integer (kind=IntKind) :: MaxNumRmesh
+   integer (kind=IntKind) :: MaxJendPlusN
+   integer (kind=IntKind) :: MaxJend
 !
    integer (kind=IntKind), parameter :: n_extra=11
    integer (kind=IntKind), parameter :: ndivin_default=1001
@@ -81,7 +82,8 @@ contains
    stop_routine = istop
    print_level = iprint
 !
-   MaxNumRmesh = 0
+   MaxJendPlusN = 0
+   MaxJend = 0
 !
    end subroutine initRadialGrid
 !  ===================================================================
@@ -101,7 +103,8 @@ contains
    deallocate( Grid )
    Initialized = .false.
 !
-   MaxNumRmesh = 0
+   MaxJendPlusN = 0
+   MaxJend = 0
 !
    end subroutine endRadialGrid
 !  ===================================================================
@@ -300,7 +303,8 @@ contains
       Grid(id)%r_mesh(j+jinsc)=exp(xg)
    enddo
 !
-   MaxNumRmesh = max(MaxNumRmesh, Grid(id)%jend_plus_n)
+   MaxJendPlusN = max(MaxJendPlusN, Grid(id)%jend_plus_n)
+   MaxJend = max(MaxJend, Grid(id)%jend)
 !
    end subroutine genRadialGrid0
 !  ===================================================================
@@ -557,7 +561,8 @@ contains
 !     ----------------------------------------------------------------
    endif
 !
-   MaxNumRmesh = max(MaxNumRmesh, Grid(id)%jend_plus_n)
+   MaxJendPlusN = max(MaxJendPlusN, Grid(id)%jend_plus_n)
+   MaxJend = max(MaxJend, Grid(id)%jend)
 !
    end subroutine genRadialGrid1
 !  ===================================================================
@@ -785,7 +790,8 @@ contains
    Grid(id)%rend=Grid(id)%r_mesh(Grid(id)%jend)
    Grid(id)%xend=Grid(id)%x_mesh(Grid(id)%jend)
 !
-   MaxNumRmesh = max(MaxNumRmesh, Grid(id)%jend_plus_n)
+   MaxJendPlusN = max(MaxJendPlusN, Grid(id)%jend_plus_n)
+   MaxJend = max(MaxJend, Grid(id)%jend)
 !
    end subroutine genRadialGrid2
 !  ===================================================================
@@ -1040,7 +1046,8 @@ contains
 !
    Grid(id)%jinsc = getRadialGridPoint(id,rinsc,less_or_equal=.true.)
 !
-   MaxNumRmesh = max(MaxNumRmesh, Grid(id)%jend_plus_n)
+   MaxJendPlusN = max(MaxJendPlusN, Grid(id)%jend_plus_n)
+   MaxJend = max(MaxJend, Grid(id)%jend)
 !
    end subroutine genRadialGrid
 !  end subroutine genRadialGrid3
@@ -1250,22 +1257,35 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getMaxNumRmesh() result(n)
+   function getMaxNumRmesh(isJend) result(n)
 !  ===================================================================
    implicit none
+!
+   logical, intent(in), optional :: isJend
+!
    integer (kind=IntKind) :: n
 !
    if (.not.Initialized) then
 !     ----------------------------------------------------------------
       call ErrorHandler('getMaxNumRmesh','need to call initRadialGrid first')
 !     ----------------------------------------------------------------
-   else if (MaxNumRmesh < 1) then
+   endif
+!
+   if (present(isJend)) then
+      if (isJend) then
+         n = MaxJend
+      else
+         n = MaxJendPlusN
+      endif
+   else
+      n = MaxJendPlusN
+   endif
+!
+   if (n < 1) then
 !     ----------------------------------------------------------------
       call WarningHandler('getMaxNumRmesh','No mesh has been generated')
 !     ----------------------------------------------------------------
    endif
-!
-   n = MaxNumRmesh
 !
    end function getMaxNumRmesh
 !  ===================================================================

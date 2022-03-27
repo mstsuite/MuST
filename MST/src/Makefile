@@ -23,12 +23,15 @@ rdin_old_infotable.o \
 rdin_old_infoevec.o \
 getValueAtPosi.o \
 lattice.o \
-averageAcrossProcesses.o
+averageAcrossProcesses.o \
+setupSemiCircleContour.o \
+getFermiDiracFunc.o
 
 AppModules = \
 InputModule.o \
 ScfDataModule.o \
 PotentialTypeModule.o \
+ExchCorrFunctionalModule.o \
 SystemModule.o \
 BZoneModule.o \
 MatsubaraModule.o \
@@ -59,6 +62,7 @@ SSSolverModule.o \
 DiracSolverModule.o \
 RelScattererModule.o \
 RelSSSolverModule.o \
+SingleScatteringDOSModule.o \
 SCPolesModule.o \
 SMatrixPolesModule.o \
 SineMatrixZerosModule.o \
@@ -67,7 +71,6 @@ CoreStatesModule.o \
 Uniform3DGridModule.o \
 ParallelFFTModule.o \
 ConstrainLocalMomentModule.o \
-ExchCorrFunctionalModule.o \
 ValenceDensityModule.o \
 ChargeDensityModule.o \
 ChargeDistributionModule.o \
@@ -78,7 +81,7 @@ ConvergenceCheckModule.o \
 MixingModule.o \
 TestPotentialModule.o \
 BookKeepingModule.o \
-ForceModule.o \
+ForceModule.o
 
 #HDF5Module.o
 
@@ -93,6 +96,7 @@ CPAMediumModule.o \
 BandStructureModule.o \
 MSSolverModule.o \
 RelMSSolverModule.o \
+MultiScatteringDOSModule.o \
 RelGreenFunctionModule.o \
 GFMethodModule.o
 
@@ -126,7 +130,8 @@ calNicholsonPoles.o \
 fetchVisualDomainParameters.o \
 printDensityOnGrid.o \
 printPotentialOnGrid.o \
-printScfResults.o
+printScfResults.o \
+adjustEnergy.o
 
 .SUFFIXES:	.o .f .c .f90 .F90
 

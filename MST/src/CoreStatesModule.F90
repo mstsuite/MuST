@@ -229,6 +229,8 @@ contains
 !
    use InputModule, only : getKeyValue
 !
+   use ScfDataModule, only : n_spin_cant
+!
    use SMatrixPolesModule, only : initSMatrixPoles
    use SMatrixPolesModule, only : isSMatrixPolesInitialized
 !
@@ -514,7 +516,7 @@ contains
       enddo
       if (.not.isSMatrixPolesInitialized()) then
 !        -------------------------------------------------------------
-         call initSMatrixPoles(LocalNumAtoms,n_spin_pola,LocalNumSpecies,&
+         call initSMatrixPoles(LocalNumAtoms,n_spin_pola,n_spin_cant,LocalNumSpecies,&
                                lmax_kkr,lmax_rho,iprint)
 !        -------------------------------------------------------------
       endif
@@ -1643,6 +1645,7 @@ contains
                                    isMuffinTinASAPotential, isFullPotential
 !
    use PotentialModule, only : getSphPotr, getPotential, getPotentialRmeshSize
+   use PotentialModule, only : getPotEf
 !
    use DataServiceCenterModule, only : createDataStorage,     &
                                        getDataStorage,        &
@@ -1654,6 +1657,8 @@ contains
    use ChemElementModule, only : getCoreStateIndex
 !
    use InterpolationModule, only : FitInterp
+!
+   use ExchCorrFunctionalModule, only : isGGAFunctional
 !
    use RadialGridModule, only : getRadialGridPoint
 !
@@ -1669,7 +1674,7 @@ contains
 !
    use IntegerFactorsModule, only : lofj, mofj
 !
-   use ScfDataModule, only : CurrentScfIteration
+   use ScfDataModule, only : CurrentScfIteration, n_spin_cant
 !
    implicit   none
 !
@@ -1679,8 +1684,9 @@ contains
 !
    integer (kind=IntKind) :: id, ia
    integer (kind=IntKind) :: is, ig, i, j, ir, numc, ib, nb, jl, jmax_rho
+   integer (kind=IntKind) :: nsize, MaxNumSpecies
    integer (kind=IntKind) :: nr, nws, nend, last, last2, nmult, jmt, jend_plus_n
-   integer (kind=IntKind) :: lmax_prod, jmax_prod, kmax_prod
+   integer (kind=IntKind) :: lmax_prod, jmax_prod, kmax_prod, rstatus
    integer (kind=IntKind) :: DataSize(LocalNumAtoms)
    integer (kind=IntKind), pointer :: pc0(:,:,:)
    integer (kind=IntKind), allocatable :: atom_print_level(:)
@@ -1691,7 +1697,7 @@ contains
 !
    real (kind=RealKind), allocatable :: wrk1(:),wrk2(:)
    real (kind=RealKind), parameter :: tolch=TEN2m5
-   real (kind=RealKind) :: h, hout, efact, dps, rws
+   real (kind=RealKind) :: h, hout, efact, dps, rws, e_delta
    real (kind=RealKind) :: qint_semi, qint_deep, msgbuf(2)
    real (kind=RealKind), allocatable :: vr_t(:)
    real (kind=RealKind), allocatable :: memtemp(:,:)
@@ -1709,6 +1715,7 @@ contains
    complex (kind=CmplxKind), pointer :: fden(:,:), dfden(:,:)
    complex (kind=CmplxKind), pointer :: fsem(:,:), dfsem(:,:)
    complex (kind=CmplxKind), pointer :: prod(:,:), fpot(:,:)
+   complex (kind=CmplxKind), allocatable :: wk_dos(:)
 !
    interface
       subroutine computeProdExpan(n,lf,f,lg,g,lh,h)
@@ -1724,13 +1731,21 @@ contains
 !  I chhose a large last value to make this code agree with the older version
 !  ===================================================================
    last = 0
+   nsize = 0
+   MaxNumSpecies = 0
    do id =1, LocalNumAtoms
       last = max(last,Core(id)%rsize)
       DataSize(id) = Core(id)%MaxNumc*n_spin_pola*Core(id)%NumSpecies
       if (Core(id)%MaxNumc < 1) then
          DataSize(id) = n_spin_pola
       endif
+      nsize = max(nsize,Core(id)%rsize*Core(id)%jmax_rho)
+      MaxNumSpecies = max(MaxNumSpecies,Core(id)%NumSpecies)
    enddo
+   if (isGGAFunctional()) then
+      nsize = 2*nsize
+   endif
+!
    allocate(vr_t(1:last))
    allocate(wrk1(0:last), wrk2(0:last), sqrt_r(0:last), sqrt_r_t(0:last), r_mesh_t(1:last))
 !
@@ -1744,6 +1759,7 @@ contains
    endif
 !
    if (isFP_SemiCore) then
+      allocate( wk_dos((nsize+12)*MaxNumSpecies*n_spin_cant*n_spin_pola) )
       allocate(atom_print_level(LocalNumAtoms))
       atom_print_level = print_level
 !     ================================================================
@@ -1897,8 +1913,9 @@ contains
 if (.false.) then
 fpot => getPotential(id,ia,is)
 do jl = 1, 45
-if (mod(lofj(jl),2) == 0 .and. lofj(jl) /= 2 .and. mod(mofj(jl),4) == 0) then
-do ir = 1, Core(id)%Grid%jend, 40
+!if (mod(lofj(jl),2) == 0 .and. lofj(jl) /= 2 .and. mod(mofj(jl),4) == 0) then
+if (lofj(jl) == 0) then
+do ir = 1, Core(id)%Grid%jend+1, 40
 write(6,'(a,3i5,2d20.13)')'l,m,ir,fpot = ',lofj(jl),mofj(jl),ir,fpot(ir,jl)
 enddo
 endif
@@ -1906,6 +1923,13 @@ enddo
 endif
 !=====================================================================
                if (isFP_SemiCore .and. numc > 0) then
+                  rstatus = getKeyValue(1,'Bound State Contour Integration Radius (>0.0)',e_delta)
+                  if (rstatus /= 0 .or. e_delta < TEN2m6 .or. e_delta > ONE) then
+                     call WarningHandler('calCoreStates',   &
+                                         'Error in reading Bound State Contour Integration Radius',e_delta)
+                     e_delta = 0.001d0
+                  endif
+!
                   e1 = ecs(1) - HALF
                   e2 = ecs(numc) + HALF
                   if (e2 > ZERO) then
@@ -1914,36 +1938,51 @@ endif
 !                 ---------------------------------------------------
                   call findSMatrixPoles(id,ia,is,e1,e2,estep,CheckPoles =.false.)
 !                 ---------------------------------------------------
-                  call computeBoundStateDensity(id,ia,is)
+!                 call computeBoundStateDensity(id,ia,is)
 !                 ---------------------------------------------------
                   fsem => Core(id)%fp_semden(:,:,is,ia)
                   dfsem => Core(id)%fp_dsemden(:,:,is,ia)
                   fsem = CZERO; dfsem = CZERO
                   nb = getNumBoundStates(id,ia,is)
                   do ib = 1, nb
+!                    ------------------------------------------------
+                     call computeBoundStateDensity(id,ia,is,e_delta,ib,getPotEf(),wk_dos)
+!                    ------------------------------------------------
+                     nullify(dfden)
                      fden => getBoundStateDensity(id,ia,is,ib,NumRs=nr,jmax_rho=jmax_rho,derivative=dfden)
-!                    dfden => getBoundStateDensity(id,ia,is,ib,derivative=.true.)
+                     if (isGGAFunctional() .and. .not.associated(dfden)) then
+                        call ErrorHandler('calCoreStates','In GGA case, the returning dfden is nullified')
+                     endif
                      if (norm2inf == 0) then
                         norm_fac = getNumBoundStateDegen(id,ia,is,ib)/getBoundStateChargeInCell(id,ia,is,ib)
                      else
                         norm_fac = ONE
+                     endif
+                     if (print_level >= 0) then
+                        write(6,'(a,d15.8)')'Normalization factor = ',norm_fac
                      endif
                      if (Core(id)%jmax_rho /= jmax_rho) then
                         call ErrorHandler('calCoreStates','Core(id)%jmax_rho <> jmax_rho', &
                                           Core(id)%jmax_rho, jmax_rho)
                      else if (nr == Core(id)%rsize) then
                         fsem = fsem + norm_fac*fden
-                        dfsem = dfsem + norm_fac*dfden
+                        if (associated(dfden)) then ! In LDA case, dfden is nullified
+                           dfsem = dfsem + norm_fac*dfden
+                        endif
                      else
                         nr = min(nr,Core(id)%rsize)
                         do jl = 1, jmax_rho
                            do ir = 1, nr
                               fsem(ir,jl) = fsem(ir,jl) + norm_fac*fden(ir,jl)
                            enddo
-                           do ir = 1, nr
-                              dfsem(ir,jl) = dfsem(ir,jl) + norm_fac*dfden(ir,jl)
-                           enddo
                         enddo
+                        if (associated(dfden)) then ! In LDA case, dfden is nullified
+                           do jl = 1, jmax_rho
+                              do ir = 1, nr
+                                 dfsem(ir,jl) = dfsem(ir,jl) + norm_fac*dfden(ir,jl)
+                              enddo
+                           enddo
+                        endif
                      endif
                   enddo
                   fsem = fac*fsem
@@ -2153,6 +2192,10 @@ endif
                      getLocalSpeciesContent(id,ia)/real(GlobalNumAtoms,kind=Realkind)
       enddo
    enddo
+!
+   if (isFP_SemiCore) then
+      deallocate(wk_dos)
+   endif
 !
    if (sss_init) then
 !     ----------------------------------------------------------------
