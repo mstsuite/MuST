@@ -227,7 +227,7 @@ contains
 !
    ResWidth = 0.001d0
 !
-   rad_derivative = isGGAFUnctional()
+   rad_derivative = isGGAFunctional()
 !  -------------------------------------------------------------------
    call setSScatteringDOSParam(n_spin_pola,n_spin_cant,rad_derivative,Harris,print_level)
 !  -------------------------------------------------------------------

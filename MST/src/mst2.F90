@@ -1236,6 +1236,37 @@ program mst2
 !     ----------------------------------------------------------------
    endif
 !  ===================================================================
+!  initialize exchange-correlation scheme, potential generation, total
+!  energy calculation, and charge distribution book-keeping
+!  -------------------------------------------------------------------
+   call initExchCorrFunctional(n_spin_pola,excorr_name,node_print_level)
+!  -------------------------------------------------------------------
+   if (node_print_level >= 0) then
+      if (isLDAFunctional()) then
+         write(6,'(/,2x,a)')'========================================='
+         write(6,'(2x,a)')  'Exchange-Correlation Functional Type: LDA'
+         write(6,'(2x,a,/)')'========================================='
+      else if (isGGAFunctional()) then
+         write(6,'(/,2x,a)')'========================================='
+         write(6,'(2x,a)')  'Exchange-Correlation Functional Type: GGA'
+         write(6,'(2x,a,/)')'========================================='
+      else if (isHybridFunctional()) then
+         write(6,'(/,2x,a)')'============================================'
+         write(6,'(2x,a)')  'Exchange-Correlation Functional Type: Hybrid'
+         write(6,'(2x,a,/)')'============================================'
+      else if (isMGGAFunctional()) then
+         write(6,'(/,2x,a)')'=========================================='
+         write(6,'(2x,a)')  'Exchange-Correlation Functional Type: MGGA'
+         write(6,'(2x,a,/)')'=========================================='
+      else if (isHartreeApproximation()) then
+         write(6,'(/,2x,a)')'=========================================='
+         write(6,'(2x,a)')  'This is Hartree approximation calculation.'
+         write(6,'(2x,a,/)')'=========================================='
+      else
+         call ErrorHandler('main','Unknown exchange-correlation functional type')
+      endif
+   endif
+!  ===================================================================
 !
 !  *******************************************************************
    t3 = getTime()
@@ -1323,37 +1354,6 @@ program mst2
    else
       if (node_print_level >= 0) then
          write(6,'(/,a,f12.8)')' Initial Fermi energy read from the potential:',Efermi
-      endif
-   endif
-!  ===================================================================
-!  initialize exchange-correlation scheme, potential generation, total
-!  energy calculation, and charge distribution book-keeping
-!  -------------------------------------------------------------------
-   call initExchCorrFunctional(n_spin_pola,excorr_name,node_print_level)
-!  -------------------------------------------------------------------
-   if (node_print_level >= 0) then
-      if (isLDAFunctional()) then
-         write(6,'(/,2x,a)')'========================================='
-         write(6,'(2x,a)')  'Exchange-Correlation Functional Type: LDA'
-         write(6,'(2x,a,/)')'========================================='
-      else if (isGGAFunctional()) then
-         write(6,'(/,2x,a)')'========================================='
-         write(6,'(2x,a)')  'Exchange-Correlation Functional Type: GGA'
-         write(6,'(2x,a,/)')'========================================='
-      else if (isHybridFunctional()) then
-         write(6,'(/,2x,a)')'============================================'
-         write(6,'(2x,a)')  'Exchange-Correlation Functional Type: Hybrid'
-         write(6,'(2x,a,/)')'============================================'
-      else if (isMGGAFunctional()) then
-         write(6,'(/,2x,a)')'=========================================='
-         write(6,'(2x,a)')  'Exchange-Correlation Functional Type: MGGA'
-         write(6,'(2x,a,/)')'=========================================='
-      else if (isHartreeApproximation()) then
-         write(6,'(/,2x,a)')'=========================================='
-         write(6,'(2x,a)')  'This is Hartree approximation calculation.'
-         write(6,'(2x,a,/)')'=========================================='
-      else
-         call ErrorHandler('main','Unknown exchange-correlation functional type')
       endif
    endif
 !  ===================================================================

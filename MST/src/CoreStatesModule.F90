@@ -1770,7 +1770,8 @@ contains
 !        -------------------------------------------------------------
          call initSSSolver(LocalNumAtoms, getLocalNumSpecies, getLocalAtomicNumber, &
                            lmax_kkr, lmax_kkr, lmax_pot, lmax_step, lmax_rho,  &
-                           n_spin_pola, 1, 0, stop_routine, atom_print_level)
+                           n_spin_pola, 1, 0, stop_routine, atom_print_level,  &
+                           derivative=isGGAFunctional())
 !        -------------------------------------------------------------
          sss_init = .true.
       else
