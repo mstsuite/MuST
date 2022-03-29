@@ -23,12 +23,15 @@ $(MST_ODIR)/rdin_old_infotable.o \
 $(MST_ODIR)/rdin_old_infoevec.o \
 $(MST_ODIR)/getValueAtPosi.o \
 $(MST_ODIR)/lattice.o \
-$(MST_ODIR)/averageAcrossProcesses.o
+$(MST_ODIR)/averageAcrossProcesses.o \
+$(MST_ODIR)/setupSemiCircleContour.o \
+$(MST_ODIR)/getFermiDiracFunc.o
 
 AppModules = \
 $(MST_ODIR)/InputModule.o \
 $(MST_ODIR)/ScfDataModule.o \
 $(MST_ODIR)/PotentialTypeModule.o \
+$(MST_ODIR)/ExchCorrFunctionalModule.o \
 $(MST_ODIR)/SystemModule.o \
 $(MST_ODIR)/BZoneModule.o \
 $(MST_ODIR)/MatsubaraModule.o \
@@ -59,6 +62,7 @@ $(MST_ODIR)/SSSolverModule.o \
 $(MST_ODIR)/DiracSolverModule.o \
 $(MST_ODIR)/RelScattererModule.o \
 $(MST_ODIR)/RelSSSolverModule.o \
+$(MST_ODIR)/SingleScatteringDOSModule.o \
 $(MST_ODIR)/SCPolesModule.o \
 $(MST_ODIR)/SMatrixPolesModule.o \
 $(MST_ODIR)/SineMatrixZerosModule.o \
@@ -67,7 +71,6 @@ $(MST_ODIR)/CoreStatesModule.o \
 $(MST_ODIR)/Uniform3DGridModule.o \
 $(MST_ODIR)/ParallelFFTModule.o \
 $(MST_ODIR)/ConstrainLocalMomentModule.o \
-$(MST_ODIR)/ExchCorrFunctionalModule.o \
 $(MST_ODIR)/ValenceDensityModule.o \
 $(MST_ODIR)/ChargeDensityModule.o \
 $(MST_ODIR)/ChargeDistributionModule.o \
@@ -78,7 +81,7 @@ $(MST_ODIR)/ConvergenceCheckModule.o \
 $(MST_ODIR)/MixingModule.o \
 $(MST_ODIR)/TestPotentialModule.o \
 $(MST_ODIR)/BookKeepingModule.o \
-$(MST_ODIR)/ForceModule.o \
+$(MST_ODIR)/ForceModule.o 
 
 #HDF5Module.o
 
@@ -93,6 +96,7 @@ $(MST_ODIR)/CPAMediumModule.o \
 $(MST_ODIR)/BandStructureModule.o \
 $(MST_ODIR)/MSSolverModule.o \
 $(MST_ODIR)/RelMSSolverModule.o \
+$(MST_ODIR)/MultiScatteringDOSModule.o \
 $(MST_ODIR)/RelGreenFunctionModule.o \
 $(MST_ODIR)/GFMethodModule.o
 
@@ -132,7 +136,8 @@ $(MST_ODIR)/calNicholsonPoles.o \
 $(MST_ODIR)/fetchVisualDomainParameters.o \
 $(MST_ODIR)/printDensityOnGrid.o \
 $(MST_ODIR)/printPotentialOnGrid.o \
-$(MST_ODIR)/printScfResults.o
+$(MST_ODIR)/printScfResults.o \
+$(MST_ODIR)/adjustEnergy.o
 
 .SUFFIXES:	.o .f .c .f90 .F90
 
