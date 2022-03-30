@@ -189,8 +189,10 @@ contains
    implicit none
 !
    character (len=*), intent(in) :: func
+   character (len=100) :: text
 !
    real (kind=RealKind), intent(in) :: t
+   real (kind=RealKind) :: timing
 !
    integer (kind=IntKind), intent(in), optional :: nc
    integer (kind=IntKind) :: i, n
@@ -216,7 +218,11 @@ contains
    endif
 !
    if (t < TEN2m8) then
-      call ErrorHandler('checkinTiming','The timing value < 10^(-8)',t)
+      text = 'Calling routine: '//func//'. The input timing value < 10^(-8). It is reset to 0'
+      call WarningHandler('checkinTiming',trim(text),t)
+      timing = ZERO
+   else 
+      timing = t
    endif
 !
    p => check_list
@@ -231,7 +237,7 @@ contains
       endif
    enddo LOOP_i
 !
-   p%accumulated_timing = p%accumulated_timing + t
+   p%accumulated_timing = p%accumulated_timing + timing
    p%num_calls = p%num_calls + n
 !
    end subroutine checkinTiming
