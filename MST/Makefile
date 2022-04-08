@@ -104,12 +104,16 @@ ifndef XLC_I
    XLC_I = 0
 endif
 
-ifndef LIBXC_PATH
-   ADDITIONAL_TARGETS = libxc
-   LIBXC_PATH = $(EXTERN_LIB_PATH)/libxc/LibXC/$(SUFFIX)
-# ADD_LIBS  += -L$(LIBXC_PATH)/lib -lxcf90 -lxc
-   ADD_LIBS  += $(LIBXC_PATH)/lib/libxcf90.a $(LIBXC_PATH)/lib/libxc.a
-   FPPFLAGS += -DLIBXC5 -I$(LIBXC_PATH)/include
+ifndef NotUse_LIBXC
+ifneq "$(NotUse_LIBXC)" "0"
+   ifndef LIBXC_PATH
+      ADDITIONAL_TARGETS = libxc
+      LIBXC_PATH = $(EXTERN_LIB_PATH)/libxc/LibXC/$(SUFFIX)
+#     ADD_LIBS  += -L$(LIBXC_PATH)/lib -lxcf90 -lxc
+      ADD_LIBS  += $(LIBXC_PATH)/lib/libxcf90.a $(LIBXC_PATH)/lib/libxc.a
+      FPPFLAGS += -DLIBXC5 -I$(LIBXC_PATH)/include
+   endif
+endif
 endif
 
 ifndef Use_FFTW
@@ -123,12 +127,17 @@ endif
 FFTW_INC = $(FFTW_PATH)/include
 
 ifndef NotUse_P3DFFT
+ifneq "$(NotUse_P3DFFT)" "0"
    ifndef P3DFFT_PATH
       ADDITIONAL_TARGETS += p3dfft
       P3DFFT_PATH = $(EXTERN_LIB_PATH)/p3dfft/P3DFFT/$(SUFFIX)
    endif
    FFT_FLAGS = -DFFTW -I$(FFTW_INC) -DP3DFFT -I$(P3DFFT_PATH)/include
    ADD_LIBS += -L$(P3DFFT_PATH)/lib -lp3dfft -L$(FFTW_PATH)/lib -lfftw3_mpi -lfftw3
+else
+   FFT_FLAGS = -DFFTW -I$(FFTW_INC)
+   ADD_LIBS += -L$(FFTW_PATH)/lib -lfftw3_mpi -lfftw3
+endif
 else
    FFT_FLAGS = -DFFTW -I$(FFTW_INC)
    ADD_LIBS += -L$(FFTW_PATH)/lib -lfftw3_mpi -lfftw3
