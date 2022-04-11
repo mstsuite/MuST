@@ -1,0 +1,75 @@
+#=====================================================================
+# Acceleration = 1: enable GPU acceleration
+# Acceleration = 0: otherwise
+#=====================================================================
+Acceleration = 0
+
+#=====================================================================
+# Library paths and elements, e.g.,
+#    HDF5_PATH   = /opt/packages/HDF5/hdf5-1.10.5
+#    LIBXC_PATH  = /opt/packages/LibXC/libxc-4.3.4/INTEL
+#    ACCEL_PATH  = /usr/local/cuda
+#    FFTW_PATH   = /usr/local/FFTW/fftw-3.3.8/INTEL
+#    P3DFFT_PATH = /opt/packages/P3DFFT/p3dfft-2.7.9/INTEL
+#    LUA_PATH    = /opt/packages/Lua/lua-5.3.5
+#  
+# If LUA_PATH, LIBXC_PATH, FFTW_PATH, and/or P3DFFT_PATH are empty, the
+# corresponding packages will be installed under $(EXTERN_LIB_PATH)
+#=====================================================================
+# Modules to load
+# module use /soft/restricted/CNDA/modulefiles
+# module load oneapi
+# module load hdf5
+# module use /soft/modulefiles
+# module load spack libtirpc
+
+HDF5_PATH   = /soft/packaging/spack-builds/linux-opensuse_leap15-x86_64/gcc-10.2.0/hdf5-1.10.7-uapcktd3szlmtouy63p4o3nofnsj5au6
+ACCEL       = CUDA
+ACCEL_PATH  = /usr/local/cuda
+LIBXC_PATH  =
+FFTW_PATH   =
+P3DFFT_PATH =
+LUA_PATH    =
+LIBS       += -qmkl=cluster -lifcore
+NotUse_LIBXC = 1
+NotUse_P3DFFT = 1
+
+XDR_INCLUDE = -I/soft/packaging/spack-builds/linux-opensuse_leap15-x86_64/gcc-10.2.0/libtirpc-1.2.6-nutg7toar3fc2tzqwyqpw6ngnofq3hxf/include/tirpc -I/soft/packaging/spack-builds/linux-opensuse_leap15-x86_64/gcc-10.2.0/libtirpc-1.2.6-nutg7toar3fc2tzqwyqpw6ngnofq3hxf/include/tirpc/rpc
+XDR_LIB = -L/soft/packaging/spack-builds/linux-opensuse_leap15-x86_64/gcc-10.2.0/libtirpc-1.2.6-nutg7toar3fc2tzqwyqpw6ngnofq3hxf/lib -ltirpc
+#=====================================================================
+# Compiler tools
+#=====================================================================
+CC          = mpiicx
+CXX         = mpiicpx
+F77         = mpiifx
+FC          = mpiifx
+MPICC       = mpiicx
+ACCEL_CXX   = nvcc -arch=sm_35
+ARCHV       = xiar -r
+
+#=====================================================================
+# Preprocessor/Compiler/Linker flags, e.g.,
+#    FFLAGS = -I. -O3 -CB -CU -traceback -ftrapuv -fpe0 -ftz -fp-stack-check
+# Note: "FPPFLAGS = -DMPI" enables MPI parallel processing.
+#=====================================================================
+FPPDEFS     = -fpp
+CPPDEFS     = 
+FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK
+
+CFLAGS      = -O3
+CXXFLAGS    = -O3 -std=c++14
+FFLAGS      = -I. -O3 -CB -CU -traceback -ftrapuv -ftz
+OPT_OPENMP  = -openmp
+
+LD_FLAGS    =
+LD          = $(FC) $(LD_FLAGS)
+
+#=====================================================================
+# LIBXC_CONFIG_FLAGS, P3DFFT_CONFIG_FLAGS and FFTW_CONFIG_FLAGS are 
+# ./configure flags for hdf5, libxc, p3dfft, and fftw package, respectively.
+# Note: for hdf5, "--enable-parallel" might be needed in the future.
+#=====================================================================
+HDF5_CONFIG_FLAGS   = --enable-fortran --enable-static-exec CC=$(CC) CXX=$(CXX) FC=$(FC)
+LIBXC_CONFIG_FLAGS  = CC=$(CC) CFLAGS="$(CFLAGS)" FC=$(FC) FFLAGS="$(FFLAGS)"
+P3DFFT_CONFIG_FLAGS = --enable-intel FC=$(FC) CC=$(CC)
+FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS)" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)"
