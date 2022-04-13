@@ -3770,7 +3770,8 @@ contains
 !                 ----------------------------------------------------
                   ssDOS = returnIDOSofBoundStates(id,ia,is,ib,wk_dos)
                   if ( node_print_level >= 0) then
-                     write(6,'(a,i4,2x,f12.8,2x,d15.8)')'Bound state id, e, and DOS = ',ib,getBoundStateEnergy(id=id,ia=ia,is=is,ibs=ib),ssDOS
+                     write(6,'(a,i4,2x,f12.8,2x,d15.8)')'Bound state id, e, and DOS = ', &
+                           ib,getBoundStateEnergy(id=id,ia=ia,is=is,ibs=ib),ssDOS
                   endif
                   ssdos_int = ssdos_int + ssDOS*getLocalSpeciesContent(id,ia)
 !                 ----------------------------------------------------

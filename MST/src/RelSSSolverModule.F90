@@ -357,7 +357,7 @@ include '../lib/arrayTools.F90'
       print_instruction(ia) = iprint(ia)
       AtomicNumber(ia) = getAtomicNumber(ia) ! Needs to be fixed for the CPA case
 !     if (AtomicNumber(ia) < 0 .or. AtomicNumber(ia) > 108) then
-!         call ErrorHandler('initSSSolver','invalid atomic number',AtomicNumber(ia))
+!         call ErrorHandler('initRelSSSolver','invalid atomic number',AtomicNumber(ia))
 !     endif
       Grid => getGrid(ia)
       if (Grid%nmult .ne. 1) then  !numlt=hin/hout here only single log grid is used
@@ -663,7 +663,7 @@ include '../lib/arrayTools.F90'
          enddo
    enddo
 
-!print*,"nr,jmax_pot, num_vl,lpot=",nr,jmax_pot,num_vl,lpot
+!print*,"nr,jmax_pot, num_vl,lpot=",nr,jmax_pot,num_vl_new,lpot
 !print*,"list_vl",list_vl
 !print*,"evec", evec
 !print*,"size of vr_new",SIZE(vr_new,1), SIZE(vr_new,2)
@@ -784,7 +784,8 @@ include '../lib/arrayTools.F90'
    use KindParamModule, only : IntKind, RealKind, CmplxKind
    implicit none
 
-   integer (kind=IntKind) :: jmax_pot,num_vl,nr,list_vl(num_vl),lmax_pot
+   integer (kind=IntKind), intent(in) :: jmax_pot,num_vl,nr,lmax_pot
+   integer (kind=IntKind), intent(in) :: list_vl(num_vl)
    real (kind=RealKind) :: evec(3)
    complex (kind=CmplxKind) :: vr_s1(jmax_pot,nr), vr_s2(jmax_pot,nr)
    complex (kind=CmplxKind) :: vr_new(num_vl,nr), br_new(num_vl,nr,3)

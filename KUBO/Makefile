@@ -132,7 +132,6 @@ endif
 FFTW_INC = $(FFTW_PATH)/include
 
 ifndef NotUse_P3DFFT
-ifneq "$(NotUse_P3DFFT)" "0"
    ifndef P3DFFT_PATH
       ADDITIONAL_TARGETS += p3dfft
       P3DFFT_PATH = $(EXTERN_LIB_PATH)/p3dfft/P3DFFT/$(SUFFIX)
@@ -140,12 +139,17 @@ ifneq "$(NotUse_P3DFFT)" "0"
    FFT_FLAGS = -DFFTW -I$(FFTW_INC) -DP3DFFT -I$(P3DFFT_PATH)/include
    ADD_LIBS += -L$(P3DFFT_PATH)/lib -lp3dfft -L$(FFTW_PATH)/lib -lfftw3_mpi -lfftw3
 else
-   FFT_FLAGS = -DFFTW -I$(FFTW_INC)
-   ADD_LIBS += -L$(FFTW_PATH)/lib -lfftw3_mpi -lfftw3
-endif
-else
-   FFT_FLAGS = -DFFTW -I$(FFTW_INC)
-   ADD_LIBS += -L$(FFTW_PATH)/lib -lfftw3_mpi -lfftw3
+   ifeq "$(NotUse_P3DFFT)" "0"
+      ifndef P3DFFT_PATH
+         ADDITIONAL_TARGETS += p3dfft
+         P3DFFT_PATH = $(EXTERN_LIB_PATH)/p3dfft/P3DFFT/$(SUFFIX)
+      endif
+      FFT_FLAGS = -DFFTW -I$(FFTW_INC) -DP3DFFT -I$(P3DFFT_PATH)/include
+      ADD_LIBS += -L$(P3DFFT_PATH)/lib -lp3dfft -L$(FFTW_PATH)/lib -lfftw3_mpi -lfftw3
+   else
+      FFT_FLAGS = -DFFTW -I$(FFTW_INC)
+      ADD_LIBS += -L$(FFTW_PATH)/lib -lfftw3_mpi -lfftw3
+   endif
 endif
 
 PREPROC_FFLAGS = $(FPPDEFS) $(FPPFLAGS) $(FFT_FLAGS)
