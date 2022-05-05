@@ -12,6 +12,10 @@ public :: initBookKeeping,  &
           getHeadLineValue, &
           getLastColumnValue
 !
+   interface writeHeadLine
+      module procedure writeHL0, writeHL1
+   end interface
+!
    interface writeRow
       module procedure writeRow0, writeRow1, writeRow2
    end interface
@@ -28,11 +32,12 @@ private
    integer (kind=IntKind) :: num_rows = 0
    integer (kind=IntKind) :: num_columns = 0
    integer (kind=IntKind) :: num_columns_old = 0
+   integer (kind=IntKind), parameter :: MaxLen = 100
 !
    character (len=12) :: ColumnTitle(MaxColumns)
    character (len=12) :: ColumnValue(MaxColumns)
-   character (len=40) :: HeadLineTitle(MaxHeadLines)
-   character (len=60) :: HeadLineValue(MaxHeadLines)
+   character (len=MaxLen) :: HeadLineTitle(MaxHeadLines)
+   character (len=MaxLen) :: HeadLineValue(MaxHeadLines)
 !
    integer (kind=IntKind) :: ColumnLength(MaxColumns)
 !
@@ -84,21 +89,31 @@ contains
 !     ----------------------------------------------------------------
       LOOP_1: do
          read(funit,'(a)',iostat=status)text
+         text = adjustl(text)
          if (status < 0 .or. rflag > 2) then
             exit LOOP_1
          else if (text(1:25) == '=========================') then
-            rflag = rflag + 1
+            if (rflag == 0) then
+               rflag = 1
+            endif
          else if (text(1:25) == '-------------------------') then
-            rflag = rflag + 1
+            if (rflag == 1) then
+               rflag = 2
+            endif
          else if (rflag == 0) then
             num_head_lines = num_head_lines + 1
-            id = index(text,':')
-            if (id < 2 .or. id > len(text)) then
-               call WarningHandler('initBookKeeping','Invalid headline',text)
-               exit LOOP_1
+            if (text(1:1) /= '*') then
+               id = index(text,':')
+               if (id < 2 .or. id > len(text)) then
+                  call WarningHandler('initBookKeeping','Invalid headline',text)
+                  exit LOOP_1
+               endif
+               HeadLineTitle(num_head_lines) = adjustl(text(:id-1))
+               HeadLineValue(num_head_lines) = adjustl(text(id+1:))
+            else
+               HeadLineTitle(num_head_lines) = trim(text)
+               HeadLineValue(num_head_lines) = ' '
             endif
-            HeadLineTitle(num_head_lines) = adjustl(text(:id-1))
-            HeadLineValue(num_head_lines) = adjustl(text(id+1:))
          else if (rflag == 1) then
 !           ----------------------------------------------------------
             call setString(text)
@@ -238,7 +253,7 @@ contains
 !
    character (len=*), intent(in) :: title
 !
-   character (len=60) :: v
+   character (len=MaxLen) :: v
 !
    integer (kind=IntKind) :: i
 !
@@ -266,15 +281,17 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine writeHeadLine(title,value)
+   subroutine writeHL0(title,value)
 !  ===================================================================
    implicit none
 !
    character (len=*), intent(in) :: title
    character (len=*), intent(in) :: value
 !
-   character (len=30) :: tt
-   character (len=48) :: tv
+   integer (kind=IntKind), parameter :: colon_position = 38
+!
+   character (len=colon_position-1) :: tt
+   character (len=50) :: tv
 !
    if (FileExist) then
       return
@@ -293,7 +310,57 @@ contains
    HeadLineValue(num_head_lines) = tv
    call FlushFile(funit)
 !
-   end subroutine writeHeadLine
+   end subroutine writeHL0
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine writeHL1(title,num_appears)
+!  ===================================================================
+   implicit none
+!
+   character (len=*), intent(in) :: title
+   integer, intent(in), optional :: num_appears
+   integer (kind=IntKind) :: np, i, j, slen
+!
+   character (len=MaxLen) :: tt
+!
+   if (FileExist) then
+      return
+   else  if (present(num_appears)) then
+      if (num_appears < 1) then
+         call ErrorHandler('writeHeadLine',                              &
+                           'Number of appears of the text pattern < 1',num_appears)
+      endif
+      np = num_appears
+   else
+      np = 1
+   endif
+!
+   slen = len_trim(title)
+   tt = ' '
+   do i = 1, np 
+      j = (i-1)*slen
+      if (j+slen > MaxLen) then
+         exit
+      endif
+      tt(j+1:j+slen) = trim(title)
+   enddo
+!
+   write(funit,'(a)')trim(tt)
+!
+   num_head_lines = num_head_lines + 1
+!
+   if (num_head_lines > MaxHeadLines) then
+      call ErrorHandler('writeHeadLine',                              &
+                        'Number of headlines exceed upper limit',MaxHeadLines)
+   endif
+   HeadLineTitle(num_head_lines) = trim(tt)
+   HeadLineValue(num_head_lines) = ' '
+   call FlushFile(funit)
+!
+   end subroutine writeHL1
 !  ===================================================================
 !
 !  *******************************************************************
@@ -316,7 +383,8 @@ contains
                         'Number of columns exceed the upper limit',MaxColumns)
    endif
 !
-   nt = len_trim(title)
+!  nt = len_trim(title)
+   nt = len(title)
    nv = len_trim(value)
    n = max(nt,nv)
 !

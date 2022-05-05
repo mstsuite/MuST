@@ -67,6 +67,9 @@
 
    write(fu,'(a)')   '# ****************************************************'
    write(fu,'(a,i4)')'# SCF Iteration: ',iscf
+   write(fu,'(a)')   '#     Note: In the MuST version later than 1.8.2, the '
+   write(fu,'(a)')   '#           following energy values no longer include '
+   write(fu,'(a)')   '#           the zero-point lattice vibrational energy.'
    if (ntstep>1) then
       write(fu,'(a,i4)')'# S-D Time Step: ',isd
    endif
@@ -75,24 +78,24 @@
       do i = 1, GlobalNumAtoms
          write(fu,'(1x,a3,1x,i7,17(1x,f10.6),1x,i4,1x,e16.9,1x,f10.6,1x,e16.9,4(1x,f10.6),4(1x,e9.2))')  &
                   atname(i), i, atpos(1:3,i), force(1:3,i), evec_old(1:3,i), evec(1:3,i), &
-                  bcon(1:3,i), vol_MT(i), vol_VP(i), siteLIZ(i), enpres(1,i)-EnergyOffset,&
+                  bcon(1:3,i), vol_MT(i), vol_VP(i), siteLIZ(i), enpres(1,i)-EnergyOffset-enpres(3,i),&
                   exc_en(i),&
-                  enpres(2,i), q_MT(i), q_VP(i), mom_MT(i), mom_VP(i), rms(1:4,i)
+                  enpres(2,i)-enpres(4,i), q_MT(i), q_VP(i), mom_MT(i), mom_VP(i), rms(1:4,i)
       enddo
    else if (n_spin_pola==2) then
       do i = 1, GlobalNumAtoms
          write(fu,'(1x,a3,1x,i7,8(1x,f10.6),1x,i4,1x,e16.9,1x,f10.6,1x,e13.6,4(1x,f10.6),2(1x,e9.2))') &
                   atname(i), i, atpos(1:3,i), force(1:3,i), vol_MT(i), vol_VP(i),       &
-                  siteLIZ(i), enpres(1,i)-EnergyOffset, &
+                  siteLIZ(i), enpres(1,i)-EnergyOffset-enpres(3,i), &
                   exc_en(i),&
-                  enpres(2,i), q_MT(i), q_VP(i),  &
+                  enpres(2,i)-enpres(4,i), q_MT(i), q_VP(i),  &
                   mom_MT(i), mom_VP(i), rms(1:2,i)
       enddo
    else
       do i = 1, GlobalNumAtoms
          write(fu,'(1x,a3,i7,8(1x,f10.6),1x,i4,1x,e16.9,1x,e13.6,2(1x,f10.6),2(1x,e9.2))') &
                   atname(i), i, atpos(1:3,i), force(1:3,i), vol_MT(i), vol_VP(i),    &
-                  siteLIZ(i), enpres(1,i)-EnergyOffset, enpres(2,i),                 &
+                  siteLIZ(i), enpres(1,i)-EnergyOffset-enpres(3,i), enpres(2,i)-enpres(4,i),           &
                   q_MT(i), q_VP(i), rms(1:2,i)
       enddo
    endif

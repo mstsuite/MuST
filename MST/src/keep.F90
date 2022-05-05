@@ -1,5 +1,5 @@
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine keep(sdstep,kscf,max_rms, Efermi, TotalEnergy, PV3)
+   subroutine keep(sdstep,kscf,max_rms)
 !  ===================================================================
    use KindParamModule, only : IntKind, RealKind
 !
@@ -24,6 +24,10 @@
                                  getHeadLineValue, &
                                  getLastColumnValue
 !
+   use ValenceDensityModule, only : getFermiEnergy
+!
+   use TotalEnergyModule, only : getEnergyPerAtom, getPressurePerAtom
+!
    implicit none
 !
    integer (kind=IntKind), intent(in) :: kscf, sdstep
@@ -33,8 +37,9 @@
    integer (kind=intKind) :: i, n, m
 !
    real (kind=RealKind), intent(in) :: max_rms(4)
-   real (kind=RealKind), intent(in) :: Efermi
-   real (kind=RealKind), intent(in) :: TotalEnergy, PV3
+   real (kind=RealKind) :: Efermi
+   real (kind=RealKind) :: TotalEnergy, PV3
+   real (kind=RealKind) :: zeropt_e, zeropt_pv
 !
    real (kind=RealKind) :: mom
 !
@@ -52,12 +57,21 @@
       end function getTokenPosition
    end interface
 !
-!  TotalEnergy = getEnergyPerAtom()
-!  PV3 = getPressurePerAtom()
+   Efermi = getFermiEnergy()
+   TotalEnergy = getEnergyPerAtom(zpte=zeropt_e)
+   PV3 = getPressurePerAtom(zptpv=zeropt_pv)
 !
    if (isBookKeepingNew()) then
+      call writeHeadLine('*',87)
+      call writeHeadLine('*  Note:                                                                              *')
+      call writeHeadLine('*     In the MuST version 1.8.2 and prior, the total energy value includes the zero-  *')
+      call writeHeadLine('*     point lattice energy. Starting from version v1.8.3, the zero point lattice      *')
+      call writeHeadLine('*     energy is removed from the total energy value and is explicitly printed out in  *')
+      call writeHeadLine('*     one of the following lines. If needed, one will have to add the zero-point      *')
+      call writeHeadLine('*     lattice energy to the total energy by hand.                                     *')
+      call writeHeadLine('*',87)
 #include "git_version.h"
-      i = getTokenPosition(6,myunit)
+      i = getTokenPosition(7,myunit)
       ver = trim(myunit(i:))
 !     ----------------------------------------------------------------
       call writeHeadLine('Source Code Version',ver)
@@ -89,6 +103,11 @@
       write(string_tmp,'(f12.5)')getSystemVolume()/real(getNumAtoms(),RealKind)
       call writeHeadLine('Average Atomic Volume (au^3)',string_tmp)
 !     ----------------------------------------------------------------
+      write(string_tmp,'(f12.5)')zeropt_e
+      call writeHeadLine('Zero Point Lattice Energy/Atom (Ryd)',string_tmp)
+      write(string_tmp,'(f12.5)')zeropt_pv
+      call writeHeadLine('Zero Point Lattice PV3/Atom (Ryd)',string_tmp)
+!     ----------------------------------------------------------------
       E_offset = int(TotalEnergy,kind=IntKind)
       write(string_tmp,'(i6)')E_offset
       call writeHeadLine('Energy Offset',string_tmp)
@@ -97,71 +116,71 @@
    else if (LastIter < 0) then
       text = getHeadLineValue('Energy Offset')
       read(text,'(i6)')E_offset
-      text = getLastColumnValue('  Iter')
+      text = getLastColumnValue('Iter')
       read(text,'(i7)')LastIter
    endif
 !
 !  -------------------------------------------------------------------
-   write(string_tmp,'(i7)')LastIter+kscf
-   call insertColumn('Iter',string_tmp)
+   write(string_tmp,'(i5)')LastIter+kscf
+   call insertColumn(' Iter',string_tmp)
 !  -------------------------------------------------------------------
    if (abs(TotalEnergy-E_offset) >= 1000.0) then
-      write(string_tmp,'(f10.4,''    '')')TotalEnergy-E_offset
+      write(string_tmp,'(f10.4,''    '')')TotalEnergy-E_offset-zeropt_e
    else if (abs(TotalEnergy-E_offset) >= 100.0) then
-      write(string_tmp,'(f10.5,''    '')')TotalEnergy-E_offset
+      write(string_tmp,'(f10.5,''    '')')TotalEnergy-E_offset-zeropt_e
    else
-      write(string_tmp,'(f10.6,''    '')')TotalEnergy-E_offset
+      write(string_tmp,'(f10.6,''    '')')TotalEnergy-E_offset-zeropt_e
    endif
-   call insertColumn('Energy',string_tmp)
+   call insertColumn('  Energy',string_tmp)
 !  -------------------------------------------------------------------
    if (abs(PV3) >= 1000.0) then
-      write(string_tmp,'(f9.3,''    '')')PV3
+      write(string_tmp,'(f9.3,''    '')')PV3-zeropt_pv
    else if (abs(PV3) >= 100.0) then
-      write(string_tmp,'(f9.4,''    '')')PV3
+      write(string_tmp,'(f9.4,''    '')')PV3-zeropt_pv
    else
-      write(string_tmp,'(f9.5,''    '')')PV3
+      write(string_tmp,'(f9.5,''    '')')PV3-zeropt_pv
    endif
-   call insertColumn('3PV',string_tmp)
+   call insertColumn('  3PV',string_tmp)
 !  -------------------------------------------------------------------
    write(string_tmp,'(f8.5,''    '')')Efermi
-   call insertColumn('Efermi',string_tmp)
+   call insertColumn('  Efermi',string_tmp)
 !  -------------------------------------------------------------------
    write(string_tmp,'(e10.3,''    '')')max_rms(1)
-   call insertColumn('Rms_rho',string_tmp)
+   call insertColumn(' Rms_rho',string_tmp)
 !  -------------------------------------------------------------------
    write(string_tmp,'(e10.3,''    '')')max_rms(2)
-   call insertColumn('Rms_pot',string_tmp)
+   call insertColumn(' Rms_pot',string_tmp)
 !  -------------------------------------------------------------------
    if ( isChargeMixing() ) then
-      string_tmp = ' rho'
+      string_tmp = ' rho '
    else
-      string_tmp = ' pot'
+      string_tmp = ' pot '
    endif
-   call insertColumn('Mix',string_tmp)
+   call insertColumn(' Mix',string_tmp)
 !  -------------------------------------------------------------------
    if (isSimpleMixing()) then
-      string_tmp = 'S'
+      string_tmp = ' S'
    else if (isDGAMixing()) then
-      string_tmp = 'A'
+      string_tmp = ' A'
    else if (isBroydenMixing()) then
-      string_tmp = 'B'
+      string_tmp = ' B'
    endif
    call insertColumn('Alg',string_tmp)
 !  -------------------------------------------------------------------
    if ( isChargeMixing() ) then
       if (getMixingParam4Rho(1) >= 0.99999999) then
-         write(string_tmp,'(f7.3,''    '')')getMixingParam4Rho(1)
+         write(string_tmp,'(f8.3,''    '')')getMixingParam4Rho(1)
       else
-         write(string_tmp,'(f7.4,''    '')')getMixingParam4Rho(1)
+         write(string_tmp,'(f8.5,''    '')')getMixingParam4Rho(1)
       endif
    else
       if (getMixingParam4Pot(1) >= 0.99999999) then
-         write(string_tmp,'(f7.3,''    '')')getMixingParam4Pot(1)
+         write(string_tmp,'(f8.3,''    '')')getMixingParam4Pot(1)
       else
-         write(string_tmp,'(f7.4,''    '')')getMixingParam4Pot(1)
+         write(string_tmp,'(f8.5,''    '')')getMixingParam4Pot(1)
       endif
    endif
-   call insertColumn('Alpha',string_tmp)
+   call insertColumn(' Alpha',string_tmp)
    if (n_spin_pola==2) then
       mom = getAverageMoment()
       write(string_tmp,'(f7.4,''    '')') mom

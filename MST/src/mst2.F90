@@ -743,7 +743,7 @@ program mst2
                           getNumRedundantEsOnMyProc()
      write(6,'(/,80(''=''))')
 !    -----------------------------------------------------------------
-!    call force_openmp     ! use this only if necessary
+     call force_openmp()    ! use this only if necessary
      call print_threads(6)
 !    -----------------------------------------------------------------
      if ( isKKR() ) then
@@ -1807,8 +1807,7 @@ program mst2
             keep_rms(2) = max(max_rms(3),max_rms(4))
             keep_rms(3:4) = max_rms(5:6)
 !           ----------------------------------------------------------
-            call keep(sdstep_new,niter,keep_rms,getFermiEnergy(),     &
-                      getEnergyPerAtom(), getPressurePerAtom())
+            call keep(sdstep_new,niter,keep_rms)
 !           ----------------------------------------------------------
             sdstep_new = 0
          endif

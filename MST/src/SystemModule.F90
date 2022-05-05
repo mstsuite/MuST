@@ -781,12 +781,12 @@ contains
    endif
 !
    if (isDataStorageExisting('Energy Pressure')) then
-      EnPres => getDataStorage('Energy Pressure',2,NumAtoms,RealMark)
+      EnPres => getDataStorage('Energy Pressure',4,NumAtoms,RealMark)
    else
 !     ----------------------------------------------------------------
-      call createDataStorage('Energy Pressure',2*NumAtoms,RealType)
+      call createDataStorage('Energy Pressure',4*NumAtoms,RealType)
 !     ----------------------------------------------------------------
-      EnPres => getDataStorage('Energy Pressure',2,NumAtoms,RealMark)
+      EnPres => getDataStorage('Energy Pressure',4,NumAtoms,RealMark)
    endif
 !
    if (isDataStorageExisting('RMS Info')) then
@@ -1614,12 +1614,12 @@ contains
 !  ===================================================================
    implicit none
    integer (kind=IntKind), intent(in) :: i
-   real (kind=RealKind), intent(in) :: pen(2)
+   real (kind=RealKind), intent(in) :: pen(4)
 !
    if (i<1 .or. i>NumAtoms) then
       call ErrorHandler('setForce','Invalid atom index',i)
    endif
-   EnPres(1:2,i) = pen(1:2)
+   EnPres(1:4,i) = pen(1:4)
 !
    end subroutine setEnPres
 !  ===================================================================
@@ -2210,7 +2210,7 @@ contains
    endif
 !
    Force(1:3,1:NumAtoms)  = ZERO
-   EnPres(1:2,1:NumAtoms) = ZERO
+   EnPres(1:4,1:NumAtoms) = ZERO
    RMS(1:2,1:NumAtoms)    = ZERO
    if ( nspin > 2 ) then
       RMS(3:4,1:NumAtoms) = ZERO

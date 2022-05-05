@@ -36,6 +36,10 @@ private
    real (kind=RealKind) :: energy_coul
    real (kind=RealKind) :: energy_kinetic
    real (kind=RealKind) :: pressure
+   real (kind=RealKind), allocatable :: ezpt(:)
+   real (kind=RealKind), allocatable :: tpzpt(:)
+   real (kind=RealKind) :: ezpt_per_atom
+   real (kind=RealKind) :: tpzpt_per_atom
 #ifdef DEBUG_EPRINT
    real (kind=RealKind) :: e_array(12)
 #endif
@@ -60,7 +64,7 @@ contains
 !  ===================================================================
    use GroupCommModule, only : getGroupID, getNumPEsInGroup, getMyPEinGroup
    use Atom2ProcModule, only : getGlobalIndex
-   use AtomModule, only : getLocalnumSpecies
+   use AtomModule, only : getLocalNumSpecies
 !
    implicit none
 !
@@ -102,7 +106,13 @@ contains
    do id=1,nlocal
       max_ns=max(max_ns,getLocalNumSpecies(id))
    enddo
-   allocate(SiteEnPres(2,nlocal))
+   allocate(SiteEnPres(2,nlocal), ezpt(nlocal), tpzpt(nlocal))
+   SiteEnPres = ZERO
+   ezpt = ZERO
+   tpzpt = ZERO
+   ezpt_per_atom = ZERO
+   tpzpt_per_atom = ZERO
+!
    InitFactors = .false.
    Initialized = .true.
    Computed = .false.
@@ -130,6 +140,8 @@ contains
    energy_coul = ZERO
    energy_kinetic = ZERO
    pressure = ZERO
+   ezpt_per_atom = ZERO
+   tpzpt_per_atom = ZERO
 !
    deallocate( GlobalIndex, Print_Level, SiteEnPres )
 !
@@ -146,10 +158,11 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getEnergyPerAtom() result (e)
+   function getEnergyPerAtom(zpte) result (e)
 !  ===================================================================
    implicit none
 !
+   real (kind=RealKind), optional, intent(out) :: zpte
    real (kind=RealKind) :: e
 !
    if (.not.Initialized) then
@@ -166,16 +179,21 @@ contains
       e = total_energy/real(GlobalNumAtoms-NumVacancies,RealKind)
    endif
 !
+   if (present(zpte)) then
+      zpte = ezpt_per_atom
+   endif
+!
    end function getEnergyPerAtom
 !  ===================================================================
 !
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getPressurePerAtom() result(p)
+   function getPressurePerAtom(zptpv) result(p)
 !  ===================================================================
    implicit none
 !
+   real (kind=RealKind), optional, intent(out) :: zptpv
    real (kind=RealKind) :: p
 !
    if (.not.Initialized) then
@@ -192,6 +210,10 @@ contains
       p = pressure/real(GlobalNumAtoms-NumVacancies,RealKind)
    endif
 !
+   if (present(zptpv)) then
+      zptpv = tpzpt_per_atom
+   endif
+!
    end function getPressurePerAtom
 !  ===================================================================
 !
@@ -200,12 +222,26 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine computeEnergyFunctional(isMT)
 !  ===================================================================
+   use GroupCommModule, only : GlobalSumInGroup
+!
    use PotentialTypeModule, only : isFullPotential
+!
+   use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies,   &
+                          getLocalSpeciesContent
+!
+   use PolyhedraModule, only : getVolume
+!
    implicit none
 !
    logical, optional :: isMT
 !
    logical :: isMTon
+!
+   integer (kind=IntKind) :: na, ia
+!
+   real (kind=RealKind) :: ezpt_ia, tpzpt_ia, omega_vp, Zi, content
+   real (kind=RealKind) :: total_ezpt, total_tpzpt
+   real (kind=RealKind) :: msgbuf(2)
 !
    interface
       function nocaseCompare(s1,s2) result(t)
@@ -227,6 +263,32 @@ contains
       endif
    endif
 !
+!  ==================================================================
+!  calculate the zeropoint energy....................................
+!  ==================================================================
+   msgbuf = ZERO
+   do na = 1, LocalNumAtoms
+      omega_vp = getVolume(na)
+      ezpt(na) = ZERO
+      tpzpt(na) = ZERO
+      do ia = 1, getLocalNumSpecies(na)
+         Zi = getLocalAtomicNumber(na,ia)
+         content = getLocalSpeciesContent(na,ia)
+!        -------------------------------------------------------------
+         call zeropt(ezpt_ia,tpzpt_ia,omega_vp,Zi)
+!        -------------------------------------------------------------
+         ezpt(na) = ezpt(na) + ezpt_ia*content
+         tpzpt(na) = tpzpt(na) + tpzpt_ia*content
+      enddo
+      msgbuf(1) = msgbuf(1) + ezpt(na)
+      msgbuf(2) = msgbuf(2) + tpzpt(na)
+   enddo
+!  -------------------------------------------------------------------
+   call GlobalSumInGroup(GroupID,msgbuf(1:2),2)
+!  -------------------------------------------------------------------
+   total_ezpt = msgbuf(1)
+   total_tpzpt = msgbuf(2)
+!
    if ( .not.isFullPotential() .or. isMTon ) then
       if (Print_Level(1) >= 0) then
          write(6,'(/,a,/)') "     Total Energy:  -  SphPot mode "
@@ -241,6 +303,13 @@ contains
 !     ----------------------------------------------------------------
       call computeFullTotalEnergy()
 !     ----------------------------------------------------------------
+   endif
+   if (GlobalNumAtoms == NumVacancies) then
+      ezpt_per_atom = ZERO
+      tpzpt_per_atom = ZERO
+   else
+      ezpt_per_atom = total_ezpt/real(GlobalNumAtoms-NumVacancies,RealKind)
+      tpzpt_per_atom = total_tpzpt/real(GlobalNumAtoms-NumVacancies,RealKind)
    endif
 !
    if (nocaseCompare(StopRoutine,'computeEnergyFunctional')) then
@@ -262,7 +331,7 @@ contains
    use RadialGridModule, only : getGrid
 !
    use Atom2ProcModule, only : getGlobalIndex
-   use AtomModule, only : getLocalAtomicNumber, getLocalnumSpecies,   &
+   use AtomModule, only : getLocalAtomicNumber, getLocalNumSpecies,   &
                           getLocalSpeciesContent, getLocalEvec
 !
    use PolyhedraModule, only : getVolume, getInscrSphVolume
@@ -320,7 +389,7 @@ contains
    real (kind=RealKind) :: onsite_term, esum_term, kine_term
    real (kind=RealKind) :: rhov_term_e, rhov_term_pv, exc_term, exc_term_mt
    real (kind=RealKind) :: vc0(3), evec(3)
-   real (kind=RealKind) :: ezpt, tpzpt, ezpt_ia, tpzpt_ia, ke, es
+   real (kind=RealKind) :: ke, es
 !
    real (kind=RealKind), pointer :: r_mesh(:)
    real (kind=RealKind), pointer :: rho_sph(:)
@@ -385,7 +454,7 @@ contains
    allocate(ws_rho(jend_max*jmax_max*n_spin_cant))
    allocate(ws_pot(jend_max*jmax_max))
    allocate(ws_prod(jend_max*(2*lmax_max+1)*(lmax_max+1)))
-   allocate(LocalEnergy(2,GlobalNumAtoms))
+   allocate(LocalEnergy(4,GlobalNumAtoms))
 !
    SiteEnPres  = ZERO
    do na = 1, LocalNumAtoms
@@ -419,8 +488,6 @@ contains
       kmax_prod = (lmax_prod+1)**2
       prod => aliasArray2_c(ws_prod,jend,jmax_prod)
 !
-      ezpt = ZERO
-      tpzpt = ZERO
       esum_term   = ZERO
       kine_term    = ZERO
       exc_term     = ZERO
@@ -432,12 +499,6 @@ contains
          omega_vp = getVolume(na)
          Zi = getLocalAtomicNumber(na,ia)
          content = getLocalSpeciesContent(na,ia)
-!
-!        -------------------------------------------------------------
-         call zeropt(ezpt_ia,tpzpt_ia,omega_vp,Zi)
-!        -------------------------------------------------------------
-         ezpt = ezpt + ezpt_ia*content
-         tpzpt = tpzpt + tpzpt_ia*content
 !
          rho_tot => getChargeDensity("TotalNew",na,ia)
          rho_val => getValenceElectronDensity(na,ia)
@@ -777,15 +838,19 @@ contains
       enddo  ! Loop over species
 !
       if (formula == 0) then
-         SiteEnPres(1,na) = SiteEnPres(1,na) + ezpt + exc_term + onsite_term + kine_term + rhov_term_e
+         SiteEnPres(1,na) = SiteEnPres(1,na) + ezpt(na) + exc_term + onsite_term + kine_term + rhov_term_e
+!        SiteEnPres(1,na) = SiteEnPres(1,na) +            exc_term + onsite_term + kine_term + rhov_term_e
       else if (formula == 1) then
-         SiteEnPres(1,na) = SiteEnPres(1,na) + ezpt + exc_term + onsite_term + esum_term + rhov_term_e
+         SiteEnPres(1,na) = SiteEnPres(1,na) + ezpt(na) + exc_term + onsite_term + esum_term + rhov_term_e
+!        SiteEnPres(1,na) = SiteEnPres(1,na) +            exc_term + onsite_term + esum_term + rhov_term_e
       else if (formula == 2) then
-         SiteEnPres(1,na) = SiteEnPres(1,na) + ezpt + onsite_term + exc_term + esum_term + rhov_term_e
+         SiteEnPres(1,na) = SiteEnPres(1,na) + ezpt(na) + onsite_term + exc_term + esum_term + rhov_term_e
+!        SiteEnPres(1,na) = SiteEnPres(1,na) +            onsite_term + exc_term + esum_term + rhov_term_e
       else
          call ErrorHandler('computeFullTotalEnergy','Undefined formula',formula)
       endif
-      SiteEnPres(2,na) = SiteEnPres(2,na) + tpzpt + 2.0d0*kine_term + rhov_term_pv + onsite_term
+      SiteEnPres(2,na) = SiteEnPres(2,na) + tpzpt(na) + 2.0d0*kine_term + rhov_term_pv + onsite_term
+!     SiteEnPres(2,na) = SiteEnPres(2,na) +             2.0d0*kine_term + rhov_term_pv + onsite_term
 !
       if (Print_Level(na) >= 0) then
          write(6,'(/,a,i5)')'Local Site Index =',na
@@ -794,6 +859,8 @@ contains
          write(6,'(a,f18.8)') 'Exc energy term         = ', exc_term
          write(6,'(a,f18.8)') 'Exc energy term in IS   = ', exc_term_mt
          write(6,'(a,f18.8)') 'Exc energy term in VP-IS= ', exc_term-exc_term_mt
+         write(6,'(a,f18.8)') 'Zero-Temp vibratinal E  = ', ezpt(na)
+         write(6,'(a,f18.8)') 'Zero-Temp vibratinal P*V= ', tpzpt(na)
          write(6,'(/,a)') 'Energy terms break up:'
          do is = 1, n_spin_pola
             write(6,'(a,i5,a,i5)')'Spin Index =',is
@@ -829,12 +896,17 @@ contains
    do na =1, LocalNumAtoms
 !     call setAtomEnergy(getGlobalIndex(na),SiteEnPres(1:2,na))
       LocalEnergy(1:2,getGlobalIndex(na))=SiteEnPres(1:2,na)
+      LocalEnergy(3,getGlobalIndex(na))=ezpt(na)
+      LocalEnergy(4,getGlobalIndex(na))=tpzpt(na)
    enddo
 !  -------------------------------------------------------------------
-   call GlobalSumInGroup(GroupID,LocalEnergy,2,GlobalNumAtoms)
+   call GlobalSumInGroup(GroupID,LocalEnergy,4,GlobalNumAtoms)
 !  -------------------------------------------------------------------
-   call setAtomEnergy(localEnergy)
+   call setAtomEnergy(LocalEnergy)
 !  -------------------------------------------------------------------
+!
+   deallocate(LocalEnergy)
+!
    Computed = .true.
 !
 !  ===================================================================
@@ -971,7 +1043,7 @@ contains
    enddo
    allocate(rho_spin(jmt))
    allocate( rho_tmp(jmt), mom_tmp(jmt) )
-   allocate(LocalEnergy(2,GlobalNumAtoms))
+   allocate(LocalEnergy(4,GlobalNumAtoms))
    rho_tmp = ZERO
    mom_tmp = ZERO
 !
@@ -1026,6 +1098,7 @@ contains
 !              -------------------------------------------------------
             endif
          endif
+!
          do is = 1,n_spin_pola
             if ( Print_Level(na) >= 0 ) then
                write(6,'(4x,a,i2,'','',4x,a,i2,2x,38(''-''))')'Spin Index :',is,'Species Index :',ia
@@ -1071,6 +1144,14 @@ contains
             press = press + dummy
          enddo
       enddo
+!
+!     ================================================================
+!     Add zero point energy term
+!     ================================================================
+      etot = etot + ezpt(na)
+      press = press + tpzpt(na)
+      SiteEnPres(1,na) = SiteEnPres(1,na) + ezpt(na)
+      SiteEnPres(2,na) = SiteEnPres(2,na) + tpzpt(na)
 !
 !     ================================================================
 !      Check if energy correction (e.g. LDA+U) is needed
@@ -1238,12 +1319,14 @@ contains
 !     endif
 !     call setAtomEnergy(getGlobalIndex(na),SiteEnPres(1:2,na))
       LocalEnergy(1:2,getGlobalIndex(na)) = SiteEnPres(1:2,na)
+      LocalEnergy(3,getGlobalIndex(na))=ezpt(na)
+      LocalEnergy(4,getGlobalIndex(na))=tpzpt(na)
    enddo
 !  -------------------------------------------------------------------
    call GlobalSumInGroup(GroupID,echarge)
-   call GlobalSumInGroup(GroupID,LocalEnergy,2,GlobalNumAtoms)
+   call GlobalSumInGroup(GroupID,LocalEnergy,4,GlobalNumAtoms)
 !  -------------------------------------------------------------------
-   call setAtomEnergy(localEnergy)
+   call setAtomEnergy(LocalEnergy)
 !  -------------------------------------------------------------------
    total_energy=total_energy+u0+emad+echarge
    pressure=pressure+u0+emadp
@@ -1265,6 +1348,8 @@ contains
       exit
       endif
    enddo
+!
+   deallocate(LocalEnergy)
 !
    Computed = .true.
 !
@@ -1330,8 +1415,6 @@ contains
    real (kind=RealKind) :: dummy
    real (kind=RealKind) :: exchen
    real (kind=RealKind) :: pterm1
-   real (kind=RealKind) :: ezpt
-   real (kind=RealKind) :: tpzpt
    real (kind=RealKind) :: evssum
 !
    real (kind=RealKind), parameter :: PI8 = PI4*TWO
@@ -1344,11 +1427,6 @@ contains
    do ir=1,jmt
       sqrt_r(ir)=sqrt(rr(ir))
    enddo
-!  ==================================================================
-!  calculate the zeropoint energy....................................
-!  ------------------------------------------------------------------
-   call zeropt(ezpt,tpzpt,omega_vp,ztotss)
-!  ------------------------------------------------------------------
 !
 !  ==================================================================
 !  Calculate the kinetic energy of the core and valence electrons
@@ -1479,8 +1557,8 @@ contains
    pterm1=TWO*PI4*pterm1
 !
 !  ******************************************************************
-   etot = ekinetic+ecoulomb+exchen+ezpt/rspin
-   press= TWO*ekinetic+ecoulomb-THREE*pterm1+tpzpt/rspin
+   etot = ekinetic+ecoulomb+exchen  ! +ezpt/rspin
+   press= TWO*ekinetic+ecoulomb-THREE*pterm1   ! +tpzpt/rspin
    if(iprint >= 0) then
       write(6,'(10x,''esemv'',t30,''='',f22.11)')esemv
       write(6,'(10x,''ecorev'',t30,''='',f22.11)')ecorv
@@ -1491,8 +1569,8 @@ contains
       write(6,'(10x,''Coulomb E'',t30,''='',f22.11)') ecoulomb
       write(6,'(10x,''Exch E'',t30,''='',f22.11)') exchen
       write(6,'(10x,''pterm1'',t30,''='',f22.11)')pterm1
-      write(6,'(10x,''ezpt/spin'',t30,''='',f22.11)')ezpt/rspin
-      write(6,'(10x,''tpzpt'',t30,''='',f22.11)')tpzpt/rspin
+!     write(6,'(10x,''ezpt/spin'',t30,''='',f22.11)')ezpt/rspin
+!     write(6,'(10x,''tpzpt'',t30,''='',f22.11)')tpzpt/rspin
    endif
 #ifdef DEBUG_EPRINT
    e_array(1) = e_array(1) + esemv 
@@ -1568,8 +1646,6 @@ contains
    real (kind=RealKind) :: correc
    real (kind=RealKind) :: cor3pv
    real (kind=RealKind) :: pterm1
-   real (kind=RealKind) :: ezpt
-   real (kind=RealKind) :: tpzpt
    real (kind=RealKind) :: evssum
    real (kind=RealKind) :: xcmt
 !
@@ -1582,11 +1658,6 @@ contains
    do ir=1,jmt
        rtmp(ir)=sqrt(rr(ir))
    enddo
-!  ==================================================================
-!  calculate the zeropoint energy....................................
-!  ------------------------------------------------------------------
-   call zeropt(ezpt,tpzpt,omega_vp,ztotss)
-!  ------------------------------------------------------------------
 !
 !  ==================================================================
 !  calculate the energy eigenvalue sum for both valence and
@@ -1718,8 +1789,8 @@ contains
 !  ==================================================================
 !  sum over terms to get the total energy and 3PV
 !  ==================================================================
-   etot = coren+valen+exchen+correc+ezpt/rspin+evssum-xcmt
-   press= pterm1+cor3pv+tpzpt/rspin+TWO*evssum-xcmt
+   etot = coren+valen+exchen+correc+evssum-xcmt  ! +ezpt/rspin
+   press= pterm1+cor3pv+TWO*evssum-xcmt  ! +tpzpt/rspin
 !
 !  *******************************************************************
 !  Major print out for current sublattice
@@ -1736,8 +1807,8 @@ contains
       write(6,'(10x,''-xcmt'',t30,''='',f22.11)')-xcmt
       write(6,'(10x,''c3pv'',t30,''='',f22.11)')cor3pv
       write(6,'(10x,''pterm1'',t30,''='',f22.11)')pterm1
-      write(6,'(10x,''ezpt/spin'',t30,''='',f22.11)')ezpt/rspin
-      write(6,'(10x,''tpzpt'',t30,''='',f22.11)')tpzpt/rspin
+!     write(6,'(10x,''ezpt/spin'',t30,''='',f22.11)')ezpt/rspin
+!     write(6,'(10x,''tpzpt'',t30,''='',f22.11)')tpzpt/rspin
    endif
 !
    deallocate( vmvold, rhov, derv, bndint, bnd, rtmp )
@@ -1754,15 +1825,15 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine zeropt(ezpt,tpzpt,omegws,ztotss)
+   subroutine zeropt(ezpt_o,tpzpt_o,omegws,ztotss)
 !  ===================================================================
    implicit none
 !
    integer (kind=IntKind) :: idebye(49)
    integer (kind=IntKind) :: iz
 !
-   real (kind=RealKind), intent(out) :: ezpt
-   real (kind=RealKind), intent(out) :: tpzpt
+   real (kind=RealKind), intent(out) :: ezpt_o
+   real (kind=RealKind), intent(out) :: tpzpt_o
    real (kind=RealKind), intent(in) :: omegws
    real (kind=RealKind), intent(in) :: ztotss
 !
@@ -1809,8 +1880,8 @@ contains
       endif
       tpvzer =3.0d0*grune(iz)*ezero
    endif
-   ezpt=ezero
-   tpzpt=tpvzer
+   ezpt_o=ezero
+   tpzpt_o=tpvzer
 !
    end subroutine zeropt
 !  ===================================================================
