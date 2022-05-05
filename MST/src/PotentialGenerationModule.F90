@@ -2958,22 +2958,22 @@ contains
 !
    if ((isLSMS().or.isKKR()) .and. max_shells > 0 .and. printNeighbor) then
       if (max_shells == 1) then
-         write(fu,'(87(''=''))')
-         write(fu,'(a)')' Atom   Index      Q          Qmt        dQ        Vmad        Local Energy     dQ(1nn)'
-!        write(fu,'(87(''-''))')
+         write(fu,'(107(''=''))')
+         write(fu,'(a)')' Atom   Index      Q          Qmt        dQ        Vmad        Local Energy     dQ(1nn)    LocalEnergy-ZptE'
+!        write(fu,'(107(''-''))')
       else
-         write(fu,'(99(''=''))')
-         write(fu,'(a)')' Atom   Index      Q          Qmt        dQ        Vmad        Local Energy     dQ(1nn)     dQ(2nn)'
-!        write(fu,'(99(''-''))')
+         write(fu,'(119(''=''))')
+         write(fu,'(a)')' Atom   Index      Q          Qmt        dQ        Vmad        Local Energy     dQ(1nn)     dQ(2nn)    LocalEnergy-ZptE'
+!        write(fu,'(119(''-''))')
       endif
    else if (na == 1) then
-      write(fu,'(75(''=''))')
-      write(fu,'(a)')' Atom   Index      Q          Qmt        dQ        Vmad        Local Energy'
-!     write(fu,'(75(''-''))')
+      write(fu,'(95(''=''))')
+      write(fu,'(a)')' Atom   Index      Q          Qmt        dQ        Vmad        Local Energy    LocalEnergy-ZptE'
+!     write(fu,'(95(''-''))')
    else
-      write(fu,'(80(''=''))')
-      write(fu,'(a)')' Atom  Site  Species    Q          Qmt        dQ        Vmad        Local Energy'
-!     write(fu,'(80(''-''))')
+      write(fu,'(100(''=''))')
+      write(fu,'(a)')' Atom  Site  Species    Q          Qmt        dQ        Vmad        Local Energy    LocalEnergy-ZptE'
+!     write(fu,'(100(''-''))')
    endif
    global_table_line => getGlobalTableLine()
    Q_Table => getGlobalOnSiteElectronTableOld()
@@ -2982,48 +2982,52 @@ contains
    if ((isLSMS().or.isKKR()) .and. max_shells > 0 .and. printNeighbor) then
       if (max_shells == 1) then
          do ig = 1, GlobalNumAtoms
-            write(fu,'(2x,a3,2x,i6,4(2x,f9.5),6x,f12.5,2x,f10.5)')                     &
-                                                 getAtomName(ig), ig,                  &
-                                                 Q_Table(ig),Qmt_Table(ig),            &
-                                                 Q_Table(ig)-getAtomicNumber(ig),      &
-                                                 MadelungShiftTable(ig),atom_en(1,ig), &
-                                                 NeighborChargeTable(1,ig)
-         enddo
-         write(fu,'(87(''=''))')
-      else
-         do ig = 1, GlobalNumAtoms
-            write(fu,'(2x,a3,2x,i6,4(2x,f9.5),6x,f12.5,2(2x,f10.5))')                  &
+            write(fu,'(2x,a3,2x,i6,4(2x,f9.5),6x,f12.5,2x,f10.5,6x,f12.5)')            &
                                                  getAtomName(ig), ig,                  &
                                                  Q_Table(ig),Qmt_Table(ig),            &
                                                  Q_Table(ig)-getAtomicNumber(ig),      &
                                                  MadelungShiftTable(ig),atom_en(1,ig), &
                                                  NeighborChargeTable(1,ig),            &
-                                                 NeighborChargeTable(2,ig)
+                                                 atom_en(1,ig)-atom_en(3,ig)
          enddo
-         write(fu,'(99(''=''))')
-      endif
-   else if (na == 1) then
-      do ig = 1, GlobalNumAtoms
-         write(fu,'(2x,a3,2x,i6,4(2x,f9.5),6x,f12.5)')                                 &
+         write(fu,'(107(''=''))')
+      else
+         do ig = 1, GlobalNumAtoms
+            write(fu,'(2x,a3,2x,i6,4(2x,f9.5),6x,f12.5,2(2x,f10.5),6x,f12.5)')         &
                                                  getAtomName(ig), ig,                  &
                                                  Q_Table(ig),Qmt_Table(ig),            &
                                                  Q_Table(ig)-getAtomicNumber(ig),      &
-                                                 MadelungShiftTable(ig),atom_en(1,ig)
+                                                 MadelungShiftTable(ig),atom_en(1,ig), &
+                                                 NeighborChargeTable(1,ig),            &
+                                                 NeighborChargeTable(2,ig),            &
+                                                 atom_en(1,ig)-atom_en(3,ig)
+         enddo
+         write(fu,'(119(''=''))')
+      endif
+   else if (na == 1) then
+      do ig = 1, GlobalNumAtoms
+         write(fu,'(2x,a3,2x,i6,4(2x,f9.5),6x,f12.5,6x,f12.5)')                        &
+                                                 getAtomName(ig), ig,                  &
+                                                 Q_Table(ig),Qmt_Table(ig),            &
+                                                 Q_Table(ig)-getAtomicNumber(ig),      &
+                                                 MadelungShiftTable(ig),atom_en(1,ig), &
+                                                 atom_en(1,ig)-atom_en(3,ig)
       enddo
-      write(fu,'(75(''=''))')
+      write(fu,'(95(''=''))')
    else
       do ig = 1, GlobalNumAtoms
          do ia = 1, getNumAlloyElements(ig)
 !           write(fu,'(2x,a3,2x,i6,4(2x,f20.16))')getAtomName(ig,ia), ig, ia,     &
             lig = global_table_line(ig) + ia
-            write(fu,'(2x,a3,2x,i6,2x,i2,4(2x,f9.5),6x,f12.5)')                        &
+            write(fu,'(2x,a3,2x,i6,2x,i2,4(2x,f9.5),6x,f12.5,6x,f12.5)')               &
                                                  getAtomName(ig,ia), ig, ia,           &
                                                  Q_Table(lig),Qmt_Table(lig),          &
                                                  Q_Table(lig)-getAtomicNumber(ig,ia),  &
-                                                 MadelungShiftTable(lig),atom_en(1,ig)
+                                                 MadelungShiftTable(lig),atom_en(1,ig),&
+                                                 atom_en(1,ig)-atom_en(3,ig)
          enddo
       enddo
-      write(fu,'(80(''=''))')
+      write(fu,'(100(''=''))')
    endif
    if (fu == 6) then
       write(6,'(/)')

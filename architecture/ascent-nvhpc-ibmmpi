@@ -1,10 +1,25 @@
 #=====================================================================
 # Acceleration = 1: enable GPU acceleration
 # Acceleration = 0: otherwise
+#
+# module load nvhpc
+# module load cuda hdf5 fftw essl
 #=====================================================================
 Acceleration = 0
 COMPILER_MODULE = nvhpc/21.3
-MODULES = hdf5 essl fftw
+MODULES = cuda hdf5 essl fftw
+
+#=====================================================================
+# If you do not intend to use LibXC, you may uncomment the following line
+# or set NotUse_LIBXC = 0
+#=====================================================================
+# NotUse_LIBXC = 1
+
+#=====================================================================
+# If you do not intend to use P3DFFT, you may uncomment the following line
+# or set NotUse_P3DFFT = 0
+#=====================================================================
+# NotUse_P3DFFT = 1
 
 #=====================================================================
 # Library paths and elements, e.g.,
@@ -29,8 +44,12 @@ LUA_PATH    =
 LIBS       += -lessl -llapack -lblas -L${OLCF_ESSL_ROOT}/lib64 -L$(OLCF_CUDA_ROOT)/lib64 -lcudart -lcuda -lcublas
 ADD_LIBS   += -lm -lstdc++ -pgf90libs
 
-ADD_LIBS   += -L$(LIBXC_PATH)/lib -lxcf90 -lxc
+ifndef NotUse_LIBXC 
+ifneq "$(NotUse_LIBXC)" "0"
 Use_LibXC   = -DLIBXC5 -I$(LIBXC_PATH)/include
+ADD_LIBS   += -L$(LIBXC_PATH)/lib -lxcf90 -lxc
+endif
+endif
 
 #=====================================================================
 # Compiler tools, gnu version 7.0 seems requiried by lsms.

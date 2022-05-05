@@ -34,7 +34,8 @@ LD=$(FC)
 # Compiler flags
 #=====================================================================
 #FFLAGS=-I. -assume byterecl -openmp -O3 -axSSE4.2
-#FFLAGS=-I. -assume byterecl -openmp -g -C -traceback -check all -check nopointer -check noshape #-warn all
+# FFLAGS=-I. -assume byterecl -openmp -g -C -traceback -check all -check nopointer -check noshape #-warn all
+# FFLAGS=-I. -O3 -CB -CU -traceback -ftrapuv -fpe0 -ftz -fp-stack-check -qopenmp
 FFLAGS=-I. -O3 -CB -CU -traceback -ftrapuv -fpe0 -ftz -fp-stack-check
 #FFLAGS=-I. -O3
 F77FLAGS=$(FFLAGS)
@@ -115,14 +116,31 @@ ifeq "$(Use_FFTW)" "1"
 #  FFT_FLAG = -DFFTW -I$(FFTW_INC)
 #  ------
    FFTW_INC = $(FFTW_PATH)/include
-ifdef P3DFFT_PATH
-   FFT_FLAG = -DFFTW -I$(FFTW_INC) -DP3DFFT -I$(P3DFFT_PATH)/include
-   ADD_LIBS += -L$(FFTW_PATH)/lib -lfftw3_mpi -lfftw3 -L$(P3DFFT_PATH)/lib -lp3dfft
-else
-   NotUse_P3DFFT = 1
-   FFT_FLAG = -DFFTW -I$(FFTW_INC)
-   ADD_LIBS += -L$(FFTW_PATH)/lib -lfftw3_mpi -lfftw3
-endif
+   ifndef NotUse_P3DFFT 
+      ifdef P3DFFT_PATH
+         FFT_FLAG = -DFFTW -I$(FFTW_INC) -DP3DFFT -I$(P3DFFT_PATH)/include
+         ADD_LIBS += -L$(FFTW_PATH)/lib -lfftw3_mpi -lfftw3 -L$(P3DFFT_PATH)/lib -lp3dfft
+      else
+         NotUse_P3DFFT = 1
+         FFT_FLAG = -DFFTW -I$(FFTW_INC)
+         ADD_LIBS += -L$(FFTW_PATH)/lib -lfftw3_mpi -lfftw3
+      endif
+   else
+      ifeq "$(NotUse_P3DFFT)" "0"
+         ifdef P3DFFT_PATH
+            FFT_FLAG = -DFFTW -I$(FFTW_INC) -DP3DFFT -I$(P3DFFT_PATH)/include
+            ADD_LIBS += -L$(FFTW_PATH)/lib -lfftw3_mpi -lfftw3 -L$(P3DFFT_PATH)/lib -lp3dfft
+         else
+            NotUse_P3DFFT = 1
+            FFT_FLAG = -DFFTW -I$(FFTW_INC)
+            ADD_LIBS += -L$(FFTW_PATH)/lib -lfftw3_mpi -lfftw3
+         endif
+      else
+         NotUse_P3DFFT = 1
+         FFT_FLAG = -DFFTW -I$(FFTW_INC)
+         ADD_LIBS += -L$(FFTW_PATH)/lib -lfftw3_mpi -lfftw3
+      endif
+   endif
 #  ------
 #  FFT_FLAG = -DFFTW -I$(FFTW_INC)
 #  ADD_LIBS += -L/lvol/packages/fftw-3.3.6-pl2/lib -lfftw3_mpi -lfftw3

@@ -22,9 +22,13 @@ export ADDITIONAL_TARGETS+=lua
 export LUA_PATH=$(TOP_DIR)/lua/LUA/$(SUFFIX)
 endif
 
+ifndef NotUse_LIBXC
+ifneq "$(NotUse_LIBXC)" "0"
 ifndef LIBXC_PATH
 export ADDITIONAL_TARGETS+=libxc
 export LIBXC_PATH=$(TOP_DIR)/libxc/LibXC/$(SUFFIX)
+endif
+endif
 endif
 
 ifndef FFTW_PATH
@@ -33,10 +37,14 @@ export ADDITIONAL_TARGETS+=fftw
 export FFTW_PATH=$(TOP_DIR)/fftw/FFTW/$(SUFFIX)
 endif
 
+ifndef NotUse_P3DFFT
+ifneq "$(NotUse_P3DFFT)" "0"
 ifndef P3DFFT_PATH
 export ADDITIONAL_TARGETS+=p3dfft
 export P3DFFT_PATH=$(TOP_DIR)/p3dfft/P3DFFT/$(SUFFIX)
 export P3DFFT_CONFIG_FLAGS += --with-fftw=$(FFTW_PATH)
+endif
+endif
 endif
 
 all: $(ERROR_TARGETS) $(ADDITIONAL_TARGETS)
