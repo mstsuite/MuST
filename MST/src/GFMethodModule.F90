@@ -3769,16 +3769,22 @@ contains
 !                 single site density
 !                 ----------------------------------------------------
                   ssDOS = returnIDOSofBoundStates(id,ia,is,ib,wk_dos)
-                  if ( node_print_level >= 0) then
-                     write(6,'(a,i4,2x,f12.8,2x,d15.8)')'Bound state id, e, and DOS = ',ib,getBoundStateEnergy(id=id,ia=ia,is=is,ibs=ib),ssDOS
-                  endif
                   ssdos_int = ssdos_int + ssDOS*getLocalSpeciesContent(id,ia)
 !                 ----------------------------------------------------
-                  call calElectroStruct(info,1,wk_dos,ssLastValue(id),ss_int=.true.,species=ia,fac=cfac)
+                  call calElectroStruct(info,ns,wk_dos,ssLastValue(id),ss_int=.true.,species=ia,fac=CONE)  !cfac)
+                  ! Change made on 4/27/22 to avoid double counting, there is already a factor of two mulplication done elsewhere.
                   call addElectroStruct(getLocalSpeciesContent(id,ia),ssLastValue(id),ssIntegrValue(id),ns, &
                                         species=ia)
 !                 ----------------------------------------------------
+                  if ( node_print_level >= 0) then
+                     write(6,'(a,i4,2x,f12.8,2x,d15.8)')'Bound state id, e, and DOS = ',ib,getBoundStateEnergy(id=id,ia=ia,is=is,ibs=ib),ssDOS
+                     write(6,'(a,i4,2x,d15.8)')'Bound state id, ssDOS = ',ib,ssDOS
+                     write(6,'(a,i4,2x,d15.8)')'Bound state id, ssLastValue =',ib,ssLastValue(id)%dos(ns,ia)
+                  endif
                enddo
+               if ( node_print_level >= 0) then
+                  write(6, '(a,2x,d15.8)') 'Total value of ssdos_int (integrated single site DOS)', ssdos_int
+               endif
             enddo
 !           ----------------------------------------------------------
             call syncAllPEs()
@@ -4328,7 +4334,7 @@ contains
             endif
          enddo
       endif
-   else if (ns == 1) then
+   else if (ns == 1 .or. ns == 2) then
       if (n_spin_cant == 1) then
          js = is      ! js = 1 or 2
       else
@@ -6696,7 +6702,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine calRelIntegratedDOS(efermi)
 !  ===================================================================
-!   use PublicParamDefinitionsModule, only : ButterFly
+!  use PublicParamDefinitionsModule, only : ButterFly
 !
    use PhysParamModule, only : Boltzmann
 !
@@ -6787,7 +6793,7 @@ contains
 !     ----------------------------------------------------------------
       call initContour( ContourType, eGridType, NumEs, Temperature,   &
                         stop_routine, maxval(print_level(1:LocalNumAtoms)), .true. )
-!      ----------------------------------------------------------------
+!     ----------------------------------------------------------------
 !
 !     ================================================================
 !     set up the enegy contour that ends at (efermi,0) for Gaussian grids
