@@ -2118,7 +2118,7 @@ use MPPModule, only : MyPE, syncAllPEs
    endif
 !
 !  -------------------------------------------------------------------
-   call checkinTiming('solveSingleScattering',getTime()-t_start)
+!  call checkinTiming('solveSingleScattering',getTime()-t_start)
 !  -------------------------------------------------------------------
 !
    end subroutine solveSingleScattering
