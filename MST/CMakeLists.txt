@@ -69,7 +69,6 @@ if (BUILD_WITH_OPENMP)
 endif ()
 
 
-
 if (DEFINED MST_LINEAR_SOLVER_DEFAULT)
     message(STATUS "Default linear solver: " ${MST_LINEAR_SOLVER_DEFAULT})
     set(MST_LINEAR_SOLVER_DEFAULT ${MST_LINEAR_SOLVER_DEFAULT} CACHE STRING "Default linear solver")
