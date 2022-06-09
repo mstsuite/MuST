@@ -51,9 +51,38 @@ private
 !  rstart_default = the starting point of the radial grid from the origin
 !  xstart_default is set to a value used in the previous version of 
 !  KKR/LSMS code and rstart_defalt = exp(xstart_default)
-!  In the future release, we will choose rstart_default = 1.0d-5
+!
+!  Note: Regarding the 1st radial point, if it is made too close to the 
+!        nucleus, the numerical problem could arise when solving the radial
+!        Schrodinger equation. 
+!        The following reference described 4 different receipes of choosing
+!        the 1st radial grid point:
+!        "Local-density-functional calculations of the energy of atoms,"
+!        S. Kotochigova, Z.H. Levine, E.L. Shirley, M.D. Stiles, and
+!        C.W. Clark, Phys. Rev. A 55, 191-199 (1997).
+!        ("Erratum: Local-density-functional calculations of the energy of atoms
+!         [Phys. Rev. A 55, 191 (1997)]," 
+!         S. Kotochigova, Z.H. Levine, E.L. Shirley, M.D. Stiles, and 
+!         C.W. Clark, Phys. Rev. A 56, 5191-5192 (1997).)
+!
+!        See also:
+!        https://www.nist.gov/pml/atomic-reference-data-electronic-structure-calculations/atomic-reference-data-electronic-3
+!
+!        All these choices have one thing in common: 
+!            rstart is proportional to 1/Z
+!        However, if the starting point is made dependent on the chemical
+!        species, it could bring problems in the CPA calculation since each atomic
+!        is occupied by different chemical species. 
+!        According to the 4th choise described in the above referernce: 
+!            rstart = 0.01*exp(-4.0)/Z,
+!        we have
+!            rstart_min = 0.01*exp(-4.0)/137, 
+!        so that 
+!            xstart_min = log(rstart_min) = -13.52515111
 !  ===================================================================
-   real (kind=RealKind), parameter :: xstart_default=-.1113096740000D+02
+   real (kind=RealKind), parameter :: xstart_min=-13.52515111
+   real (kind=RealKind), parameter :: rstart_min=exp(xstart_min)
+   real (kind=RealKind), parameter :: xstart_default=-0.1113096740000D+02
    real (kind=RealKind), parameter :: rstart_default=exp(xstart_default)
    real (kind=RealKind), parameter :: xstep_default=0.01d0
 !
@@ -894,6 +923,9 @@ contains
             call ErrorHandler(sname,'rfix < 0',rfix)
          endif
          rstart = rfix
+         if (rstart < rstart_min) then
+            rstart = rstart_min
+         endif
       else if (nfix < 1) then
          call ErrorHandler(sname,'Invalid nfix',nfix)
       else
@@ -958,6 +990,10 @@ contains
       Grid(id)%xstart = log(rstart)
    else if (hin > TEN2m4 .and. nin > 0) then
       Grid(id)%xstart = log(rmt) - (nin-1)*hin
+      if (Grid(id)%xstart < xstart_min) then
+         Grid(id)%xstart = xstart_min
+         hin = (log(rmt) - Grid(id)%xstart)/real(nin-1,kind=RealKind)
+      endif
       Grid(id)%rstart = exp(Grid(id)%xstart)
    else
       Grid(id)%rstart = rstart_default
