@@ -3777,7 +3777,8 @@ contains
                                         species=ia)
 !                 ----------------------------------------------------
                   if ( node_print_level >= 0) then
-                     write(6,'(a,i4,2x,f12.8,2x,d15.8)')'Bound state id, e, and DOS = ',ib,getBoundStateEnergy(id=id,ia=ia,is=is,ibs=ib),ssDOS
+                     write(6,'(a,i4,2x,f12.8,2x,d15.8)')'Bound state id, e, and DOS = ',&
+                       ib,getBoundStateEnergy(id=id,ia=ia,is=is,ibs=ib),ssDOS
                      write(6,'(a,i4,2x,d15.8)')'Bound state id, ssDOS = ',ib,ssDOS
                      write(6,'(a,i4,2x,d15.8)')'Bound state id, ssLastValue =',ib,ssLastValue(id)%dos(ns,ia)
                   endif
