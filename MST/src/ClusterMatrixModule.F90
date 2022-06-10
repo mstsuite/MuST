@@ -19,6 +19,8 @@ public :: initClusterMatrix, &
           endClusterMatrix,  &
           calClusterMatrix,  &
           getTau,            &
+          checkIfNeighbor,   &
+          getNeighborTau,    &
           getKau
 !
 private
@@ -53,7 +55,14 @@ private
    complex (kind=CmplxKind), allocatable, target :: sine_g(:)
    complex (kind=CmplxKind), allocatable, target :: BlockMatrix(:)
    complex (kind=CmplxKind), allocatable, target :: BigMatrix(:)
+   complex (kind=CmplxKind), allocatable, target :: BigMatrixInv(:)
 !
+   type TauNeighborStruct
+      complex (kind=CmplxKind), allocatable :: wau_l(:,:)
+      complex (kind=CmplxKind), allocatable :: kau_l(:,:)
+      complex (kind=CmplxKind), allocatable :: tau_l(:,:)
+   end type TauNeighborStruct
+
    type TauijStruct
       integer (kind=IntKind) :: id_cluster  ! the index within LIZ cluster
       integer (kind=IntKind) :: id_global   ! the atom global index
@@ -61,6 +70,7 @@ private
       integer (kind=IntKind) :: jsize
       complex (kind=CmplxKind), pointer :: kau_l(:,:,:)
       complex (kind=CmplxKind), pointer :: tau_l(:,:,:)
+      type (TauNeighborStruct), allocatable :: neighMat(:)
       type (TauijStruct), pointer :: next
    end type TauijStruct
 !
@@ -78,6 +88,7 @@ private
    logical :: InitializedFactors = .false.
 !
    logical :: ExchSSSmatAllocated = .false.
+   logical :: istauij_needed = .false.
 !
    complex (kind=CmplxKind), allocatable, target :: remote_jsmtx(:,:)
    complex (kind=CmplxKind), allocatable, target :: local_jsmtx(:,:)
@@ -110,13 +121,14 @@ contains
 !  ===================================================================
    use GroupCommModule, only : getGroupID, getNumPEsInGroup, getMyPEinGroup
 !
-   use ScfDataModule, only : Minv_alg, NumEs
+   use ScfDataModule, only : Minv_alg, NumEs, tauij_needed
 !
    use SystemModule, only  : getLmaxPhi
 !
    use RSpaceStrConstModule, only : initRSpaceStrConst
 !
    use MatrixBlockInversionModule, only : initMatrixBlockInv
+   use WriteMatrixModule, only : writeMatrix
 !
    integer (kind=IntKind), intent(in) :: num_latoms
    integer (kind=IntKind), intent(in) :: index(num_latoms)
@@ -141,6 +153,10 @@ contains
    LocalNumAtoms = num_latoms
    stop_routine = istop
 !
+   if (tauij_needed == 1) then
+     istauij_needed = .true.
+   endif
+
    GroupID = getGroupID('Unit Cell')
    NumPEsInGroup = getNumPEsInGroup(GroupID)
    MyPEinGroup = getMyPEinGroup(GroupID)
@@ -222,11 +238,25 @@ contains
       kmaxns = kmax_kkr(i)*n_spin_cant
       kblocks(1,i) = kmaxns
       Neighbor => getNeighbor(i)
+      if (istauij_needed) then
+        allocate(Tau00(i)%neighMat(Neighbor%NumAtoms+1))
+      endif
       do j = 1,Neighbor%NumAtoms
          lmax = Neighbor%Lmax(j)
          lmax_max = max(lmax_max,lmax)
-         kblocks(j+1,i) = (lmax+1)*(lmax+1)*n_spin_cant 
+         kblocks(j+1,i) = (lmax+1)*(lmax+1)*n_spin_cant
+         if (istauij_needed) then
+           allocate(Tau00(i)%neighMat(j)%tau_l(kmax_max, kmax_max))
+           allocate(Tau00(i)%neighMat(j)%kau_l(kmax_max, kmax_max))
+           allocate(Tau00(i)%neighMat(j)%wau_l(kmax_max, kmax_max))
+           Tau00(i)%neighMat(j)%tau_l = CZERO
+           Tau00(i)%neighMat(j)%kau_l = CZERO
+           Tau00(i)%neighMat(j)%wau_l = CZERO
+         endif
       enddo
+      allocate(Tau00(i)%neighMat(Neighbor%NumAtoms+1)%tau_l(kmax_max, kmax_max))
+      allocate(Tau00(i)%neighMat(Neighbor%NumAtoms+1)%kau_l(kmax_max, kmax_max))
+      allocate(Tau00(i)%neighMat(Neighbor%NumAtoms+1)%wau_l(kmax_max, kmax_max))
 !     Tau00(i)%tau_l => aliasArray3_c( wsTau00L(pos_tau+1:pos_tau+kmaxns*kmaxns),&
 !                                      kmax_kkr(i), kmax_kkr(i), n_spin_cant*n_spin_cant )
       p1 => wsTau00L(pos_tau+1:pos_tau+kmaxns*kmaxns)
@@ -246,6 +276,11 @@ contains
    allocate( sine_g(isize_max*isize_max) )
    allocate( store_sine(isize_max*isize_max) )
    allocate( BigMatrix(dsize_max*dsize_max) )
+!  Allocate matrices for tauij calculation (i,j != 0)
+   if (istauij_needed) then
+     allocate( BigMatrixInv(dsize_max*dsize_max) )
+   endif
+     
    jinv_g = CZERO; sine_g = CZERO
 !
 !  -------------------------------------------------------------------
@@ -650,6 +685,8 @@ use MPPModule, only : MyPE, syncAllPEs
    use MatrixModule, only : setupUnitMatrix, computeUAUts
 !
    use MatrixBlockInversionModule, only : invertMatrixBlock
+   use MatrixInverseModule, only : MtxInv_LU
+   use WriteMatrixModule, only : writeMatrix
 !
    implicit none
 !
@@ -659,7 +696,7 @@ use MPPModule, only : MyPE, syncAllPEs
 !
    integer (kind=IntKind) :: my_atom, iri, irj, kli, klj, is, js, ns
    integer (kind=IntKind) :: lmaxi, lmaxj, kkri, kkrj, kkri_ns, kkrj_ns
-   integer (kind=IntKind) :: nbi, nbj, sbi, sbj
+   integer (kind=IntKind) :: nbi, nbj, sbi, sbj, i, j, my_atom2, nindex
    integer (kind=IntKind) :: nbr_kkri, nbr_kkri_ns, nbr_kkrj, nbr_kkrj_ns
    integer (kind=IntKind) :: tsize, kmax_max_ns, dsize, kkrsz_ns
 !
@@ -670,13 +707,14 @@ use MPPModule, only : MyPE, syncAllPEs
    complex (kind=CmplxKind), pointer :: gij(:,:)
    complex (kind=CmplxKind), pointer :: p_jinvi(:)
    complex (kind=CmplxKind), pointer :: p_sinej(:)
-!  complex (kind=CmplxKind), pointer :: pBigMatrix(:)
+   complex (kind=CmplxKind), pointer :: pBigMatrix(:,:)
    complex (kind=CmplxKind), pointer :: pBlockMatrix(:,:)
    complex (kind=CmplxKind), pointer :: OmegaHat(:,:)
    complex (kind=CmplxKind), pointer :: wau_g(:,:)
    complex (kind=CmplxKind), pointer :: wau_l(:,:,:)
    complex (kind=CmplxKind), pointer :: jig(:), ubmat(:,:)
    complex (kind=CmplxKind), pointer :: sm1(:,:), sm2(:,:), tm(:,:)
+   complex (kind=CmplxKind), pointer :: smi(:,:), smj(:,:)
    complex (kind=CmplxKind), pointer :: kau_l(:,:), tau_l(:,:)
 !
    interface
@@ -716,12 +754,11 @@ use MPPModule, only : MyPE, syncAllPEs
       Neighbor => getNeighbor(my_atom)
       kkrsz_ns = kmax_kkr(my_atom)*n_spin_cant
       jig => wsStoreA
-!
 !     ================================================================
 !     Construct BigMatrix for local atom: my_atom
 !     ================================================================
       dsize = dsize_l(my_atom)  ! This is the number of rows of BigMatrix
-!
+
 !     ================================================================
 !     initialize BigMatrix so that it is a unit matrix to begin with..
 !     ================================================================
@@ -892,6 +929,7 @@ use MPPModule, only : MyPE, syncAllPEs
          enddo
          nbj = nbj + kkrj_ns
       enddo
+!     call writeMatrix('BigMatrix',BigMatrix,dsize_max*dsize_max)
 !
       if ( nbi /= nbj ) then
 !        -------------------------------------------------------------
@@ -912,6 +950,23 @@ use MPPModule, only : MyPE, syncAllPEs
 !        wau_g = [(1-pBlockMatrix)^{-1}-1]
 !              = (1-pBlockMatrix)^{-1}*pBlockMatrix
 !        =============================================================
+         if (istauij_needed) then
+           call zcopy(dsize_max*dsize_max, BigMatrix,1,BigMatrixInv,1)
+ !         call writeMatrix('BigMatrixCopyCheck',BigMatrixInv,dsize*dsize)
+           pBigMatrix => aliasArray2_c(BigMatrixInv,dsize_max,dsize_max)
+           call MtxInv_LU(pBigMatrix, dsize_max)
+           do i = 1,dsize
+             pBigMatrix(i,i) = pBigMatrix(i,i) - CONE
+           enddo
+           Neighbor => getNeighbor(my_atom)
+           do j = 1, Neighbor%NumAtoms+1
+             call zcopy(kkrsz_ns*kkrsz_ns, &
+                 pBigMatrix((j-1)*kkrsz_ns+1:j*kkrsz_ns,1:kkrsz_ns), &
+                 1, Tau00(my_atom)%neighMat(j)%wau_l, 1)
+           enddo
+  !        call writeMatrix("BigMatrixInv00",Tau00(my_atom)%neighMat(1)%wau_l, kkrsz_ns, kkrsz_ns)
+  !        call writeMatrix("BigMatrixInv10",pBigMatrix(kkrsz_ns+1:2*kkrsz_ns, 1:kkrsz_ns), kkrsz_ns, kkrsz_ns)
+         endif
          BlockMatrix = CZERO
          pBlockMatrix => aliasArray2_c(BlockMatrix,kkrsz_ns,kkrsz_ns)
 !        =============================================================
@@ -927,6 +982,7 @@ use MPPModule, only : MyPE, syncAllPEs
 !        -------------------------------------------------------------
          call invertMatrixBlock( my_atom, pBlockMatrix, kkrsz_ns, kkrsz_ns,  &
                                  BigMatrix, dsize, dsize )
+!        call writeMatrix('BlockMatrix',pBlockMatrix, kkrsz_ns, kkrsz_ns)
 !        -------------------------------------------------------------
 !write(6,'(a,i5,2f9.5,2x,4d16.8)')'Block =',MyPE,energy,pBlockMatrix(1,1),pBlockMatrix(3,3)
 !call syncAllPEs()
@@ -956,7 +1012,7 @@ use MPPModule, only : MyPE, syncAllPEs
 !        -------------------------------------------------------------
          nullify( pBlockMatrix )
 !        -------------------------------------------------------------
-!
+!        call writeMatrix('wau_g', wau_g, kkrsz_ns, kkrsz_ns)
 !        =============================================================
 !        Rotate the wau_g-matrix from global frame to local frame of references
 !        Note: if n_spin_cant = 1, wau_g and wau_l share the same space.
@@ -987,7 +1043,12 @@ use MPPModule, only : MyPE, syncAllPEs
                           kmax_kkr(my_atom), OmegaHat, kmax_kkr(my_atom), &
                           CZERO, Tau00(my_atom)%kau_l(1,1,ns), kmax_kkr(my_atom))
 !              -------------------------------------------------------
-!
+               do j = 1, Neighbor%NumAtoms
+                 call zgemm('n', 'n', kmax_kkr(my_atom), kmax_kkr(my_atom), &
+                   kmax_kkr(my_atom), kappa, Tau00(my_atom)%neighMat(j)%wau_l, &
+                   kmax_kkr(my_atom), OmegaHat, kmax_kkr(my_atom), &
+                   CZERO, Tau00(my_atom)%neighMat(j)%kau_l, kmax_kkr(my_atom))
+               enddo
 !              =======================================================
 !              As a check, set Tau00(my_atom)%kau_l = kappa*OmegaHat
 !              the resulting Green function should be the single site 
@@ -1001,7 +1062,6 @@ use MPPModule, only : MyPE, syncAllPEs
          enddo
       endif
    enddo
-!
 !  ===================================================================
 !  Determine Tau00 = S*Kau00*S^{*T}/energy + t_matrix
 !  calculate tau00 if needed
@@ -1032,6 +1092,24 @@ use MPPModule, only : MyPE, syncAllPEs
          enddo
       endif
    endif
+
+   if (istauij_needed) then
+     do my_atom = 1, LocalNumAtoms
+       smi => getSingleScatteringMatrix('Sine-Matrix',spin=1,site=my_atom)
+       tm => getSingleScatteringMatrix('T-Matrix',spin=1,site=my_atom)
+       do my_atom2 = 1, LocalNumAtoms
+         if (my_atom == my_atom2 .or. checkIfNeighbor(my_atom, my_atom2)) then
+           nindex = determineNeighborIndex(my_atom, my_atom2)
+           smj => getSingleScatteringMatrix('Sine-Matrix',spin=1,site=my_atom2)
+           call computeUAUts(smj,kmax_kkr(my_atom2),kmax_kkr(my_atom), &
+                          smi,kmax_kkr(my_atom), CONE/energy, &
+                Tau00(my_atom)%neighMat(nindex)%kau_l, kmax_kkr(my_atom),CZERO, &
+                Tau00(my_atom)%neighMat(nindex)%tau_l,kmax_kkr(my_atom),wsStoreA)
+         endif
+       enddo
+       Tau00(my_atom)%neighMat(1)%tau_l = Tau00(my_atom)%neighMat(1)%tau_l + tm
+     enddo
+   endif 
 !
    nullify(gij, p_jinvi, p_sinej, jig, wau_g, wau_l, ubmat, pBlockMatrix)
 !
@@ -1087,7 +1165,94 @@ use MPPModule, only : MyPE, syncAllPEs
    endif
 !
    end function getTau
-!  ====================================================================
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function checkIfNeighbor(id1, id2) result(is_neighbor)
+!  ===================================================================
+
+   integer (kind=IntKind), intent(in) :: id1, id2
+   real (kind=RealKind) :: R12
+   real (kind=RealKind) :: pos1(3), pos2(3) 
+   logical :: is_neighbor
+
+   Neighbor => getNeighbor(id1)
+   pos1 = Position(1:3,id1)
+   pos2 = Position(1:3,id2)
+   R12 = (pos1(1) - pos2(1))**2 + (pos1(2) - pos2(2))**2 + (pos1(3) - pos2(3))**2
+   if (sqrt(R12) <= maxval(Neighbor%ShellRad)) then
+     is_neighbor = .true.
+   else
+     is_neighbor = .false.
+   endif 
+
+   end function checkIfNeighbor
+!  ===================================================================
+!
+!  *******************************************************************
+!  
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function determineNeighborIndex(id1, id2) result(nindex)
+!  ===================================================================
+
+   integer (kind=IntKind), intent(in) :: id1, id2
+   integer (kind=IntKind) :: i
+   integer (kind=IntKind) :: nindex
+   real (kind=RealKind) :: pos2(3), posn(3)
+
+   nindex = 0
+   if (id1 == id2) then
+     nindex = 1
+     return
+   endif
+   pos2 = Position(1:3, id2)
+   Neighbor => getNeighbor(id1)
+   do i = 1, Neighbor%NumAtoms
+     posn = Neighbor%Position(1:3, i)
+     if (posn(1) == pos2(1) .and. posn(2) == pos2(2) &
+                          .and. posn(3) == pos2(3)) then
+       nindex = i
+       exit
+     endif
+   enddo
+
+   end function determineNeighborIndex
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function determineGlobalIndex(nindex)
+!  ===================================================================
+
+   integer (kind=IntKind), intent(in) :: nindex
+
+   end function determineGlobalIndex
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getNeighborTau(id1, id2) result(ptau)
+!  ===================================================================
+
+   integer (kind=IntKind), intent(in) :: id1, id2
+   integer (kind=IntKind) :: nindex
+   real (kind=RealKind) :: pos1(3), pos2(3), posn(3)
+   real (kind=RealKind) :: R12, R1n, R2n
+   complex (kind=CmplxKind), pointer :: ptau(:,:)
+
+   if (id1 == id2) then
+     ptau => Tau00(id1)%neighMat(1)%tau_l
+   else
+     nindex = determineNeighborIndex(id1, id2)
+     ptau => Tau00(id1)%neighMat(1+nindex)%tau_l
+   endif
+
+   end function getNeighborTau
+!  ===================================================================
 !
 !  *******************************************************************
 !
