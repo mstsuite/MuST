@@ -1224,17 +1224,6 @@ use MPPModule, only : MyPE, syncAllPEs
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function determineGlobalIndex(nindex)
-!  ===================================================================
-
-   integer (kind=IntKind), intent(in) :: nindex
-
-   end function determineGlobalIndex
-!  ===================================================================
-!
-!  *******************************************************************
-!
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getNeighborTau(id1, id2) result(ptau)
 !  ===================================================================
 
