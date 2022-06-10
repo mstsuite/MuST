@@ -737,7 +737,9 @@ program kubo
    call endScfData
    call endKuboData()
    call endBZone()
-   call endIBZRotation()
+   if (isKKRCPA() .or. isKKRCPASRO()) then
+     call endIBZRotation()
+   endif
 
 !  ==================================================================
    call date_and_time(exec_date,exec_time)
