@@ -254,9 +254,11 @@ contains
            Tau00(i)%neighMat(j)%wau_l = CZERO
          endif
       enddo
-      allocate(Tau00(i)%neighMat(Neighbor%NumAtoms+1)%tau_l(kmax_max, kmax_max))
-      allocate(Tau00(i)%neighMat(Neighbor%NumAtoms+1)%kau_l(kmax_max, kmax_max))
-      allocate(Tau00(i)%neighMat(Neighbor%NumAtoms+1)%wau_l(kmax_max, kmax_max))
+      if (istauij_needed) then
+        allocate(Tau00(i)%neighMat(Neighbor%NumAtoms+1)%tau_l(kmax_max, kmax_max))
+        allocate(Tau00(i)%neighMat(Neighbor%NumAtoms+1)%kau_l(kmax_max, kmax_max))
+        allocate(Tau00(i)%neighMat(Neighbor%NumAtoms+1)%wau_l(kmax_max, kmax_max))
+      endif
 !     Tau00(i)%tau_l => aliasArray3_c( wsTau00L(pos_tau+1:pos_tau+kmaxns*kmaxns),&
 !                                      kmax_kkr(i), kmax_kkr(i), n_spin_cant*n_spin_cant )
       p1 => wsTau00L(pos_tau+1:pos_tau+kmaxns*kmaxns)
