@@ -1045,12 +1045,14 @@ use MPPModule, only : MyPE, syncAllPEs
                           kmax_kkr(my_atom), OmegaHat, kmax_kkr(my_atom), &
                           CZERO, Tau00(my_atom)%kau_l(1,1,ns), kmax_kkr(my_atom))
 !              -------------------------------------------------------
-               do j = 1, Neighbor%NumAtoms
-                 call zgemm('n', 'n', kmax_kkr(my_atom), kmax_kkr(my_atom), &
-                   kmax_kkr(my_atom), kappa, Tau00(my_atom)%neighMat(j)%wau_l, &
-                   kmax_kkr(my_atom), OmegaHat, kmax_kkr(my_atom), &
-                   CZERO, Tau00(my_atom)%neighMat(j)%kau_l, kmax_kkr(my_atom))
-               enddo
+               if (istauij_needed) then
+                 do j = 1, Neighbor%NumAtoms
+                   call zgemm('n', 'n', kmax_kkr(my_atom), kmax_kkr(my_atom), &
+                    kmax_kkr(my_atom), kappa, Tau00(my_atom)%neighMat(j)%wau_l, &
+                    kmax_kkr(my_atom), OmegaHat, kmax_kkr(my_atom), &
+                    CZERO, Tau00(my_atom)%neighMat(j)%kau_l, kmax_kkr(my_atom))
+                 enddo
+               endif
 !              =======================================================
 !              As a check, set Tau00(my_atom)%kau_l = kappa*OmegaHat
 !              the resulting Green function should be the single site 
