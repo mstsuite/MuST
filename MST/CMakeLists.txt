@@ -91,8 +91,8 @@ if (BUILD_WITH_OPENMP)
     endif ()
 
 
-'''
-if (NOT DEFINED CMAKE_CUDA_STANDARD)
+#### Not sure about this part, working on it ###
+''' if (NOT DEFINED CMAKE_CUDA_STANDARD)
         set(CMAKE_CUDA_STANDARD 14)
         set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 endif ()
@@ -123,6 +123,8 @@ else ()
         message(FATAL_ERROR "Cusolver was not defined or found")
     endif ()
 endif ()
+
+##################################################################
 '''
 
 if (DEFINED MST_LINEAR_SOLVER_DEFAULT)
