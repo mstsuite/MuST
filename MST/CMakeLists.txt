@@ -54,6 +54,10 @@ if (BUILD_WITH_OPENMP)
 endif ()
 
 
+# Needed for gcc 10
+target_compile_options(mst_lib PUBLIC "-fallow-argument-mismatch")
+        
+
 # Build LibXC 
 option(USE_LIBXC "Use the libxc libary" ON)
 if (USE_LIBXC)
@@ -62,6 +66,7 @@ if (USE_LIBXC)
 else ()
     message(STATUS "LIBXC is not used")
 endif ()
+
 
 # Build mjson 
 include(mjson)
@@ -78,7 +83,7 @@ if (USE_ACCELERATOR_CUDA_C)
         target_compile_definitions(mst_main PUBLIC "CUDA_DEBUG")
     endif ()
 
-
+        
 # Build with OpenMP
 if (BUILD_WITH_OPENMP)
         message(STATUS "OpenMP is also defined for GPU")
@@ -183,22 +188,24 @@ else ()
     endif ()
     target_link_libraries(mst_main PUBLIC LAPACK::LAPACK)
 
-    # BLAS
-    option(SEARCH_BLAS "Search for BLAS" ON)
-    if (NOT SEARCH_BLAS)
+
+# BLAS
+option(SEARCH_BLAS "Search for BLAS" ON)
+if (NOT SEARCH_BLAS)
         add_library(BLAS::BLAS STATIC IMPORTED GLOBAL)
         set_target_properties(BLAS::BLAS PROPERTIES IMPORTED_LOCATION ${BLAS_LIBRARIES})
         if (DEFINED BLAS_LINKER_FLAGS)
-            target_compile_options(BLAS::BLAS INTERFACE ${BLAS_LINKER_FLAGS})
+                target_compile_options(BLAS::BLAS INTERFACE ${BLAS_LINKER_FLAGS})
         endif ()
         if (DEFINED BLAS_INCLUDE_DIR)
-            target_include_directories(BLAS::BLAS INTERFACE ${BLAS_INCLUDE_DIR})
+                target_include_directories(BLAS::BLAS INTERFACE ${BLAS_INCLUDE_DIR})
         endif ()
-    else ()
-        if (NOT DEFINED BLA_VENDOR)
-            set(BLA_VENDOR "Generic")
+
+        else ()
+                if (NOT DEFINED BLA_VENDOR)
+                        set(BLA_VENDOR "Generic")
+                endif ()
+                find_package(BLAS REQUIRED)
         endif ()
-        find_package(BLAS REQUIRED)
-    endif ()
-    target_link_libraries(mst_main PUBLIC BLAS::BLAS)
+        target_link_libraries(mst_main PUBLIC BLAS::BLAS)
 endif ()
