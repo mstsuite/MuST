@@ -120,7 +120,7 @@ contains
          do L1 = 1, kmax
            do L2 = 1, kmax
              TauIJ(i,j)%taun(L1, L2) = (-1.0)**(getLIndex(L1) - getLIndex(L2))\
-                      *conjg(TauIJ(j,i)%taup(L2, L1))
+                      *conjg(TauIJ(i,j)%taup(L2, L1))
            enddo
          enddo
        endif
