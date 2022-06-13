@@ -119,7 +119,7 @@ contains
          call zcopy(kmax*kmax, tau, 1, TauIJ(j,i)%taup,1)
          do L1 = 1, kmax
            do L2 = 1, kmax
-             TauIJ(i,j)%taun = conjg(TauIJ(i,j)%taup)
+             TauIJ(i,j)%taun = conjg(TauIJ(j,i)%taup)
            enddo
          enddo
        endif
