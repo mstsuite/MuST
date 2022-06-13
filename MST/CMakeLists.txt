@@ -90,37 +90,40 @@ if (BUILD_WITH_OPENMP)
         target_compile_options(mst_main PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler -fopenmp>)
     endif ()
 
-    if (NOT DEFINED CMAKE_CUDA_STANDARD)
+
+'''
+if (NOT DEFINED CMAKE_CUDA_STANDARD)
         set(CMAKE_CUDA_STANDARD 14)
         set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-    endif ()
+endif ()
 
-    if (NOT DEFINED CMAKE_CUDA_SEPARABLE_COMPILATION)
+if (NOT DEFINED CMAKE_CUDA_SEPARABLE_COMPILATION)
         set(CMAKE_CUDA_SEPARABLE_COMPILATION OFF)
-    endif ()
+endif ()
 
-    find_package(CUDAToolkit REQUIRED)
+find_package(CUDAToolkit REQUIRED)
 
-    message(STATUS "CUDA Version: " ${CUDAToolkit_VERSION})
-    message(STATUS "CUDA Include dirs: " ${CUDAToolkit_INCLUDE_DIRS})
-    message(STATUS "CUDA Library: " ${CUDAToolkit_LIBRARY_DIR})
 
-    target_link_libraries(mst_main PUBLIC CUDA::toolkit)
+message(STATUS "CUDA Version: " ${CUDAToolkit_VERSION})
+message(STATUS "CUDA Include dirs: " ${CUDAToolkit_INCLUDE_DIRS})
+message(STATUS "CUDA Library: " ${CUDAToolkit_LIBRARY_DIR})
 
-    # Check if the necessary libraries have been found
-    if (TARGET CUDA::cublas)
+target_link_libraries(mst_main PUBLIC CUDA::toolkit)
+
+# Check if the necessary libraries have been found
+if (TARGET CUDA::cublas)
         target_link_libraries(mst_main PUBLIC CUDA::cublas)
-    else ()
+else ()
         message(FATAL_ERROR "CuBLAS was not defined or found")
-    endif ()
+endif ()
 
-    if (TARGET CUDA::cusolver)
+if (TARGET CUDA::cusolver)
         target_link_libraries(mst_main PUBLIC CUDA::cusolver)
-    else ()
+else ()
         message(FATAL_ERROR "Cusolver was not defined or found")
     endif ()
 endif ()
-
+'''
 
 if (DEFINED MST_LINEAR_SOLVER_DEFAULT)
     message(STATUS "Default linear solver: " ${MST_LINEAR_SOLVER_DEFAULT})
