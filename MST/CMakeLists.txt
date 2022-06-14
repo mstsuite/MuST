@@ -75,19 +75,19 @@ include(mjson)
 # CUDA
 if (USE_ACCELERATOR_CUDA_C)
 
-    target_compile_definitions(mst_main PUBLIC ACCELERATOR_CUDA_C)
+    target_compile_definitions(mst_lib PUBLIC ACCELERATOR_CUDA_C)
 
     option(CUDA_DEBUG "Debug CUDA routines" OFF)
 
     if (CUDA_DEBUG)
-        target_compile_definitions(mst_main PUBLIC "CUDA_DEBUG")
+        target_compile_definitions(mst_lib PUBLIC "CUDA_DEBUG")
     endif ()
 
         
 # Build with OpenMP
 if (BUILD_WITH_OPENMP)
         message(STATUS "OpenMP is also defined for GPU")
-        target_compile_options(mst_main PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler -fopenmp>)
+        target_compile_options(mst_lib PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler -fopenmp>)
     endif ()
 
 
@@ -108,17 +108,17 @@ message(STATUS "CUDA Version: " ${CUDAToolkit_VERSION})
 message(STATUS "CUDA Include dirs: " ${CUDAToolkit_INCLUDE_DIRS})
 message(STATUS "CUDA Library: " ${CUDAToolkit_LIBRARY_DIR})
 
-target_link_libraries(mst_main PUBLIC CUDA::toolkit)
+target_link_libraries(mst_lib PUBLIC CUDA::toolkit)
 
 # Check if the necessary libraries have been found
 if (TARGET CUDA::cublas)
-        target_link_libraries(mst_main PUBLIC CUDA::cublas)
+        target_link_libraries(mst_lib PUBLIC CUDA::cublas)
 else ()
         message(FATAL_ERROR "CuBLAS was not defined or found")
 endif ()
 
 if (TARGET CUDA::cusolver)
-        target_link_libraries(mst_main PUBLIC CUDA::cusolver)
+        target_link_libraries(mst_lib PUBLIC CUDA::cusolver)
 else ()
         message(FATAL_ERROR "Cusolver was not defined or found")
     endif ()
