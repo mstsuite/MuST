@@ -115,8 +115,10 @@ contains
    do i = 1, LocalNumAtoms
      do j = 1, LocalNumAtoms
        if (checkIfNeighbor(i,j)) then
-         tau => getNeighborTau(i,j)
-         call zcopy(kmax*kmax, tau, 1, TauIJ(j,i)%taup,1)
+         TauIJ(j,i)%taup = getNeighborTau(i,j)
+   !     print *, "Tau matrix for (m,n) = ", i,j
+   !     call writeMatrix('TauP', TauIJ(j,i)%taup, kmax, kmax)
+        ! call zcopy(kmax*kmax, tau, 1, TauIJ(j,i)%taup,1)
          do L1 = 1, kmax
            do L2 = 1, kmax
              TauIJ(i,j)%taun(L1, L2) = (-1.0)**(getLIndex(L1) - getLIndex(L2))\
@@ -126,13 +128,14 @@ contains
        endif
      enddo
    enddo
-!   do i = 1, LocalNumAtoms
-!    do j = 1, LocalNumAtoms
-!      call writeMatrix('TauP',TauIJ(i,j)%taup,kmax,kmax)
-!      call writeMatrix('TauN',TauIJ(i,j)%taun,kmax,kmax)
-!      print *, "System Volume Per Atom", omega 
-!    enddo
-!  enddo
+  ! do i = 1, LocalNumAtoms
+  !  do j = 1, LocalNumAtoms
+     ! print *, "Tau Matrix for (m,n) = ", i,j
+     !  call writeMatrix('TauP',TauIJ(i,j)%taup,kmax,kmax)
+     !  call writeMatrix('TauN',TauIJ(i,j)%taun,kmax,kmax)
+     ! print *, "System Volume Per Atom", omega 
+  !  enddo
+  !enddo
   
    end subroutine initLSMSConductivity
 !  ============================================================
@@ -146,7 +149,7 @@ contains
 
    integer (kind=IntKind), intent(in) :: dir1, dir2, caltype
    integer (kind=IntKind) :: m, n, L, Jmcaltype
-   complex (kind=CmplxKind) :: coeff, sigmaval
+   complex (kind=CmplxKind) :: coeff, sigmaval, trace
    complex (kind=CmplxKind), pointer :: Jm(:,:), Jn(:,:)
    complex (kind=CmplxKind), allocatable :: temp(:,:), temp2(:,:), temp3(:,:)
 
@@ -155,7 +158,6 @@ contains
 
    sigmaval = CZERO
    coeff = -CONE/(PI*omega)
-!  print *, "Prefactor is", coeff
    do m = 1, LocalNumAtoms
      if (caltype == 2 .or. caltype == 3) then
        Jmcaltype = 5 - caltype
@@ -164,6 +166,7 @@ contains
        Jm => getJMatrix(n=m,ic=1,is=spin_pola,dir=dir1,en_type=caltype,tilde=0)
      endif
      do n = 1, LocalNumAtoms
+       trace = CZERO
        Jn => getJMatrix(n=n,ic=1,is=spin_pola,dir=dir2,en_type=caltype,tilde=0)
        if (caltype == 1) then
          call zgemm('n', 'n', dsize, dsize, dsize, CONE, Jn, dsize, &
@@ -189,13 +192,13 @@ contains
        call zgemm('n', 'n', dsize, dsize, dsize, CONE, Jm, dsize, &
              temp2, dsize, CZERO, temp3, dsize)
        do L = 1, dsize
-         sigmaval = sigmaval + coeff*temp3(L,L)
+         trace = trace + coeff*temp3(L,L)
        enddo
-!      print *, "Sigmaval for (m,n) ", m, n, " and caltype", caltype, "is ", sigmaval 
+       sigmaval = sigmaval + trace
+!      print *, "Sigmaval for (m,n) ", m, n, " in direction (mu,nu) ", dir1, dir2, " and caltype", caltype, "is "
+!      print *, real(trace), "with total", real(sigmaval) 
      enddo
    enddo
-
-!  print *, "Total sigmaval for (dir1,dir2,caltype) ",dir1,dir2,caltype, " is", sigmaval 
 
    end function calSigmaTildeLSMS
 !  ============================================================
