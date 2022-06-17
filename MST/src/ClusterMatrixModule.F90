@@ -1109,6 +1109,8 @@ use MPPModule, only : MyPE, syncAllPEs
                           smi,kmax_kkr(my_atom), CONE/energy, &
                 Tau00(my_atom)%neighMat(nindex)%kau_l, kmax_kkr(my_atom),CZERO, &
                 Tau00(my_atom)%neighMat(nindex)%tau_l,kmax_kkr(my_atom),wsStoreA)
+    !      print *, "TauP for (m,n) = ", my_atom,my_atom2
+    !      call writeMatrix('TauP', Tau00(my_atom)%neighMat(nindex)%tau_l, kmax_kkr(my_atom), kmax_kkr(my_atom))
          endif
        enddo
        Tau00(my_atom)%neighMat(1)%tau_l = Tau00(my_atom)%neighMat(1)%tau_l + tm
@@ -1217,7 +1219,7 @@ use MPPModule, only : MyPE, syncAllPEs
      posn = Neighbor%Position(1:3, i)
      if (posn(1) == pos2(1) .and. posn(2) == pos2(2) &
                           .and. posn(3) == pos2(3)) then
-       nindex = i
+       nindex = i+1
        exit
      endif
    enddo
@@ -1235,14 +1237,18 @@ use MPPModule, only : MyPE, syncAllPEs
    integer (kind=IntKind) :: nindex
    real (kind=RealKind) :: pos1(3), pos2(3), posn(3)
    real (kind=RealKind) :: R12, R1n, R2n
-   complex (kind=CmplxKind), pointer :: ptau(:,:)
+   complex (kind=CmplxKind) :: ptau(kmax_max,kmax_max)
+
+!  print *, "Tau for (m,n) =", id2, id1
 
    if (id1 == id2) then
-     ptau => Tau00(id1)%neighMat(1)%tau_l
+     nindex = 1
    else
      nindex = determineNeighborIndex(id1, id2)
-     ptau => Tau00(id1)%neighMat(1+nindex)%tau_l
    endif
+   ptau = Tau00(id1)%neighMat(nindex)%tau_l
+!  call writeMatrix("Taustored", Tau00(id1)%neighMat(nindex)%tau_l, kmax_max, kmax_max)
+!  call writeMatrix("ptau", ptau, kmax_max, kmax_max)
 
    end function getNeighborTau
 !  ===================================================================
