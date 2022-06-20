@@ -75,29 +75,23 @@ contains
 
 !  Solving for eF - i*delta
 
-!  do id = 1, LocalNumAtoms
-!    print *, "Atom number ", id
+   do id = 1, LocalNumAtoms
+     print *, "Atom number ", id
 !    --------------------------------------------------------------------------
-!    call solveSingleScattering(spin=spin_pola, site=id, e=eneg, vshift=CZERO)
+     call solveSingleScattering(spin=spin_pola, site=id, e=eneg, vshift=CZERO)
 !    --------------------------------------------------------------------------
-!  enddo
+   enddo
 
-!  call calClusterMatrix(energy=eneg, &
-!     getSingleScatteringMatrix=getScatteringMatrix, tau_needed=.true.)
+   call calClusterMatrix(energy=eneg, &
+      getSingleScatteringMatrix=getScatteringMatrix, tau_needed=.true.)
 
-!  do i = 1, LocalNumAtoms
- !   tau00 => getTau(i)
- !   call writeMatrix('tau00', tau00, kmax, kmax, 1)
-!    do j = 1, LocalNumAtoms
-!      if (checkIfNeighbor(i,j)) then
- !       print *, i, "and ", j, "are neighbors"
-!        tau => getNeighborTau(i, j)
-!        call zcopy(kmax*kmax, tau,1,TauIJ(j,i)%taun,1)
-!      else
- !       print *, i, "and ", j, "are not neighbors!"
-!      endif
-!    enddo
-!  enddo
+   do i = 1, LocalNumAtoms
+     do j = 1, LocalNumAtoms
+       if (checkIfNeighbor(i,j)) then
+         TauIJ(j,i)%taun = getNeighborTau(i, j)
+       endif
+     enddo
+   enddo
 
 !  Solving for eF + i*delta
 
@@ -119,23 +113,23 @@ contains
    !     print *, "Tau matrix for (m,n) = ", i,j
    !     call writeMatrix('TauP', TauIJ(j,i)%taup, kmax, kmax)
         ! call zcopy(kmax*kmax, tau, 1, TauIJ(j,i)%taup,1)
-         do L1 = 1, kmax
-           do L2 = 1, kmax
-             TauIJ(i,j)%taun(L1, L2) = (-1.0)**(getLIndex(L1) - getLIndex(L2))\
-                      *conjg(TauIJ(j,i)%taup(L2, L1))
-           enddo
-         enddo
+   !     do L1 = 1, kmax
+   !       do L2 = 1, kmax
+   !         TauIJ(i,j)%taun(L1, L2) = (-1.0)**(getLindex(L1) - getLindex(L2))&
+   !                      *conjg(TauIJ(j,i)%taup(L2, L1))
+   !       enddo
+   !     enddo
        endif
      enddo
    enddo
-  ! do i = 1, LocalNumAtoms
-  !  do j = 1, LocalNumAtoms
-     ! print *, "Tau Matrix for (m,n) = ", i,j
-     !  call writeMatrix('TauP',TauIJ(i,j)%taup,kmax,kmax)
-     !  call writeMatrix('TauN',TauIJ(i,j)%taun,kmax,kmax)
-     ! print *, "System Volume Per Atom", omega 
-  !  enddo
-  !enddo
+!  do i = 1, LocalNumAtoms
+!    do j = 1, LocalNumAtoms
+!      print *, "Tau Matrix for (m,n) = ", i,j
+!      call writeMatrix('TauP',TauIJ(i,j)%taup,kmax,kmax)
+!      call writeMatrix('TauN',TauIJ(i,j)%taun,kmax,kmax)
+!      print *, "System Volume Per Atom", omega 
+!    enddo
+!  enddo
   
    end subroutine initLSMSConductivity
 !  ============================================================
@@ -165,6 +159,7 @@ contains
      else
        Jm => getJMatrix(n=m,ic=1,is=spin_pola,dir=dir1,en_type=caltype,tilde=0)
      endif
+!    call writeMatrix('Jm', Jm, dsize, dsize)
      do n = 1, LocalNumAtoms
        trace = CZERO
        Jn => getJMatrix(n=n,ic=1,is=spin_pola,dir=dir2,en_type=caltype,tilde=0)
