@@ -1046,7 +1046,7 @@ use MPPModule, only : MyPE, syncAllPEs
                           CZERO, Tau00(my_atom)%kau_l(1,1,ns), kmax_kkr(my_atom))
 !              -------------------------------------------------------
                if (istauij_needed) then
-                 do j = 1, Neighbor%NumAtoms
+                 do j = 1, Neighbor%NumAtoms+1
                    call zgemm('n', 'n', kmax_kkr(my_atom), kmax_kkr(my_atom), &
                     kmax_kkr(my_atom), kappa, Tau00(my_atom)%neighMat(j)%wau_l, &
                     kmax_kkr(my_atom), OmegaHat, kmax_kkr(my_atom), &
