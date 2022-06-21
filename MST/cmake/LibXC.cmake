@@ -1,4 +1,6 @@
-f (DEFINED libxc_LIBRARIES AND DEFINED libxc_INCLUDE_DIR)
+
+
+if (DEFINED libxc_LIBRARIES AND DEFINED libxc_INCLUDE_DIR)
     if (EXISTS ${libxc_LIBRARIES} AND EXISTS ${libxc_INCLUDE_DIR})
         message(STATUS "libxc path was correctly defined")
     else()
