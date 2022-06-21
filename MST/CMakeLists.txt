@@ -30,7 +30,7 @@ set_target_properties(mst_lib PROPERTIES
 target_include_directories(mst_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(mst_main PUBLIC mst_lib)
-target_link_libraries(lsmscore PUBLIC gfortran)
+target_link_libraries(mst_main PUBLIC gfortran)
 
 
 # Adding Subdirectories
@@ -53,11 +53,12 @@ if (BUILD_WITH_OPENMP)
     target_link_libraries(mst_main PUBLIC OpenMP::OpenMP_CXX)
 endif ()
 
+# Find LibXC
+find_package(Libxc REQUIRED)
 
 # Needed for gcc 10
 target_compile_options(mst_lib PUBLIC "-fallow-argument-mismatch")
         
-
 # Build LibXC 
 option(USE_LIBXC "Use the libxc libary" ON)
 if (USE_LIBXC)
@@ -91,8 +92,7 @@ if (BUILD_WITH_OPENMP)
     endif ()
 
 
-#### Not sure about this part, working on it ###
-''' if (NOT DEFINED CMAKE_CUDA_STANDARD)
+if (NOT DEFINED CMAKE_CUDA_STANDARD)
         set(CMAKE_CUDA_STANDARD 14)
         set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 endif ()
@@ -124,8 +124,7 @@ else ()
     endif ()
 endif ()
 
-##################################################################
-'''
+
 
 if (DEFINED MST_LINEAR_SOLVER_DEFAULT)
     message(STATUS "Default linear solver: " ${MST_LINEAR_SOLVER_DEFAULT})
