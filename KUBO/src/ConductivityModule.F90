@@ -299,7 +299,7 @@ contains
        do is = 1, n_spin_pola
          if (mode == 3) then
       !    --------------------------------------------------------------
-           call initCPAConductivity(id, is, kmax_kkr_max, efermi, LocalNumAtoms)
+           call initCPAConductivity(id, is, kmax_kkr_max, efermi, LocalNumAtoms, mode)
       !    -------------------------------------------------------------- 
            call computeCPAConductivity(is, dirnum)
       !    --------------------------------------------------------------
@@ -308,6 +308,7 @@ contains
          else if (mode == 4) then
       !    --------------------------------------------------------------
       !    Under development
+           call initCPAConductivity(id, is, kmax_kkr_max, efermi, LocalNumAtoms, mode)
       !    --------------------------------------------------------------
          endif
        enddo
