@@ -675,7 +675,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calClusterMatrix(energy,getSingleScatteringMatrix,tau_needed)
+   subroutine calClusterMatrix(energy,getSingleScatteringMatrix,tau_needed,kp)
 !  ===================================================================
    use TimerModule, only : getTime
 use MPPModule, only : MyPE, syncAllPEs
@@ -693,6 +693,7 @@ use MPPModule, only : MyPE, syncAllPEs
    implicit none
 !
    complex (kind=CmplxKind), intent(in) :: energy
+   complex (kind=CmplxKind), intent(in), optional :: kp
 !
    logical, intent(in), optional :: tau_needed
 !
@@ -748,7 +749,11 @@ use MPPModule, only : MyPE, syncAllPEs
    call exchangeSSSMatrix(getSingleScatteringMatrix)
 !  -------------------------------------------------------------------
 !
-   kappa = sqrt(energy)
+   if (present(kp)) then
+     kappa = kp
+   else
+     kappa = sqrt(energy)
+   endif
    kmax_max_ns = kmax_max*n_spin_cant
    tsize = kmax_max*kmax_max*n_spin_cant*n_spin_cant
 !
@@ -765,7 +770,7 @@ use MPPModule, only : MyPE, syncAllPEs
 !     initialize BigMatrix so that it is a unit matrix to begin with..
 !     ================================================================
       call setupUnitMatrix(dsize,BigMatrix)
-!
+      BigMatrixInv = CZERO
 !     ================================================================
 !     loop over cluster neighbors to build BigMatrix [1-Jinv*G*S]
 !
@@ -957,14 +962,15 @@ use MPPModule, only : MyPE, syncAllPEs
  !         call writeMatrix('BigMatrixCopyCheck',BigMatrixInv,dsize*dsize)
            pBigMatrix => aliasArray2_c(BigMatrixInv,dsize_max,dsize_max)
            call MtxInv_LU(pBigMatrix, dsize_max)
-           do i = 1,dsize
+           do i = 1,dsize_max
              pBigMatrix(i,i) = pBigMatrix(i,i) - CONE
            enddo
            Neighbor => getNeighbor(my_atom)
            do j = 1, Neighbor%NumAtoms+1
-             call zcopy(kkrsz_ns*kkrsz_ns, &
-                 pBigMatrix((j-1)*kkrsz_ns+1:j*kkrsz_ns,1:kkrsz_ns), &
-                 1, Tau00(my_atom)%neighMat(j)%wau_l, 1)
+             Tau00(my_atom)%neighMat(j)%wau_l = pBigMatrix((j-1)*kkrsz_ns+1:j*kkrsz_ns,1:kkrsz_ns)
+          !  call zcopy(kkrsz_ns*kkrsz_ns, &
+          !      pBigMatrix((j-1)*kkrsz_ns+1:j*kkrsz_ns,(j-1)*kkrsz_ns+1:j*kkrsz_ns), &
+          !      1, Tau00(my_atom)%neighMat(j)%wau_l, 1)
            enddo
   !        call writeMatrix("BigMatrixInv00",Tau00(my_atom)%neighMat(1)%wau_l, kkrsz_ns, kkrsz_ns)
   !        call writeMatrix("BigMatrixInv10",pBigMatrix(kkrsz_ns+1:2*kkrsz_ns, 1:kkrsz_ns), kkrsz_ns, kkrsz_ns)
@@ -1048,9 +1054,9 @@ use MPPModule, only : MyPE, syncAllPEs
                if (istauij_needed) then
                  do j = 1, Neighbor%NumAtoms+1
                    call zgemm('n', 'n', kmax_kkr(my_atom), kmax_kkr(my_atom), &
-                    kmax_kkr(my_atom), kappa, Tau00(my_atom)%neighMat(j)%wau_l, &
+                    kmax_kkr(my_atom), kappa, Tau00(my_atom)%neighMat(j)%wau_l(1,1), &
                     kmax_kkr(my_atom), OmegaHat, kmax_kkr(my_atom), &
-                    CZERO, Tau00(my_atom)%neighMat(j)%kau_l, kmax_kkr(my_atom))
+                    CZERO, Tau00(my_atom)%neighMat(j)%kau_l(1,1), kmax_kkr(my_atom))
                  enddo
                endif
 !              =======================================================
@@ -1105,19 +1111,23 @@ use MPPModule, only : MyPE, syncAllPEs
          if (my_atom == my_atom2 .or. checkIfNeighbor(my_atom, my_atom2)) then
            nindex = determineNeighborIndex(my_atom, my_atom2)
            smj => getSingleScatteringMatrix('Sine-Matrix',spin=1,site=my_atom2)
-           call computeUAUts(smj,kmax_kkr(my_atom2),kmax_kkr(my_atom), &
+           call computeUAUts(smj,kmax_kkr(my_atom),kmax_kkr(my_atom), &
                           smi,kmax_kkr(my_atom), CONE/energy, &
                 Tau00(my_atom)%neighMat(nindex)%kau_l, kmax_kkr(my_atom),CZERO, &
                 Tau00(my_atom)%neighMat(nindex)%tau_l,kmax_kkr(my_atom),wsStoreA)
+    !      Tau00(my_atom)%neighMat(nindex)%tau_l = Tau00(my_atom)%neighMat(nindex)%tau_l + tm
     !      print *, "TauP for (m,n) = ", my_atom,my_atom2
     !      call writeMatrix('TauP', Tau00(my_atom)%neighMat(nindex)%tau_l, kmax_kkr(my_atom), kmax_kkr(my_atom))
          endif
        enddo
        Tau00(my_atom)%neighMat(1)%tau_l = Tau00(my_atom)%neighMat(1)%tau_l + tm
      enddo
-   endif 
+   endif
+!  nindex = determineNeighborIndex(3, 10)
+!  call writeMatrix("Tau103CMM", Tau00(3)%neighMat(nindex)%tau_l, kmax_kkr(1), kmax_kkr(1)) 
 !
-   nullify(gij, p_jinvi, p_sinej, jig, wau_g, wau_l, ubmat, pBlockMatrix)
+
+   nullify(gij, p_jinvi, p_sinej, jig, wau_g, wau_l, ubmat, pBlockMatrix, pBigMatrix)
 !
    end subroutine calClusterMatrix
 !  ===================================================================
