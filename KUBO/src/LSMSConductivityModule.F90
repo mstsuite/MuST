@@ -11,7 +11,7 @@ public :: initLSMSConductivity, &
 
 private
    integer (kind=IntKind) :: LocalNumAtoms, GlobalNumAtoms
-   integer (kind=IntKind) :: dsize, spin_pola
+   integer (kind=IntKind) :: dsize, spin_pola, total_pairs, total_neighbors
    real (kind=RealKind) :: omega
    complex (kind=CmplxKind) :: eval
    complex (kind=CmplxKind), pointer :: tau(:,:), tau00(:,:,:)
@@ -57,6 +57,7 @@ contains
    spin_pola = is
    omega = getSystemVolume()
    dsize = kmax
+   total_pairs = 0
   
    if (isFermiEnergyRealPart()) then
       eval = getFermiEnergyRealPart() + SQRTm1*delta
@@ -68,9 +69,9 @@ contains
 
    kappa = -sqrt(eval)
 
-   print *, "SQRT positive is ", sqrt(eval)
-   print *, "SQRT negative is ", sqrt(eneg)
-   print *, "What it should be", -sqrt(eval)  
+ ! print *, "SQRT positive is ", sqrt(eval)
+ ! print *, "SQRT negative is ", sqrt(eneg)
+ ! print *, "What it should be", -sqrt(eval)  
  
    allocate(TauIJ(LocalNumAtoms, LocalNumAtoms))
    do i = 1, LocalNumAtoms
@@ -116,14 +117,17 @@ contains
        getSingleScatteringMatrix=getScatteringMatrix, tau_needed=.true.)
 
    do i = 1, LocalNumAtoms
-     temp => getTau(i)
      do j = 1, LocalNumAtoms
        if (checkIfNeighbor(i,j)) then
          TauIJ(i,j)%taup = getNeighborTau(i,j)
+         total_pairs = total_pairs + 1
        endif
      enddo
    enddo
 
+   total_neighbors = total_pairs - LocalNumAtoms
+   print *, "Total pairs ", total_pairs
+   print *, "Total neighbors ", total_neighbors
  ! call writeMatrix('Tau12', TauIJ(1,2)%taup, dsize, dsize)
    do i = 1, LocalNumAtoms
     do j = 1, LocalNumAtoms
@@ -156,13 +160,15 @@ contains
 
    integer (kind=IntKind), intent(in) :: dir1, dir2, caltype
    integer (kind=IntKind) :: m, n, L
-   complex (kind=CmplxKind) :: coeff, sigmaval, trace
+   complex (kind=CmplxKind) :: coeff, sigmaval, trace, tmpsum
+   complex (kind=CmplxKind) :: sigmamat(LocalNumAtoms,LocalNumAtoms)
    complex (kind=CmplxKind), pointer :: Jm(:,:), Jn(:,:)
    complex (kind=CmplxKind), allocatable :: temp(:,:), temp2(:,:), temp3(:,:)
 
    allocate(temp(dsize, dsize), temp2(dsize, dsize), temp3(dsize, dsize))
    temp = CZERO; temp2 = CZERO; temp3 = CZERO
 
+   sigmamat = CZERO
    sigmaval = CZERO
    coeff = -CONE/(PI*omega)
    do m = 1, LocalNumAtoms
@@ -206,10 +212,28 @@ contains
          trace = trace + coeff*temp3(L,L)
        enddo
        sigmaval = sigmaval + trace
-      !print *, "Sigmaval for (m,n) ", m, n, " in direction (mu,nu) ", dir1, dir2, " and caltype", caltype, "is "
-      !print *, real(trace), "with total", real(sigmaval) 
+       sigmamat(m,n) = trace
+  !    print *, "Sigmaval for (m,n) ", m, n, " in direction (mu,nu) ", dir1, dir2, " and caltype", caltype, "is "
+  !    print *, real(trace), "with total", real(sigmaval) 
      enddo
    enddo
+
+   tmpsum = CZERO
+   print *, "Total Single-site sum is "
+   do m = 1, LocalNumAtoms
+     tmpsum = tmpsum + sigmamat(m,m)
+   enddo
+   print *, real(tmpsum)
+   tmpsum = CZERO
+   print *, "Total Cross-site sum is "
+   do m = 1, LocalNumAtoms
+     do n = 1, LocalNumAtoms
+       if (m .ne. n) then
+         tmpsum = tmpsum + sigmamat(m,n)
+       endif
+     enddo
+   enddo
+   print *, tmpsum
 
    end function calSigmaTildeLSMS
 !  ============================================================
