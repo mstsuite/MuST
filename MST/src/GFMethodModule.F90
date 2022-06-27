@@ -3768,10 +3768,10 @@ contains
 !                 add the shallow bound state densities to the
 !                 single site density
 !                 ----------------------------------------------------
-                  ssDOS = returnIDOSofBoundStates(id,ia,is,ib,wk_dos)
+                  ssDOS = returnIDOSofBoundStates(id,ia,is,ib,wk_dos) ! A factor 2 for the non-spin-polarized case is included
                   ssdos_int = ssdos_int + ssDOS*getLocalSpeciesContent(id,ia)
 !                 ----------------------------------------------------
-                  call calElectroStruct(info,ns,wk_dos,ssLastValue(id),ss_int=.true.,species=ia,fac=CONE)  !cfac)
+                  call calElectroStruct(info,1,wk_dos,ssLastValue(id),ss_int=.true.,species=ia,fac=CONE)
                   ! Change made on 4/27/22 to avoid double counting, there is already a factor of two mulplication done elsewhere.
                   call addElectroStruct(getLocalSpeciesContent(id,ia),ssLastValue(id),ssIntegrValue(id),ns, &
                                         species=ia)
@@ -3780,7 +3780,7 @@ contains
                      write(6,'(a,i4,2x,f12.8,2x,d15.8)')'Bound state id, e, and DOS = ',&
                        ib,getBoundStateEnergy(id=id,ia=ia,is=is,ibs=ib),ssDOS
                      write(6,'(a,i4,2x,d15.8)')'Bound state id, ssDOS = ',ib,ssDOS
-                     write(6,'(a,i4,2x,d15.8)')'Bound state id, ssLastValue =',ib,ssLastValue(id)%dos(ns,ia)
+                     write(6,'(a,i4,2x,d15.8)')'Bound state id, ssLastValue =',ib,real(ssLastValue(id)%dos(ns,ia),kind=RealKind)
                   endif
                enddo
                if ( node_print_level >= 0) then
@@ -4335,7 +4335,7 @@ contains
             endif
          enddo
       endif
-   else if (ns == 1 .or. ns == 2) then
+   else if (ns == 1) then
       if (n_spin_cant == 1) then
          js = is      ! js = 1 or 2
       else

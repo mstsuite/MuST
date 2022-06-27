@@ -2124,9 +2124,11 @@ use MPPModule, only : MyPE, syncAllPEs
       call StopHandler(sname)
    endif
 !
+#ifdef TIMING_SS
 !  -------------------------------------------------------------------
-!  call checkinTiming('solveSingleScattering',getTime()-t_start)
+   call checkinTiming('solveSingleScattering',getTime()-t_start)
 !  -------------------------------------------------------------------
+#endif
 !
    end subroutine solveSingleScattering
 !  ===================================================================
