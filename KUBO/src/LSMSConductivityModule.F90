@@ -48,7 +48,7 @@ contains
    real (kind=RealKind) :: delta
    real (kind=RealKind) :: posi(3), posj(3), dist
    complex (kind=CmplxKind) :: eneg, kappa
-   complex (kind=CmplxKind), pointer :: temp(:,:), temp2(:,:)
+   complex (kind=CmplxKind), pointer :: temp(:,:,:), temp2(:,:)
    
    delta = getFermiEnergyImagPart()
    pot_type = useStepFunctionForSigma()
@@ -84,23 +84,23 @@ contains
 
 !  Solving for eF - i*delta
 
-   do id = 1, LocalNumAtoms
+!  do id = 1, LocalNumAtoms
 !    print *, "Atom number ", id
 !    --------------------------------------------------------------------------
-     call solveSingleScattering(spin=spin_pola, site=id, e=eneg, vshift=CZERO, kp=kappa)
+!    call solveSingleScattering(spin=spin_pola, site=id, e=eneg, vshift=CZERO, kp=kappa)
 !    --------------------------------------------------------------------------
-   enddo
+!  enddo
 
-   call calClusterMatrix(energy=eneg, &
-      getSingleScatteringMatrix=getScatteringMatrix, tau_needed=.true., kp=kappa)
+!  call calClusterMatrix(energy=eneg, &
+!     getSingleScatteringMatrix=getScatteringMatrix, tau_needed=.true., kp=kappa)
 
-   do i = 1, LocalNumAtoms
-     do j = 1, LocalNumAtoms
-       if (checkIfNeighbor(i,j)) then
-         TauIJ(j,i)%taun = getNeighborTau(i, j)
-       endif
-     enddo
-   enddo
+!  do i = 1, LocalNumAtoms
+!    do j = 1, LocalNumAtoms
+!      if (checkIfNeighbor(i,j)) then
+!        TauIJ(j,i)%taun = getNeighborTau(i, j)
+!      endif
+!    enddo
+!  enddo
 
 !  Solving for eF + i*delta
 
@@ -116,6 +116,7 @@ contains
        getSingleScatteringMatrix=getScatteringMatrix, tau_needed=.true.)
 
    do i = 1, LocalNumAtoms
+     temp => getTau(i)
      do j = 1, LocalNumAtoms
        if (checkIfNeighbor(i,j)) then
          TauIJ(i,j)%taup = getNeighborTau(i,j)
@@ -124,15 +125,15 @@ contains
    enddo
 
  ! call writeMatrix('Tau12', TauIJ(1,2)%taup, dsize, dsize)
- ! do i = 1, LocalNumAtoms
- !  do j = 1, LocalNumAtoms
- !     do L1 = 1, dsize
- !       do L2 = 1, dsize
- !         TauIJ(i,j)%taun(L1,L2) = (-1.0)**(getLindex(L1) - getLindex(L2))*conjg(TauIJ(j,i)%taup(L2,L1))
- !       enddo
- !     enddo
- !   enddo
- ! enddo
+   do i = 1, LocalNumAtoms
+    do j = 1, LocalNumAtoms
+       do L1 = 1, dsize
+         do L2 = 1, dsize
+          TauIJ(i,j)%taun(L1,L2) = (-1.0)**(getLindex(L1) - getLindex(L2))*conjg(TauIJ(j,i)%taup(L2,L1))
+         enddo
+       enddo
+     enddo
+   enddo
 !  call writeMatrix('Tau103LSMS', TauIJ(10, 3)%taup, dsize, dsize)
 !  do i = 1, LocalNumAtoms
 !    do j = 1, LocalNumAtoms
@@ -183,7 +184,6 @@ contains
   !      call writeMatrix('TauNM', TauIJ(n,m)%taup, dsize, dsize)
          call zgemm('n', 'n', dsize, dsize, dsize, CONE, &
            TauIJ(m,n)%taup, dsize, temp, dsize, CZERO, temp2, dsize)
- !       call writeMatrix('TaumnjTaunm', temp2, dsize, dsize)
        else if (caltype == 2) then
          call zgemm('n', 'n', dsize, dsize, dsize, CONE, Jn, dsize, &
                TauIJ(n,m)%taun, dsize, CZERO, temp, dsize)
@@ -202,14 +202,12 @@ contains
        endif
        call zgemm('n', 'n', dsize, dsize, dsize, CONE, Jm, dsize, &
              temp2, dsize, CZERO, temp3, dsize)
-  !    call writeMatrix('JtauJtau', temp3, dsize, dsize)
-       print *, "-1/pi*V = ", coeff
        do L = 1, dsize
          trace = trace + coeff*temp3(L,L)
        enddo
        sigmaval = sigmaval + trace
-       print *, "Sigmaval for (m,n) ", m, n, " in direction (mu,nu) ", dir1, dir2, " and caltype", caltype, "is "
-       print *, real(trace), "with total", real(sigmaval) 
+      !print *, "Sigmaval for (m,n) ", m, n, " in direction (mu,nu) ", dir1, dir2, " and caltype", caltype, "is "
+      !print *, real(trace), "with total", real(sigmaval) 
      enddo
    enddo
 
