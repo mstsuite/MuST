@@ -39,6 +39,7 @@ BASE_ROUTINES = readInputs.o startProcess.o finishProcess.o setupRadGridAndCell.
 SRC_OBJS =  \
 $(ODIR)/PublicTypeDefinitionsModule.o \
 $(ODIR)/PublicParamDefinitionsModule.o \
+$(ODIR)/CheckPointModule.o \
 $(ODIR)/AdaptIntegrationModule.o \
 $(ODIR)/adjustEnergy.o \
 $(ODIR)/getFermiDiracFunc.o \

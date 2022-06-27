@@ -11,7 +11,8 @@ BinvMatrix.o \
 WriteFunctionModule.o \
 DefaultParamModule.o \
 LatticeModule.o \
-IBZRotationModule.o
+IBZRotationModule.o \
+CheckPointModule.o
 
 BasicRoutines = \
 readPositionData.o \

@@ -15,6 +15,8 @@ subroutine startProcess(ss_mode)
 !
    use DataServiceCenterModule, only : initDataServiceCenter
 !
+   use CheckPointModule, only : initCheckPoint
+!
    use InputModule, only : initInput
 !
    use OutputModule, only : initOutput, getStandardOutputLevel
@@ -75,6 +77,7 @@ subroutine startProcess(ss_mode)
       write(6,'(80(''-''))')
    endif
    call initGroupComm()
+   call initCheckPoint()
    call initDataServiceCenter()
    call initInput()
    call readInputs(def_id,info_id)

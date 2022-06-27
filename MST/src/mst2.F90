@@ -68,6 +68,8 @@ program mst2
                                    getTestV0,          &
                                    getTestValenceNum
 !
+   use CheckPointModule, only : initCheckPoint, endCheckPoint
+!
    use ScfDataModule, only : ngaussr, ngaussq
    use ScfDataModule, only : initScfData, nscf, printScfData, potwrite, movie
    use ScfDataModule, only : n_spin_pola, n_spin_cant
@@ -439,6 +441,8 @@ program mst2
 !
 !  -------------------------------------------------------------------
    call initGroupComm()
+!  -------------------------------------------------------------------
+   call initCheckPoint()
 !  -------------------------------------------------------------------
 !
 !  ===================================================================
@@ -2037,6 +2041,7 @@ stop 'Under construction...'
    endif
    call endSystem()
    call endDataServiceCenter()
+   call endCheckPoint()
    call endGroupComm()
    call endMPP()
 !

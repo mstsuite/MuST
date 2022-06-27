@@ -1937,7 +1937,7 @@ endif
                      e2 = -TEN2m6
                   endif
 !                 ---------------------------------------------------
-                  call findSMatrixPoles(id,ia,is,e1,e2,estep,CheckPoles =.false.)
+                  call findSMatrixPoles(id,ia,is,e1,e2,Delta=estep,CheckPoles =.false.)
 !                 ---------------------------------------------------
 !                 call computeBoundStateDensity(id,ia,is)
 !                 ---------------------------------------------------
