@@ -5,7 +5,7 @@ module MultiScatteringDOSModule
 !
    use PublicTypeDefinitionsModule, only : GridStruct
 !
-   use ErrorHandlerModule, only : ErrorHandler
+   use ErrorHandlerModule, only : ErrorHandler, StopHandler
 !
    use TimerModule, only : getTime
 !
@@ -134,6 +134,8 @@ contains
 !  ===================================================================
    use MathParamModule, only : CONE, ZERO, HALF, PI, Y0
 !
+   use CheckPointModule, only : isStopPoint, takeStopAction
+!
    use MSSolverModule, only : getMSGreenFunction, getMSGreenMatrix
    use MSSolverModule, only : getMSGreenFunctionDerivative
 !
@@ -162,6 +164,7 @@ contains
    integer (kind=IntKind) :: is, id, atom, ia, ir, nr
    integer (kind=IntKind) :: ks, jid, j, l, m, jl, kl, klc, p0, n, i
    integer (kind=IntKind) :: jmax, kmax, iend, ns_sqr, gform
+   integer (kind=IntKind) :: point_id
 !
    real (kind=RealKind) :: r0j(3), evec_new(3), sfac, dos(2)
    real (kind=RealKind), pointer :: r_mesh(:), pra_y(:,:)
@@ -185,6 +188,8 @@ contains
    type (GridStruct), pointer :: Grid
 !
    logical :: isPositive
+!
+   character (len=20) :: sname='getMScatteringDOS'
 !
    is = info(1); id = info(2); atom = info(3)
 !
@@ -424,6 +429,10 @@ contains
       deallocate(der_fedos)
    endif
    nullify(fedos)
+!
+   if (isStopPoint(sname,point_id)) then
+      call takeStopAction(point_id,0)
+   endif
 !
    end function getMScatteringDOS
 !  ===================================================================

@@ -70,6 +70,7 @@ UTILITIES_O = $(ODIR)/measureVoronoi.o \
 
 SRC_OBJS = $(ODIR)/PublicTypeDefinitionsModule.o \
            $(ODIR)/PublicParamDefinitionsModule.o $(ODIR)/DefaultParamModule.o \
+           $(ODIR)/CheckPointModule.o \
            $(ODIR)/InputModule.o $(ODIR)/ScfDataModule.o $(ODIR)/SystemModule.o \
            $(ODIR)/ProcMappingModule.o \
            $(ODIR)/PolyhedraModule.o $(ODIR)/Atom2ProcModule.o \
