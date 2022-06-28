@@ -11,7 +11,8 @@ $(MST_ODIR)/BinvMatrix.o \
 $(MST_ODIR)/WriteFunctionModule.o \
 $(MST_ODIR)/DefaultParamModule.o \
 $(MST_ODIR)/LatticeModule.o \
-$(MST_ODIR)/IBZRotationModule.o
+$(MST_ODIR)/IBZRotationModule.o \
+$(MST_ODIR)/CheckPointModule.o
 
 BasicRoutines = \
 $(MST_ODIR)/readPositionData.o \
