@@ -620,9 +620,11 @@ contains
      enddo
    enddo
 
-   do jn = 1, nsize
+   call writeMatrix('TauIJ', SROMedium(n)%tau_cpa(1:dsize, 1:dsize, 1), dsize, dsize)
+   do jn = 2, nsize
      print *, "TauIJ between 1 and neighbor ", jn
-     call writeMatrix('TauIJ', SROMedium(n)%tau_cpa(1:dsize, (jn-1)*dsize+1:jn*dsize, 1), dsize, dsize)
+     print *, SROMedium(n)%Neighbor%Position(1:3, jn)
+     call writeMatrix('TauIJ', SROMedium(n)%tau_cpa((jn-1)*dsize+1:jn*dsize, 1:dsize, 1), dsize, dsize)
    enddo
  
    call ErrorHandler('Got tau','SROModule')
