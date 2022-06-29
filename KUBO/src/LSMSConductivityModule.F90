@@ -35,7 +35,8 @@ contains
    use SystemModule, only : getNumAtoms
    use Atom2ProcModule, only : getLocalNumAtoms
    use SSSolverModule, only : solveSingleScattering, getScatteringMatrix
-   use ClusterMatrixModule, only : getTau, calClusterMatrix, getNeighborTau, checkIfNeighbor
+   use ClusterMatrixModule, only : getTau, calClusterMatrix, &
+              calClusterMatrixNonPeriodic, getClusterTau, getNeighborTau, checkIfNeighbor
    use CurrentMatrixModule, only : calCurrentMatrix, getJMatrix, getLindex
    use WriteMatrixModule, only : writeMatrix
    use SystemModule, only : getAtomPosition
@@ -113,17 +114,26 @@ contains
 !    --------------------------------------------------------------------------
    enddo
 
-   call calClusterMatrix(energy=eval, &
+!  call calClusterMatrix(energy=eval, &
+!      getSingleScatteringMatrix=getScatteringMatrix, tau_needed=.true.)
+
+   call calClusterMatrixNonPeriodic(energy=eval, &
        getSingleScatteringMatrix=getScatteringMatrix, tau_needed=.true.)
 
    do i = 1, LocalNumAtoms
      do j = 1, LocalNumAtoms
-       if (checkIfNeighbor(i,j)) then
-         TauIJ(i,j)%taup = getNeighborTau(i,j)
-         total_pairs = total_pairs + 1
-       endif
+       TauIJ(i,j)%taup = getClusterTau(i, j)
      enddo
-   enddo
+   enddo 
+
+!  do i = 1, LocalNumAtoms
+!    do j = 1, LocalNumAtoms
+!      if (checkIfNeighbor(i,j)) then
+!        TauIJ(i,j)%taup = getNeighborTau(i,j)
+!        total_pairs = total_pairs + 1
+!      endif
+!    enddo
+!  enddo
 
    total_neighbors = total_pairs - LocalNumAtoms
    print *, "Total pairs ", total_pairs
@@ -138,6 +148,9 @@ contains
        enddo
      enddo
    enddo
+
+!  call writeMatrix('Tau11n', TauIJ(1,1)%taun, dsize, dsize)
+!  call writeMatrix('Tau12n', TauIJ(1,2)%taun, dsize, dsize)
 !  call writeMatrix('Tau103LSMS', TauIJ(10, 3)%taup, dsize, dsize)
 !  do i = 1, LocalNumAtoms
 !    do j = 1, LocalNumAtoms
@@ -213,8 +226,8 @@ contains
        enddo
        sigmaval = sigmaval + trace
        sigmamat(m,n) = trace
-  !    print *, "Sigmaval for (m,n) ", m, n, " in direction (mu,nu) ", dir1, dir2, " and caltype", caltype, "is "
-  !    print *, real(trace), "with total", real(sigmaval) 
+     ! print *, "Sigmaval for (m,n) ", m, n, " in direction (mu,nu) ", dir1, dir2, " and caltype", caltype, "is "
+     ! print *, real(trace), "with total", real(sigmaval) 
      enddo
    enddo
 
