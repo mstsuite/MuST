@@ -805,6 +805,10 @@ contains
    enddo
    
    call MtxInv_LU(ClusterMatrix, LocalNumAtoms*kkrsz)
+  
+   do i = 1, LocalNumAtoms*kkrsz
+     ClusterMatrix(i,i) = ClusterMatrix(i,i) - CONE
+   enddo
 
    do my_atom = 1, LocalNumAtoms
 !    ----------------------------------------------------------
