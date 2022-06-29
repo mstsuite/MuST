@@ -18,8 +18,10 @@ module ClusterMatrixModule
 public :: initClusterMatrix, &
           endClusterMatrix,  &
           calClusterMatrix,  &
+          calClusterMatrixNonPeriodic, &
           getTau,            &
           checkIfNeighbor,   &
+          getClusterTau,     &
           getNeighborTau,    &
           getKau
 !
@@ -56,6 +58,9 @@ private
    complex (kind=CmplxKind), allocatable, target :: BlockMatrix(:)
    complex (kind=CmplxKind), allocatable, target :: BigMatrix(:)
    complex (kind=CmplxKind), allocatable, target :: BigMatrixInv(:,:)
+   complex (kind=CmplxKind), allocatable, target :: ClusterMatrix(:,:)
+   complex (kind=CmplxKind), allocatable, target :: ClusterKau(:,:)
+   complex (kind=CmplxKind), allocatable, target :: ClusterTau(:,:)
 !
    type TauNeighborStruct
       complex (kind=CmplxKind), allocatable :: wau_l(:,:)
@@ -281,6 +286,9 @@ contains
 !  Allocate matrices for tauij calculation (i,j != 0)
    if (istauij_needed) then
      allocate (BigMatrixInv(dsize_max, dsize_max))
+     allocate (ClusterMatrix(LocalNumAtoms*kmax_max,LocalNumAtoms*kmax_max))
+     allocate (ClusterKau(LocalNumAtoms*kmax_max,LocalNumAtoms*kmax_max))
+     allocate (ClusterTau(LocalNumAtoms*kmax_max,LocalNumAtoms*kmax_max))
    endif
      
    jinv_g = CZERO; sine_g = CZERO
@@ -675,6 +683,168 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine calClusterMatrixNonPeriodic(energy,getSingleScatteringMatrix,tau_needed,kp)
+!  ===================================================================
+   use TimerModule, only : getTime
+   use MPPModule, only : MyPE, syncAllPEs
+!
+   use SpinRotationModule, only : rotateGtoL
+!
+   use RSpaceStrConstModule, only : getGij => getStrConstMatrix
+!
+   use MatrixModule, only : setupUnitMatrix, computeUAUts
+!
+   use MatrixBlockInversionModule, only : invertMatrixBlock
+   use MatrixInverseModule, only : MtxInv_LU
+   use WriteMatrixModule, only : writeMatrix
+
+   implicit none
+!
+   complex (kind=CmplxKind), intent(in) :: energy
+   complex (kind=CmplxKind), intent(in), optional :: kp
+!
+   logical, intent(in), optional :: tau_needed
+!
+   integer (kind=IntKind) :: my_atom, iri, irj, kli, klj, is, js, ns
+   integer (kind=IntKind) :: lmaxi, lmaxj, kkri, kkrj, kkri_ns, kkrj_ns
+   integer (kind=IntKind) :: nbi, nbj, sbi, sbj, i, j, kl, jl, my_atom2, nindex
+   integer (kind=IntKind) :: nbr_kkri, nbr_kkri_ns, nbr_kkrj, nbr_kkrj_ns
+   integer (kind=IntKind) :: tsize, kmax_max_ns, dsize, kkrsz_ns, kkrsz
+!
+   integer (kind=IntKind) :: lid_i, lid_j, pei, pej, jid, info, iid
+!
+   real (kind=RealKind) :: rij(3), posi(3), posj(3)
+!
+   complex (kind=CmplxKind), pointer :: gij(:,:)
+   complex (kind=CmplxKind), pointer :: p_jinvi(:)
+   complex (kind=CmplxKind), pointer :: p_sinej(:)
+   complex (kind=CmplxKind), pointer :: OmegaHat(:,:)
+   complex (kind=CmplxKind), pointer :: wau_g(:,:)
+   complex (kind=CmplxKind), pointer :: wau_l(:,:,:)
+   complex (kind=CmplxKind), pointer :: jig(:), ubmat(:,:)
+   complex (kind=CmplxKind), pointer :: smi(:,:), smj(:,:), tm(:,:)
+   complex (kind=CmplxKind), pointer :: kau_l(:,:), tau_l(:,:)
+!
+   interface
+      function getSingleScatteringMatrix(smt,spin,site,atom,dsize) result(sm)
+         use KindParamModule, only : IntKind, CmplxKind
+         character (len=*), intent(in) :: smt
+         integer (kind=IntKind), intent(in), optional :: spin, site, atom
+         integer (kind=IntKind), intent(out), optional :: dsize
+         complex (kind=CmplxKind), pointer :: sm(:,:)
+      end function getSingleScatteringMatrix
+   end interface
+
+   interface
+      subroutine convertGijToRel(gij, bgij, kkr1, kkr2, ce)
+         use KindParamModule, only : IntKind, RealKind, CmplxKind
+         implicit none
+         integer (kind=IntKind), intent(in) :: kkr1, kkr2
+         complex (kind=CmplxKind), intent(in) :: gij(:,:)
+         complex (kind=CmplxKind), intent(out) :: bgij(:,:)
+         complex (kind=CmplxKind), intent(in) :: ce
+      end subroutine convertGijToRel
+   end interface
+!
+   if (.not.Initialized) then
+      call ErrorHandler('calTauMatrix','Module not initialized')
+   endif
+!
+!  -------------------------------------------------------------------
+   call exchangeSSSMatrix(getSingleScatteringMatrix)
+!  -------------------------------------------------------------------
+!
+   if (present(kp)) then
+     kappa = kp
+   else
+     kappa = sqrt(energy)
+   endif
+   kkrsz = kmax_max*n_spin_cant
+   tsize = kmax_max*kmax_max*n_spin_cant*n_spin_cant
+
+   call setupUnitMatrix(LocalNumAtoms*kkrsz, ClusterMatrix)
+
+   do my_atom = 1, LocalNumAtoms
+     jig => wsStoreA
+     posj(1:3) = Position(1:3,my_atom)
+     lmaxj = lmax_kkr(my_atom)
+     nbr_kkrj = kmax_kkr(my_atom)
+     p_sinej => local_jsmtx(tsize+2:2*tsize+1,my_atom)
+     kkrj  = (lmaxj+1)*(lmaxj+1)
+     kkrj_ns  = kkrj*n_spin_cant
+     nbr_kkrj_ns  = nbr_kkrj*n_spin_cant
+     do my_atom2 = 1, LocalNumAtoms
+       posi(1:3) = Position(1:3, my_atom2)
+       lmaxi = lmax_kkr(my_atom2)
+       nbr_kkri = kmax_kkr(my_atom2)
+       p_jinvi => local_jsmtx(2:tsize+1,my_atom2)
+       kkri = (lmaxi+1)*(lmaxi+1)
+       kkri_ns = kkri*n_spin_cant
+       nbr_kkri_ns = nbr_kkri*n_spin_cant
+       if (my_atom .ne. my_atom2) then
+         rij = posj - posi
+         gij => getGij(kappa,rij,lmaxi,lmaxj)
+         do js = 1, n_spin_cant
+           do is = 1, n_spin_cant
+!            ----------------------------------------------
+             call zgemm('n', 'n', kkri, kkrj, kkri, CONE,                      &
+                        p_jinvi((js-1)*nbr_kkri_ns*nbr_kkri+(is-1)*nbr_kkri+1),&
+                        nbr_kkri_ns, gij, kkri, CZERO,                         &
+                        jig((js-1)*kkri_ns*kkrj+(is-1)*kkri+1), kkri_ns)
+!            ----------------------------------------------
+           enddo
+         enddo
+!        ------------------------------------------------------
+         call zgemm('n', 'n', kkri_ns, kkrj_ns, kkrj_ns, -CONE/kappa, &
+                    jig, kkri_ns, p_sinej, nbr_kkrj_ns, CZERO,        &
+                    ClusterMatrix((my_atom2-1)*kkrsz+1:my_atom2*kkrsz, &
+                     (my_atom-1)*kkrsz+1:my_atom*kkrsz), kkrsz)
+!        ------------------------------------------------------
+       endif 
+     enddo
+   enddo
+   
+   call MtxInv_LU(ClusterMatrix, LocalNumAtoms*kkrsz)
+
+   do my_atom = 1, LocalNumAtoms
+!    ----------------------------------------------------------
+     OmegaHat => getSingleScatteringMatrix('OmegaHat-Matrix',spin=js,site=my_atom)
+!    ----------------------------------------------------------
+     do my_atom2 = 1, LocalNumAtoms
+       call zgemm('n', 'n', kmax_kkr(my_atom), kmax_kkr(my_atom), &
+       kmax_kkr(my_atom), kappa, ClusterMatrix((my_atom2-1)*kkrsz+1:my_atom2*kkrsz, &
+       (my_atom-1)*kkrsz+1:my_atom*kkrsz), kmax_kkr(my_atom), OmegaHat, &
+       kmax_kkr(my_atom), CZERO, ClusterKau((my_atom2-1)*kkrsz+1:my_atom2*kkrsz, &
+       (my_atom-1)*kkrsz+1:my_atom*kkrsz), kmax_kkr(my_atom))
+     enddo
+   enddo
+
+   do my_atom = 1, LocalNumAtoms
+     smj => getSingleScatteringMatrix('Sine-Matrix',spin=1,site=my_atom)
+     do my_atom2 = 1, LocalNumAtoms
+       smi => getSingleScatteringMatrix('Sine-Matrix',spin=1,site=my_atom2)
+       call computeUAUts(smi,kmax_kkr(my_atom),kmax_kkr(my_atom), &
+                         smj,kmax_kkr(my_atom), CONE/energy, &
+         ClusterKau((my_atom2-1)*kkrsz+1:my_atom2*kkrsz, &
+          (my_atom-1)*kkrsz+1:my_atom*kkrsz), kmax_kkr(my_atom),CZERO, &
+         ClusterTau((my_atom2-1)*kkrsz+1:my_atom2*kkrsz, &
+          (my_atom-1)*kkrsz+1:my_atom*kkrsz), kmax_kkr(my_atom),wsStoreA)
+     enddo
+   enddo
+
+   do my_atom = 1, LocalNumAtoms
+     tm => getSingleScatteringMatrix('T-Matrix',spin=1,site=my_atom)
+     ClusterTau((my_atom-1)*kkrsz+1:my_atom*kkrsz, &
+          (my_atom-1)*kkrsz+1:my_atom*kkrsz) = ClusterTau((my_atom-1)*kkrsz+1:my_atom*kkrsz, &
+          (my_atom-1)*kkrsz+1:my_atom*kkrsz) + tm
+   enddo
+
+   end subroutine calClusterMatrixNonPeriodic   
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine calClusterMatrix(energy,getSingleScatteringMatrix,tau_needed,kp)
 !  ===================================================================
    use TimerModule, only : getTime
@@ -930,7 +1100,7 @@ use MPPModule, only : MyPE, syncAllPEs
                              jig, kkri_ns, p_sinej, nbr_kkrj_ns, CZERO,        &
                              BigMatrix(dsize*nbj+nbi+1), dsize)
 !                 ----------------------------------------------------
-          !       call writeMatrix('BigMatrixIteration', BigMatrix, dsize, dsize)
+                 !call writeMatrix('BigMatrixIteration', BigMatrix, dsize*dsize)
                endif
             endif
             nbi = nbi + kkri_ns
@@ -973,8 +1143,8 @@ use MPPModule, only : MyPE, syncAllPEs
            enddo
            Neighbor => getNeighbor(my_atom)
            do j = 1, Neighbor%NumAtoms+1
-             do jl = 1, kkrsz_ns
-               do kl = 1, kkrsz_ns
+             do jl = 1, kmax_kkr(my_atom)
+               do kl = 1, kmax_kkr(my_atom)
                  Tau00(my_atom)%neighMat(j)%wau_l(jl,kl) = BigMatrixInv((j-1)*kkrsz_ns + jl, kl)
                enddo
              enddo
@@ -1131,6 +1301,14 @@ use MPPModule, only : MyPE, syncAllPEs
        Tau00(my_atom)%neighMat(1)%tau_l = Tau00(my_atom)%neighMat(1)%tau_l + tm
      enddo
    endif
+
+   Neighbor => getNeighbor(16)
+   print *, "Kau with 16 (origin atom) and neighbors"
+   call writeMatrix('TauIJ',Tau00(16)%neighMat(1)%tau_l, kkrsz_ns, kkrsz_ns)
+   do j = 2, Neighbor%NumAtoms+1
+     print *, Neighbor%Position(1:3, j-1)
+     call writeMatrix('TauIJ',Tau00(LocalNumAtoms)%neighMat(j)%tau_l, kkrsz_ns, kkrsz_ns)
+   enddo
 !  nindex = determineNeighborIndex(3, 10)
 !  call writeMatrix("Tau103CMM", Tau00(3)%neighMat(nindex)%tau_l, kmax_kkr(1), kmax_kkr(1)) 
 !
@@ -1263,6 +1441,19 @@ use MPPModule, only : MyPE, syncAllPEs
 !  call writeMatrix("ptau", ptau, kmax_max, kmax_max)
 
    end function getNeighborTau
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getClusterTau(id1, id2) result(ptau)
+!  ===================================================================
+
+   integer (kind=IntKind), intent(in) :: id1, id2
+   complex (kind=CmplxKind) :: ptau(kmax_max,kmax_max)
+
+   ptau = ClusterTau((id1-1)*kmax_max+1:id1*kmax_max, &
+                     (id2-1)*kmax_max+1:id2*kmax_max)
+
+   end function getClusterTau
 !  ===================================================================
 !
 !  *******************************************************************
