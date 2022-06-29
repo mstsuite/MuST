@@ -622,8 +622,8 @@ contains
 
    call writeMatrix('TauIJ', SROMedium(n)%tau_cpa(1:dsize, 1:dsize, 1), dsize, dsize)
    do jn = 2, nsize
-     write(6,'(3x,f10.5,14x,f10.5,14x,f10.5)') SROMedium(n)%Neighbor%Position(1, jn), &
-        SROMedium(n)%Neighbor%Position(2, jn),SROMedium(n)%Neighbor%Position(1, jn)
+     write(6,'(3x,f10.5,14x,f10.5,14x,f10.5)') SROMedium(n)%Neighbor%Position(1, jn-1), &
+        SROMedium(n)%Neighbor%Position(2, jn-1),SROMedium(n)%Neighbor%Position(1, jn-1)
      call writeMatrix('TauIJ', SROMedium(n)%tau_cpa((jn-1)*dsize+1:jn*dsize, 1:dsize, 1), dsize, dsize)
    enddo
  
