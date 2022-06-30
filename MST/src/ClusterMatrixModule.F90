@@ -843,6 +843,8 @@ contains
           (my_atom-1)*kkrsz+1:my_atom*kkrsz) + tm
    enddo
 
+   deallocate(ClusterMatrix, ClusterKau)
+
    end subroutine calClusterMatrixNonPeriodic   
 !  ===================================================================
 !
