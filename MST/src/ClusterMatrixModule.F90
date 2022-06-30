@@ -1308,13 +1308,13 @@ use MPPModule, only : MyPE, syncAllPEs
      enddo
    endif
 
-   Neighbor => getNeighbor(16)
-   print *, "Kau with 16 (origin atom) and neighbors"
-   call writeMatrix('TauIJ',Tau00(16)%neighMat(1)%tau_l, kkrsz_ns, kkrsz_ns)
-   do j = 2, Neighbor%NumAtoms+1
-     print *, Neighbor%Position(1:3, j-1)
-     call writeMatrix('TauIJ',Tau00(LocalNumAtoms)%neighMat(j)%tau_l, kkrsz_ns, kkrsz_ns)
-   enddo
+!  Neighbor => getNeighbor(16)
+!  print *, "Kau with 16 (origin atom) and neighbors"
+!  call writeMatrix('TauIJ',Tau00(16)%neighMat(1)%tau_l, kkrsz_ns, kkrsz_ns)
+!  do j = 2, Neighbor%NumAtoms+1
+!    print *, Neighbor%Position(1:3, j-1)
+!    call writeMatrix('TauIJ',Tau00(LocalNumAtoms)%neighMat(j)%tau_l, kkrsz_ns, kkrsz_ns)
+!  enddo
 !  nindex = determineNeighborIndex(3, 10)
 !  call writeMatrix("Tau103CMM", Tau00(3)%neighMat(nindex)%tau_l, kmax_kkr(1), kmax_kkr(1)) 
 !
