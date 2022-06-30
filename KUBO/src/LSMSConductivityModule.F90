@@ -49,7 +49,7 @@ contains
    real (kind=RealKind) :: delta
    real (kind=RealKind) :: posi(3), posj(3), dist
    complex (kind=CmplxKind) :: eneg, kappa
-   complex (kind=CmplxKind), pointer :: temp(:,:,:), temp2(:,:)
+   complex (kind=CmplxKind), allocatable :: temp(:,:)
    
    delta = getFermiEnergyImagPart()
    pot_type = useStepFunctionForSigma()
@@ -74,12 +74,12 @@ contains
  ! print *, "SQRT negative is ", sqrt(eneg)
  ! print *, "What it should be", -sqrt(eval)  
  
-   allocate(TauIJ(LocalNumAtoms, LocalNumAtoms))
+   allocate(TauIJ(LocalNumAtoms, LocalNumAtoms), temp(kmax, kmax))
    do i = 1, LocalNumAtoms
      do j = 1, LocalNumAtoms
-       allocate(TauIJ(i,j)%taup(kmax, kmax))
+!      allocate(TauIJ(i,j)%taup(kmax, kmax))
        allocate(TauIJ(i,j)%taun(kmax, kmax))
-       TauIJ(i,j)%taup = CZERO
+!      TauIJ(i,j)%taup = CZERO
        TauIJ(i,j)%taun = CZERO
      enddo
    enddo
@@ -120,11 +120,11 @@ contains
    call calClusterMatrixNonPeriodic(energy=eval, &
        getSingleScatteringMatrix=getScatteringMatrix, tau_needed=.true.)
 
-   do i = 1, LocalNumAtoms
-     do j = 1, LocalNumAtoms
-       TauIJ(i,j)%taup = getClusterTau(i, j)
-     enddo
-   enddo 
+!  do i = 1, LocalNumAtoms
+!    do j = 1, LocalNumAtoms
+!      TauIJ(i,j)%taup = getClusterTau(i, j)
+!    enddo
+!  enddo 
 
 !  do i = 1, LocalNumAtoms
 !    do j = 1, LocalNumAtoms
@@ -141,9 +141,10 @@ contains
  ! call writeMatrix('Tau12', TauIJ(1,2)%taup, dsize, dsize)
    do i = 1, LocalNumAtoms
     do j = 1, LocalNumAtoms
+       temp = getClusterTau(j,i)
        do L1 = 1, dsize
          do L2 = 1, dsize
-          TauIJ(i,j)%taun(L1,L2) = (-1.0)**(getLindex(L1) - getLindex(L2))*conjg(TauIJ(j,i)%taup(L2,L1))
+          TauIJ(i,j)%taun(L1,L2) = (-1.0)**(getLindex(L1) - getLindex(L2))*conjg(temp(L2,L1)) !conjg(TauIJ(j,i)%taup(L2,L1))
          enddo
        enddo
      enddo
@@ -168,6 +169,7 @@ contains
    function calSigmaTildeLSMS(dir1, dir2, caltype) result(sigmaval)
 !  ============================================================
 
+   use ClusterMatrixModule, only : getClusterTau
    use CurrentMatrixModule, only : getJMatrix
    use WriteMatrixModule, only : writeMatrix
 
@@ -198,19 +200,19 @@ contains
   !    call writeMatrix('Jn', Jn, dsize, dsize)
        if (caltype == 1) then
          call zgemm('n', 'n', dsize, dsize, dsize, CONE, Jn, dsize, &
-               TauIJ(n,m)%taup, dsize, CZERO, temp, dsize)
+               getClusterTau(n, m), dsize, CZERO, temp, dsize)
   !      call writeMatrix('TauMN', TauIJ(m,n)%taup, dsize, dsize)
   !      call writeMatrix('TauNM', TauIJ(n,m)%taup, dsize, dsize)
          call zgemm('n', 'n', dsize, dsize, dsize, CONE, &
-           TauIJ(m,n)%taup, dsize, temp, dsize, CZERO, temp2, dsize)
+           getClusterTau(m, n), dsize, temp, dsize, CZERO, temp2, dsize)
        else if (caltype == 2) then
          call zgemm('n', 'n', dsize, dsize, dsize, CONE, Jn, dsize, &
                TauIJ(n,m)%taun, dsize, CZERO, temp, dsize)
          call zgemm('n', 'n', dsize, dsize, dsize, CONE, &
-            TauIJ(m,n)%taup, dsize, temp, dsize, CZERO, temp2, dsize)
+            getClusterTau(m,n), dsize, temp, dsize, CZERO, temp2, dsize)
        else if (caltype == 3) then
          call zgemm('n', 'n', dsize, dsize, dsize, CONE, Jn, dsize, &
-               TauIJ(n,m)%taup, dsize, CZERO, temp, dsize)
+               getClusterTau(n,m), dsize, CZERO, temp, dsize)
          call zgemm('n', 'n', dsize, dsize, dsize, CONE, &
             TauIJ(m,n)%taun, dsize, temp, dsize, CZERO, temp2, dsize)
        else if (caltype == 4) then
