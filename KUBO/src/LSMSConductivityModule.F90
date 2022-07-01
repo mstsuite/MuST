@@ -12,6 +12,8 @@ public :: initLSMSConductivity, &
 private
    integer (kind=IntKind) :: LocalNumAtoms, GlobalNumAtoms
    integer (kind=IntKind) :: dsize, spin_pola, total_pairs, total_neighbors
+   integer (kind=IntKind) :: maxnumneighbors
+   integer (kind=IntKind), allocatable :: num_neighbors(:)
    real (kind=RealKind) :: omega
    complex (kind=CmplxKind) :: eval
    complex (kind=CmplxKind), pointer :: tau(:,:), tau00(:,:,:)
@@ -20,8 +22,15 @@ private
       complex (kind=CmplxKind), allocatable :: taup(:,:)
       complex (kind=CmplxKind), allocatable :: taun(:,:)
    end type TauContainerType
-   
-   type (TauContainerType), allocatable, target :: TauIJ(:,:)
+  
+   type TauNeighborType
+      type (TauContainerType), allocatable :: neigh1j(:)
+      type (TauContainerType), allocatable :: neighj1(:)
+   end type TauNeighborType
+ 
+   type (TauNeighborType), allocatable, target :: TauIJ(:)
+
+   type (NeighborStruct), pointer :: Neighbor
 
 contains
 !  ============================================================
@@ -70,17 +79,26 @@ contains
 
    kappa = -sqrt(eval)
 
- ! print *, "SQRT positive is ", sqrt(eval)
- ! print *, "SQRT negative is ", sqrt(eneg)
- ! print *, "What it should be", -sqrt(eval)  
- 
-   allocate(TauIJ(LocalNumAtoms, LocalNumAtoms), temp(kmax, kmax))
+  allocate(num_neighbors(LocalNumAtoms))
+  do i = 1, LocalNumAtoms
+    Neighbor => getNeighbor(i)
+    num_neighbors(i) = Neighbor%NumAtoms + 1
+  enddo
+  maxnumneighbors = maxval(num_neighbors)
+     
+
+   allocate(TauIJ(LocalNumAtoms))
    do i = 1, LocalNumAtoms
-     do j = 1, LocalNumAtoms
-!      allocate(TauIJ(i,j)%taup(kmax, kmax))
-       allocate(TauIJ(i,j)%taun(kmax, kmax))
-!      TauIJ(i,j)%taup = CZERO
-       TauIJ(i,j)%taun = CZERO
+     Neighbor => getNeighbor(i)
+     allocate(TauIJ(i)%neigh1j(Neighbor%NumAtoms+1))
+     allocate(TauIJ(i)%neighj1(Neighbor%NumAtoms+1))
+     do j = 1, Neighbor%NumAtoms+1
+       allocate(TauIJ(i)%neigh1j(j)%taup(kmax, kmax))
+       allocate(TauIJ(i)%neigh1j(j)%taun(kmax, kmax))
+       allocate(TauIJ(i)%neighj1(j)%taup(kmax, kmax))
+       allocate(TauIJ(i)%neighj1(j)%taun(kmax, kmax))
+    !  TauIJ(i,j)%taup = CZERO
+    !  TauIJ(i,j)%taun = CZERO
      enddo
    enddo
 
@@ -97,9 +115,11 @@ contains
 !     getSingleScatteringMatrix=getScatteringMatrix, tau_needed=.true., kp=kappa)
 
 !  do i = 1, LocalNumAtoms
-!    do j = 1, LocalNumAtoms
-!      if (checkIfNeighbor(i,j)) then
-!        TauIJ(j,i)%taun = getNeighborTau(i, j)
+!    Neighbor => getNeighbor(i)
+!    do j = 1, Neighbor%NumAtoms+1
+!     if (checkIfNeighbor(i,j)) then
+!        TauIJ(i)%neigh1j(j)%taun = getNeighborTau(i, j, 0)
+!        TauIJ(i)%neighj1(j)%taun = getNeighborTau(i, j, 1)
 !      endif
 !    enddo
 !  enddo
@@ -114,11 +134,11 @@ contains
 !    --------------------------------------------------------------------------
    enddo
 
-!  call calClusterMatrix(energy=eval, &
-!      getSingleScatteringMatrix=getScatteringMatrix, tau_needed=.true.)
-
-   call calClusterMatrixNonPeriodic(energy=eval, &
+   call calClusterMatrix(energy=eval, &
        getSingleScatteringMatrix=getScatteringMatrix, tau_needed=.true.)
+
+!  call calClusterMatrixNonPeriodic(energy=eval, &
+!      getSingleScatteringMatrix=getScatteringMatrix, tau_needed=.true.)
 
 !  do i = 1, LocalNumAtoms
 !    do j = 1, LocalNumAtoms
@@ -126,25 +146,24 @@ contains
 !    enddo
 !  enddo 
 
-!  do i = 1, LocalNumAtoms
-!    do j = 1, LocalNumAtoms
-!      if (checkIfNeighbor(i,j)) then
-!        TauIJ(i,j)%taup = getNeighborTau(i,j)
-!        total_pairs = total_pairs + 1
-!      endif
-!    enddo
-!  enddo
+   do i = 1, LocalNumAtoms
+     Neighbor => getNeighbor(i)
+     do j = 1, Neighbor%NumAtoms+1
+       TauIJ(i)%neigh1j(j)%taup = getNeighborTau(i,j,0)
+       TauIJ(i)%neighj1(j)%taup = getNeighborTau(i,j,1)
+     enddo
+   enddo
 
-   total_neighbors = total_pairs - LocalNumAtoms
-   print *, "Total pairs ", total_pairs
-   print *, "Total neighbors ", total_neighbors
  ! call writeMatrix('Tau12', TauIJ(1,2)%taup, dsize, dsize)
    do i = 1, LocalNumAtoms
-    do j = 1, LocalNumAtoms
-       temp = getClusterTau(j,i)
+     Neighbor => getNeighbor(i)
+     do j = 1, Neighbor%NumAtoms
        do L1 = 1, dsize
          do L2 = 1, dsize
-          TauIJ(i,j)%taun(L1,L2) = (-1.0)**(getLindex(L1) - getLindex(L2))*conjg(temp(L2,L1)) !conjg(TauIJ(j,i)%taup(L2,L1))
+           TauIJ(i)%neigh1j(j)%taun(L1,L2) = (-1.0)**(getLindex(L1) - getLindex(L2))* &
+              conjg(TauIJ(i)%neighj1(j)%taup(L2,L1))
+           TauIJ(i)%neighj1(j)%taun(L1,L2) = (-1.0)**(getLindex(L1) - getLindex(L2))* &
+              conjg(TauIJ(i)%neigh1j(j)%taup(L2,L1))
          enddo
        enddo
      enddo
@@ -176,7 +195,7 @@ contains
    integer (kind=IntKind), intent(in) :: dir1, dir2, caltype
    integer (kind=IntKind) :: m, n, L
    complex (kind=CmplxKind) :: coeff, sigmaval, trace, tmpsum
-   complex (kind=CmplxKind) :: sigmamat(LocalNumAtoms,LocalNumAtoms)
+   complex (kind=CmplxKind) :: sigmamat(LocalNumAtoms,maxnumneighbors)
    complex (kind=CmplxKind), pointer :: Jm(:,:), Jn(:,:)
    complex (kind=CmplxKind), allocatable :: temp(:,:), temp2(:,:), temp3(:,:)
 
@@ -194,32 +213,37 @@ contains
      else
        Jm => getJMatrix(n=m,ic=1,is=spin_pola,dir=dir1,en_type=caltype,tilde=0)
      endif
-     do n = 1, LocalNumAtoms
+     Neighbor => getNeighbor(m)
+     do n = 1, Neighbor%NumAtoms+1
        trace = CZERO; temp = CZERO; temp2 = CZERO; temp3 = CZERO
-       Jn => getJMatrix(n=n,ic=1,is=spin_pola,dir=dir2,en_type=caltype,tilde=0)
+       if (n == 1) then
+         Jn => getJMatrix(n=m,ic=1,is=spin_pola,dir=dir2,en_type=caltype,tilde=0)
+       else
+         Jn => getJMatrix(n=Neighbor%LocalIndex(n-1),ic=1,is=spin_pola,dir=dir2,en_type=caltype,tilde=0)
+       endif
   !    call writeMatrix('Jn', Jn, dsize, dsize)
        if (caltype == 1) then
          call zgemm('n', 'n', dsize, dsize, dsize, CONE, Jn, dsize, &
-               getClusterTau(n, m), dsize, CZERO, temp, dsize)
+              TauIJ(m)%neighj1(n)%taup, dsize, CZERO, temp, dsize)
   !      call writeMatrix('TauMN', TauIJ(m,n)%taup, dsize, dsize)
   !      call writeMatrix('TauNM', TauIJ(n,m)%taup, dsize, dsize)
          call zgemm('n', 'n', dsize, dsize, dsize, CONE, &
-           getClusterTau(m, n), dsize, temp, dsize, CZERO, temp2, dsize)
+            TauIJ(m)%neigh1j(n)%taup, dsize, temp, dsize, CZERO, temp2, dsize)
        else if (caltype == 2) then
          call zgemm('n', 'n', dsize, dsize, dsize, CONE, Jn, dsize, &
-               TauIJ(n,m)%taun, dsize, CZERO, temp, dsize)
+              TauIJ(m)%neighj1(n)%taun, dsize, CZERO, temp, dsize)
          call zgemm('n', 'n', dsize, dsize, dsize, CONE, &
-            getClusterTau(m,n), dsize, temp, dsize, CZERO, temp2, dsize)
+            TauIJ(m)%neigh1j(n)%taup, dsize, temp, dsize, CZERO, temp2, dsize)
        else if (caltype == 3) then
          call zgemm('n', 'n', dsize, dsize, dsize, CONE, Jn, dsize, &
-               getClusterTau(n,m), dsize, CZERO, temp, dsize)
+              TauIJ(m)%neighj1(n)%taup, dsize, CZERO, temp, dsize)
          call zgemm('n', 'n', dsize, dsize, dsize, CONE, &
-            TauIJ(m,n)%taun, dsize, temp, dsize, CZERO, temp2, dsize)
+            TauIJ(m)%neigh1j(n)%taun, dsize, temp, dsize, CZERO, temp2, dsize)
        else if (caltype == 4) then
          call zgemm('n', 'n', dsize, dsize, dsize, CONE, Jn, dsize, &
-               TauIJ(n,m)%taun, dsize, CZERO, temp, dsize)
+               TauIJ(m)%neighj1(n)%taun, dsize, CZERO, temp, dsize)
          call zgemm('n', 'n', dsize, dsize, dsize, CONE, &
-            TauIJ(m,n)%taun, dsize, temp, dsize, CZERO, temp2, dsize)
+            TauIJ(m)%neigh1j(n)%taun, dsize, temp, dsize, CZERO, temp2, dsize)
        endif
        call zgemm('n', 'n', dsize, dsize, dsize, CONE, Jm, dsize, &
              temp2, dsize, CZERO, temp3, dsize)
@@ -236,19 +260,18 @@ contains
    tmpsum = CZERO
    print *, "Total Single-site sum is "
    do m = 1, LocalNumAtoms
-     tmpsum = tmpsum + sigmamat(m,m)
+     tmpsum = tmpsum + sigmamat(m,1)
    enddo
    print *, real(tmpsum)
    tmpsum = CZERO
    print *, "Total Cross-site sum is "
    do m = 1, LocalNumAtoms
-     do n = 1, LocalNumAtoms
-       if (m .ne. n) then
-         tmpsum = tmpsum + sigmamat(m,n)
-       endif
+     Neighbor => getNeighbor(m)
+     do n = 2, Neighbor%NumAtoms+1
+       tmpsum = tmpsum + sigmamat(m,n)
      enddo
    enddo
-   print *, tmpsum
+   print *, real(tmpsum)
 
    end function calSigmaTildeLSMS
 !  ============================================================
