@@ -1,4 +1,4 @@
-
+##### by Franco 
 
 if (DEFINED libxc_LIBRARIES AND DEFINED libxc_INCLUDE_DIR)
     if (EXISTS ${libxc_LIBRARIES} AND EXISTS ${libxc_INCLUDE_DIR})
