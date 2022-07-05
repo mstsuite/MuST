@@ -1,4 +1,4 @@
-target_sources(mst_main
+target_sources(mst_lib
               PUBLIC
               AndersonLib.F90
               BesselModule.F90
