@@ -297,9 +297,9 @@ contains
 !  Allocate matrices for tauij calculation (i,j != 0)
    if (istauij_needed) then
      allocate (BigMatrixInv(dsize_max, dsize_max))
-     allocate (ClusterMatrix(LocalNumAtoms*kmax_max,LocalNumAtoms*kmax_max))
-     allocate (ClusterKau(LocalNumAtoms*kmax_max,LocalNumAtoms*kmax_max))
-     allocate (ClusterTau(LocalNumAtoms*kmax_max,LocalNumAtoms*kmax_max))
+!    allocate (ClusterMatrix(LocalNumAtoms*kmax_max,LocalNumAtoms*kmax_max))
+!    allocate (ClusterKau(LocalNumAtoms*kmax_max,LocalNumAtoms*kmax_max))
+!    allocate (ClusterTau(LocalNumAtoms*kmax_max,LocalNumAtoms*kmax_max))
    endif
      
    jinv_g = CZERO; sine_g = CZERO
@@ -820,6 +820,8 @@ contains
    do i = 1, LocalNumAtoms*kkrsz
      ClusterMatrix(i,i) = ClusterMatrix(i,i) - CONE
    enddo
+   ClusterKau = CZERO
+   ClusterTau = CZERO
 
    do my_atom = 1, LocalNumAtoms
 !    ----------------------------------------------------------
@@ -854,7 +856,7 @@ contains
           (my_atom-1)*kkrsz+1:my_atom*kkrsz) + tm
    enddo
 
-   deallocate(ClusterMatrix, ClusterKau)
+!  deallocate(ClusterMatrix, ClusterKau)
 
    end subroutine calClusterMatrixNonPeriodic   
 !  ===================================================================
@@ -1344,17 +1346,6 @@ use MPPModule, only : MyPE, syncAllPEs
        Tau00(my_atom)%neighj1(1)%tau_l = Tau00(my_atom)%neighj1(1)%tau_l + tm
      enddo
    endif
-
-!  Neighbor => getNeighbor(16)
-!  print *, "Kau with 16 (origin atom) and neighbors"
-!  call writeMatrix('TauIJ',Tau00(16)%neigh1j(1)%tau_l, kkrsz_ns, kkrsz_ns)
-!  do j = 2, Neighbor%NumAtoms+1
-!    print *, Neighbor%Position(1:3, j-1)
-!    call writeMatrix('TauIJ',Tau00(LocalNumAtoms)%neigh1j(j)%tau_l, kkrsz_ns, kkrsz_ns)
-!  enddo
-!  nindex = determineNeighborIndex(3, 10)
-!  call writeMatrix("Tau103CMM", Tau00(3)%neighMat(nindex)%tau_l, kmax_kkr(1), kmax_kkr(1)) 
-!
 
    nullify(gij, p_jinvi, p_sinej, jig, wau_g, wau_l, ubmat, pBlockMatrix, pBigMatrix)
 !
