@@ -54,7 +54,7 @@ contains
 
    integer (kind=IntKind), intent(in) :: is, kmax
    real (kind=RealKind), intent(in) :: efermi
-   integer (kind=IntKind) :: pot_type, id, i, j, L1, L2
+   integer (kind=IntKind) :: shin, pot_type, id, i, j, L1, L2
    real (kind=RealKind) :: delta
    real (kind=RealKind) :: posi(3), posj(3), dist
    complex (kind=CmplxKind) :: eneg, kappa
@@ -169,17 +169,18 @@ contains
      enddo
    enddo
 
-!  call writeMatrix('Tau11n', TauIJ(1,1)%taun, dsize, dsize)
-!  call writeMatrix('Tau12n', TauIJ(1,2)%taun, dsize, dsize)
-!  call writeMatrix('Tau103LSMS', TauIJ(10, 3)%taup, dsize, dsize)
-!  do i = 1, LocalNumAtoms
-!    do j = 1, LocalNumAtoms
-!      print *, "Tau Matrix for (m,n) = ", i,j
-!      call writeMatrix('TauP',TauIJ(i,j)%taup,kmax,kmax)
-!      call writeMatrix('TauN',TauIJ(i,j)%taun,kmax,kmax)
-!      print *, "System Volume Per Atom", omega 
-!    enddo
-!  enddo
+   Neighbor => getNeighbor(LocalNumAtoms)
+   print *, "(1,1) element"
+   do j = 2, Neighbor%NumAtoms+1
+     shin = Neighbor%ShellIndex(j-1)
+     print *, Neighbor%ShellRad(shin), real(TauIJ(LocalNumAtoms)%neigh1j(j)%taup(1,1))
+   enddo
+
+   print *, "(2,2) element"
+   do j = 2, Neighbor%NumAtoms+1
+     shin = Neighbor%ShellIndex(j-1)
+     print *, Neighbor%ShellRad(shin), real(TauIJ(LocalNumAtoms)%neigh1j(j)%taup(2,2))
+   enddo
   
    end subroutine initLSMSConductivity
 !  ============================================================
