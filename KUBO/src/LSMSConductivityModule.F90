@@ -157,7 +157,7 @@ contains
  ! call writeMatrix('Tau12', TauIJ(1,2)%taup, dsize, dsize)
    do i = 1, LocalNumAtoms
      Neighbor => getNeighbor(i)
-     do j = 1, Neighbor%NumAtoms
+     do j = 1, Neighbor%NumAtoms+1
        do L1 = 1, dsize
          do L2 = 1, dsize
            TauIJ(i)%neigh1j(j)%taun(L1,L2) = (-1.0)**(getLindex(L1) - getLindex(L2))* &
