@@ -1,4 +1,9 @@
 target_sources(mst_main
+               PUBLIC
+               mst2.F90
+               )
+
+target_sources(mst_lib
               PUBLIC
               AccelerateCPAModule.F90
               AdaptIntegrationModule.F90
@@ -100,12 +105,10 @@ target_sources(mst_main
               gaspari_gyorffy_formula.F90
               getFermiDiracFunc.F90
               getValueAtPosi.F90
-              get_svn.sh
               getpotg.F90
               imp_inp.h
               keep.F90
               lattice.F90
-              mst2.F90
               polyfermi.F90
               potredg.F90
               preproc.c
