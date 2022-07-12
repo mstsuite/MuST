@@ -43,7 +43,7 @@ add_subdirectory(iolib)
 
 # Find MPI Library
 find_package(MPI REQUIRED COMPONENTS CXX OPTIONAL_COMPONENTS)
-target_link_libraries(mst_main PUBLIC MPI::MPI_CXX)
+target_link_libraries(mst_main PUBLIC MPI)
 
 
 # Find OpenMP library
