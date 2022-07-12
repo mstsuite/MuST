@@ -7,7 +7,16 @@ cmake_minimum_required(VERSION 3.18)
 cmake_host_system_information(RESULT Ncpu QUERY NUMBER_OF_PHYSICAL_CORES)
 message(STATUS "CMake ${CMAKE_VERSION} with max. ${Ncpu} threads")
 
-project(MST LANGUAGES Fortran C CXX CUDA)
+project(MST LANGUAGES Fortran C)
+
+# make CUDA optional
+include(CheckLanguage)
+check_language(CUDA)
+if(CMAKE_CUDA_COMPILER)
+        enable_language(CUDA)
+else()
+        message(STATUS "No CUDA compiler found")
+endif()
 
 # Defining mst_main
 add_executable(mst_main)
