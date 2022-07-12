@@ -139,5 +139,5 @@ target_sources(mst_lib
               updatePotential.F90
               )
 
-target_include_directories(mst_main PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(mst_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
               
