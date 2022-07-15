@@ -15,6 +15,7 @@ target_sources(mst_lib
               BandStructureModule.F90
               BinvMatrix.F90
               BookKeepingModule.F90
+              CheckPointModule.F90
               CPAMediumModule.F90
               ChargeDensityModule.F90
               ChargeDistributionModule.F90
@@ -45,7 +46,7 @@ target_sources(mst_lib
               MatrixBlockInversionModule.F90
               MatsubaraModule.F90
               MediumHostModule.F90
-              MediumMatrixModule.F90
+              #MediumMatrixModule.F90
               MixingModule.F90
               MultiScatteringDOSModule.F90
               NeighborModule.F90
@@ -71,7 +72,7 @@ target_sources(mst_lib
               SROModule.F90
               SSSolverModule.F90
               ScfDataModule.F90
-              ScreenStrConstModule.F90
+              #ScreenStrConstModule.F90
               SendRecvTmatModule.F90
               SineMatrixZerosModule.F90
               SingleScatteringDOSModule.F90
@@ -79,7 +80,6 @@ target_sources(mst_lib
               StepFunctionModule.F90
               StrConstModule.F90
               SurfElementsModule.F90
-              SurfJNYModule.F90
               SystemModule.F90
               SystemSymmetryModule.F90
               SystemVolumeModule.F90
@@ -94,7 +94,7 @@ target_sources(mst_lib
               averageAcrossProcesses.F90
               averageDOS.F90
               buildSendTable.F90
-              calBandStructure.F90
+              #calBandStructure.F90
               calNicholsonPoles.F90
               computeTraceComplex.F90
               constructDataOnGrid.F90
@@ -111,7 +111,7 @@ target_sources(mst_lib
               lattice.F90
               polyfermi.F90
               potredg.F90
-              preproc.c
+              #preproc.c
               printDataOnGrid.F90
               printDataOnLine.F90
               printDensityOnGrid.F90

@@ -18,6 +18,8 @@ else()
         message(STATUS "No CUDA compiler found")
 endif()
 
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
+
 # Defining mst_main
 add_executable(mst_main)
 
@@ -39,7 +41,6 @@ set_target_properties(mst_lib PROPERTIES
 target_include_directories(mst_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(mst_main PUBLIC mst_lib)
-target_link_libraries(mst_main PUBLIC gfortran)
 
 
 # Adding Subdirectories
@@ -51,22 +52,51 @@ add_subdirectory(iolib)
 
 
 # Find MPI Library
-find_package(MPI REQUIRED COMPONENTS CXX OPTIONAL_COMPONENTS)
-target_link_libraries(mst_main PUBLIC MPI)
+find_package(MPI REQUIRED COMPONENTS Fortran OPTIONAL_COMPONENTS)
+target_link_libraries(mst_lib PUBLIC MPI::MPI_Fortran)
+target_compile_definitions(mst_lib PUBLIC MPI)
 
 
 # Find OpenMP library
 option(BUILD_WITH_OPENMP "Build with OpenMP" ON)
 if (BUILD_WITH_OPENMP)
     find_package(OpenMP REQUIRED)
-    target_link_libraries(mst_main PUBLIC OpenMP::OpenMP_CXX)
+    target_link_libraries(mst_lib PUBLIC OpenMP::OpenMP_Fortran)
 endif ()
 
 # Find LibXC
 find_package(Libxc REQUIRED)
 
-# Needed for gcc 10
-target_compile_options(mst_lib PUBLIC "-fallow-argument-mismatch")
+# Find XDR
+find_package(XDR REQUIRED)
+
+target_include_directories(mst_lib PUBLIC ${XDR_INCLUDE})
+target_include_directories(mst_lib PUBLIC ${RPC_INCLUDE_DIR})
+
+message(STATUS "XDR: " ${XDR_INCLUDE})
+message(STATUS "XDR: " ${RPC_INCLUDE_DIR})
+
+# Find FFTW
+find_package(FFTW REQUIRED)
+
+target_link_libraries(mst_lib PUBLIC ${FFTW_LIB})
+target_link_libraries(mst_lib PUBLIC ${FFTW_LIBRARIES})
+target_include_directories(mst_lib PUBLIC ${FFTW_INCLUDES})
+
+
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+
+  target_link_libraries(mst_lib PUBLIC "gcc")
+  target_link_libraries(mst_lib PUBLIC "gfortran")
+
+  target_compile_options(mst_lib PUBLIC "-ffree-line-length-none")
+
+  if(CMAKE_Fortran_COMPILER_VERSION VERSION_GREATER_EQUAL "10.0.0")
+    # Needed for gcc 10
+    target_compile_options(mst_lib PUBLIC "-fallow-argument-mismatch")
+  endif()
+
+endif()
         
 # Build LibXC 
 option(USE_LIBXC "Use the libxc libary" ON)
@@ -76,10 +106,6 @@ if (USE_LIBXC)
 else ()
     message(STATUS "LIBXC is not used")
 endif ()
-
-
-# Build mjson 
-include(mjson)
 
 
 # CUDA
@@ -138,13 +164,13 @@ endif ()
 if (DEFINED MST_LINEAR_SOLVER_DEFAULT)
     message(STATUS "Default linear solver: " ${MST_LINEAR_SOLVER_DEFAULT})
     set(MST_LINEAR_SOLVER_DEFAULT ${MST_LINEAR_SOLVER_DEFAULT} CACHE STRING "Default linear solver")
-    target_compile_definitions(mst_main PUBLIC "MST_LINEAR_SOLVER_DEFAULT=${MST_LINEAR_SOLVER_DEFAULT}")
+    target_compile_definitions(mst_lib PUBLIC "MST_LINEAR_SOLVER_DEFAULT=${MST_LINEAR_SOLVER_DEFAULT}")
 endif ()
 
 if (DEFINED MST_BUILD_KKR_MATRIX_DEFAULT)
     message(STATUS "Default kkr matrix build: " ${MST_BUILD_KKR_MATRIX_DEFAULT})
     set(MST_BUILD_KKR_MATRIX_DEFAULT ${MST_BUILD_KKR_MATRIX_DEFAULT} CACHE STRING "Default linear solver")
-    target_compile_definitions(mst_main PUBLIC "MST_BUILD_KKR_MATRIX_DEFAULT=${MST_BUILD_KKR_MATRIX_DEFAULT}")
+    target_compile_definitions(mst_lib PUBLIC "MST_BUILD_KKR_MATRIX_DEFAULT=${MST_BUILD_KKR_MATRIX_DEFAULT}")
 endif ()
 
 
@@ -152,26 +178,20 @@ option(ARCH_IBM "Is IBM architecture" OFF)
 
 if (ARCH_IBM)
     message(STATUS "Use the IBM architecture")
-    target_compile_definitions(mst_main PUBLIC "ARCH_IBM")
+    target_compile_definitions(mst_lib PUBLIC "ARCH_IBM")
 endif ()
-
-# Find MPI library
-find_package(MPI REQUIRED COMPONENTS CXX OPTIONAL_COMPONENTS)
-target_link_libraries(mst_main PUBLIC MPI::MPI_CXX)
-
 
 # Find HDF5
 message(STATUS "Find HDF5")
 set(HDF5_PREFER_PARALLEL false)
-find_package(HDF5 REQUIRED)
+find_package(HDF5 REQUIRED COMPONENTS Fortran C)
 
 message(STATUS "HDF5 C Libaries: " "${HDF5_C_LIBRARIES}")
 message(STATUS "HDF5 LIBRARIES: " "${HDF5_LIBRARIES}")
 message(STATUS "HDF5 INCLUDE DIRS: " "${HDF5_INCLUDE_DIRS}")
 message(STATUS "HDF5 Version: " "${HDF5_VERSION}")
 
-target_link_libraries(mst_main PUBLIC HDF5::HDF5)
-
+target_link_libraries(mst_lib PUBLIC HDF5::HDF5)
 
 # Linear algebra libraries
 option(USE_ESSL "Use IBM ESSL library" OFF)
@@ -180,7 +200,7 @@ if (USE_ESSL)
     find_package(ESSL REQUIRED)
     set(ESSL_WORKAROUND True)
 
-    target_link_libraries(mst_main PUBLIC ESSL)
+    target_link_libraries(mst_lib PUBLIC ESSL)
 else ()
     # Lapack
     option(SEARCH_LAPACK "Search for LAPACK" ON)
@@ -199,7 +219,7 @@ else ()
         endif ()
         find_package(LAPACK REQUIRED)
     endif ()
-    target_link_libraries(mst_main PUBLIC LAPACK::LAPACK)
+    target_link_libraries(mst_lib PUBLIC LAPACK::LAPACK)
 
 
 # BLAS
@@ -220,5 +240,5 @@ if (NOT SEARCH_BLAS)
                 endif ()
                 find_package(BLAS REQUIRED)
         endif ()
-        target_link_libraries(mst_main PUBLIC BLAS::BLAS)
+        target_link_libraries(mst_lib PUBLIC BLAS::BLAS)
 endif ()

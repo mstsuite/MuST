@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+if [ -z "$srcdir" ]; then
+  srcdir="./"
+fi
+
+if [ -z "$builddir" ]; then
+  builddir="./"
+fi
+
+systems="H Li BrOH BrOH+"
+funcs=$*
+if [[ "$funcs" = "" ]]; then
+  funcs=$(awk '{print $2}' ${builddir}../src/xc_funcs.h)
+fi
+
+for func in $funcs; do
+  # Make sure name is in correct format
+  func=$(echo $func | awk '{print tolower($0)}' | sed 's/^xc_//g')
+
+  echo "processing $func"
+
+  dir=${func%%_*}
+  tmp=${func//${dir}_/}
+  if [ "x$dir" = "xhyb" ]; then
+    dir=${dir}_${tmp%%_*}
+    tmp=${func//${dir}_/}
+  fi
+  dir=${dir}_${tmp%%_*}
+
+  for system in $systems; do
+    for spin in pol unpol; do
+      if [ "x$spin" = "xunpol" ]; then
+        nspin=1
+      else
+        nspin=2
+      fi
+      for order in 0 1; do # change to 0 1 2 to get also fxc
+        refname=$func.$system.$spin.$order
+
+        $builddir/xc-regression $func $nspin $order $srcdir/input/$system $srcdir/regression/$dir/$refname > /dev/null
+        rm -f $srcdir/regression/$dir/$refname.bz2
+        bzip2 $srcdir/regression/$dir/$refname
+      done
+    done
+  done
+done
