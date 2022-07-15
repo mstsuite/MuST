@@ -84,6 +84,15 @@ if( FFTW_ROOT )
     NO_DEFAULT_PATH
   )
 
+  find_file (
+    FFTW_Fortran
+    NAMES "fftw3.f"
+    PATHS ${FFTW_ROOT}
+    PATH_SUFFIXES "include"
+    NO_DEFAULT_PATH
+  )
+
+
 else()
 
   find_library(
@@ -128,6 +137,12 @@ else()
     PATHS ${PKG_FFTW_INCLUDE_DIRS} ${INCLUDE_INSTALL_DIR}
   )
 
+  find_file(
+    FFTW_Fortran
+    NAMES "fftw3.f"
+    PATHS ${PKG_FFTW_INCLUDE_DIRS} ${INCLUDE_INSTALL_DIR}
+  )
+
 endif( FFTW_ROOT )
 
 set(FFTW_LIBRARIES ${FFTW_LIB} ${FFTWF_LIB})
@@ -142,4 +157,6 @@ include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(FFTW DEFAULT_MSG
                                   FFTW_INCLUDES FFTW_LIBRARIES)
 
-mark_as_advanced(FFTW_INCLUDES FFTW_LIBRARIES FFTW_LIB FFTWF_LIB FFTWL_LIB FFTW_THREADS_LIB FFTWF_THREADS_LIB FFTWL_THREADS_LIB)
+mark_as_advanced(FFTW_INCLUDES FFTW_LIBRARIES FFTW_LIB FFTWF_LIB FFTWL_LIB FFTW_THREADS_LIB FFTWF_THREADS_LIB FFTWL_THREADS_LIB FFTW_Fortran)
+
+

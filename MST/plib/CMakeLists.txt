@@ -3,7 +3,6 @@ target_sources(mst_lib
               GroupCommModule.F90
               MPPModule.F90
               ParallelIOModule.F90
-              StatusModule.F90
               )
 
 
