@@ -12,7 +12,7 @@ public :: initLSMSConductivity, &
 private
    integer (kind=IntKind) :: LocalNumAtoms, GlobalNumAtoms
    integer (kind=IntKind) :: dsize, spin_pola, total_pairs, total_neighbors
-   integer (kind=IntKind) :: maxnumneighbors
+   integer (kind=IntKind) :: numspecies, maxnumneighbors
    integer (kind=IntKind), allocatable :: num_neighbors(:)
    real (kind=RealKind) :: omega
    complex (kind=CmplxKind) :: eval
@@ -51,6 +51,7 @@ contains
    use SystemModule, only : getAtomPosition
    use SystemVolumeModule, only : getSystemVolume
    use PolyhedraModule, only : getVolume
+   use SystemModule, only : getAtomTypeName, getAtomType, getNumAtomTypes
 
    integer (kind=IntKind), intent(in) :: is, kmax
    real (kind=RealKind), intent(in) :: efermi
@@ -59,7 +60,9 @@ contains
    real (kind=RealKind) :: posi(3), posj(3), dist
    complex (kind=CmplxKind) :: eneg, kappa
    complex (kind=CmplxKind), allocatable :: temp(:,:)
-   
+   complex (kind=CmplxKind), pointer :: Jx(:,:), Jy(:,:), Jz(:,:)
+
+   numspecies = getNumAtomTypes()
    delta = getFermiEnergyImagPart()
    pot_type = useStepFunctionForSigma()
    LocalNumAtoms = getLocalNumAtoms()
@@ -85,7 +88,6 @@ contains
     num_neighbors(i) = Neighbor%NumAtoms + 1
   enddo
   maxnumneighbors = maxval(num_neighbors)
-     
 
    allocate(TauIJ(LocalNumAtoms))
    do i = 1, LocalNumAtoms
@@ -169,17 +171,29 @@ contains
      enddo
    enddo
 
-   Neighbor => getNeighbor(LocalNumAtoms)
-   print *, "(1,1) element"
-   do j = 2, Neighbor%NumAtoms+1
-     shin = Neighbor%ShellIndex(j-1)
-     print *, Neighbor%ShellRad(shin), real(TauIJ(LocalNumAtoms)%neigh1j(j)%taup(1,1))
-   enddo
+   do i = 1, LocalNumAtoms
+     print *, "Convergence Data For Atom ", i, "Species ", getAtomType(i)
+     Neighbor => getNeighbor(i)
+     print *, "(1,1) element"
+     do j = 2, Neighbor%NumAtoms+1
+       shin = Neighbor%ShellIndex(j-1)
+       print *, getAtomType(Neighbor%LocalIndex(j-1)), &
+               Neighbor%ShellRad(shin), real(TauIJ(i)%neigh1j(j)%taup(1,1))
+     enddo
 
-   print *, "(2,2) element"
-   do j = 2, Neighbor%NumAtoms+1
-     shin = Neighbor%ShellIndex(j-1)
-     print *, Neighbor%ShellRad(shin), real(TauIJ(LocalNumAtoms)%neigh1j(j)%taup(2,2))
+     print *, "(2,2) element"
+     do j = 2, Neighbor%NumAtoms+1
+       shin = Neighbor%ShellIndex(j-1)
+       print *, getAtomType(Neighbor%LocalIndex(j-1)), &
+               Neighbor%ShellRad(shin), real(TauIJ(i)%neigh1j(j)%taup(2,2))
+     enddo
+     
+     print *, "(3,3) element"
+     do j = 2, Neighbor%NumAtoms+1
+       shin = Neighbor%ShellIndex(j-1)
+       print *, getAtomType(Neighbor%LocalIndex(j-1)), &
+               Neighbor%ShellRad(shin), real(TauIJ(i)%neigh1j(j)%taup(3,3))
+     enddo
    enddo
   
    end subroutine initLSMSConductivity
@@ -192,11 +206,13 @@ contains
    use ClusterMatrixModule, only : getClusterTau
    use CurrentMatrixModule, only : getJMatrix
    use WriteMatrixModule, only : writeMatrix
+   use SystemModule, only : getAtomType
 
    integer (kind=IntKind), intent(in) :: dir1, dir2, caltype
-   integer (kind=IntKind) :: m, n, L
+   integer (kind=IntKind) :: m, n, L, A, B
    complex (kind=CmplxKind) :: coeff, sigmaval, trace, tmpsum
-   complex (kind=CmplxKind) :: sigmamat(LocalNumAtoms,maxnumneighbors)
+   complex (kind=CmplxKind) :: sigmamat(numspecies, numspecies)
+   complex (kind=CmplxKind) :: sigmaatom(LocalNumAtoms)
    complex (kind=CmplxKind), pointer :: Jm(:,:), Jn(:,:)
    complex (kind=CmplxKind), allocatable :: temp(:,:), temp2(:,:), temp3(:,:)
 
@@ -204,9 +220,11 @@ contains
    temp = CZERO; temp2 = CZERO; temp3 = CZERO
 
    sigmamat = CZERO
+   sigmaatom = CZERO
    sigmaval = CZERO
    coeff = -CONE/(PI*omega)
    do m = 1, LocalNumAtoms
+     A = getAtomType(m)
      if (caltype == 2) then
        Jm => getJMatrix(n=m,ic=1,is=spin_pola,dir=dir1,en_type=3,tilde=0)
      else if (caltype == 3) then
@@ -218,8 +236,10 @@ contains
      do n = 1, Neighbor%NumAtoms+1
        trace = CZERO; temp = CZERO; temp2 = CZERO; temp3 = CZERO
        if (n == 1) then
+         B = A
          Jn => getJMatrix(n=m,ic=1,is=spin_pola,dir=dir2,en_type=caltype,tilde=0)
        else
+         B = getAtomType(Neighbor%LocalIndex(n-1))
          Jn => getJMatrix(n=Neighbor%LocalIndex(n-1),ic=1,is=spin_pola,dir=dir2,en_type=caltype,tilde=0)
        endif
   !    call writeMatrix('Jn', Jn, dsize, dsize)
@@ -252,27 +272,24 @@ contains
          trace = trace + coeff*temp3(L,L)
        enddo
        sigmaval = sigmaval + trace
-       sigmamat(m,n) = trace
+       sigmamat(A,B) = sigmamat(A,B) + trace
+       sigmaatom(m) = sigmaatom(m) + trace
      ! print *, "Sigmaval for (m,n) ", m, n, " in direction (mu,nu) ", dir1, dir2, " and caltype", caltype, "is "
      ! print *, real(trace), "with total", real(sigmaval) 
      enddo
    enddo
 
-   tmpsum = CZERO
-   print *, "Total Single-site sum is "
    do m = 1, LocalNumAtoms
-     tmpsum = tmpsum + sigmamat(m,1)
+     print *, "Conductivity ", caltype, " along dirs ", dir1, dir2, "for Atom ", m
+     print *, real(sigmaatom(m))
    enddo
-   print *, real(tmpsum)
-   tmpsum = CZERO
-   print *, "Total Cross-site sum is "
-   do m = 1, LocalNumAtoms
-     Neighbor => getNeighbor(m)
-     do n = 2, Neighbor%NumAtoms+1
-       tmpsum = tmpsum + sigmamat(m,n)
+
+   do m = 1, numspecies
+     do n = 1, numspecies
+       print *, "Conductivity ", caltype, " along dirs ", dir1, dir2, " for Type ", m, n
+       print *, real(sigmamat(m,n))
      enddo
    enddo
-   print *, real(tmpsum)
 
    end function calSigmaTildeLSMS
 !  ============================================================
