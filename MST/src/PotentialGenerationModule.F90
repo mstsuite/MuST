@@ -2959,20 +2959,24 @@ contains
    if ((isLSMS().or.isKKR()) .and. max_shells > 0 .and. printNeighbor) then
       if (max_shells == 1) then
          write(fu,'(107(''=''))')
-         write(fu,'(a)')' Atom   Index      Q          Qmt        dQ        Vmad        Local Energy     dQ(1nn)    LocalEnergy-ZptE'
+         write(fu,'(2a)')' Atom   Index      Q          Qmt        dQ        Vmad',   &
+                         '        Local Energy     dQ(1nn)    LocalEnergy-ZptE'
 !        write(fu,'(107(''-''))')
       else
          write(fu,'(119(''=''))')
-         write(fu,'(a)')' Atom   Index      Q          Qmt        dQ        Vmad        Local Energy     dQ(1nn)     dQ(2nn)    LocalEnergy-ZptE'
+         write(fu,'(2a)')' Atom   Index      Q          Qmt        dQ        Vmad',   &
+                         '        Local Energy     dQ(1nn)     dQ(2nn)    LocalEnergy-ZptE'
 !        write(fu,'(119(''-''))')
       endif
    else if (na == 1) then
       write(fu,'(95(''=''))')
-      write(fu,'(a)')' Atom   Index      Q          Qmt        dQ        Vmad        Local Energy    LocalEnergy-ZptE'
+      write(fu,'(2a)')' Atom   Index      Q          Qmt        dQ        Vmad',      &
+                      '        Local Energy    LocalEnergy-ZptE'
 !     write(fu,'(95(''-''))')
    else
       write(fu,'(100(''=''))')
-      write(fu,'(a)')' Atom  Site  Species    Q          Qmt        dQ        Vmad        Local Energy    LocalEnergy-ZptE'
+      write(fu,'(2a)')' Atom  Site  Species    Q          Qmt        dQ        Vmad', &
+                      '        Local Energy    LocalEnergy-ZptE'
 !     write(fu,'(100(''-''))')
    endif
    global_table_line => getGlobalTableLine()
