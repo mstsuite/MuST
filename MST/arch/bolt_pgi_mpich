@@ -3,7 +3,7 @@ MATHLIB_PATH = /opt/packages/pgi/19.7/linux86-64-llvm/19.7/lib
 LIBXC_PATH = /usr/local/libxc/libxc-5.0.0/PGI-MPICH
 FFTW_PATH = /usr/local/fftw/fftw-3.3.8/PGI-MPICH
 P3DFFT_PATH = /usr/local/p3dfft/p3dfft-2.7.9/PGI-MPICH
-export MKLROOT = /opt/intel/compilers_and_libraries_2019.3.199/linux/mkl
+export MKLROOT = /opt/intel/oneapi/mkl/2021.3.0
 #=====================================================================
 # Compilers and archiver tool
 #=====================================================================
@@ -32,9 +32,10 @@ LD=$(FC)
 
 #=====================================================================
 # Compiler flags
+#    "-O3" is found problematic
 #=====================================================================
 # FFLAGS=-I. -fast -fastsse -Mbounds -traceback -Mchkptr -Mchkstk
-FFLAGS=-I. -O3
+FFLAGS=-I. -O2
 #FFLAGS=-I. -O3
 F77FLAGS=$(FFLAGS)
 FPPDEFS=-Mpreprocess
