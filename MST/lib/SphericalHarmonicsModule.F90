@@ -104,6 +104,7 @@ contains
    deallocate( clm, plm, e_imp )
    lmax_max = -1
    jmax_max =  0
+   Initialized = .false.
 !
    end subroutine endSphericalHarmonics
 !  ===================================================================

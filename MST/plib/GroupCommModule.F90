@@ -155,6 +155,7 @@ private
 #else
 #define MPI_STATUS_SIZE 1
 #define MPI_ADDRESS_KIND IntKind
+#define MPI_COMM_WORLD 0
 #endif
    integer status(MPI_STATUS_SIZE)
 !
