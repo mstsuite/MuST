@@ -260,6 +260,7 @@ program mst2
    logical :: FrozenCoreFileExist = .false.
    logical :: StandardInputExist = .false.
    logical :: isDOSCalculationOnly = .false.
+   logical :: Symmetrize_mod = .false.
 !
    character (len=80) :: info_table, info_path
    character (len=160) :: itname, cmd
@@ -604,6 +605,13 @@ program mst2
 !  Initialize the Brillouin zone mesh for k-space integration
 !  ===================================================================
    if (isKKR() .or. isScreenKKR_LSMS() .or. isKKRCPA() .or. isKKRCPASRO()) then
+!     ================================================================
+      if (isFullPotential() .and. getLmaxKKR() >= 6 .and. Symmetrize /= 0) then
+         Symmetrize = 0
+         Symmetrize_mod = .true.
+      endif
+!     ================================================================
+!
       if (isReadKmesh()) then
 !        -------------------------------------------------------------
          call initBZone(getKmeshFileName(),istop,-1)
@@ -766,6 +774,24 @@ program mst2
         write(6,'(/,14x,a,/)')'::::  Embedded-LSMS Electronic Structure Calculation ::::'
      else if ( isSingleSite() ) then
         write(6,'(/,14x,a,/)')'::::  Single Site Electronic Structure Calculation ::::'
+     endif
+!
+     if (Symmetrize_mod) then
+        write(6,'(/)')
+        write(6,'(3x,a)')'::::::::::::::::::::::::::  WARNING  ::::::::::::::::::::::::::::::'
+        write(6,'(3x,a)')'::                                                               ::'
+        write(6,'(3x,a)')':: For Full-potential KKR or KKR-CPA calculations with lmax > 5, ::'
+        write(6,'(3x,a)')':: the k-space integration is forced to take place in the entire ::'
+        write(6,'(3x,a)')':: first Brillouin zone (B.Z.), rather than in the irreducible   ::'
+        write(6,'(3x,a)')':: B.Z., since the rotation symmetry of the single site regular  ::'
+        write(6,'(3x,a)')':: solutions and the single site scattering matrices are found   ::'
+        write(6,'(3x,a)')':: broken numerically that the symmetry opertation in B.Z. is no ::'
+        write(6,'(3x,a)')':: longer valid.                                                 ::'
+        write(6,'(3x,a)')':: This rotation symmetry broken problem will be addressed in a  ::'
+        write(6,'(3x,a)')':: future code release.                                          ::'
+        write(6,'(3x,a)')'::                                                               ::'
+        write(6,'(3x,a)')':::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::'
+        write(6,'(/)')
      endif
    endif
 !

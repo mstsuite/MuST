@@ -86,6 +86,7 @@ contains
    use RadialGridModule, only : getMaxNumRmesh
 !
    use QuadraticMatrixModule, only : initQuadraticMatrix,  &
+                                     endQuadraticMatrix,   &
                                      isQuadraticMatrixInitialized
 !
    use IntegerFactorsModule, only : initIntegerFactors,               &
@@ -100,6 +101,7 @@ contains
    integer (kind=IntKind) :: id, is, n, m, i2, kl1, kl2, kl3, lmax_max
 !
    logical, parameter :: isGeneral = .false.
+   logical :: yes
 !
    LocalNumAtoms = nla
    n_spin_pola = npola
@@ -174,7 +176,13 @@ contains
       enddo
    enddo
 !
-   if (.not.isQuadraticMatrixInitialized()) then
+   yes = isQuadraticMatrixInitialized(n)
+   if (yes .and. n < kmax_kkr_max) then
+      call endQuadraticMatrix()
+      yes = .false.
+   endif
+!
+   if (.not.yes) then
 !     ----------------------------------------------------------------
       call initQuadraticMatrix(kmax_kkr_max,isGeneral)
 !     ----------------------------------------------------------------
@@ -390,8 +398,8 @@ contains
    logical, optional, intent(in) :: CheckZeros
    logical, optional, intent(in) :: PanelOnZero
 !
-   integer (kind=IntKind) :: ie, iw, kmax_kkr, jmax_rho, NumWindows, info
-   integer (kind=IntKind) :: i, j, n, nv, nb, je, ip, nb0, ib, nz0
+   integer (kind=IntKind) :: ie, iw, kmax_kkr, jmax_rho, NumWindows, info, kl, klp
+   integer (kind=IntKind) :: i, j, n, nv, nb, je, ip, nb0, ib, nz0, kmax_sine
    integer (kind=IntKind) :: MyNumWindows
    integer (kind=IntKind), allocatable :: bpdeg(:), degens(:)
    integer (kind=IntKind), allocatable :: nbr(:)
@@ -527,8 +535,22 @@ contains
 !        -------------------------------------------------------------
          sine_mat => getSineMatrix(spin=is,site=id,atom=ia)
 !        -------------------------------------------------------------
-         call zcopy(kmax_kkr*kmax_kkr,sine_mat,1,s0,1)
-!        -------------------------------------------------------------
+         kmax_sine = size(sine_mat,dim=1)
+         if (kmax_kkr == kmax_sine) then
+!           ----------------------------------------------------------
+            call zcopy(kmax_kkr*kmax_kkr,sine_mat,1,s0,1)
+!           ----------------------------------------------------------
+         else if (kmax_kkr < kmax_sine) then
+            do kl = 1, kmax_kkr
+               do klp = 1, kmax_kkr
+                  s0(klp,kl) = sine_mat(klp,kl)
+               enddo
+            enddo
+         else
+!           ----------------------------------------------------------
+            call ErrorHandler('findSineMatrixZeros','kmax_kkr > kmax_sine',kmax_kkr,kmax_sine)
+!           ----------------------------------------------------------
+         endif
       endif
 !
       e = cmplx(e0+de,ZERO,kind=CmplxKind)
@@ -538,8 +560,22 @@ contains
 !     ----------------------------------------------------------------
       sine_mat => getSineMatrix(spin=is,site=id,atom=ia)
 !     ----------------------------------------------------------------
-      call zcopy(kmax_kkr*kmax_kkr,sine_mat,1,s2,1)
-!     ----------------------------------------------------------------
+      kmax_sine = size(sine_mat,dim=1)
+      if (kmax_kkr == kmax_sine) then
+!        -------------------------------------------------------------
+         call zcopy(kmax_kkr*kmax_kkr,sine_mat,1,s2,1)
+!        -------------------------------------------------------------
+      else if (kmax_kkr < kmax_sine) then
+         do kl = 1, kmax_kkr
+            do klp = 1, kmax_kkr
+               s2(klp,kl) = sine_mat(klp,kl)
+            enddo
+         enddo
+      else
+!        -------------------------------------------------------------
+         call ErrorHandler('findSineMatrixZeros','kmax_kkr > kmax_sine',kmax_kkr,kmax_sine)
+!        -------------------------------------------------------------
+      endif
 !
       e = cmplx(e0-de,ZERO,kind=CmplxKind)
 !     ----------------------------------------------------------------
@@ -547,12 +583,25 @@ contains
 !     call solveSingleScattering(is, id, ce0, cde, atom=ia)
 !     ----------------------------------------------------------------
       sine_mat => getSineMatrix(spin=is,site=id,atom=ia)
-!     ----------------------------------------------------------------
-      call zcopy(kmax_kkr*kmax_kkr,sine_mat,1,s1,1)
-!     ----------------------------------------------------------------
+      kmax_sine = size(sine_mat,dim=1)
+      if (kmax_kkr == kmax_sine) then
+!        -------------------------------------------------------------
+         call zcopy(kmax_kkr*kmax_kkr,sine_mat,1,sm,1)
+!        -------------------------------------------------------------
+      else if (kmax_kkr < kmax_sine) then
+         do kl = 1, kmax_kkr
+            do klp = 1, kmax_kkr
+               sm(klp,kl) = sine_mat(klp,kl)
+            enddo
+         enddo
+      else
+!        -------------------------------------------------------------
+         call ErrorHandler('findSineMatrixZeros','kmax_kkr > kmax_sine',kmax_kkr,kmax_sine)
+!        -------------------------------------------------------------
+      endif
 !
-      s1 = (s2 - sine_mat)/de2
-      s2 = (s2 + sine_mat - TWO*s0)/dede2
+      s1 = (s2 - sm)/de2
+      s2 = (s2 + sm - TWO*s0)/dede2
 !
       if (isZeroInterval) then
 !        -------------------------------------------------------------
@@ -658,7 +707,8 @@ contains
             e = e0 + ie*0.001d0
             call solveSingleScattering(is, id, e, CZERO, atom=ia)
             sine_mat => getSineMatrix()
-            call calcDet(sine_mat,kmax_kkr,det,diag)
+            kmax_sine = size(sine_mat,dim=1)
+            call calcDet(sine_mat,kmax_sine,det,diag)
             write(6,'(a,f12.5,2x,2d16.8)')'e,det = ',real(e),det
          enddo
          write(6,'(/)')
@@ -791,7 +841,7 @@ contains
 !        degeneracy of the pole, since the residual matrix has already
 !        been multiplied by the number of degeneracies.
 !  *******************************************************************
-   use SSSolverModule, only : solveSingleScattering, getSineMatrix
+   use SSSolverModule, only : solveSingleScattering
    use SSSolverModule, only : getRegSolution, getRegSolutionDerivative
    use SSSolverModule, only : getJostInvMatrix
 !  use SSSolverModule, only : getOmegaHatMatrix
@@ -812,7 +862,7 @@ contains
    integer (kind=IntKind), intent(in) :: id, is, ia
 !
    integer (kind=IntKind) :: ie, ib, info, ip
-   integer (kind=IntKind) :: kmax_kkr, jmax_rho, kmax_rho, NumRs, NumBPs
+   integer (kind=IntKind) :: kmax_kkr, jmax_rho, kmax_rho, NumRs, NumBPs, kmax_phi
    integer (kind=IntKind) :: kl, klp, klp_bar, kl1, kl2, kl3, kl3_bar, m3, mp, ir, jl3
 !
    real (kind=RealKind), pointer :: r_mesh(:)
@@ -883,9 +933,10 @@ contains
 !call !zgemm('n','n',kmax_kkr,kmax_kkr,kmax_kkr,CONE,jost_inv,kmax_kkr,smat_inv,kmax_kkr,CZERO,BSinv,kmax_kkr)
 !
       PhiLr => getRegSolution()
+      kmax_phi = size(PhiLr,dim=2)
 !     ----------------------------------------------------------------
       call zgemm('n','n',NumRs*kmax_kkr,kmax_kkr,kmax_kkr,CONE,          &
-                 PhiLr,NumRs*kmax_kkr,BSinv,kmax_kkr,                    &
+                 PhiLr,NumRs*kmax_phi,BSinv,kmax_kkr,                    &
                  CZERO,BPhiLr,NumRs*kmax_kkr)
 !     ----------------------------------------------------------------
       PPr = CZERO
@@ -921,7 +972,7 @@ contains
       DerPhiLr => getRegSolutionDerivative()
 !     ----------------------------------------------------------------
       call zgemm('n','n',NumRs*kmax_kkr,kmax_kkr,kmax_kkr,CONE,       &
-                 DerPhiLr,NumRs*kmax_kkr,BSinv,kmax_kkr,              &
+                 DerPhiLr,NumRs*kmax_phi,BSinv,kmax_kkr,              &
                  CZERO,DerBPhiLr,NumRs*kmax_kkr)
 !     ----------------------------------------------------------------
       PPr = CZERO

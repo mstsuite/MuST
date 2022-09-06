@@ -487,7 +487,7 @@ contains
       endif
 !     ----------------------------------------------------------------
       call initSMatrixPoles(LocalNumAtoms,n_spin_pola,n_spin_cant,LocalNumSpecies,&
-                            lmax_kkr,lmax_green,iprint_loc)
+                            min(lmax_kkr,4),lmax_green,iprint_loc)
 !     ----------------------------------------------------------------
    endif
 !
@@ -499,7 +499,7 @@ contains
       endif
 !     ----------------------------------------------------------------
       call initSineMatrixZeros(LocalNumAtoms,n_spin_pola,LocalNumSpecies,&
-                            lmax_kkr,lmax_green,iprint_loc)
+                               min(lmax_kkr,4),lmax_green,iprint_loc)
 !     ----------------------------------------------------------------
    endif
 !
@@ -3336,6 +3336,9 @@ contains
             enddo
          enddo
       enddo
+!     ----------------------------------------------------------------
+      call syncAllPEs()
+!     ----------------------------------------------------------------
 !
       e_delta = ZERO
       rstatus = getKeyValue(1,'Resonance State Contour Integration Radius (>0.0)',e_delta)
@@ -3778,7 +3781,7 @@ contains
 !                 ----------------------------------------------------
                   if ( node_print_level >= 0) then
                      write(6,'(a,i4,2x,f12.8,2x,d15.8)')'Bound state id, e, and DOS = ',ib, &
-                           getBoundStateEnergy(id=id,ia=ia,is=is,ibs=ib),ssDOS
+                                                        getBoundStateEnergy(id=id,ia=ia,is=is,ibs=ib),ssDOS
                      write(6,'(a,i4,2x,d15.8)')'Bound state id, ssDOS = ',ib,ssDOS
                      write(6,'(a,i4,2x,d15.8)')'Bound state id, ssLastValue =',ib,          &
                                                real(ssLastValue(id)%dos(ns,ia),kind=RealKind)

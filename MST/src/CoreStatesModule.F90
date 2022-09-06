@@ -517,7 +517,7 @@ contains
       if (.not.isSMatrixPolesInitialized()) then
 !        -------------------------------------------------------------
          call initSMatrixPoles(LocalNumAtoms,n_spin_pola,n_spin_cant,LocalNumSpecies,&
-                               lmax_kkr,lmax_rho,iprint)
+                               min(lmax_kkr,4),lmax_rho,iprint)
 !        -------------------------------------------------------------
       endif
       allocate(ws_prod(g2last*jmax_prod), ws_den(g2last*jmax_rho))
