@@ -139,5 +139,53 @@ target_sources(mst_lib
               updatePotential.F90
               )
 
-target_include_directories(mst_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-              
+target_include_directories(mst_lib PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+
+execute_process(COMMAND git describe --tags
+        OUTPUT_VARIABLE GIT_VERSION_TAG
+        ERROR_QUIET)
+
+# Check whether we got any revision (which isn't
+# always the case, e.g. when someone downloaded a zip
+# file from Github instead of a checkout)
+if ("${GIT_VERSION_TAG}" STREQUAL "")
+    set(GIT_VERSION_TAG "N/A")
+else()
+    string(STRIP "${GIT_VERSION_TAG}" GIT_VERSION_TAG)
+endif()
+
+string(TIMESTAMP TIME "%A, %B %d %Y %H:%M:%S")
+
+cmake_host_system_information(RESULT FQDN QUERY FQDN)
+
+execute_process(COMMAND whoami
+        OUTPUT_VARIABLE USERNAME
+        ERROR_QUIET)
+
+if ("${USERNAME}" STREQUAL "")
+    set(USERNAME "N/A")
+else()
+    string(STRIP "${USERNAME}" USERNAME)
+endif()
+
+configure_file (
+        "${CMAKE_CURRENT_SOURCE_DIR}/git_version.h.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/git_version.h"
+)
+
+configure_file (
+        "${CMAKE_CURRENT_SOURCE_DIR}/imp_inp.h"
+        "${CMAKE_CURRENT_BINARY_DIR}/imp_inp.h"
+        COPYONLY
+)
+
+configure_file (
+        "${CMAKE_CURRENT_SOURCE_DIR}/print_version_include.h.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/print_version_include.h"
+)
+
+configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/DefaultParameters.h"
+        "${CMAKE_CURRENT_BINARY_DIR}/DefaultParameters.h"
+        COPYONLY
+)

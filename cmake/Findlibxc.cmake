@@ -1,20 +1,24 @@
-##### by Franco 
 
 if (DEFINED libxc_LIBRARIES AND DEFINED libxc_INCLUDE_DIR)
+
     if (EXISTS ${libxc_LIBRARIES} AND EXISTS ${libxc_INCLUDE_DIR})
         message(STATUS "libxc path was correctly defined")
-    else()
-        message(ERROR "Specified path for libxc libaries is wrong")
+    else ()
+        message(STATUS "Specified path for libxc libaries is wrong")
     endif ()
-endif()
+
+endif ()
 
 if (NOT DEFINED libxc_LIBRARIES)
+
     set(libxc_LIBRARIES
-            ${CMAKE_BINARY_DIR}/external/libxc/lib/${CMAKE_STATIC_LIBRARY_PREFIX}xc${CMAKE_STATIC_LIBRARY_SUFFIX})
+            ${CMAKE_BINARY_DIR}/external/libxc/lib/${CMAKE_STATIC_LIBRARY_PREFIX}xc${CMAKE_STATIC_LIBRARY_SUFFIX}
+            CACHE FILEPATH "Libxc library" FORCE)
 
     set(libxc_INCLUDE_DIR
             ${CMAKE_BINARY_DIR}/external/libxc/include
-            )
+            CACHE PATH "Libxc include path" FORCE)
+
 endif ()
 
 if (EXISTS ${libxc_LIBRARIES} AND EXISTS ${libxc_INCLUDE_DIR})
@@ -22,61 +26,57 @@ if (EXISTS ${libxc_LIBRARIES} AND EXISTS ${libxc_INCLUDE_DIR})
     message(STATUS "libxc was found")
     message(STATUS "libxc library: " ${libxc_LIBRARIES})
     message(STATUS "libxc include: " ${libxc_INCLUDE_DIR})
-else()
+else ()
     set(libxc_FOUND false)
-    message(STATUS "libxc was not found and will be installed")
+    message(STATUS "Libxc was not found and will be installed")
 endif ()
 
 if (NOT libxc_FOUND)
 
     cmake_policy(SET CMP0111 NEW)
 
-    find_program(AUTORECONF_EXECUTABLE
-            NAMES autoreconf
-            DOC "Autoreconf" REQUIRED)
+    find_package(Autotools REQUIRED)
 
-    find_program(AUTOCONF_EXECUTABLE
-            NAMES autoconf
-            DOC "Autoconf" REQUIRED)
-
-    find_program(AUTOMAKE_EXECUTABLE
-            NAMES automake
-            DOC "Automake" REQUIRED)
-
-    find_program(MAKE_EXECUTABLE
-            NAMES gmake make
-            NAMES_PER_DIR
-            DOC "GNU Make")
-
-    include(FindPackageHandleStandardArgs)
-    find_package_handle_standard_args(Autotools
-            REQUIRED_VARS AUTOCONF_EXECUTABLE AUTOMAKE_EXECUTABLE MAKE_EXECUTABLE)
-
-    file(COPY ${PROJECT_SOURCE_DIR}/external/libxc-5.1.6
-            DESTINATION ${CMAKE_BINARY_DIR}/external)
-
-    set(_src ${CMAKE_BINARY_DIR}/external/libxc-5.1.6)
+    set(_src ${CMAKE_BINARY_DIR}/external/libxc-5.2.3)
     get_filename_component(_src "${_src}" REALPATH)
 
     set(_install ${CMAKE_BINARY_DIR}/external/libxc)
     file(MAKE_DIRECTORY ${_install})
     file(MAKE_DIRECTORY ${_install}/include)
     get_filename_component(_install "${_install}" REALPATH)
+
     include(ExternalProject)
 
     ExternalProject_Add(libxc
+
+            GIT_REPOSITORY https://gitlab.com/libxc/libxc.git
+            GIT_TAG 5.2.3
+            GIT_SHALLOW ON
+            GIT_PROGRESS ON
+
             SOURCE_DIR ${_src}
+            DOWNLOAD_DIR ${_src}
             BUILD_IN_SOURCE true
             CONFIGURE_COMMAND ${AUTORECONF_EXECUTABLE} -i
             COMMAND ./configure --prefix=${_install} CC=${CMAKE_C_COMPILER}
-            BUILD_COMMAND ${MAKE_EXECUTABLE}
+            BUILD_COMMAND ${MAKE_EXECUTABLE} -j ${CMAKE_BUILD_PARALLEL_LEVEL}
             INSTALL_COMMAND ${MAKE_EXECUTABLE} install
             BUILD_BYPRODUCTS ${_install}/lib/libxc.a
-            )
 
+            USES_TERMINAL_DOWNLOAD ON
+            USES_TERMINAL_CONFIGURE ON
+            USES_TERMINAL_BUILD ON
+            USES_TERMINAL_INSTALL ON
+            )
 
 endif ()
 
+
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(libxc DEFAULT_MSG
+        libxc_LIBRARIES libxc_INCLUDE_DIR)
+
+mark_as_advanced(libxc_LIBRARIES libxc_INCLUDE_DIR)
 
 add_library(libxc::libxc STATIC IMPORTED GLOBAL)
 set_target_properties(libxc::libxc PROPERTIES IMPORTED_LOCATION ${libxc_LIBRARIES})
