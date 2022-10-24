@@ -3360,7 +3360,7 @@ contains
                   call computeSineZeroDensity(id,ia,is)
 !                 ----------------------------------------------------
                enddo
-               if (node_print_level >= 0) then
+               if (node_print_level >= 0 .and. getNumResonanceStates(id,ia,is) > 0) then
 !                 ----------------------------------------------------
                   call printSineMatrixZerosInfo(id,ia,is)
 !                 ----------------------------------------------------

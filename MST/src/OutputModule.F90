@@ -92,7 +92,7 @@ contains
    implicit none
 !
    character (len=1)  :: output_to_screen
-   character (len=6)  :: cnode
+   character (len=8)  :: cnode
    character (len=40)  :: systemid
 !   character (len=70)  :: cpath
    character (len=70)  :: str_pe, str_atom, str_lvl
@@ -288,7 +288,7 @@ contains
 !     ----------------------------------------------------------------
    endif
 !
-   write(cnode,'(i6)')MyPE+offset
+   write(cnode,'(i8)')MyPE+offset
    if (MyPE >= offset) then
 !     ----------------------------------------------------------------
       call WarningHandler('initOutput','Processor logical index is too long')

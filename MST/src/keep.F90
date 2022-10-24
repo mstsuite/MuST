@@ -117,6 +117,7 @@
       text = getHeadLineValue('Energy Offset')
       read(text,'(i6)')E_offset
       text = getLastColumnValue('Iter')
+print *,trim(text)
       read(text,'(i7)')LastIter
    endif
 !
