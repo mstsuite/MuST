@@ -1,22 +1,26 @@
-################
-# Iman Jehanzeb
-################
 
-cmake_minimum_required(VERSION 3.18)
+#
+# Options
+#
 
-cmake_host_system_information(RESULT Ncpu QUERY NUMBER_OF_PHYSICAL_CORES)
-message(STATUS "CMake ${CMAKE_VERSION} with max. ${Ncpu} threads")
+option(WITH_ACCELERATION "Enable CUDA" OFF)
+option(WITH_OPENMP "Build with OpenMP" ON)
+option(WITH_LIBXC "Build with Libxc" ON)
 
-project(MST LANGUAGES Fortran C)
 
-# make CUDA optional
 include(CheckLanguage)
-check_language(CUDA)
-if(CMAKE_CUDA_COMPILER)
+
+if (WITH_ACCELERATION)
+    message(STATUS "CUDA is activated: " ${WITH_ACCELERATION})
+    check_language(CUDA)
+    if (CMAKE_CUDA_COMPILER)
         enable_language(CUDA)
-else()
+    else ()
         message(STATUS "No CUDA compiler found")
-endif()
+    endif ()
+else ()
+    message(STATUS "CUDA is deactivated: " ${WITH_ACCELERATION})
+endif ()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
@@ -30,18 +34,17 @@ set_target_properties(mst_main PROPERTIES
         )
 
 
-# Defining mst_lib 
+# Defining mst_lib
 add_library(mst_lib)
 
 set_target_properties(mst_lib PROPERTIES
         LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
         ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
         Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/modules)
-        
+
 target_include_directories(mst_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(mst_main PUBLIC mst_lib)
-
 
 # Adding Subdirectories
 add_subdirectory(src)
@@ -49,6 +52,26 @@ add_subdirectory(lib)
 add_subdirectory(plib)
 add_subdirectory(iolib)
 
+#
+# Compiler flags
+#
+
+if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+
+    target_link_libraries(mst_lib PUBLIC "gcc")
+    target_link_libraries(mst_lib PUBLIC "gfortran")
+
+    target_compile_options(mst_lib PUBLIC "-ffree-line-length-none")
+
+    if (CMAKE_Fortran_COMPILER_VERSION VERSION_GREATER_EQUAL "10.0.0")
+        # Needed for gcc 10
+        target_compile_options(mst_lib PUBLIC "-fallow-argument-mismatch")
+    endif ()
+
+endif ()
+
+
+target_compile_definitions(mst_lib PUBLIC "Underscore")
 
 
 # Find MPI Library
@@ -56,16 +79,12 @@ find_package(MPI REQUIRED COMPONENTS Fortran OPTIONAL_COMPONENTS)
 target_link_libraries(mst_lib PUBLIC MPI::MPI_Fortran)
 target_compile_definitions(mst_lib PUBLIC MPI)
 
-
 # Find OpenMP library
-option(BUILD_WITH_OPENMP "Build with OpenMP" ON)
-if (BUILD_WITH_OPENMP)
+if (WITH_OPENMP)
     find_package(OpenMP REQUIRED)
     target_link_libraries(mst_lib PUBLIC OpenMP::OpenMP_Fortran)
 endif ()
 
-# Find LibXC
-find_package(Libxc REQUIRED)
 
 # Find XDR
 find_package(XDR REQUIRED)
@@ -84,32 +103,18 @@ target_link_libraries(mst_lib PUBLIC ${FFTW_LIBRARIES})
 target_include_directories(mst_lib PUBLIC ${FFTW_INCLUDES})
 
 
-if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+#
+# External libraries
+#
 
-  target_link_libraries(mst_lib PUBLIC "gcc")
-  target_link_libraries(mst_lib PUBLIC "gfortran")
-
-  target_compile_options(mst_lib PUBLIC "-ffree-line-length-none")
-
-  if(CMAKE_Fortran_COMPILER_VERSION VERSION_GREATER_EQUAL "10.0.0")
-    # Needed for gcc 10
-    target_compile_options(mst_lib PUBLIC "-fallow-argument-mismatch")
-  endif()
-
-endif()
-        
-# Build LibXC 
-option(USE_LIBXC "Use the libxc libary" ON)
-if (USE_LIBXC)
-    message(STATUS "LIBXC is used")
-    include(libxc)
-else ()
-    message(STATUS "LIBXC is not used")
+# LIBXC
+if (WITH_LIBXC)
+    find_package(libxc REQUIRED)
+    target_link_libraries(mst_lib PUBLIC libxc::libxc)
 endif ()
 
-
 # CUDA
-if (USE_ACCELERATOR_CUDA_C)
+if (WITH_ACCELERATION)
 
     target_compile_definitions(mst_lib PUBLIC ACCELERATOR_CUDA_C)
 
@@ -119,67 +124,46 @@ if (USE_ACCELERATOR_CUDA_C)
         target_compile_definitions(mst_lib PUBLIC "CUDA_DEBUG")
     endif ()
 
-        
-# Build with OpenMP
-if (BUILD_WITH_OPENMP)
+
+    # Build with OpenMP
+    if (WITH_OPENMP)
         message(STATUS "OpenMP is also defined for GPU")
         target_compile_options(mst_lib PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler -fopenmp>)
     endif ()
 
 
-if (NOT DEFINED CMAKE_CUDA_STANDARD)
+    if (NOT DEFINED CMAKE_CUDA_STANDARD)
         set(CMAKE_CUDA_STANDARD 14)
         set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-endif ()
+    endif ()
 
-if (NOT DEFINED CMAKE_CUDA_SEPARABLE_COMPILATION)
+    if (NOT DEFINED CMAKE_CUDA_SEPARABLE_COMPILATION)
         set(CMAKE_CUDA_SEPARABLE_COMPILATION OFF)
-endif ()
+    endif ()
 
-find_package(CUDAToolkit REQUIRED)
+    find_package(CUDAToolkit REQUIRED)
 
 
-message(STATUS "CUDA Version: " ${CUDAToolkit_VERSION})
-message(STATUS "CUDA Include dirs: " ${CUDAToolkit_INCLUDE_DIRS})
-message(STATUS "CUDA Library: " ${CUDAToolkit_LIBRARY_DIR})
+    message(STATUS "CUDA Version: " ${CUDAToolkit_VERSION})
+    message(STATUS "CUDA Include dirs: " ${CUDAToolkit_INCLUDE_DIRS})
+    message(STATUS "CUDA Library: " ${CUDAToolkit_LIBRARY_DIR})
 
-target_link_libraries(mst_lib PUBLIC CUDA::toolkit)
+    target_link_libraries(mst_lib PUBLIC CUDA::toolkit)
 
-# Check if the necessary libraries have been found
-if (TARGET CUDA::cublas)
+    # Check if the necessary libraries have been found
+    if (TARGET CUDA::cublas)
         target_link_libraries(mst_lib PUBLIC CUDA::cublas)
-else ()
+    else ()
         message(FATAL_ERROR "CuBLAS was not defined or found")
-endif ()
+    endif ()
 
-if (TARGET CUDA::cusolver)
+    if (TARGET CUDA::cusolver)
         target_link_libraries(mst_lib PUBLIC CUDA::cusolver)
-else ()
+    else ()
         message(FATAL_ERROR "Cusolver was not defined or found")
     endif ()
 endif ()
 
-
-
-if (DEFINED MST_LINEAR_SOLVER_DEFAULT)
-    message(STATUS "Default linear solver: " ${MST_LINEAR_SOLVER_DEFAULT})
-    set(MST_LINEAR_SOLVER_DEFAULT ${MST_LINEAR_SOLVER_DEFAULT} CACHE STRING "Default linear solver")
-    target_compile_definitions(mst_lib PUBLIC "MST_LINEAR_SOLVER_DEFAULT=${MST_LINEAR_SOLVER_DEFAULT}")
-endif ()
-
-if (DEFINED MST_BUILD_KKR_MATRIX_DEFAULT)
-    message(STATUS "Default kkr matrix build: " ${MST_BUILD_KKR_MATRIX_DEFAULT})
-    set(MST_BUILD_KKR_MATRIX_DEFAULT ${MST_BUILD_KKR_MATRIX_DEFAULT} CACHE STRING "Default linear solver")
-    target_compile_definitions(mst_lib PUBLIC "MST_BUILD_KKR_MATRIX_DEFAULT=${MST_BUILD_KKR_MATRIX_DEFAULT}")
-endif ()
-
-
-option(ARCH_IBM "Is IBM architecture" OFF)
-
-if (ARCH_IBM)
-    message(STATUS "Use the IBM architecture")
-    target_compile_definitions(mst_lib PUBLIC "ARCH_IBM")
-endif ()
 
 # Find HDF5
 message(STATUS "Find HDF5")
@@ -222,23 +206,23 @@ else ()
     target_link_libraries(mst_lib PUBLIC LAPACK::LAPACK)
 
 
-# BLAS
-option(SEARCH_BLAS "Search for BLAS" ON)
-if (NOT SEARCH_BLAS)
+    # BLAS
+    option(SEARCH_BLAS "Search for BLAS" ON)
+    if (NOT SEARCH_BLAS)
         add_library(BLAS::BLAS STATIC IMPORTED GLOBAL)
         set_target_properties(BLAS::BLAS PROPERTIES IMPORTED_LOCATION ${BLAS_LIBRARIES})
         if (DEFINED BLAS_LINKER_FLAGS)
-                target_compile_options(BLAS::BLAS INTERFACE ${BLAS_LINKER_FLAGS})
+            target_compile_options(BLAS::BLAS INTERFACE ${BLAS_LINKER_FLAGS})
         endif ()
         if (DEFINED BLAS_INCLUDE_DIR)
-                target_include_directories(BLAS::BLAS INTERFACE ${BLAS_INCLUDE_DIR})
+            target_include_directories(BLAS::BLAS INTERFACE ${BLAS_INCLUDE_DIR})
         endif ()
 
-        else ()
-                if (NOT DEFINED BLA_VENDOR)
-                        set(BLA_VENDOR "Generic")
-                endif ()
-                find_package(BLAS REQUIRED)
+    else ()
+        if (NOT DEFINED BLA_VENDOR)
+            set(BLA_VENDOR "Generic")
         endif ()
-        target_link_libraries(mst_lib PUBLIC BLAS::BLAS)
+        find_package(BLAS REQUIRED)
+    endif ()
+    target_link_libraries(mst_lib PUBLIC BLAS::BLAS)
 endif ()
