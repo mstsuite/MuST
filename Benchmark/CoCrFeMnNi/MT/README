@@ -1,0 +1,33 @@
+This directory contains two performance benchmark cases for the muffin-tin, 
+spin-canted, ab initio electronic structure calculation of CoCrFeMnNi high
+entropy alloys with a FCC underlying lattice. The calculation is performed
+using the LSMS method.
+
+The input files for running mst2 include
+i_mst: 
+   contains the control parameters for running the SCF calculation
+position.dat: 
+   position data of the atoms in the unit cell
+Co_v, Cr_v, Fe_v, Mn_v, Ni_v: 
+   the starting potential data files for Co, Cr, Fe, Mn, and Ni, respectively
+Evec_input.dat:
+   the starting configuration of the magnetic (spin) moment orientations
+
+In the MuST code, the MPI parallelization is performed at multiple levels, 
+depending on the number of available MPI tasks. The primary paralleization
+is performed by distributing the atoms, followed by distributing the energy
+points on the complex energy contour, over the MPI tasks.
+===========================================================================
+u56/: 
+   Input files for a unit cell with 56 atoms. 
+   The calculation uses 32 energy points. The number of MPI tasks need to be 
+   either multiples of 56 or a factor of 56, e.g., 
+   7, 8, 14, 28, 56, 112, 224, 448  896, 1792
+
+u56000/: 
+   Input files for a unit cell with 56,000 atoms. 
+   This random sample was generated using MuST/bin/genap. The input data for 
+   running genap is inp_genap.
+   The calculation uses 32 energy points. The number of MPI tasks need to be 
+   either multiples of 56000 or a factor of 56000, e.g., 
+   14000, 28000, 56000, 112000, 224000, 448000, etc.
