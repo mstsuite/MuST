@@ -124,12 +124,15 @@ ENV LIBXC_INCLUDE_DIR=/usr/local/include/
 COPY . /home/MuST
 
 RUN cd /home/MuST && \
-    mkdir build && \
-    cmake -Dlibxc_INCLUDE_DIR=${LIBXC_INCLUDE_DIR} \
+    ls -lht && \
+    mkdir -p build && \
+    cd build && \
+    cmake -DCMAKE_BUILD_TYPE=Release \
+          -Dlibxc_INCLUDE_DIR=${LIBXC_INCLUDE_DIR} \
           -Dlibxc_LIBRARIES=${LIBXC_LIBRARIES} .. && \
     cmake --build . --parallel
 
-ENV MST=/home/MuST/build/bin/mst
+ENV MST=/home/MuST/build/bin/MST
 
 # User configurations
 ENV PYTHONUNBUFFERED=1
