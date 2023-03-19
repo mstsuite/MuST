@@ -40,6 +40,7 @@ private
    integer (kind=IntKind) :: iseed = -30
    integer (kind=IntKind), allocatable :: AtomType(:)
    integer (kind=IntKind), allocatable :: NumAtomsOfType(:)
+   integer (kind=IntKind), allocatable :: EmptyCell(:)
 !
    real (kind=RealKind), target :: large_cell(3,3)
    real (kind=RealKind), target, allocatable :: AtomPosition(:,:)
@@ -69,11 +70,12 @@ private
 contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine initSample(nbasis,na,nb,nc,small_cell,bv,ct)
+   subroutine initSample(nbasis,na,nb,nc,small_cell,bv,eca,ct)
 !  ===================================================================
    implicit none
 !
    integer (kind=IntKind), intent(in) :: nbasis, na, nb, nc
+   integer (kind=IntKind), intent(in) :: eca(nbasis)
 !
    real (kind=RealKind), target, intent(in) :: small_cell(3,3)
    real (kind=RealKind), target, intent(in) :: bv(3,nbasis)
@@ -105,6 +107,7 @@ contains
    NumRepeatsC = nc
 !
    allocate( AtomPosition(NumAtoms,3), AtomName(1:NumAtoms), AtomType(1:NumAtoms) )
+   allocate( EmptyCell(NumAtoms) )
 !
    large_cell(1:3,1) = small_cell(1:3,1)*na
    large_cell(1:3,2) = small_cell(1:3,2)*nb
@@ -115,7 +118,7 @@ contains
    atom_position_z => AtomPosition(1:NumAtoms,3)
 !
 !  -------------------------------------------------------------------
-   call genLatticePoints(nbasis,na,nb,nc,small_cell,bv,centered)
+   call genLatticePoints(nbasis,na,nb,nc,small_cell,bv,centered,eca)
 !  -------------------------------------------------------------------
 !
    do i = 1, MaxShells
@@ -139,7 +142,7 @@ contains
 !
    nullify( atom_position_x,atom_position_y,atom_position_z )
 !
-   deallocate( AtomName, AtomPosition, AtomType )
+   deallocate( AtomName, AtomPosition, AtomType, EmptyCell )
 !
    if (allocated(NumAtomsOfType)) then
       deallocate(NumAtomsOfType)
@@ -167,11 +170,12 @@ contains
 !  *******************************************************************
 !              
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine genLatticePoints(nbasis,na,nb,nc,small_box,bv,centered)
+   subroutine genLatticePoints(nbasis,na,nb,nc,small_box,bv,centered,eca)
 !  ===================================================================
    implicit none
 !                          
    integer (kind=IntKind), intent(in) :: nbasis,na,nb,nc
+   integer (kind=IntKind), intent(in) :: eca(nbasis)
 !
    real (kind=RealKind), intent(in) :: small_box(3,3)
    real (kind=RealKind), intent(in) :: bv(3,nbasis)
@@ -213,6 +217,7 @@ contains
                atom_position_x(n) = bv(1,isub) + x0
                atom_position_y(n) = bv(2,isub) + y0
                atom_position_z(n) = bv(3,isub) + z0
+               EmptyCell(n) = eca(isub)
             enddo
          enddo
       enddo     
