@@ -29,6 +29,7 @@
    integer (kind=IntKind), parameter :: MaxBasis = 250
    integer (kind=IntKind), parameter :: MaxClusters = 10
    integer (kind=IntKind), parameter :: MaxECA = 20 ! max number of empty cell atoms in small cell
+   integer (kind=IntKind), parameter :: VaZ = 200   ! Shift the vacancy Z by VaZ
 !
    character (len=2) :: Cluster(MaxAtomTypes)
    character (len=2) :: Medium(MaxAtomTypes)
@@ -418,6 +419,11 @@
                bv(1,nbasis) = BasisVec(1,i,1) + HALF
                bv(2,nbasis) = BasisVec(2,i,1) + HALF
                bv(3,nbasis) = BasisVec(3,i,1) + HALF
+               do j = 1, 3
+                  if (bv(j,nbasis) > ONE) then
+                     bv(j,nbasis) = bv(j,nbasis) - ONE
+                  endif
+               enddo
                num_eca = num_eca + 1
                if (num_eca > MaxECA) then
                   call ErrorHandler('main','num_eca > MaxECA',num_eca,MaxECA)
@@ -428,6 +434,11 @@
                bv(1,nbasis) = BasisVec(1,i,1) + THREE/FOUR
                bv(2,nbasis) = BasisVec(2,i,1) + THREE/FOUR
                bv(3,nbasis) = BasisVec(3,i,1) + THREE/FOUR
+               do j = 1, 3
+                  if (bv(j,nbasis) > ONE) then
+                     bv(j,nbasis) = bv(j,nbasis) - ONE
+                  endif
+               enddo
                num_eca = num_eca + 1
                if (num_eca > MaxECA) then
                   call ErrorHandler('main','num_eca > MaxECA',num_eca,MaxECA)
@@ -833,6 +844,9 @@
    allocate( AtomZ(NumAtoms), IndexN(NumAtoms) )
    do i = 1,NumAtoms
       AtomZ(i) = getZtot(AtomName_medium(i))
+      if (AtomZ(i) == 0) then
+         AtomZ(i) = VaZ
+      endif
    enddo
 !  -------------------------------------------------------------------
    call HeapSort(NumAtoms, AtomZ, IndexN)
@@ -843,7 +857,11 @@
          k = IndexN(i)
          if (ClusterFlag(i) == 0) then
             if ( ftype==1 ) then
-               n = AtomZ(i)
+               if (AtomZ(i) == VaZ) then
+                  n = 0
+               else
+                  n = AtomZ(i)
+               endif
                write(14,'(i3,1x,3f19.15,1x,f7.4,2x,i5,3x,a)') n,      &
                    x_medium(k),y_medium(k),z_medium(k), 1.0d0, 0, "U"
             else if ( ftype==2) then
@@ -869,7 +887,11 @@
       do i = 1, NumMediumAtoms
          k = IndexN(i)
          if ( ftype==1 ) then
-            n = AtomZ(i)
+            if (AtomZ(i) == VaZ) then
+               n = 0
+            else
+               n = AtomZ(i)
+            endif
             write(14,'(i3,1x,3f19.15,1x,f7.4,2x,i5,3x,a)') n,      &
                 x_medium(k),y_medium(k),z_medium(k), 1.0d0, 0, "U"
          else if ( ftype==2) then
