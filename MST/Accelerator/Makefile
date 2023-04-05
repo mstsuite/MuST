@@ -63,6 +63,8 @@ initialize_matinv_cuda.o \
 finalize_matinv_cuda.o \
 zblock_lu_accel.o \
 zblock_lu_cuda_c.o \
+cusolver_invwhole_c.o \
+invertMatrixBlock_CUDA.o \
 zblock_lu_CPU.o \
 inverse.o \
 DeviceStorage.o \
