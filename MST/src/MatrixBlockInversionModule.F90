@@ -407,17 +407,17 @@ contains
 !     Use the  LU algorithm
 !     ================================================================
       isLU = .true.
-#ifdef ACCEL
-      mp = maxval( MaxMatrixSize )
+!#ifdef ACCEL
+!      mp = maxval( MaxMatrixSize )
 !     ----------------------------------------------------------------
-      call zblock_lu_accel( a, lda, na, MatrixBlockSizes(1,id),       &
-                            MaxNumBlocks, NumBlocks(id), p_idcol, blk1, ipvt, mp, k)
+!      call zblock_lu_accel( a, lda, na, MatrixBlockSizes(1,id),       &
+!                            MaxNumBlocks, NumBlocks(id), p_idcol, blk1, ipvt, mp, k)
 !     ----------------------------------------------------------------
-#else
+!#else
 !     ----------------------------------------------------------------
       call zblock_lu1( id, a, lda, na, k)
 !     ----------------------------------------------------------------
-#endif
+!#endif
    else if ( alg>=3 .and. alg<=6 ) then
 !      call ErrorHandler('block_inv','Error: not defined yet.',alg)
 !      return
