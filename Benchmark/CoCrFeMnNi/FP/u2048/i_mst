@@ -15,9 +15,9 @@ No. Atoms in System (> 0)  ::  2048
                        Position and Potential Data Files
 ===========================+====================================================
 Atomic Position File Name  :: position.dat
-# Default Potential Input File Name  ::  Co_v, Cr_v, Fe_v, Mn_v, Ni_v
-Default Potential Input File Name  ::  CoCrFeMnNi_mt_v
-Default Potential Input File Form  ::  1
+Default Potential Input File Name  ::  Co_v, Cr_v, Fe_v, Mn_v, Ni_v
+# Default Potential Input File Name  ::  CoCrFeMnNi_mt_v
+Default Potential Input File Form  ::  0
    = 0: ASCII Format       ----------
    = 1: XDR Format         ----------
    = 2: HDF Format         ----------
