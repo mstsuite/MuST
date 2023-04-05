@@ -939,6 +939,7 @@ use MPPModule, only : MyPE, syncAllPEs
 #else
          call invertMatrixBlock( my_atom, pBlockMatrix, kkrsz_ns, kkrsz_ns,  &
                                  BigMatrix, dsize, dsize )
+#endif
 !         print *,"CPU pBlockMatrix(:, 1) = ",pBlockMatrix(:,1)
 !        -------------------------------------------------------------
 !write(6,'(a,i5,2f9.5,2x,4d16.8)')'Block =',MyPE,energy,pBlockMatrix(1,1),pBlockMatrix(3,3)
