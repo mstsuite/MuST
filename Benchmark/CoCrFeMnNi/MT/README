@@ -18,7 +18,7 @@ depending on the number of available MPI tasks. The primary paralleization
 is performed by distributing the atoms, followed by distributing the energy
 points on the complex energy contour, over the MPI tasks.
 ===========================================================================
-u56/: 
+u56/ and u56_CUDA/: 
    Input files for a unit cell with 56 atoms. 
    The calculation uses 32 energy points. The number of MPI tasks need to be 
    either multiples of 56 or a factor of 56, e.g., 
