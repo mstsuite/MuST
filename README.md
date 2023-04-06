@@ -72,6 +72,7 @@ All the relevant information and instructions are provided in the <a href="https
 * J. S. Faulkner and G. M. Stocks, _Calculating properties with the coherent-potential approximation_, Phys. Rev. B **21**, 3222 (1980).
 
 * G. M. Stocks and H. Z. Winter, _Self-consistent-field-Korringa-Kohn-Rostoker-coherent-potential approximation for random alloys_, Z. Physik B-Condensed Matter **46**, 95 (1982).
+* 
 
 ## Citation
 If you publish results obtained using LSMS we ask that you cite the following publications:
