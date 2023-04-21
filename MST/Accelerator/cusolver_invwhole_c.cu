@@ -22,11 +22,14 @@ float time_copyin=0;
 float time_copyout=0;
 float time_compute=0;
 
-double _Complex tau00[*m][*m];
+// LFu: fix segmentation fault when allocating the array
+double _Complex *tau00;
+tau00 = (double _Complex *) malloc(sizeof(double _Complex) * *m * *m);
+
 for (int i=0;i<*m;i++){
 for (int j=0;j<*m;j++){
-	if (i==j){tau00[i][j]={1,0};}
-        else{tau00[i][j]={0,0};}
+	if (i==j){tau00[i * *m + j]={1,0};}
+        else{tau00[i * *m + j]={0,0};}
 }
 }
 
@@ -118,4 +121,7 @@ cudaEventElapsedTime(&time_copyout, start, stop);
 //clean up
 cusolverDnDestroy(cusolverHandle);
 cudaFree(workArray);
+
+// LFu: clean up tau00
+free(tau00);
 }
