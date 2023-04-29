@@ -1,9 +1,9 @@
 ifdef MST
-include ../MST/arch/bolt_intel
+include ../MST/arch/bolt_intel_accel
 else ifdef KUBO
-include ../MST/arch/bolt_intel
+include ../MST/arch/bolt_intel_accel
 else ifdef EXTERNAL
-include ../MST/arch/bolt_intel
+include ../MST/arch/bolt_intel_accel
 else
 include ../lsms/arch/bolt-intel-nvidia
 endif

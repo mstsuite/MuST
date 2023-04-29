@@ -251,6 +251,8 @@ program mst2
 !
    use KreinModule, only : initKrein, endKrein
 !
+   use CmdLineOptionModule, only : getCmdLineOptionValue
+!
    implicit none
 !
    logical :: ScfConverged = .false.
@@ -272,6 +274,7 @@ program mst2
    character (len=50) :: FrozenCoreFileName = 'FrozenCoreDensity.dat'
 !
    integer (kind=IntKind) :: MyPE, NumPEs
+   integer (kind=IntKind) :: NumWriteProcs, NumReadProcs
    integer (kind=IntKind) :: funit_sysmov, en_movie
    integer (kind=IntKind) :: def_id, info_id
    integer (kind=IntKind) :: i, id, ig, is, jl, nk, ne, n, na, ia
@@ -651,9 +654,29 @@ program mst2
    call createParallelization(isLSMS())
 !  -------------------------------------------------------------------
 #endif
-   call initParallelIO(getGroupID('Unit Cell'),1) ! only the 1st cluster
-                                                  ! in the group performs
-                                                  ! writing potential data
+!  ===================================================================
+!  Note: only the 1st cluster in the group performs writing potential data
+!  ===================================================================
+   n = getCmdLineOptionValue('Number of Writing Processes',NumWriteProcs)
+   n = getCmdLineOptionValue('Number of Reading Processes',NumReadProcs)
+   if (NumWriteProcs > 0 .and. NumReadProcs > 0) then
+!     ----------------------------------------------------------------
+      call initParallelIO(getGroupID('Unit Cell'), 1,                 &
+                          nin=NumReadProcs, nout=NumWriteProcs)
+!     ----------------------------------------------------------------
+   else if (NumWriteProcs > 0) then
+!     ----------------------------------------------------------------
+      call initParallelIO(getGroupID('Unit Cell'), 1, nout=NumWriteProcs)
+!     ----------------------------------------------------------------
+   else if (NumReadProcs > 0) then
+!     ----------------------------------------------------------------
+      call initParallelIO(getGroupID('Unit Cell'), 1, nin=NumReadProcs)
+!     ----------------------------------------------------------------
+   else
+!     ----------------------------------------------------------------
+      call initParallelIO(getGroupID('Unit Cell'), 1)
+!     ----------------------------------------------------------------
+   endif
 !  -------------------------------------------------------------------
    call initAtom2Proc(GlobalNumAtoms)
 !  -------------------------------------------------------------------

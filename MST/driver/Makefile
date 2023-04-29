@@ -56,6 +56,7 @@ $(ODIR)/CoreStatesModule.o \
 $(ODIR)/GauntFactorsModule.o \
 $(ODIR)/getpotg.o \
 $(ODIR)/DefaultParamModule.o  \
+$(ODIR)/CmdLineOptionModule.o  \
 $(ODIR)/InputModule.o  \
 $(ODIR)/IsoparametricIntegrationModule.o \
 $(ODIR)/lattice.o  \

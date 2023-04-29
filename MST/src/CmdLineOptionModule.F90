@@ -1,59 +1,58 @@
-module DefaultParamModule
+module CmdLineOptionModule
    use KindParamModule, only : IntKind, RealKind, CmplxKind
    use MathParamModule, only : ZERO, ONE
    use ErrorHandlerModule, only : StopHandler, ErrorHandler, WarningHandler
 !
-public :: initDefaultParam,  &
-          endDefaultParam,   &
-          getDefaultValue
+public :: initCmdLineOption,  &
+          endCmdLineOption,   &
+          getCmdLineOptionValue
 !
-interface getDefaultValue
-   module procedure getDefaultValue_s0, getDefaultValue_s1
-   module procedure getDefaultValue_i0, getDefaultValue_i1
-   module procedure getDefaultValue_r0, getDefaultValue_r1
-   module procedure getDefaultValue_c0, getDefaultValue_c1
+interface getCmdLineOptionValue
+   module procedure getCmdLineOptionValue_s0, getCmdLineOptionValue_s1
+   module procedure getCmdLineOptionValue_i0, getCmdLineOptionValue_i1
+   module procedure getCmdLineOptionValue_r0, getCmdLineOptionValue_r1
+   module procedure getCmdLineOptionValue_c0, getCmdLineOptionValue_c1
 end interface
 !
 private
-   integer (kind=IntKind), parameter :: MaxParams = 150
-   integer (kind=intKind) :: NumParams
+   integer (kind=IntKind), parameter :: MaxOptions = 20
 !
-   character (len=50), allocatable :: StoredKeys(:)
-   character (len=80), allocatable :: DefaultValues(:)
+   integer (kind=intKind) :: NumOptions = 0
+!
+   character (len=20) :: Options(3,MaxOptions)
+   character (len=50) :: OptionKeys(MaxOptions)
+   character (len=50) :: OptionValues(MaxOptions)
 !
 contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine initDefaultParam()
+   subroutine initCmdLineOption(num_args)
 !  ===================================================================
    implicit none
 !
-   allocate(StoredKeys(MaxParams), DefaultValues(MaxParams))
+   integer (kind=IntKind), intent(out) :: num_args
+!
+   NumOptions = 0
 !
 !  -------------------------------------------------------------------
-   call loadDefaultKeyValues(StoredKeys,DefaultValues,NumParams)
+   call loadCmdLineOptions(num_args)
 !  -------------------------------------------------------------------
 !
-   if (NumParams > MaxParams) then
-      call ErrorHandler('initDefaultParam','NumParams > MaxParams',   &
-                        NumParams,MaxParams)
-   endif
-!
-   end subroutine initDefaultParam
+   end subroutine initCmdLineOption
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine endDefaultParam()
+   subroutine endCmdLineOption()
 !  ===================================================================
    implicit none
 !
-   deallocate(StoredKeys, DefaultValues)
+   NumOptions = 0
 !
-   end subroutine endDefaultParam
+   end subroutine endCmdLineOption
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getDefaultValue_s0(key,value) result(s)
+   function getCmdLineOptionValue_s0(key,value) result(s)
 !  ===================================================================
    implicit none
 !
@@ -77,8 +76,8 @@ contains
    found = .false.
 !
    key_t = trim(adjustl(key))
-   LOOP_i: do i = 1, NumParams
-      if (nocaseCompare(key_t,StoredKeys(i))) then
+   LOOP_i: do i = 1, NumOptions
+      if (nocaseCompare(key_t,OptionKeys(i))) then
          k = i
          found = .true.
          exit LOOP_i
@@ -87,18 +86,18 @@ contains
    if (.not.found) then
       s = 1
 !     ----------------------------------------------------------------
-!     call WarningHandler('getDefaultValue','Invalid Key',key_t)
+!     call WarningHandler('getCmdLineOptionValue','Invalid Key',key_t)
 !     ----------------------------------------------------------------
       return
    endif
 !
-   value = DefaultValues(k)
+   value = OptionValues(k)
 !
-   end function getDefaultValue_s0
+   end function getCmdLineOptionValue_s0
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getDefaultValue_s1(key,n,value) result(s)
+   function getCmdLineOptionValue_s1(key,n,value) result(s)
 !  ===================================================================
    use StringModule, only : initString, endString, getNumTokens, readToken
    implicit none
@@ -125,8 +124,8 @@ contains
    found = .false.
 !
    key_t = trim(adjustl(key))
-   LOOP_i: do i = 1, NumParams
-      if (nocaseCompare(key_t,StoredKeys(i))) then
+   LOOP_i: do i = 1, NumOptions
+      if (nocaseCompare(key_t,OptionKeys(i))) then
          k = i
          found = .true.
          exit LOOP_i
@@ -135,23 +134,23 @@ contains
    if (.not.found) then
       s = 1
 !     ----------------------------------------------------------------
-!     call WarningHandler('getDefaultValue','Invalid Key',key_t)
+!     call WarningHandler('getCmdLineOptionValue','Invalid Key',key_t)
 !     ----------------------------------------------------------------
       return
    endif
 !
    if (n < 1) then
 !     ----------------------------------------------------------------
-      call ErrorHandler('getDefaultValue','Number of values < 1',n)
+      call ErrorHandler('getCmdLineOptionValue','Number of values < 1',n)
 !     ----------------------------------------------------------------
    else if (n == 1) then
-      value(1) = DefaultValues(k)
+      value(1) = OptionValues(k)
    else
-      call initString(DefaultValues(k))
+      call initString(OptionValues(k))
       m = getNumTokens()
       if (m < n) then
 !        -------------------------------------------------------------
-         call ErrorHandler('getDefaultValue','Number of string values < n',m,n)
+         call ErrorHandler('getCmdLineOptionValue','Number of string values < n',m,n)
 !        -------------------------------------------------------------
       endif
       do i = 1, n
@@ -160,11 +159,11 @@ contains
       call endString()
    endif
 !
-   end function getDefaultValue_s1
+   end function getCmdLineOptionValue_s1
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getDefaultValue_i0(key,value) result(s)
+   function getCmdLineOptionValue_i0(key,value) result(s)
 !  ===================================================================
    implicit none
 !
@@ -188,8 +187,8 @@ contains
    found = .false.
 !
    key_t = trim(adjustl(key))
-   LOOP_i: do i = 1, NumParams
-      if (nocaseCompare(key_t,StoredKeys(i))) then
+   LOOP_i: do i = 1, NumOptions
+      if (nocaseCompare(key_t,OptionKeys(i))) then
          k = i
          found = .true.
          exit LOOP_i
@@ -198,22 +197,22 @@ contains
    if (.not.found) then
       s = 1
 !     ----------------------------------------------------------------
-!     call WarningHandler('getDefaultValue','Invalid Key',key_t)
+!     call WarningHandler('getCmdLineOptionValue','Invalid Key',key_t)
 !     ----------------------------------------------------------------
       return
    endif
 !
-   read(DefaultValues(k),*,iostat=status)value
+   read(OptionValues(k),*,iostat=status)value
    if (status < 0) then
-      call ErrorHandler('getDefaultValue','Invalid DefaultValue',     &
-                        DefaultValues(k))
+      call ErrorHandler('getCmdLineOptionValue','Invalid OptionValue',     &
+                        OptionValues(k))
    endif
 !
-   end function getDefaultValue_i0
+   end function getCmdLineOptionValue_i0
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getDefaultValue_i1(key,n,value) result(s)
+   function getCmdLineOptionValue_i1(key,n,value) result(s)
 !  ===================================================================
    implicit none
 !
@@ -239,8 +238,8 @@ contains
    found = .false.
 !
    key_t = trim(adjustl(key))
-   LOOP_i: do i = 1, NumParams
-      if (nocaseCompare(key_t,StoredKeys(i))) then
+   LOOP_i: do i = 1, NumOptions
+      if (nocaseCompare(key_t,OptionKeys(i))) then
          k = i
          found = .true.
          exit LOOP_i
@@ -249,28 +248,28 @@ contains
    if (.not.found) then
       s = 1
 !     ----------------------------------------------------------------
-!     call WarningHandler('getDefaultValue','Invalid Key',key_t)
+!     call WarningHandler('getCmdLineOptionValue','Invalid Key',key_t)
 !     ----------------------------------------------------------------
       return
    endif
 !
    if (n < 1) then
 !     ----------------------------------------------------------------
-      call ErrorHandler('getDefaultValue','Number of values < 1',n)
+      call ErrorHandler('getCmdLineOptionValue','Number of values < 1',n)
 !     ----------------------------------------------------------------
    else
-      read(DefaultValues(k),*,iostat=status)value(1:n)
+      read(OptionValues(k),*,iostat=status)value(1:n)
       if (status < 0) then
-         call ErrorHandler('getDefaultValue','Invalid DefaultValue',  &
-                           DefaultValues(k))
+         call ErrorHandler('getCmdLineOptionValue','Invalid OptionValue',  &
+                           OptionValues(k))
       endif
    endif
 !
-   end function getDefaultValue_i1
+   end function getCmdLineOptionValue_i1
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getDefaultValue_r0(key,value) result(s)
+   function getCmdLineOptionValue_r0(key,value) result(s)
 !  ===================================================================
    implicit none
 !
@@ -295,8 +294,8 @@ contains
    found = .false.
 !
    key_t = trim(adjustl(key))
-   LOOP_i: do i = 1, NumParams
-      if (nocaseCompare(key_t,StoredKeys(i))) then
+   LOOP_i: do i = 1, NumOptions
+      if (nocaseCompare(key_t,OptionKeys(i))) then
          k = i
          found = .true.
          exit LOOP_i
@@ -305,22 +304,22 @@ contains
    if (.not.found) then
       s = 1
 !     ----------------------------------------------------------------
-!     call WarningHandler('getDefaultValue','Invalid Key',key_t)
+!     call WarningHandler('getCmdLineOptionValue','Invalid Key',key_t)
 !     ----------------------------------------------------------------
       return
    endif
 !
-   read(DefaultValues(k),*,iostat=status)value
+   read(OptionValues(k),*,iostat=status)value
    if (status < 0) then
-      call ErrorHandler('getDefaultValue','Invalid DefaultValue',     &
-                        DefaultValues(k))
+      call ErrorHandler('getCmdLineOptionValue','Invalid OptionValue',     &
+                        OptionValues(k))
    endif
 !
-   end function getDefaultValue_r0
+   end function getCmdLineOptionValue_r0
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getDefaultValue_r1(key,n,value) result(s)
+   function getCmdLineOptionValue_r1(key,n,value) result(s)
 !  ===================================================================
    implicit none
 !
@@ -347,8 +346,8 @@ contains
    found = .false.
 !
    key_t = trim(adjustl(key))
-   LOOP_i: do i = 1, NumParams
-      if (nocaseCompare(key_t,StoredKeys(i))) then
+   LOOP_i: do i = 1, NumOptions
+      if (nocaseCompare(key_t,OptionKeys(i))) then
          k = i
          found = .true.
          exit LOOP_i
@@ -357,28 +356,28 @@ contains
    if (.not.found) then
       s = 1
 !     ----------------------------------------------------------------
-!     call WarningHandler('getDefaultValue','Invalid Key',key_t)
+!     call WarningHandler('getCmdLineOptionValue','Invalid Key',key_t)
 !     ----------------------------------------------------------------
       return
    endif
 !
    if (n < 1) then
 !     ----------------------------------------------------------------
-      call ErrorHandler('getDefaultValue','Number of values < 1',n)
+      call ErrorHandler('getCmdLineOptionValue','Number of values < 1',n)
 !     ----------------------------------------------------------------
    else
-      read(DefaultValues(k),*,iostat=status)value(1:n)
+      read(OptionValues(k),*,iostat=status)value(1:n)
       if (status < 0) then
-         call ErrorHandler('getDefaultValue','Invalid DefaultValue',  &
-                           DefaultValues(k))
+         call ErrorHandler('getCmdLineOptionValue','Invalid OptionValue',  &
+                           OptionValues(k))
       endif
    endif
 !
-   end function getDefaultValue_r1
+   end function getCmdLineOptionValue_r1
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getDefaultValue_c0(key,value) result(s)
+   function getCmdLineOptionValue_c0(key,value) result(s)
 !  ===================================================================
    implicit none
 !
@@ -403,8 +402,8 @@ contains
    found = .false.
 !
    key_t = trim(adjustl(key))
-   LOOP_i: do i = 1, NumParams
-      if (nocaseCompare(key_t,StoredKeys(i))) then
+   LOOP_i: do i = 1, NumOptions
+      if (nocaseCompare(key_t,OptionKeys(i))) then
          k = i
          found = .true.
          exit LOOP_i
@@ -413,22 +412,22 @@ contains
    if (.not.found) then
       s = 1
 !     ----------------------------------------------------------------
-!     call WarningHandler('getDefaultValue','Invalid Key',key_t)
+!     call WarningHandler('getCmdLineOptionValue','Invalid Key',key_t)
 !     ----------------------------------------------------------------
       return
    endif
 !
-   read(DefaultValues(k),*,iostat=status)value
+   read(OptionValues(k),*,iostat=status)value
    if (status < 0) then
-      call ErrorHandler('getDefaultValue','Invalid DefaultValue',     &
-                        DefaultValues(k))
+      call ErrorHandler('getCmdLineOptionValue','Invalid OptionValue',     &
+                        OptionValues(k))
    endif
 !
-   end function getDefaultValue_c0
+   end function getCmdLineOptionValue_c0
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getDefaultValue_c1(key,n,value) result(s)
+   function getCmdLineOptionValue_c1(key,n,value) result(s)
 !  ===================================================================
    implicit none
 !
@@ -455,8 +454,8 @@ contains
    found = .false.
 !
    key_t = trim(adjustl(key))
-   LOOP_i: do i = 1, NumParams
-      if (nocaseCompare(key_t,StoredKeys(i))) then
+   LOOP_i: do i = 1, NumOptions
+      if (nocaseCompare(key_t,OptionKeys(i))) then
          k = i
          found = .true.
          exit LOOP_i
@@ -465,44 +464,156 @@ contains
    if (.not.found) then
       s = 1
 !     ----------------------------------------------------------------
-!     call WarningHandler('getDefaultValue','Invalid Key',key_t)
+!     call WarningHandler('getCmdLineOptionValue','Invalid Key',key_t)
 !     ----------------------------------------------------------------
       return
    endif
 !
    if (n < 1) then
 !     ----------------------------------------------------------------
-      call ErrorHandler('getDefaultValue','Number of values < 1',n)
+      call ErrorHandler('getCmdLineOptionValue','Number of values < 1',n)
 !     ----------------------------------------------------------------
    else
-      read(DefaultValues(k),*,iostat=status)value(1:n)
+      read(OptionValues(k),*,iostat=status)value(1:n)
       if (status < 0) then
-         call ErrorHandler('getDefaultValue','Invalid DefaultValue',  &
-                           DefaultValues(k))
+         call ErrorHandler('getCmdLineOptionValue','Invalid OptionValue',  &
+                           OptionValues(k))
       endif
    endif
 !
-   end function getDefaultValue_c1
+   end function getCmdLineOptionValue_c1
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine loadDefaultKeyValues(Keys,Values,n)
+   subroutine loadCmdLineOptions(num_args)
 !  ===================================================================
    implicit none
 !
-   character (len=50), intent(out) :: Keys(:)
-   character (len=80), intent(out) :: Values(:)
+   character (len=50) :: args
 !
-   integer (kind=IntKind), intent(out) :: n
+   integer (kind=IntKind), intent(out) :: num_args
+   integer (kind=IntKind) :: i, j, n, m, ml, ieq
+   integer (kind=IntKind) :: mj, mj_save
 !
-   n = 0; Keys = ' '; Values = ' '
-!
-   include '../src/DefaultParameters.inc'
-!
-   if (n > size(Keys)) then
-      call ErrorHandler('loadDefaultKeyValues','n > size of Keys',n,size(Keys))
-   endif
-!
-   end subroutine loadDefaultKeyValues
 !  ===================================================================
-end module DefaultParamModule
+!  Command line arguments list
+!  -------------------------------------------------------------------
+!  character (len=200) :: cmdline_arguments
+!  character (len=256) :: msg
+!  integer (kind=intKind) :: ios
+!  integer (kind=intKind) :: NumOutputProcs, NumAtomsPerProc
+!
+!  namelist /cla/NumOutputProcs, NumAtomsPerProc
+!  ===================================================================
+!
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         implicit none
+         logical :: t
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+      end function nocaseCompare
+   end interface
+!
+   n = 0; Options = ' '; OptionKeys = ' '; OptionValues = ' '
+!
+   include '../src/CmdLineOptions.inc'
+!
+   if (n > MaxOptions) then
+      call ErrorHandler('loadCmdLineOptions','n > MaxOptions',n,MaxOptions)
+   endif
+   NumOptions = n
+!  print *,'NumOptions = ',NumOptions
+!
+!  ===================================================================
+!  Start processing the command line arguments...........
+!  -------------------------------------------------------------------
+   n = command_argument_count()
+!  -------------------------------------------------------------------
+   num_args = 0
+   mj_save = 0
+   if (n > 0) then
+!     cmdline_arguments = '&cla '
+      do i = 1, n
+!        -------------------------------------------------------------
+         call get_command_argument(i,args)
+!        -------------------------------------------------------------
+!        print *,'Before processed: ',trim(args)
+         ieq = index(args,'=')
+         ml = len(trim(args))
+         if (ieq == ml) then
+            m = ml - 1
+         else if (ieq > 0) then
+            m = ieq - 1
+         else
+            m = ml
+         endif
+         mj = 0
+         if (args(1:2) == '--') then
+            LOOP_j2: do j = 1, NumOptions
+               if (nocaseCompare(trim(args(3:m)),trim(Options(2,j)(3:))) .or. &
+                   nocaseCompare(trim(args(3:m)),trim(Options(3,j)(3:)))) then
+                  mj = j
+                  exit LOOP_j2
+               endif
+            enddo LOOP_j2
+         else if (args(1:1) == '-') then
+            LOOP_j1: do j = 1, NumOptions
+               if (nocaseCompare(trim(args(2:m)),trim(Options(1,j)(2:)))) then
+                  mj = j
+                  exit LOOP_j1
+               endif
+            enddo LOOP_j1
+         endif
+         if (mj > 0) then
+            num_args = num_args + 1
+            mj_save = mj
+            if (ieq == 0 .or. ieq == ml) then
+!              args = trim(OptName(j))//'='
+               OptionValues(mj) = ' '
+            else
+!              args = trim(OptName(j))//args(ieq:ml)
+               OptionValues(mj) = args(ieq+1:ml)
+            endif
+         else if (mj_save > 0) then
+            if (ieq == 1) then
+               args(1:1) = ' '
+               args = adjustl(args)
+            else if (ieq > 1) then
+!              -------------------------------------------------------
+               call ErrorHandler('loadCmdLineOptions','Error parsing the command line option',trim(args))
+!              -------------------------------------------------------
+            endif
+            OptionValues(mj_save) = trim(OptionValues(mj_save))//args(1:ml)
+         else
+!           ----------------------------------------------------------
+            call ErrorHandler('loadCmdLineOptions','Error parsing the command line option',trim(args))
+!           ----------------------------------------------------------
+         endif
+!        print *,'After  processed: ',trim(args)
+!        cmdline_arguments = trim(cmdline_arguments)//' '//trim(args)
+      enddo
+!     cmdline_arguments = trim(cmdline_arguments)//' /'
+!     print *,'cmd-line args: ',trim(cmdline_arguments)
+!     read(cmdline_arguments, nml=cla, iostat=ios, iomsg=msg)
+!     if (ios /= 0) then
+!        -------------------------------------------------------------
+!        call ErrorHandler('initInput','Error parsing the command line',msg)
+!        -------------------------------------------------------------
+!     endif
+!     print *,'NumOutputProcs  = ',NumOutputProcs
+!     print *,'NumAtomsPerProc = ',NumAtomsPerProc
+!  else
+!     NumOutputProcs = 0
+!     NumAtomsPerProc = 0
+   endif
+!  do i = 1, NumOptions
+!     print *,trim(OptionKeys(i)),' = ',trim(OptionValues(i))
+!  enddo
+!  ===================================================================
+!  End of processing the command line argumens
+!  ===================================================================
+!
+   end subroutine loadCmdLineOptions
+!  ===================================================================
+end module CmdLineOptionModule

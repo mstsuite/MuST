@@ -80,19 +80,27 @@ private
 !
    character (len=80) :: file_path
 !
+   integer (kind=IntKind) :: num_args
 contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine initInput()
 !  ===================================================================
    use DefaultParamModule, only : initDefaultParam
+   use CmdLineOptionModule, only : initCmdLineOption
+!
    implicit none
 !
    NumInputTables = 0
 !  DataTable%UnitNumber = -1
 !  DataTable%Open = .false.
 !
+!  -------------------------------------------------------------------
    call initDefaultParam()
+!  -------------------------------------------------------------------
+   call initCmdLineOption(num_args)
+!  -------------------------------------------------------------------
+!  print *,'Number of command line arguments = ',num_args
 !
    Initialized = .true.
 !
@@ -105,6 +113,8 @@ contains
    subroutine endInput()
 !  ===================================================================
    use DefaultParamModule, only : endDefaultParam
+   use CmdLineOptionModule, only : endCmdLineOption
+!
    implicit none
    integer (kind=IntKind) :: i
    type (InputTableStruct), pointer :: next
@@ -119,10 +129,13 @@ contains
    nullify(CurrentPtr)
    nullify(next)
 !
+   call endCmdLineOption()
+!
    call endDefaultParam()
 !
    Initialized = .false.
    NumInputTables = 0
+   num_args = 0
 !
    end subroutine endInput
 !  ===================================================================
