@@ -1,0 +1,76 @@
+#=====================================================================
+# Acceleration = 1: enable GPU acceleration
+# Acceleration = 0: otherwise
+#=====================================================================
+Acceleration = 1
+
+#=====================================================================
+# Library paths and elements, e.g.,
+#    HDF5_PATH   = /opt/packages/HDF5/hdf5-1.10.5/PGI
+#    LIBXC_PATH  = /opt/packages/LibXC/libxc-4.3.4/PGI
+#    ACCEL_PATH  = /usr/local/cuda
+#    FFTW_PATH   = /usr/local/FFTW/fftw-3.3.8/PGI
+#    P3DFFT_PATH = /opt/packages/P3DFFT/p3dfft-2.7.9/PGI
+#    LUA_PATH    = /opt/packages/Lua/lua-5.3.5/PGI
+#  
+# If LUA_PATH, LIBXC_PATH, FFTW_PATH, and/or P3DFFT_PATH are empty, the
+# corresponding packages will be installed under $(EXTERN_LIB_PATH)
+#=====================================================================
+MATH_PATH   = /opt/intel/compilers_and_libraries_2020.1.217/linux/mkl
+HDF5_PATH   = 
+ACCEL       = CUDA
+ACCEL_PATH  = /usr/local/cuda
+LIBXC_PATH  = /home/liangstein/MUST-KKR/libxc
+FFTW_PATH   = /home/liangstein/MUST-KKR/nvhpc_fftw3
+P3DFFT_PATH = /home/liangstein/MUST-KKR/nvhpc_p3dfft
+LUA_PATH    =
+LIBS       += -L/scratch/projects/compilers/nvhpc_22.1/Linux_x86_64/22.1/compilers/lib/ -lblas -llapack \
+              -L/scratch/projects/compilers/nvhpc_22.1/Linux_x86_64/22.1//comm_libs/mpi/lib/ -lscalapack \
+              -L$(ACCEL_PATH)/lib64 -lcudart -lcuda -lcublas -lstdc++ -lcusolver
+
+#=====================================================================
+# Compiler tools
+#=====================================================================
+CC          = mpicc
+CXX         = mpicxx
+F77         = mpifort
+FC          = mpifort
+MPICC       = mpicc
+ACCEL_CXX   = nvcc -arch=sm_80
+ARCHV       = ar -r
+
+#=====================================================================
+# Preprocessor/Compiler/Linker flags, e.g.,
+#    FFLAGS = -I. -O3 -CB -CU -traceback -ftrapuv -fpe0 -ftz -fp-stack-check
+# Note: "FPPFLAGS = -DMPI" enables MPI parallel processing.
+# Unfortunately, rpc on b2t02 is not properly installed.
+#     Specifically, gssrpc_xdr_double is missing from libgssrpc.so
+#     I have to disable using XDR format.
+#=====================================================================
+FPPDEFS     = -cpp -DNVHPC
+CPPDEFS     = -cpp
+FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK
+
+CFLAGS      = -O3
+CXXFLAGS    = -O3 -std=c++14
+# FFLAGS      = -O3
+# F77FLAGS    = -O3
+# the following option "-w -fallow-argument-mismatch" is needed for gcc.10.1.0
+FFLAGS      = -O3 -w #-fallow-argument-mismatch
+F77FLAGS    = -O3 -w #-fallow-argument-mismatch
+# FFLAGS      = -O3 -fcheck=all -w -fallow-argument-mismatch
+# F77FLAGS    = -O3 -fcheck=all -w -fallow-argument-mismatch
+OPT_OPENMP  = -mp
+
+LD_FLAGS    = -mp
+LD          = $(FC) $(LD_FLAGS)
+
+#=====================================================================
+# LIBXC_CONFIG_FLAGS, P3DFFT_CONFIG_FLAGS and FFTW_CONFIG_FLAGS are 
+# ./configure flags for hdf5, libxc, p3dfft, and fftw package, respectively.
+# Note: for hdf5, "--enable-parallel" might be needed in the future.
+#=====================================================================
+HDF5_CONFIG_FLAGS   = --enable-fortran --enable-static-exec CC=$(CC) CXX=$(CXX) FC=$(FC)
+LIBXC_CONFIG_FLAGS  = CC=$(CC) CFLAGS="$(CFLAGS)" FC=$(FC) FFLAGS="$(FFLAGS)"
+P3DFFT_CONFIG_FLAGS = FC=$(FC) CC=$(CC) --enable-openmpi FCFLAGS="$(FFLAGS)"
+FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS)" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)"
