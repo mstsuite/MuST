@@ -3,7 +3,7 @@
 # Acceleration = 0: otherwise
 #=====================================================================
 Acceleration = 0
-NotUse_P3DFFT = 1
+# NotUse_P3DFFT = 0
 
 #=====================================================================
 # Library paths and elements, e.g.,
@@ -22,7 +22,8 @@ LIBXC_PATH  =
 FFTW_PATH   = 
 P3DFFT_PATH = 
 LUA_PATH    =
-LIBS       += -Mmkl -L/opt/packages/ScaLAPACK/scalapack-2.1.0 -lscalapack
+# LIBS       += -Mmkl -L/opt/packages/ScaLAPACK/scalapack-2.1.0 -lscalapack
+LIBS       += -L$(NVHPC_ROOT)/compilers/lib -lblas_lp64 -llapack_lp64
 ADD_LIBS   += -lm -lstdc++ -pgf90libs
 
 #=====================================================================
@@ -30,8 +31,8 @@ ADD_LIBS   += -lm -lstdc++ -pgf90libs
 #=====================================================================
 CC          = mpicc
 CXX         = mpicxx
-F77         = mpif90
-FC          = mpif90
+F77         = mpifort
+FC          = mpifort
 MPICC       = mpicc
 ACCEL_CXX   = nvcc -arch=sm_35
 ARCHV       = ar -r

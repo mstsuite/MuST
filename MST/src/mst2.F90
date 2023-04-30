@@ -729,16 +729,16 @@ program mst2
 !     write(6,'(a,a)') 'This code was compiled by ', compiler_version(), &
 !                      ' using the options ', compiler_options()
 !     ----------------------------------------------------------------
-      n = command_argument_count()
+!     n = command_argument_count()
 !     ----------------------------------------------------------------
-      do i = 1, n
+!     do i = 1, n
 !        -------------------------------------------------------------
-         call get_command_argument(i,cmd)
+!        call get_command_argument(i,cmd)
 !        -------------------------------------------------------------
-         if (len_trim(cmd) > 0) then
-            write(6,'(a,a)')'Command argument: ',trim(cmd)
-         endif
-      enddo
+!        if (len_trim(cmd) > 0) then
+!           write(6,'(a,a)')'Command argument: ',trim(cmd)
+!        endif
+!     enddo
 !     ----------------------------------------------------------------
       call get_environment_variable("HOSTNAME", cmd)
 !     ----------------------------------------------------------------
