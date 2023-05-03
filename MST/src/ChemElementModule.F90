@@ -19,7 +19,8 @@ public :: getAtomInfo,      &
           getAtomicRadius,  &
           getImplicitMuffinTinRadius,  &
           getImplicitCoreRadius,  &
-          getDebyeTemperature
+          getDebyeTemperature, &
+          isAtomName ! check if the given string a chemical element name.
 !
    interface setNumCoreStates
       module procedure setNumCoreStates_a, setNumCoreStates_n
@@ -1698,6 +1699,52 @@ contains
 !
    name=Element(AtomNumber)%AtomName(1:2)
    end function getName
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isAtomName(AtomName) result(y)
+!  ===================================================================
+   implicit none
+!
+   character (len=*), intent(in) :: AtomName
+!
+   logical :: y
+!
+   character (len=2) :: a
+   character (len=7), parameter :: sname='isAtomName'
+   integer (kind=IntKind) :: i, k
+!
+   if (.not.Initialized) then
+      call initChemElement()
+   endif
+!
+   k=len_trim(adjustl(AtomName))
+   if (k > MaxLenOfAtomName .or. k < 1) then
+      y = .false.
+      return
+   endif
+!
+   a=trim(adjustl(AtomName))
+!  if(a(1:1) < 'A' .and. a(1:1) /= '_') then
+   if(a(1:1) < 'A') then
+      a(1:1)=achar(iachar(a(1:1))+iachar('A')-iachar('a'))
+   endif
+!  if (k == 2 .and. a(2:2) >= 'A' .and. a(2:2) <= 'Z' .and. a(1:1) /= '_') then
+   if (k == 2 .and. a(2:2) >= 'A' .and. a(2:2) <= 'Z') then
+      a(2:2)=achar(iachar(a(2:2))-iachar('A')+iachar('a'))
+   endif
+!
+   y = .false.
+   do i=MinZtot,NumElements
+      if (Element(i)%AtomName(1:2) == a(1:2)) then
+         y = .true.
+         exit
+      endif
+   enddo
+!
+   end function isAtomName
 !  ===================================================================
 !
 !  *******************************************************************

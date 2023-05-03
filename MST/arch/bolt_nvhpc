@@ -51,7 +51,9 @@ CPPFLAGS    =
 CFLAGS      = -O3
 CXXFLAGS    = -O3 -std=c++14
 OPT_OPENMP  = -fopenmp -mp=gpu -Minfo=mp,accel
-FFLAGS      = -O3 -Mbounds -traceback -Mchkptr -Mchkstk
+FFLAGS      = -O3
+FFLAGS_ALT  = -O2
+# -Mbounds -traceback -Mchkptr -Mchkstk
 # FFLAGS      = -O3 $(OPT_OPENMP)
 F77FLAGS    = $(FFLAGS)
 
@@ -66,4 +68,4 @@ LD          = $(FC) $(LD_FLAGS)
 HDF5_CONFIG_FLAGS   = --enable-fortran --enable-static-exec CC=$(CC) CXX=$(CXX) FC=$(FC)
 LIBXC_CONFIG_FLAGS  = CC=$(CC) CFLAGS="$(CFLAGS)" FC=$(FC) FFLAGS="$(FFLAGS)" LIBS=""
 P3DFFT_CONFIG_FLAGS = --enable-pgi --enable-openmpi --enable-estimate FC=$(FC) CC=$(CC) LIBS="$(LIBS)" CCLD=$(FC) LIBS=""
-FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS)" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)"
+FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS)" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)" LIBS="$(ADD_LIBS)"

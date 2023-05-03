@@ -11,6 +11,11 @@
 !*        subroutine call.                                           *
 !*        getKeyIndex should be considered obsolete                  *
 !*                                                                   *
+!* VERSION NUMBER : 1.2                                              *
+!* LAST MODIFIED  : MAY 1st, 2023                                    *
+!* NOTES: Added functions getKeyLabelValue, isLabelValueForm, and    *
+!*                        isIndexValueForm                           *
+!*                                                                   *
 !* The module for open, readi, and close formatted input data files  *
 !* The data in each input file are stored in an InputTable.          *
 !* Given the key name, the data can be accessed using following      *
@@ -25,23 +30,27 @@ module InputModule
    use PublicTypeDefinitionsModule, only : InputTableStruct
    use PublicParamDefinitionsModule, only : StandardInputFile
 !
-public :: initInput,       &
-          endInput,        &
-          openInputFile,   &
-          readInputData,   &
-          closeInputFile,  &
+public :: initInput,         &
+          endInput,          &
+          openInputFile,     &
+          readInputData,     &
+          closeInputFile,    &
           getNumInputTables, &
-          getTableName,    &
-          getTableIndex,   &
-          printKeyNames,   &
-          printKeyValues,  &
-          getNumData,      &
-          getNumKeys,      &
-          getNumKeyValues, &
-          getKeyValue,     &
-          getKeyIndex,     &
-          getKeyIndexValue, &
-          isKeyExisting
+          getTableName,      &
+          getTableIndex,     &
+          printKeyNames,     &
+          printKeyValues,    &
+          getNumData,        &
+          getNumKeys,        &
+          getNumKeyValues,   &
+          getKeyValue,       &
+          getKeyIndex,       &
+          getKeyIndexValue,  &
+          isKeyExisting,     &
+          isIndexValueForm,  &
+          isLabelValueForm,  &
+          getKeyLabelValue,  &
+          getKeyLabelIndexValue
 !
    interface getKeyValue
       module procedure getKeyValue_str0, getKeyValue_str1, &
@@ -61,6 +70,18 @@ public :: initInput,       &
                        getKeyIndexValue_int2, getKeyIndexValue_int3
       module procedure getKeyIndexValue_real0, getKeyIndexValue_real1, &
                        getKeyIndexValue_real2, getKeyIndexValue_real3
+   end interface
+!
+   interface getKeyLabelValue
+      module procedure getKeyLabelValue_str0, getKeyLabelValue_str1 
+      module procedure getKeyLabelValue_int0, getKeyLabelValue_int1
+      module procedure getKeyLabelValue_real0, getKeyLabelValue_real1
+   end interface
+!
+   interface getKeyLabelIndexValue
+      module procedure getKeyLabelIndexValue_str
+      module procedure getKeyLabelIndexValue_int
+      module procedure getKeyLabelIndexValue_real
    end interface
 !
 private
@@ -88,6 +109,7 @@ contains
 !  ===================================================================
    use DefaultParamModule, only : initDefaultParam
    use CmdLineOptionModule, only : initCmdLineOption
+   use StringModule, only : initString
 !
    implicit none
 !
@@ -97,8 +119,8 @@ contains
 !
 !  -------------------------------------------------------------------
    call initDefaultParam()
-!  -------------------------------------------------------------------
    call initCmdLineOption(num_args)
+   call initString(80)
 !  -------------------------------------------------------------------
 !  print *,'Number of command line arguments = ',num_args
 !
@@ -114,6 +136,7 @@ contains
 !  ===================================================================
    use DefaultParamModule, only : endDefaultParam
    use CmdLineOptionModule, only : endCmdLineOption
+   use StringModule, only : endString
 !
    implicit none
    integer (kind=IntKind) :: i
@@ -129,9 +152,11 @@ contains
    nullify(CurrentPtr)
    nullify(next)
 !
+!  -------------------------------------------------------------------
    call endCmdLineOption()
-!
    call endDefaultParam()
+   call endString()
+!  -------------------------------------------------------------------
 !
    Initialized = .false.
    NumInputTables = 0
@@ -161,7 +186,7 @@ contains
       pflag=0; fflag=0
       do 
          read(5,'(a)',iostat=status)text
-         if (status < 0) then
+         if (status /= 0) then
             write(6,'(a)')'File name is not found in the standard input file'
             call ErrorHandler('getDefaultInput','Invalid input data file')
          else if (text(1:17) == 'Current File Path') then
@@ -727,6 +752,143 @@ endif
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isIndexValueForm(id,key) result(y)
+!  ===================================================================
+   use StringModule, only : setString, getNumTokens, readToken
+!
+   implicit none
+!
+   character (len=*), intent(in) :: key
+   character (len=50) :: v1
+!
+   integer (kind=IntKind), intent(in) :: id
+   integer (kind=IntKind) :: i
+!
+   logical :: y
+!
+   interface
+      function isInteger(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isInteger
+   end interface
+!
+   if (id < 1 .or. id > NumInputTables) then
+      call ErrorHandler('isIndexValueForm','invalid table index',id)
+   endif
+!
+   CurrentPtr => DataTable
+   LOOP_i0: do i=1,NumInputTables
+      if (CurrentPtr%TableIndex == id) then
+         exit LOOP_i0
+      else
+         CurrentPtr => CurrentPtr%next
+      endif
+   enddo LOOP_i0
+!
+   y = .false.
+   LOOP_i1: do i=1,CurrentPtr%NumData
+      if (CurrentPtr%KeyName(i) == key) then
+         call setString(trim(CurrentPtr%KeyValue(i)))
+         if (getNumTokens() > 1) then
+            call readToken(1,v1)
+            if (isInteger(v1)) then
+               y = .true.
+            else
+               y = .false.
+            endif
+         else
+!           -----------------------------------------------------------
+            call WarningHandler('isIndexValueForm','invalid input data format', &
+                                CurrentPtr%KeyValue(i))
+!           -----------------------------------------------------------
+            y = .false.
+         endif
+         exit LOOP_i1
+      endif
+   enddo LOOP_i1
+!
+   end function isIndexValueForm
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isLabelValueForm(id,key) result(y)
+!  ===================================================================
+   use StringModule, only : setString, getNumTokens, readToken
+!
+   implicit none
+!
+   character (len=*), intent(in) :: key
+   character (len=50) :: v1
+!
+   integer (kind=IntKind), intent(in) :: id
+   integer (kind=IntKind) :: i
+!
+   logical :: y
+!
+   interface
+      function isInteger(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isInteger
+   end interface
+!
+   interface
+      function isNumber(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isNumber
+   end interface
+!
+   if (id < 1 .or. id > NumInputTables) then
+      call ErrorHandler('isLabelValueForm','invalid table index',id)
+   endif
+!
+   CurrentPtr => DataTable
+   LOOP_i0: do i=1,NumInputTables
+      if (CurrentPtr%TableIndex == id) then
+         exit LOOP_i0
+      else
+         CurrentPtr => CurrentPtr%next
+      endif
+   enddo LOOP_i0
+!
+   y = .false.
+   LOOP_i1: do i=1,CurrentPtr%NumData
+      if (CurrentPtr%KeyName(i) == key) then
+         call setString(trim(CurrentPtr%KeyValue(i)))
+         if (getNumTokens() > 1) then
+            call readToken(1,v1)
+            if (isInteger(v1)) then
+               y = .false.
+            else if (isNumber(v1)) then
+!              --------------------------------------------------------
+               call WarningHandler('isLabelValueForm','Unexpected label in the data', &
+                                 v1)
+!              --------------------------------------------------------
+               y = .false.
+            else
+               y = .true.
+            endif
+         else
+!           -----------------------------------------------------------
+            call WarningHandler('isLabelValueForm','invalid input data format', &
+                                CurrentPtr%KeyValue(i))
+!           -----------------------------------------------------------
+            y = .false.
+         endif
+         exit LOOP_i1
+      endif
+   enddo LOOP_i1
+!
+   end function isLabelValueForm
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getNumKeyValues(id,key) result(n)
 !  ===================================================================
    implicit none
@@ -900,7 +1062,7 @@ endif
          m = m+1
          s=adjustl(CurrentPtr%KeyValue(i))
          read(s,'(80a)',iostat=status)value(1:k,m)
-         if (status < 0) then
+         if (status /= 0) then
             call ErrorHandler('getKeyValue','Invalid value',          &
                               CurrentPtr%KeyValue(i))
          endif
@@ -955,7 +1117,7 @@ endif
       if (CurrentPtr%KeyName(i) == key) then
          s=adjustl(CurrentPtr%KeyValue(i))
          read(s,'(80a)',iostat=status)value(1:k)
-         if (status < 0) then
+         if (status /= 0) then
             call ErrorHandler('getKeyValue','Invalid value',          &
                               CurrentPtr%KeyValue(i))
          endif
@@ -1017,7 +1179,7 @@ endif
    do i=1,CurrentPtr%NumData
       if (CurrentPtr%KeyName(i) == key) then
          read(CurrentPtr%KeyValue(i),*,iostat=status)value
-         if (status < 0) then
+         if (status /= 0) then
             call ErrorHandler('getKeyValue','Invalid value',          &
                               CurrentPtr%KeyValue(i))
          endif
@@ -1080,7 +1242,7 @@ endif
       if (CurrentPtr%KeyName(i) == key) then
          m = m+1
          read(CurrentPtr%KeyValue(i),*,iostat=status)value(m)
-         if (status < 0) then
+         if (status /= 0) then
             call ErrorHandler('getKeyValue','Invalid value',          &
                               CurrentPtr%KeyValue(i))
          endif
@@ -1134,7 +1296,7 @@ endif
       if (CurrentPtr%KeyName(i) == key) then
          m = m+1
          read(CurrentPtr%KeyValue(i),*,iostat=status)value(1:k,m)
-         if (status < 0) then
+         if (status /= 0) then
             call ErrorHandler('getKeyValue','Invalid value',          &
                               CurrentPtr%KeyValue(i))
          endif
@@ -1188,7 +1350,7 @@ endif
    do i=1,CurrentPtr%NumData
       if (CurrentPtr%KeyName(i) == key) then
          read(CurrentPtr%KeyValue(i),*,iostat=status)value(1:k)
-         if (status < 0) then
+         if (status /= 0) then
             call ErrorHandler('getKeyValue','Invalid value',          &
                               CurrentPtr%KeyValue(i))
          endif
@@ -1250,7 +1412,7 @@ endif
    do i=1,CurrentPtr%NumData
       if (CurrentPtr%KeyName(i) == key) then
          read(CurrentPtr%KeyValue(i),*,iostat=status)value
-         if (status < 0) then
+         if (status /= 0) then
             call ErrorHandler('getKeyValue','Invalid value',          &
                               CurrentPtr%KeyValue(i))
          endif
@@ -1313,7 +1475,7 @@ endif
       if (CurrentPtr%KeyName(i) == key) then
          m = m+1
          read(CurrentPtr%KeyValue(i),*,iostat=status)value(m)
-         if (status < 0) then
+         if (status /= 0) then
             call ErrorHandler('getKeyValue','Invalid value',          &
                               CurrentPtr%KeyValue(i))
          endif
@@ -1367,7 +1529,7 @@ endif
       if (CurrentPtr%KeyName(i) == key) then
          m = m+1
          read(CurrentPtr%KeyValue(i),*,iostat=status)value(1:k,m)
-         if (status < 0) then
+         if (status /= 0) then
             call ErrorHandler('getKeyValue','Invalid value',          &
                               CurrentPtr%KeyValue(i))
          endif
@@ -1421,7 +1583,7 @@ endif
    do i=1,CurrentPtr%NumData
       if (CurrentPtr%KeyName(i) == key) then
          read(CurrentPtr%KeyValue(i),*,iostat=status)value(1:k)
-         if (status < 0) then
+         if (status /= 0) then
             call ErrorHandler('getKeyValue','Invalid value',          &
                               CurrentPtr%KeyValue(i))
          endif
@@ -1483,7 +1645,7 @@ endif
    do i=1,CurrentPtr%NumData
       if (CurrentPtr%KeyName(i) == key) then
          read(CurrentPtr%KeyValue(i),*,iostat=status)value
-         if (status < 0) then
+         if (status /= 0) then
             call ErrorHandler('getKeyValue','Invalid value',          &
                               CurrentPtr%KeyValue(i))
          endif
@@ -1546,7 +1708,7 @@ endif
       if (CurrentPtr%KeyName(i) == key) then
          m = m+1
          read(CurrentPtr%KeyValue(i),*,iostat=status)value(m)
-         if (status < 0) then
+         if (status /= 0) then
             call ErrorHandler('getKeyValue','Invalid value',          &
                               CurrentPtr%KeyValue(i))
          endif
@@ -1600,7 +1762,7 @@ endif
       if (CurrentPtr%KeyName(i) == key) then
          m = m+1
          read(CurrentPtr%KeyValue(i),*,iostat=status)value(1:k,m)
-         if (status < 0) then
+         if (status /= 0) then
             call ErrorHandler('getKeyValue','Invalid value',          &
                               CurrentPtr%KeyValue(i))
          endif
@@ -1661,7 +1823,7 @@ endif
    do i=1,CurrentPtr%NumData
       if (CurrentPtr%KeyName(i) == key) then
          read(CurrentPtr%KeyValue(i),*,iostat=status)value(1:k)
-         if (status < 0) then
+         if (status /= 0) then
             call ErrorHandler('getKeyValue','Invalid value',          &
                               CurrentPtr%KeyValue(i))
          endif
@@ -1769,6 +1931,13 @@ endif
    logical :: found
 !
    interface
+      function isInteger(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isInteger
+   end interface
+!
+   interface
       function getTokenPosition(k,s,n) result(p)
          character (len=*), intent(in) :: s
          integer, intent(in) :: k
@@ -1798,15 +1967,18 @@ endif
          s=trim(adjustl(CurrentPtr%KeyValue(i)))
          p1 = getTokenPosition(1,s)
          p2 = getTokenPosition(2,s)
-         read(s(p1:p2-1),*,iostat=status)k_index
-         if (status < 0) then
-            call WarningHandler('getKeyIndexValue','Invalid value',          &
-                              CurrentPtr%KeyValue(i))
-         else
-            value = s(p2:)
-            found = .true.
+         if (isInteger(s(p1:p2-1))) then
+            read(s(p1:p2-1),*,iostat=status)k_index
+            if (status /= 0) then
+               call WarningHandler('getKeyIndexValue','Invalid value', &
+                                 CurrentPtr%KeyValue(i))
+               k_index = 0
+            else
+               value = s(p2:)
+               found = .true.
+            endif
+            exit
          endif
-         exit
       endif
    enddo
 !
@@ -1834,6 +2006,13 @@ endif
    character (len=80) :: s
    integer (kind=IntKind) :: i, m, status, p1, p2, j
    logical :: found
+!
+   interface
+      function isInteger(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isInteger
+   end interface
 !
    interface
       function getTokenPosition(k,s,n) result(p)
@@ -1867,17 +2046,19 @@ endif
          s=trim(adjustl(CurrentPtr%KeyValue(i)))
          p1 = getTokenPosition(1,s)
          p2 = getTokenPosition(2,s)
-         read(s(p1:p2-1),*,iostat=status)j
-         if (status < 0) then
-            call WarningHandler('getKeyIndexValue','Invalid value',          &
-                              CurrentPtr%KeyValue(i))
-         else if (j < 1 .or. j > n) then
-            call ErrorHandler('getKeyIndexValue','Index value out of range',j)
-         else
-            value(m) = s(p2:)
-            found = .true.
+         if (isInteger(s(p1:p2-1))) then
+            read(s(p1:p2-1),*,iostat=status)j
+            if (status /= 0) then
+               call WarningHandler('getKeyIndexValue','Invalid value', &
+                                 CurrentPtr%KeyValue(i))
+            else if (j < 1 .or. j > n) then
+               call ErrorHandler('getKeyIndexValue','Index value out of range',j)
+            else
+               value(m) = s(p2:)
+               k_index(j) = m
+               found = .true.
+            endif
          endif
-         k_index(j) = m
       endif
       if (m == n) then
          exit
@@ -1899,23 +2080,22 @@ endif
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getKeyIndexValue_str2(id,key,k,k_index,value,n) result(status)
 !  ===================================================================
+   use StringModule, only : setString, getNumTokens, readToken
    implicit none
    character (len=*), intent(in) :: key
    integer (kind=IntKind), intent(in) :: k,n
    integer (kind=IntKind), intent(in) :: id
    integer (kind=IntKind), intent(out) :: k_index(n)
    character (len=*), intent(out) :: value(k,n)
-   character (len=80) :: s
-   integer (kind=IntKind) :: i, m, status, p1, p2, j
+   character (len=10) :: s
+   integer (kind=IntKind) :: i, m, status, p1, p2, j, ik
    logical :: found
 !
    interface
-      function getTokenPosition(k,s,n) result(p)
+      function isInteger(s) result(t)
          character (len=*), intent(in) :: s
-         integer, intent(in) :: k
-         integer, intent(out), optional :: n
-         integer :: p
-      end function getTokenPosition
+         logical :: t
+      end function isInteger
    end interface
 !
    if (id < 1 .or. id > NumInputTables) then
@@ -1938,20 +2118,21 @@ endif
    do i=1,CurrentPtr%NumData
       if (CurrentPtr%KeyName(i) == key) then
          m = m+1
-         s=adjustl(CurrentPtr%KeyValue(i))
-         p1 = getTokenPosition(1,s)
-         p2 = getTokenPosition(2,s)
-         read(s(p1:p2-1),*)j
-         read(s(p2:),'(80a)',iostat=status)value(1:k,m)
-         if (status < 0) then
-            call WarningHandler('getKeyIndexValue','Invalid value',          &
-                              CurrentPtr%KeyValue(i))
-         else if (j < 1 .or. j > n) then
-            call ErrorHandler('getKeyIndexValue','Index value out of range',j)
-         else
-            found = .true.
+         call setString(adjustl(CurrentPtr%KeyValue(i)))
+         if (getNumTokens() > k) then
+            call readToken(1,s)
+            if (isInteger(s)) then
+               read(s,*)j
+               if (j < 1 .or. j > n) then
+                  call ErrorHandler('getKeyIndexValue','Index value out of range',j)
+               endif
+               do ik = 1, k
+                  call readToken(ik+1,value(ik,m))
+               enddo
+               found = .true.
+               k_index(j) = m
+            endif
          endif
-         k_index(j) = m
       endif
       if (m == n) then
          exit
@@ -1973,22 +2154,21 @@ endif
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getKeyIndexValue_str3(id,key,k,k_index,value) result(status)
 !  ===================================================================
+   use StringModule, only : setString, getNumTokens, readToken
    implicit none
    character (len=*), intent(in) :: key
    integer (kind=IntKind), intent(in) :: id, k
    integer (kind=IntKind), intent(out) :: k_index
    character (len=*), intent(out) :: value(k)
-   character (len=80) :: s
-   integer (kind=IntKind) :: i, status, p1, p2
+   character (len=10) :: s
+   integer (kind=IntKind) :: i, status, j
    logical :: found
 !
    interface
-      function getTokenPosition(k,s,n) result(p)
+      function isInteger(s) result(t)
          character (len=*), intent(in) :: s
-         integer, intent(in) :: k
-         integer, intent(out), optional :: n
-         integer :: p
-      end function getTokenPosition
+         logical :: t
+      end function isInteger
    end interface
 !
    if (id < 1 .or. id > NumInputTables) then
@@ -2009,18 +2189,18 @@ endif
    value(1:k)(:) = ' '
    do i=1,CurrentPtr%NumData
       if (CurrentPtr%KeyName(i) == key) then
-         s=adjustl(CurrentPtr%KeyValue(i))
-         p1 = getTokenPosition(1,s)
-         p2 = getTokenPosition(2,s)
-         read(s(p1:p2-1),*)k_index
-         read(s(p2:),'(80a)',iostat=status)value(1:k)
-         if (status < 0) then
-            call ErrorHandler('getKeyIndexValue','Invalid value',          &
-                              CurrentPtr%KeyValue(i))
-         else
-            found = .true.
+         call setString(adjustl(CurrentPtr%KeyValue(i)))
+         if (getNumTokens() > k) then
+            call readToken(1,s)
+            if (isInteger(s)) then
+               read(s,*)k_index
+               do j = 1, k
+                  call readToken(j+1,value(j))
+               enddo
+               found = .true.
+            endif
+            exit
          endif
-         exit
       endif
    enddo
 !
@@ -2044,8 +2224,25 @@ endif
    integer (kind=IntKind), intent(in) :: id
    integer (kind=IntKind), intent(out) :: k_index
    integer (kind=IntKind), intent(out) :: value
-   integer (kind=IntKind) :: i, status
+   integer (kind=IntKind) :: i, status, p1, p2
+   character (len=80) :: s
    logical :: found
+!
+   interface
+      function isInteger(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isInteger
+   end interface
+!
+   interface
+      function getTokenPosition(k,s,n) result(p)
+         character (len=*), intent(in) :: s
+         integer, intent(in) :: k
+         integer, intent(out), optional :: n
+         integer :: p
+      end function getTokenPosition
+   end interface
 !
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyIndexValue','invalid table index',id)
@@ -2065,14 +2262,20 @@ endif
    value = 0
    do i=1,CurrentPtr%NumData
       if (CurrentPtr%KeyName(i) == key) then
-         read(CurrentPtr%KeyValue(i),*,iostat=status)k_index,value
-         if (status < 0) then
-            call WarningHandler('getKeyIndexValue','Invalid value',          &
-                              CurrentPtr%KeyValue(i))
-         else
-            found = .true.
+         s=trim(adjustl(CurrentPtr%KeyValue(i)))
+         p1 = getTokenPosition(1,s)
+         p2 = getTokenPosition(2,s)
+         if (isInteger(s(p1:p2-1))) then
+            read(CurrentPtr%KeyValue(i),*,iostat=status)k_index,value
+            if (status /= 0) then
+               call WarningHandler('getKeyIndexValue','Invalid value',          &
+                                   CurrentPtr%KeyValue(i))
+               k_index = 0; value = 0
+            else
+               found = .true.
+            endif
+            exit
          endif
-         exit
       endif
    enddo
 !
@@ -2097,8 +2300,25 @@ endif
    integer (kind=IntKind), intent(in) :: n
    integer (kind=IntKind), intent(out) :: k_index(n)
    integer (kind=IntKind), intent(out) :: value(n)
-   integer (kind=IntKind) :: i, m, status, j
+   integer (kind=IntKind) :: i, m, status, j, p1, p2
+   character (len=80) :: s
    logical :: found
+!
+   interface
+      function isInteger(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isInteger
+   end interface
+!
+   interface
+      function getTokenPosition(k,s,n) result(p)
+         character (len=*), intent(in) :: s
+         integer, intent(in) :: k
+         integer, intent(out), optional :: n
+         integer :: p
+      end function getTokenPosition
+   end interface
 !
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyIndexValue','invalid table index',id)
@@ -2120,16 +2340,22 @@ endif
    do i=1,CurrentPtr%NumData
       if (CurrentPtr%KeyName(i) == key) then
          m = m+1
-         read(CurrentPtr%KeyValue(i),*,iostat=status)j,value(m)
-         if (status < 0) then
-            call WarningHandler('getKeyIndexValue','Invalid value',          &
-                              CurrentPtr%KeyValue(i))
-         else if (j < 1 .or. j > n) then
-            call ErrorHandler('getKeyIndexValue','Index value out of range',j)
-         else
-            found = .true.
+         s=trim(adjustl(CurrentPtr%KeyValue(i)))
+         p1 = getTokenPosition(1,s)
+         p2 = getTokenPosition(2,s)
+         if (isInteger(s(p1:p2-1))) then
+            read(CurrentPtr%KeyValue(i),*,iostat=status)j,value(m)
+            if (status /= 0) then
+               call WarningHandler('getKeyIndexValue','Invalid value',          &
+                                   CurrentPtr%KeyValue(i))
+               value(m) = 0
+            else if (j < 1 .or. j > n) then
+               call ErrorHandler('getKeyIndexValue','Index value out of range',j)
+            else
+               found = .true.
+               k_index(j) = m
+            endif
          endif
-         k_index(j) = m
       endif
       if (m == n) then
          exit
@@ -2157,8 +2383,25 @@ endif
    integer (kind=IntKind), intent(in) :: k,n
    integer (kind=IntKind), intent(out) :: k_index(n)
    integer (kind=IntKind), intent(out) :: value(k,n)
-   integer (kind=IntKind) :: i, m, status, j
+   integer (kind=IntKind) :: i, m, status, j, p1, p2
+   character (len=80) :: s
    logical :: found
+!
+   interface
+      function isInteger(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isInteger
+   end interface
+!
+   interface
+      function getTokenPosition(k,s,n) result(p)
+         character (len=*), intent(in) :: s
+         integer, intent(in) :: k
+         integer, intent(out), optional :: n
+         integer :: p
+      end function getTokenPosition
+   end interface
 !
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyIndexValue','invalid table index',id)
@@ -2180,16 +2423,22 @@ endif
    do i=1,CurrentPtr%NumData
       if (CurrentPtr%KeyName(i) == key) then
          m = m+1
-         read(CurrentPtr%KeyValue(i),*,iostat=status)j,value(1:k,m)
-         if (status < 0) then
-            call WarningHandler('getKeyIndexValue','Invalid value',          &
-                              CurrentPtr%KeyValue(i))
-         else if (j < 1 .or. j > n) then
-            call ErrorHandler('getKeyIndexValue','Index value out of range',j)
-         else
-            found = .true.
+         s=trim(adjustl(CurrentPtr%KeyValue(i)))
+         p1 = getTokenPosition(1,s)
+         p2 = getTokenPosition(2,s)
+         if (isInteger(s(p1:p2-1))) then
+            read(CurrentPtr%KeyValue(i),*,iostat=status)j,value(1:k,m)
+            if (status /= 0) then
+               call WarningHandler('getKeyIndexValue','Invalid value',          &
+                                 CurrentPtr%KeyValue(i))
+               value(1:k,m) = 0
+            else if (j < 1 .or. j > n) then
+               call ErrorHandler('getKeyIndexValue','Index value out of range',j)
+            else
+               k_index(j) = m
+               found = .true.
+            endif
          endif
-         k_index(j) = m
       endif
       if (m == n) then
          exit
@@ -2217,8 +2466,25 @@ endif
    integer (kind=IntKind), intent(in) :: k
    integer (kind=IntKind), intent(out) :: k_index
    integer (kind=IntKind), intent(out) :: value(k)
-   integer (kind=IntKind) :: i, status
+   integer (kind=IntKind) :: i, status, p1, p2
+   character (len=80) :: s
    logical :: found
+!
+   interface
+      function isInteger(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isInteger
+   end interface
+!
+   interface
+      function getTokenPosition(k,s,n) result(p)
+         character (len=*), intent(in) :: s
+         integer, intent(in) :: k
+         integer, intent(out), optional :: n
+         integer :: p
+      end function getTokenPosition
+   end interface
 !
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyIndexValue','invalid table index',id)
@@ -2238,14 +2504,21 @@ endif
    value(1:k) = 0
    do i=1,CurrentPtr%NumData
       if (CurrentPtr%KeyName(i) == key) then
-         read(CurrentPtr%KeyValue(i),*,iostat=status)k_index,value(1:k)
-         if (status < 0) then
-            call WarningHandler('getKeyIndexValue','Invalid value',          &
-                              CurrentPtr%KeyValue(i))
-         else
-            found = .true.
+         s=trim(adjustl(CurrentPtr%KeyValue(i)))
+         p1 = getTokenPosition(1,s)
+         p2 = getTokenPosition(2,s)
+         if (isInteger(s(p1:p2-1))) then
+            read(CurrentPtr%KeyValue(i),*,iostat=status)k_index,value(1:k)
+            if (status /= 0) then
+               call WarningHandler('getKeyIndexValue','Invalid value', &
+                                 CurrentPtr%KeyValue(i))
+               k_index = 0
+               value = 0
+            else
+               found = .true.
+            endif
+            exit
          endif
-         exit
       endif
    enddo
 !
@@ -2269,8 +2542,25 @@ endif
    integer (kind=IntKind), intent(in) :: id
    integer (kind=IntKind), intent(out) :: k_index
    real (kind=RealKind), intent(out) :: value
-   integer (kind=IntKind) :: i, status
+   integer (kind=IntKind) :: i, status, p1, p2
+   character (len=80) :: s
    logical :: found
+!
+   interface
+      function isInteger(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isInteger
+   end interface
+!
+   interface
+      function getTokenPosition(k,s,n) result(p)
+         character (len=*), intent(in) :: s
+         integer, intent(in) :: k
+         integer, intent(out), optional :: n
+         integer :: p
+      end function getTokenPosition
+   end interface
 !
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyIndexValue','invalid table index',id)
@@ -2290,14 +2580,21 @@ endif
    value = ZERO
    do i=1,CurrentPtr%NumData
       if (CurrentPtr%KeyName(i) == key) then
-         read(CurrentPtr%KeyValue(i),*,iostat=status)k_index,value
-         if (status < 0) then
-            call WarningHandler('getKeyIndexValue','Invalid value',          &
+         s=trim(adjustl(CurrentPtr%KeyValue(i)))
+         p1 = getTokenPosition(1,s)
+         p2 = getTokenPosition(2,s)
+         if (isInteger(s(p1:p2-1))) then
+            read(CurrentPtr%KeyValue(i),*,iostat=status)k_index,value
+            if (status /= 0) then
+               call WarningHandler('getKeyIndexValue','Invalid value',          &
                               CurrentPtr%KeyValue(i))
-         else
-            found = .true.
+               k_index = 0
+               value = ZERO
+            else
+               found = .true.
+            endif
+            exit
          endif
-         exit
       endif
    enddo
 !
@@ -2322,8 +2619,25 @@ endif
    integer (kind=IntKind), intent(in) :: n
    integer (kind=IntKind), intent(out) :: k_index(n)
    real (kind=RealKind), intent(out) :: value(n)
-   integer (kind=IntKind) :: i, m, status, j
+   integer (kind=IntKind) :: i, m, status, j, p1, p2
+   character (len=80) :: s
    logical :: found
+!
+   interface
+      function isInteger(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isInteger
+   end interface
+!
+   interface
+      function getTokenPosition(k,s,n) result(p)
+         character (len=*), intent(in) :: s
+         integer, intent(in) :: k
+         integer, intent(out), optional :: n
+         integer :: p
+      end function getTokenPosition
+   end interface
 !
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyIndexValue','invalid table index',id)
@@ -2345,16 +2659,22 @@ endif
    do i=1,CurrentPtr%NumData
       if (CurrentPtr%KeyName(i) == key) then
          m = m+1
-         read(CurrentPtr%KeyValue(i),*,iostat=status)j,value(m)
-         if (status < 0) then
-            call WarningHandler('getKeyIndexValue','Invalid value',          &
-                              CurrentPtr%KeyValue(i))
-         else if (j < 1 .or. j > n) then
-            call ErrorHandler('getKeyIndexValue','Index value out of range',j)
-         else
-            found = .true.
+         s=trim(adjustl(CurrentPtr%KeyValue(i)))
+         p1 = getTokenPosition(1,s)
+         p2 = getTokenPosition(2,s)
+         if (isInteger(s(p1:p2-1))) then
+            read(CurrentPtr%KeyValue(i),*,iostat=status)j,value(m)
+            if (status /= 0) then
+               call WarningHandler('getKeyIndexValue','Invalid value',          &
+                                 CurrentPtr%KeyValue(i))
+               value(m) = ZERO
+            else if (j < 1 .or. j > n) then
+               call ErrorHandler('getKeyIndexValue','Index value out of range',j)
+            else
+               found = .true.
+               k_index(j) = m
+            endif
          endif
-         k_index(j) = m
       endif
       if (m == n) then
          exit
@@ -2382,8 +2702,25 @@ endif
    integer (kind=IntKind), intent(in) :: k,n
    integer (kind=IntKind), intent(out) :: k_index(n)
    real (kind=RealKind), intent(out) :: value(k,n)
-   integer (kind=IntKind) :: i, m, status, j
+   integer (kind=IntKind) :: i, m, status, j, p1, p2
+   character (len=80) :: s
    logical :: found
+!
+   interface
+      function isInteger(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isInteger
+   end interface
+!
+   interface
+      function getTokenPosition(k,s,n) result(p)
+         character (len=*), intent(in) :: s
+         integer, intent(in) :: k
+         integer, intent(out), optional :: n
+         integer :: p
+      end function getTokenPosition
+   end interface
 !
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyIndexValue','invalid table index',id)
@@ -2405,16 +2742,22 @@ endif
    do i=1,CurrentPtr%NumData
       if (CurrentPtr%KeyName(i) == key) then
          m = m+1
-         read(CurrentPtr%KeyValue(i),*,iostat=status)j,value(1:k,m)
-         if (status < 0) then
-            call WarningHandler('getKeyIndexValue','Invalid value',          &
-                              CurrentPtr%KeyValue(i))
-         else if (j < 1 .or. j > n) then
-            call ErrorHandler('getKeyIndexValue','Index value out of range',j)
-         else
-            found = .true.
+         s=trim(adjustl(CurrentPtr%KeyValue(i)))
+         p1 = getTokenPosition(1,s)
+         p2 = getTokenPosition(2,s)
+         if (isInteger(s(p1:p2-1))) then
+            read(CurrentPtr%KeyValue(i),*,iostat=status)j,value(1:k,m)
+            if (status /= 0) then
+               call WarningHandler('getKeyIndexValue','Invalid value',          &
+                                 CurrentPtr%KeyValue(i))
+               value(1:k,m) = ZERO
+            else if (j < 1 .or. j > n) then
+               call ErrorHandler('getKeyIndexValue','Index value out of range',j)
+            else
+               found = .true.
+               k_index(j) = m
+            endif
          endif
-         k_index(j) = m
       endif
       if (m == n) then
          exit
@@ -2442,8 +2785,25 @@ endif
    integer (kind=IntKind), intent(in) :: k
    integer (kind=IntKind), intent(out) :: k_index
    real (kind=RealKind), intent(out) :: value(k)
-   integer (kind=IntKind) :: i, status
+   integer (kind=IntKind) :: i, status, p1, p2
+   character (len=80) :: s
    logical :: found
+!
+   interface
+      function isInteger(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isInteger
+   end interface
+!
+   interface
+      function getTokenPosition(k,s,n) result(p)
+         character (len=*), intent(in) :: s
+         integer, intent(in) :: k
+         integer, intent(out), optional :: n
+         integer :: p
+      end function getTokenPosition
+   end interface
 !
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyIndexValue','invalid table index',id)
@@ -2463,14 +2823,21 @@ endif
    value(1:k) = ZERO
    do i=1,CurrentPtr%NumData
       if (CurrentPtr%KeyName(i) == key) then
-         read(CurrentPtr%KeyValue(i),*,iostat=status)k_index,value(1:k)
-         if (status < 0) then
-            call WarningHandler('getKeyIndexValue','Invalid value',          &
-                              CurrentPtr%KeyValue(i))
-         else
-            found = .true.
+         s=trim(adjustl(CurrentPtr%KeyValue(i)))
+         p1 = getTokenPosition(1,s)
+         p2 = getTokenPosition(2,s)
+         if (isInteger(s(p1:p2-1))) then
+            read(CurrentPtr%KeyValue(i),*,iostat=status)k_index,value(1:k)
+            if (status /= 0) then
+               call WarningHandler('getKeyIndexValue','Invalid value',          &
+                                 CurrentPtr%KeyValue(i))
+               k_index = 0
+               value = ZERO
+            else
+               found = .true.
+            endif
+            exit
          endif
-         exit
       endif
    enddo
 !
@@ -2482,5 +2849,490 @@ endif
    endif
 !
    end function getKeyIndexValue_real3
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getKeyLabelValue_str0(id,key,lab,value) result(status)
+!  ===================================================================
+   implicit none
+   integer (kind=IntKind), intent(in) :: id
+   character (len=*), intent(in) :: key
+   character (len=*), intent(in) :: lab
+   character (len=*), intent(out) :: value
+   character (len=80) :: s
+   integer (kind=IntKind) :: i, status, p1, p2
+   logical :: found
+!
+   interface
+      function getTokenPosition(k,s,n) result(p)
+         character (len=*), intent(in) :: s
+         integer, intent(in) :: k
+         integer, intent(out), optional :: n
+         integer :: p
+      end function getTokenPosition
+   end interface
+!
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         implicit none
+         logical :: t
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+      end function nocaseCompare
+   end interface
+!
+   if (id < 1 .or. id > NumInputTables) then
+      call ErrorHandler('getKeyLabelValue','invalid table index',id)
+   endif
+!
+   CurrentPtr => DataTable
+   do i=1,NumInputTables
+      if (CurrentPtr%TableIndex == id) then
+         exit
+      else
+         CurrentPtr => CurrentPtr%next
+      endif
+   enddo
+!
+   found = .false.
+   value(:) = ' '
+   do i=1,CurrentPtr%NumData
+      if (CurrentPtr%KeyName(i) == key) then
+         s=adjustl(CurrentPtr%KeyValue(i))
+         p1 = getTokenPosition(1,s)
+         p2 = getTokenPosition(2,s)
+         if (nocaseCompare(s(p1:p2-1),lab)) then
+            value = s(p2:)
+            found = .true.
+            exit
+         endif
+      endif
+   enddo
+!
+   if (.not.found) then
+!     call WarningHandler('getKeyLabelValue','Key not found',key)
+      status = 1
+   else
+      status = 0
+   endif
+!
+   end function getKeyLabelValue_str0
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getKeyLabelValue_str1(id,key,k,lab,value) result(status)
+!  ===================================================================
+   use StringModule, only : setString, getNumTokens, readToken
+!
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: id, k
+   character (len=*), intent(in) :: key
+   character (len=*), intent(in) :: lab
+   character (len=*), intent(out) :: value(k)
+   character (len=10) :: s
+   integer (kind=IntKind) :: i, j, status
+   logical :: found
+!
+   interface
+      function getTokenPosition(k,s,n) result(p)
+         character (len=*), intent(in) :: s
+         integer, intent(in) :: k
+         integer, intent(out), optional :: n
+         integer :: p
+      end function getTokenPosition
+   end interface
+!
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         implicit none
+         logical :: t
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+      end function nocaseCompare
+   end interface
+!
+   if (id < 1 .or. id > NumInputTables) then
+      call ErrorHandler('getKeyLabelValue','invalid table index',id)
+   endif
+!
+   CurrentPtr => DataTable
+   do i=1,NumInputTables
+      if (CurrentPtr%TableIndex == id) then
+         exit
+      else
+         CurrentPtr => CurrentPtr%next
+      endif
+   enddo
+!
+   found = .false.
+   value(1:k)(:) = ' '
+   do i=1,CurrentPtr%NumData
+      if (CurrentPtr%KeyName(i) == key) then
+         call setString(adjustl(CurrentPtr%KeyValue(i)))
+         if (getNumTokens() > k) then
+            call readToken(1,s)
+            if (nocaseCompare(s,lab)) then
+               do j = 1, k
+                  call readToken(j+1,value(j))
+               enddo
+               found = .true.
+               exit
+            endif
+         endif
+      endif
+   enddo
+!
+   if (.not.found) then
+!     call WarningHandler('getKeyLabelValue','Key not found',key)
+      status = 1
+   else
+      status = 0
+   endif
+!
+   end function getKeyLabelValue_str1
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getKeyLabelValue_int0(id,key,lab,value) result(status)
+!  ===================================================================
+   implicit none
+   integer (kind=IntKind), intent(in) :: id
+   character (len=*), intent(in) :: key
+   character (len=*), intent(in) :: lab
+   integer (kind=IntKind), intent(out) :: value
+   character (len=len(lab)) :: s
+   integer (kind=IntKind) :: i, status
+   logical :: found
+!
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         implicit none
+         logical :: t
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+      end function nocaseCompare
+   end interface
+!
+   if (id < 1 .or. id > NumInputTables) then
+      call ErrorHandler('getKeyLabelValue','invalid table index',id)
+   endif
+!
+   CurrentPtr => DataTable
+   do i=1,NumInputTables
+      if (CurrentPtr%TableIndex == id) then
+         exit
+      else
+         CurrentPtr => CurrentPtr%next
+      endif
+   enddo
+!
+   found = .false.
+   value = 0
+   do i=1,CurrentPtr%NumData
+      if (CurrentPtr%KeyName(i) == key) then
+         read(CurrentPtr%KeyValue(i),*,iostat=status)s,value
+         if (status /= 0) then
+            call WarningHandler('getKeyLabelValue','Invalid value form', &
+                                CurrentPtr%KeyValue(i))
+            value = 0
+         else if (nocaseCompare(s,lab)) then
+            found = .true.
+            exit
+         endif
+      endif
+   enddo
+!
+   if (.not.found) then
+!     call WarningHandler('getKeyLabelValue','Key not found',key)
+      status = 1
+   else
+      status = 0
+   endif
+!
+   end function getKeyLabelValue_int0
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getKeyLabelValue_int1(id,key,k,lab,value) result(status)
+!  ===================================================================
+   implicit none
+   integer (kind=IntKind), intent(in) :: id
+   integer (kind=IntKind), intent(in) :: k
+   integer (kind=IntKind), intent(out) :: value(k)
+   character (len=*), intent(in) :: key
+   character (len=*), intent(in) :: lab
+   character (len=len(lab)) :: s
+   integer (kind=IntKind) :: i, status
+   logical :: found
+!
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         implicit none
+         logical :: t
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+      end function nocaseCompare
+   end interface
+!
+   if (id < 1 .or. id > NumInputTables) then
+      call ErrorHandler('getKeyLabelValue','invalid table index',id)
+   endif
+!
+   CurrentPtr => DataTable
+   do i=1,NumInputTables
+      if (CurrentPtr%TableIndex == id) then
+         exit
+      else
+         CurrentPtr => CurrentPtr%next
+      endif
+   enddo
+!
+   found = .false.
+   value(1:k) = 0
+   do i=1,CurrentPtr%NumData
+      if (CurrentPtr%KeyName(i) == key) then
+         read(CurrentPtr%KeyValue(i),*,iostat=status)s,value(1:k)
+         if (status /= 0) then
+            call WarningHandler('getKeyLabelValue','Invalid value form', &
+                                CurrentPtr%KeyValue(i))
+            value = 0
+         else if (nocaseCompare(s,lab)) then
+            found = .true.
+            exit
+         endif
+      endif
+   enddo
+!
+   if (.not.found) then
+!     call WarningHandler('getKeyLabelValue','Key not found',key)
+      status = 1
+   else
+      status = 0
+   endif
+!
+   end function getKeyLabelValue_int1
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getKeyLabelValue_real0(id,key,lab,value) result(status)
+!  ===================================================================
+   implicit none
+   integer (kind=IntKind), intent(in) :: id
+   character (len=*), intent(in) :: key
+   character (len=*), intent(in) :: lab
+   real (kind=RealKind), intent(out) :: value
+   character (len=len(lab)) :: s
+   integer (kind=IntKind) :: i, status
+   logical :: found
+!
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         implicit none
+         logical :: t
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+      end function nocaseCompare
+   end interface
+!
+   if (id < 1 .or. id > NumInputTables) then
+      call ErrorHandler('getKeyLabelValue','invalid table index',id)
+   endif
+!
+   CurrentPtr => DataTable
+   do i=1,NumInputTables
+      if (CurrentPtr%TableIndex == id) then
+         exit
+      else
+         CurrentPtr => CurrentPtr%next
+      endif
+   enddo
+!
+   found = .false.
+   value = ZERO
+   do i=1,CurrentPtr%NumData
+      if (CurrentPtr%KeyName(i) == key) then
+         read(CurrentPtr%KeyValue(i),*,iostat=status)s,value
+         if (status /= 0) then
+            call WarningHandler('getKeyLabelValue','Invalid value form', &
+                                CurrentPtr%KeyValue(i))
+            value = ZERO
+         else if (nocaseCompare(s,lab)) then
+            found = .true.
+            exit
+         endif
+      endif
+   enddo
+!
+   if (.not.found) then
+!     call WarningHandler('getKeyLabelValue','Key not found',key)
+      status = 1
+   else
+      status = 0
+   endif
+!
+   end function getKeyLabelValue_real0
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getKeyLabelValue_real1(id,key,k,lab,value) result(status)
+!  ===================================================================
+   implicit none
+   integer (kind=IntKind), intent(in) :: id
+   integer (kind=IntKind), intent(in) :: k
+   character (len=*), intent(in) :: key
+   character (len=*), intent(in) :: lab
+   real (kind=RealKind), intent(out) :: value(k)
+   character (len=len(lab)) :: s
+   integer (kind=IntKind) :: i, status
+   logical :: found
+!
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         implicit none
+         logical :: t
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+      end function nocaseCompare
+   end interface
+!
+   if (id < 1 .or. id > NumInputTables) then
+      call ErrorHandler('getKeyLabelValue','invalid table index',id)
+   endif
+!
+   CurrentPtr => DataTable
+   do i=1,NumInputTables
+      if (CurrentPtr%TableIndex == id) then
+         exit
+      else
+         CurrentPtr => CurrentPtr%next
+      endif
+   enddo
+!
+   found = .false.
+   value(1:k) = ZERO
+   do i=1,CurrentPtr%NumData
+      if (CurrentPtr%KeyName(i) == key) then
+         read(CurrentPtr%KeyValue(i),*,iostat=status)s,value(1:k)
+         if (status /= 0) then
+            call WarningHandler('getKeyLabelValue','Invalid value form', &
+                                CurrentPtr%KeyValue(i))
+            value = ZERO
+         else if (nocaseCompare(s,lab)) then
+            found = .true.
+            exit
+         endif
+      endif
+   enddo
+!
+   if (.not.found) then
+!     call WarningHandler('getKeyLabelValue','Key not found',key)
+      status = 1
+   else
+      status = 0
+   endif
+!
+   end function getKeyLabelValue_real1
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getKeyLabelIndexValue_str(id,key,nl,lab,nv,lind,k_index,value) result(status)
+!  ===================================================================
+   implicit none
+   character (len=*), intent(in) :: key
+   integer (kind=IntKind), intent(in) :: id, nl, nv
+   character (len=*), intent(in) :: lab(nl)
+   integer (kind=IntKind), intent(in) :: lind(nv)
+   integer (kind=IntKind), intent(out) :: k_index(nv)
+   character (len=*), intent(out) :: value(nv)
+   character (len=len(value)) :: s
+   integer (kind=IntKind) :: i, j, status
+!
+   status = getKeyIndexValue(id,key,k_index,value,nv)
+   do i = 1, nl
+      if (getKeyLabelValue(id,key,lab(i),s) == 0) then
+         do j = 1, nv
+            if (lind(j) == i .and. k_index(j) == 0) then
+               k_index(j) = j
+               value(j) = s
+            endif
+         enddo
+      endif
+   enddo
+!
+   end function getKeyLabelIndexValue_str
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getKeyLabelIndexValue_int(id,key,nl,lab,nv,lind,k_index,value) result(status)
+!  ===================================================================
+   implicit none
+   character (len=*), intent(in) :: key
+   integer (kind=IntKind), intent(in) :: id, nl, nv
+   character (len=*), intent(in) :: lab(nl)
+   integer (kind=IntKind), intent(in) :: lind(nv)
+   integer (kind=IntKind), intent(out) :: k_index(nv)
+   integer (kind=IntKind), intent(out) :: value(nv)
+   integer (kind=IntKind) :: i, j, status, v
+!
+   status = getKeyIndexValue(id,key,k_index,value,nv)
+   do i = 1, nl
+      if (getKeyLabelValue(id,key,lab(i),v) == 0) then
+         do j = 1, nv
+            if (lind(j) == i .and. k_index(j) == 0) then
+               k_index(j) = j
+               value(j) = v
+            endif
+         enddo
+      endif
+   enddo
+!
+   end function getKeyLabelIndexValue_int
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getKeyLabelIndexValue_real(id,key,nl,lab,nv,lind,k_index,value) result(status)
+!  ===================================================================
+   implicit none
+   character (len=*), intent(in) :: key
+   integer (kind=IntKind), intent(in) :: id, nl, nv
+   character (len=*), intent(in) :: lab(nl)
+   integer (kind=IntKind), intent(in) :: lind(nv)
+   integer (kind=IntKind), intent(out) :: k_index(nv)
+   real (kind=RealKind), intent(out) :: value(nv)
+   integer (kind=IntKind) :: i, j, status
+   real (kind=RealKind) :: v
+!
+   status = getKeyIndexValue(id,key,k_index,value,nv)
+   do i = 1, nl
+      if (getKeyLabelValue(id,key,lab(i),v) == 0) then
+         do j = 1, nv
+            if (lind(j) == i .and. k_index(j) == 0) then
+               k_index(j) = j
+               value(j) = v
+            endif
+         enddo
+      endif
+   enddo
+!
+   end function getKeyLabelIndexValue_real
 !  ===================================================================
 end module InputModule

@@ -1,5 +1,5 @@
 program mst2
-!  use ISO_FORTRAN_ENV, only : compiler_version, compiler_options
+   use ISO_FORTRAN_ENV, only : compiler_version, compiler_options
 !
    use KindParamModule, only : IntKind, RealKind, CmplxKind
 !
@@ -726,8 +726,8 @@ program mst2
 !     ----------------------------------------------------------------
       write(6,'(a,a)')'Execution command: ',trim(cmd)
 !     ----------------------------------------------------------------
-!     write(6,'(a,a)') 'This code was compiled by ', compiler_version(), &
-!                      ' using the options ', compiler_options()
+      write(6,'(4a)') 'This code was compiled by ', compiler_version(), &
+                      ' using the options ', compiler_options()
 !     ----------------------------------------------------------------
 !     n = command_argument_count()
 !     ----------------------------------------------------------------

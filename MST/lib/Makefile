@@ -146,6 +146,9 @@ $(MSTLIB): $(MODULE) $(LOBS)
 	$(ARCHV) $(MSTLIB) $(MODULE) $(LOBS)
 	ranlib $(MSTLIB)
 
+IntegrationModule.o: IntegrationModule.F90
+	$(FC) $(PREPROC_FFLAGS) $(FFLAGS_ALT) $<
+
 clear: $(MODULE) $(LOBS)
 	cd $(ODIR); rm -f $(MODULE) $(LOBS)
 #=====================================================================
