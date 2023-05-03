@@ -58,6 +58,7 @@ CXXFLAGS    = -O3 -std=c++14
 # the following option "-w -fallow-argument-mismatch" is needed for gcc.10.1.0
 FFLAGS      = -O3 -w #-fallow-argument-mismatch
 F77FLAGS    = -O3 -w #-fallow-argument-mismatch
+FFLAGS_ALT  = -O2
 # FFLAGS      = -O3 -fcheck=all -w -fallow-argument-mismatch
 # F77FLAGS    = -O3 -fcheck=all -w -fallow-argument-mismatch
 OPT_OPENMP  = -mp
@@ -73,4 +74,4 @@ LD          = $(FC) $(LD_FLAGS)
 HDF5_CONFIG_FLAGS   = --enable-fortran --enable-static-exec CC=$(CC) CXX=$(CXX) FC=$(FC)
 LIBXC_CONFIG_FLAGS  = CC=$(CC) CFLAGS="$(CFLAGS)" FC=$(FC) FFLAGS="$(FFLAGS)"
 P3DFFT_CONFIG_FLAGS = FC=$(FC) CC=$(CC) --enable-openmpi FCFLAGS="$(FFLAGS)"
-FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS)" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)"
+FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS)" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)" LIBS="$(ADD_LIBS)"
