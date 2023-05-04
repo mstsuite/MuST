@@ -933,7 +933,7 @@ use MPPModule, only : MyPE, syncAllPEs
 !         print *,"BigMatrix shape",shape(BigMatrix)
 #ifdef ACCEL
          pBigMatrix => aliasArray2_c(BigMatrix, dsize, dsize)
-         call invertMatrixBlock_CUDA(my_atom, pBlockMatrix, kkrsz_ns,  &
+         call invertMatrixLSMS_CUDA(my_atom, pBlockMatrix, kkrsz_ns,  &
                                  pBigMatrix, dsize )
 !         print *,"CUDA pBlockMatrix(:, 1) = ",pBlockMatrix(:,1)
 #else
