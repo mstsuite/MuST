@@ -16,26 +16,27 @@ Acceleration = 0
 # If LUA_PATH, LIBXC_PATH, FFTW_PATH, and/or P3DFFT_PATH are empty, the
 # corresponding packages will be installed under $(EXTERN_LIB_PATH)
 #=====================================================================
-MATH_PATH   = /opt/intel/compilers_and_libraries_2020.1.217/linux/mkl
+MATH_PATH   = /opt/intel/oneapi/mkl/2023.1.0
 HDF5_PATH   = 
 ACCEL       = CUDA
-ACCEL_PATH  = 
+ACCEL_PATH  = /opt/packages/cuda/v11.7.1/
 LIBXC_PATH  = /home/liangstein/libxc6.1
-FFTW_PATH   = /home/liangstein/nvhpc_deps/fftw3
-P3DFFT_PATH = /home/liangstein/nvhpc_deps/p3dfft
+FFTW_PATH   = /home/liangstein/gnu8.5/fftw3
+P3DFFT_PATH = /home/liangstein/gnu8.5/p3dfft
 LUA_PATH    =
-LIBS       += -L/opt/nvidia/hpc_sdk/Linux_x86_64/22.11/compilers/lib/ -lblas -llapack \
-              -L/opt/nvidia/hpc_sdk/Linux_x86_64/22.11/comm_libs/mpi/lib/ -lscalapack
+LIBS       += -L$(MATH_PATH)/lib/intel64 -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -ldl -lpthread -lm \
+              -lmkl_scalapack_lp64 -lmkl_cdft_core -lmkl_blacs_openmpi_lp64
+ADD_LIBS   += -lgfortran
 
 #=====================================================================
 # Compiler tools
 #=====================================================================
 CC          = mpicc
 CXX         = mpicxx
-F77         = mpifort
-FC          = mpifort
+F77         = mpif90
+FC          = mpif90
 MPICC       = mpicc
-ACCEL_CXX   = nvcc -arch=sm_80
+ACCEL_CXX   = nvcc -arch=sm_60
 ARCHV       = ar -r
 
 #=====================================================================
@@ -46,9 +47,9 @@ ARCHV       = ar -r
 #     Specifically, gssrpc_xdr_double is missing from libgssrpc.so
 #     I have to disable using XDR format.
 #=====================================================================
-FPPDEFS     = -cpp -DNVHPC
+FPPDEFS     = -cpp
 CPPDEFS     = -cpp
-FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK
+FPPFLAGS    = -DMPI -DMaxOutProcs=1 #-DUSE_SCALAPACK
 
 CFLAGS      = -O3
 CXXFLAGS    = -O3 -std=c++14
@@ -57,12 +58,11 @@ CXXFLAGS    = -O3 -std=c++14
 # the following option "-w -fallow-argument-mismatch" is needed for gcc.10.1.0
 FFLAGS      = -O3 -w #-fallow-argument-mismatch
 F77FLAGS    = -O3 -w #-fallow-argument-mismatch
-FFLAGS_ALT  = -O1 #additional flag for preventing nvhpc compilers generating numerical error
 # FFLAGS      = -O3 -fcheck=all -w -fallow-argument-mismatch
 # F77FLAGS    = -O3 -fcheck=all -w -fallow-argument-mismatch
-OPT_OPENMP  = -mp
+OPT_OPENMP  = -fopenmp
 
-LD_FLAGS    = -mp
+LD_FLAGS    = 
 LD          = $(FC) $(LD_FLAGS)
 
 #=====================================================================
@@ -73,4 +73,4 @@ LD          = $(FC) $(LD_FLAGS)
 HDF5_CONFIG_FLAGS   = --enable-fortran --enable-static-exec CC=$(CC) CXX=$(CXX) FC=$(FC)
 LIBXC_CONFIG_FLAGS  = CC=$(CC) CFLAGS="$(CFLAGS)" FC=$(FC) FFLAGS="$(FFLAGS)"
 P3DFFT_CONFIG_FLAGS = FC=$(FC) CC=$(CC) --enable-openmpi FCFLAGS="$(FFLAGS)"
-FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS)" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)" LIBS="$(ADD_LIBS)"
+FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS)" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)"

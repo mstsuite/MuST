@@ -8,7 +8,7 @@
 //#include "DeviceStorage.hpp"
 
 extern "C"
-void cusolver_invwhole_c_(int *m, double _Complex *a, int *block_size, double _Complex *b)
+void cusolver_lsms_c_(int *m, double _Complex *a, int *block_size, double _Complex *b)
 {
 static bool initialized = false;
 static cuDoubleComplex  *aDev;

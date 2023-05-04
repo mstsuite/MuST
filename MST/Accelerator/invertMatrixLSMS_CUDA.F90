@@ -12,7 +12,7 @@ subroutine wholeinv_CPU(m,a,tau00)
 end subroutine wholeinv_CPU
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine invertMatrixBlock_CUDA(my_atom, pBlockMatrix, kkrsz_ns, pBigMatrix, dsize)
+   subroutine invertMatrixLSMS_CUDA(my_atom, pBlockMatrix, kkrsz_ns, pBigMatrix, dsize)
 !  ===================================================================
    use KindParamModule, only : IntKind, RealKind, CmplxKind
 !
@@ -36,7 +36,7 @@ end subroutine wholeinv_CPU
        pBlockMatrix(i,j)=pBigMatrix(i,j)
      enddo
    enddo
-   call cusolver_invwhole_c(dsize,pBigMatrix,kkrsz_ns,tmpmatrixC)!tempmatrixC is the first block of the inverse of BigMatrix
+   call cusolver_lsms_c(dsize,pBigMatrix,kkrsz_ns,tmpmatrixC)!tempmatrixC is the first block of the inverse of BigMatrix
 !   z = matmul(a1,pBigMatrix)
 !   print *,"z(1,1)=",z(1,1),"z(1,10)=",z(1,10),"sum of inverted matrix =",sum(z)
    do i=1,kkrsz_ns
@@ -63,4 +63,4 @@ end subroutine wholeinv_CPU
 !  -------------------------------------------------------------------
 #endif
 !
-   end subroutine invertMatrixBlock_CUDA
+   end subroutine invertMatrixLSMS_CUDA

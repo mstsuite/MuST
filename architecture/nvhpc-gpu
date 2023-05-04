@@ -20,12 +20,12 @@ MATH_PATH   = /opt/intel/compilers_and_libraries_2020.1.217/linux/mkl
 HDF5_PATH   = 
 ACCEL       = CUDA
 ACCEL_PATH  = /usr/local/cuda
-LIBXC_PATH  = /home/liangstein/MUST-KKR/libxc
-FFTW_PATH   = /home/liangstein/MUST-KKR/nvhpc_fftw3
-P3DFFT_PATH = /home/liangstein/MUST-KKR/nvhpc_p3dfft
+LIBXC_PATH  = /home/liangstein/libxc6.1
+FFTW_PATH   = /home/liangstein/nvhpc_deps/fftw3
+P3DFFT_PATH = /home/liangstein/nvhpc_deps/p3dfft
 LUA_PATH    =
-LIBS       += -L/scratch/projects/compilers/nvhpc_22.1/Linux_x86_64/22.1/compilers/lib/ -lblas -llapack \
-              -L/scratch/projects/compilers/nvhpc_22.1/Linux_x86_64/22.1//comm_libs/mpi/lib/ -lscalapack \
+LIBS       += -L/opt/nvidia/hpc_sdk/Linux_x86_64/22.11/compilers/lib/ -lblas -llapack \
+              -L/opt/nvidia/hpc_sdk/Linux_x86_64/22.11/comm_libs/mpi/lib/ -lscalapack \
               -L$(ACCEL_PATH)/lib64 -lcudart -lcuda -lcublas -lstdc++ -lcusolver
 
 #=====================================================================
@@ -36,7 +36,7 @@ CXX         = mpicxx
 F77         = mpifort
 FC          = mpifort
 MPICC       = mpicc
-ACCEL_CXX   = nvcc -arch=sm_80
+ACCEL_CXX   = nvcc -arch=sm_60
 ARCHV       = ar -r
 
 #=====================================================================
@@ -58,7 +58,7 @@ CXXFLAGS    = -O3 -std=c++14
 # the following option "-w -fallow-argument-mismatch" is needed for gcc.10.1.0
 FFLAGS      = -O3 -w #-fallow-argument-mismatch
 F77FLAGS    = -O3 -w #-fallow-argument-mismatch
-FFLAGS_ALT  = -O2
+FFLAGS_ALT  = -O1 #additional flag for preventing nvhpc compilers generating numerical error
 # FFLAGS      = -O3 -fcheck=all -w -fallow-argument-mismatch
 # F77FLAGS    = -O3 -fcheck=all -w -fallow-argument-mismatch
 OPT_OPENMP  = -mp
