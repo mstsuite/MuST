@@ -20,12 +20,12 @@ MATH_PATH   = /opt/intel/compilers_and_libraries_2020.1.217/linux/mkl
 HDF5_PATH   = 
 ACCEL       = CUDA
 ACCEL_PATH  = 
-LIBXC_PATH  = /home/liangstein/MUST-KKR/libxc
-FFTW_PATH   = /home/liangstein/MUST-KKR/nvhpc_fftw3
-P3DFFT_PATH = /home/liangstein/MUST-KKR/nvhpc_p3dfft
+LIBXC_PATH  = /home/liangstein/libxc6.1
+FFTW_PATH   = /home/liangstein/nvhpc_deps/fftw3
+P3DFFT_PATH = /home/liangstein/nvhpc_deps/p3dfft
 LUA_PATH    =
-LIBS       += -L/scratch/projects/compilers/nvhpc_22.1/Linux_x86_64/22.1/compilers/lib/ -lblas -llapack \
-              -L/scratch/projects/compilers/nvhpc_22.1/Linux_x86_64/22.1//comm_libs/mpi/lib/ -lscalapack
+LIBS       += -L/opt/nvidia/hpc_sdk/Linux_x86_64/22.11/compilers/lib/ -lblas -llapack \
+              -L/opt/nvidia/hpc_sdk/Linux_x86_64/22.11/comm_libs/mpi/lib/ -lscalapack
 
 #=====================================================================
 # Compiler tools
