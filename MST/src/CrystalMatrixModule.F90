@@ -2208,6 +2208,9 @@ contains
 !
    if (NumPEsInGroup == 1) then  ! BandSizeCant = KKRMatrixSizeCant
 !    ----------------------------------------------------------------
+#ifdef ACCEL
+     call invertMatrixKKR_CUDA(p_MatrixBand, KKRMatrixSizeCant)
+#else
      if(do_sro) then
          call ZGETRF(OKKRMatrixSizeCant, OKKRMatrixSizeCant,               &
                      p_MatrixBand, OKKRMatrixSizeCant, IPVT, INFO)
@@ -2224,7 +2227,12 @@ contains
          call ErrorHandler('calCrystalMatrix','Failed in ZGETRF',INFO)
 !        -------------------------------------------------------------
      endif
+#endif
    else
+#ifdef ACCEL
+     call invertMatrixKKR_CUDA(p_MatrixBand, KKRMatrixSizeCant)
+#else
+
 #ifdef USE_SCALAPACK
 !     ----------------------------------------------------------------
       if (do_sro) then
@@ -2262,8 +2270,10 @@ contains
 !        -------------------------------------------------------------
       endif
 #endif
+#endif
    endif
 !
+#ifndef ACCEL
    if (NumPEsInGroup == 1) then  ! BandSizeCant = KKRMatrixSizeCant
 !     ----------------------------------------------------------------
       if (do_sro) then
@@ -2314,6 +2324,7 @@ contains
       endif
 #endif
    endif
+#endif
 !  ==================================================================
 !  Since we are only dealing with method = 2 for SRO, no need to make
 !  any changes here
