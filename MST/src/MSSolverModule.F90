@@ -747,6 +747,7 @@ contains
    else if (isKKR()) then
 !     ----------------------------------------------------------------
       call calCrystalMatrix(e,getScatteringMatrix)
+!     call calCrystalMatrix(e,getScatteringMatrix,use_tmat=.true.)
 !     call calCrystalMatrix(e,getScatteringMatrix,tau_needed=.true.)
 !     call calCrystalMatrix(e,getScatteringMatrix,use_tmat=.true.,tau_needed=.true.)
 !     ----------------------------------------------------------------
@@ -795,6 +796,7 @@ contains
 !
    use ScfDataModule, only : isKKR, isScreenKKR, isLSMS, isKKRCPA, &
                       isKKRCPASRO, isEmbeddedCluster, isSROSCF
+   use ScfDataModule, only : CurrentScfIteration
 !
    use SystemSymmetryModule, only : getSymmetryFlags
 !
@@ -956,9 +958,10 @@ contains
          if (isLSMS()) then
             kau00 => getClusterKau(local_id=id) ! Kau00 = energy * S^{-1} * [Tau00 - t_matrix] * S^{-T*}
          else if (isKKR()) then
-!kau00=>getCrystalTau(local_id=id)
+!           kau00 => getCrystalTau(local_id=id)
 !call writeMatrix('Tau',kau00(:,:,1),kmaxk,kmaxk,TEN2m6)
             kau00 => getCrystalKau(local_id=id) ! Kau00 = energy * S^{-1} * [Tau00 - t_matrix] * S^{-T*}
+!call writeMatrix('Kau',kau00(:,:,1),kmaxk,kmaxk,TEN2m6)
 !call checkMatrixSymmetry('Kau00',kau00(:,:,1),kmaxk,TEN2m6)
          else if (isKKRCPA() .or.  isEmbeddedCluster()) then
 !p_kau00 => getCPAMatrix('Tcpa',site=id)
@@ -1118,6 +1121,7 @@ contains
                         enddo
                      enddo
                   enddo
+!  write(6,'(a,3i5,2x,2d15.8,2x,2d15.8)')'MyPE,NumPEsInGroup,np,gf = ',MyPE,NumPEsInGroup,np,e,gf(mst(id)%iend-50,1)
                else if (method == 1) then
                   do kl1 = kmaxk,1,-1
                      do klp1 = kmaxp,1,-1

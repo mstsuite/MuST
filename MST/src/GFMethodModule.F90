@@ -3966,6 +3966,8 @@ contains
    use MultiScatteringDOSModule, only : setMScatteringDOSParam
    use MultiScatteringDOSModule, only : getMScatteringDOS, getRelMScatteringDOS
 !
+   use CheckPointModule, only : isStopPoint, takeStopAction
+!
    implicit none
 !
    logical, intent(in) :: useIrregularSolution
@@ -3975,6 +3977,7 @@ contains
    integer (kind=IntKind) :: ie, id, is, js, info(6), ia
    integer (kind=IntKind) :: e_loc
    integer (kind=IntKind) :: NumEsOnMyProc, NumRedunEs
+   integer (kind=IntKind) :: point_id
 !
    real (kind=RealKind) :: time_ie, ssDOS, msDOS(2), ChargeInLowContour(LocalNumAtoms)
 !
@@ -3984,6 +3987,8 @@ contains
 !  complex (kind=CmplxKind) :: test_result_c1(LocalNumAtoms)
 !
    type (ElectroStruct), pointer :: pCurrentValue
+!
+   character (len=25) :: sname = 'calMultipleScatteringIDOS'
 !
    interface adjustEnergy
       function adjustEnergy_r(is,e) result(energy)
@@ -4211,6 +4216,10 @@ contains
 !     ----------------------------------------------------------------
       call sumESVAL_r(IntegrValue,eGID)
 !     ----------------------------------------------------------------
+   endif
+!
+   if (isStopPoint(sname,point_id)) then
+      call takeStopAction(point_id,0)
    endif
 !
    end subroutine calMultipleScatteringIDOS
