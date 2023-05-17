@@ -957,6 +957,7 @@ contains
    use StrConstModule, only : checkFreeElectronPoles, getFreeElectronPoleFactor
    use WriteMatrixModule,  only : writeMatrix
    use Atom2ProcModule, only : getGlobalIndex
+   use ScfDataModule, only : isKKR
 !
    implicit none
 !
@@ -1312,7 +1313,8 @@ contains
 !           ----------------------------------------------------------------
          endif
       endif
-      if (method == 2) then
+      if (method == 2 .and. isKKR()) then ! Avoid calling calKauFromTau in
+                                          ! the KKR-CPA case
 !        -------------------------------------------------------------------
          call calKauFromTau(getSingleScatteringMatrix,site_config)
 !        -------------------------------------------------------------------
@@ -1336,6 +1338,7 @@ contains
 !  ===================================================================
    use StrConstModule, only : getStrConstMatrix
    use StrConstModule, only : checkFreeElectronPoles, getFreeElectronPoleFactor
+   use ScfDataModule, only : isKKR
 !
    implicit none
 !
@@ -1454,8 +1457,11 @@ contains
 !     ----------------------------------------------------------------
       call computeTauMatrix(getSingleScatteringMatrix,site_config)
 !     ----------------------------------------------------------------
-      call calKauFromTau(getSingleScatteringMatrix,site_config)
-!     ----------------------------------------------------------------------
+      if (isKKR()) then  ! Avoid calling calKauFromTau in the KKR-CPA case
+!        -------------------------------------------------------------
+         call calKauFromTau(getSingleScatteringMatrix,site_config)
+!        -------------------------------------------------------------
+      endif
    else
 !     ----------------------------------------------------------------
       call ErrorHandler('calCrystalMatrix_k','The method is invalid',method)
