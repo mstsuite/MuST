@@ -961,6 +961,7 @@ contains
 !
    implicit none
 !
+!
    logical, intent(in), optional :: tau_needed
    logical, intent(in), optional :: use_tmat
    logical, intent(in), optional :: use_sro
@@ -1282,6 +1283,7 @@ contains
          endif
    !     call writeMatrix('KKR_MatrixBand',KKR_MatrixBand,KKRMatrixSizeCant, &
    !                      BandSizeCant,TEN2m8)
+         !print *,"1 Times in sumk loop",t2-t1,t3-t2,t4-t3
       enddo
    !  -------------------------------------------------------------------
       call GlobalSumInGroup(kGID,KKR_MatrixBand,KKRMatrixSizeCant*BandSizeCant)
@@ -1320,7 +1322,6 @@ contains
 !        -------------------------------------------------------------------
       endif
    endif
- 
    nullify( weight, kpts )
 !
    if (trim(stop_routine) ==trim(sname)) then
@@ -1989,8 +1990,14 @@ contains
 !
    use WriteMatrixModule,  only : writeMatrix
 !
+   use MPPModule, only : MyPE, sendMessage, recvMessage
+   use MPPModule, only : setCommunicator, resetCommunicator
+   use GroupCommModule, only : getGroupID, getGroupCommunicator
+!   use TimerModule, only : getTime
    implicit none
+!   double precision :: t1,t2,t3,t4
 !
+   integer (kind=IntKind) :: comm
    integer (kind=IntKind), intent(in) :: method
    integer (kind=IntKind), intent(in), optional :: fixed_g, fixed_l
    logical, optional, intent(in) :: use_sro
@@ -2007,6 +2014,10 @@ contains
    complex (kind=CmplxKind), pointer :: p_sinej(:), w2(:,:)
    complex (kind=CmplxKind), intent(out), target :: p_MatrixBand(:)
    complex (kind=CmplxKInd) :: cfac, wfac
+#ifdef ACCEL
+   complex (kind=CmplxKind), allocatable :: KKR_matrix(:,:)
+   integer (kind=IntKind) :: mpi_i, mpi_j, block_size
+#endif
 !
    logical :: do_sro = .false.
 !
@@ -2340,9 +2351,11 @@ contains
       call zcopy(KKRMatrixSizeCant*KKRMatrixSizeCant,WORK,1,p_MatrixBand,1)
    endif
 !
+
    if (NumPEsInGroup == 1) then  ! BandSizeCant = KKRMatrixSizeCant
 !    ----------------------------------------------------------------
 #ifdef ACCEL
+     !no atom parallelism, just invert the p_MatrixBand on process 0
      call invertMatrixKKR_CUDA(p_MatrixBand, KKRMatrixSizeCant)
 #else
      if(do_sro) then
@@ -2363,17 +2376,74 @@ contains
      endif
 #endif
    else
+
+
 #ifdef ACCEL
-     call invertMatrixKKR_CUDA(p_MatrixBand, KKRMatrixSizeCant)
+     GroupID = getGroupID('Unit Cell')
+     comm = getGroupCommunicator(GroupID)
+     call setCommunicator(comm,MyPEinGroup,NumPEsInGroup,sync=.true.)
+     !there is atom parallelism, should invert the KKR matrix on process 0
+     block_size = KKRMatrixSizeCant/NumPEsInGroup
+     !assign KKR matrix on process 0 first
+     !t1 = getTime()
+     if (MyPEinGroup == 0) then
+         allocate(KKR_matrix(KKRMatrixSizeCant, KKRMatrixSizeCant))
+     endif
+     if (MyPEinGroup == 0) then
+         do j=1,block_size
+             do i=1,KKRMatrixSizeCant
+                 KKR_matrix(i, j) = p_MatrixBand(i+(j-1)*KKRMatrixSizeCant)
+             enddo
+         enddo
+     endif
+     !collect part of KKR matrix from each process, p_MatrixBand is part of KKR matrix
+     do mpi_i=1,NumPEsInGroup-1
+         if (MyPEinGroup == mpi_i) then
+             call sendMessage(p_MatrixBand,block_size * KKRMatrixSizeCant,1010,0)!sendMessage(message,size1,msgtype,target_node)
+         endif
+         if (MyPEinGroup == 0) then
+             call recvMessage(KKR_matrix(:,mpi_i*block_size+1:(mpi_i+1)*block_size), KKRMatrixSizeCant, block_size,1010,mpi_i)!recvMessage(message,size1,msgtype,source_node)
+         endif
+     enddo
+     !t2 = getTime()
+     !invert the KKR matrix
+     if (MyPEinGroup == 0) then 
+         call invertMatrixKKR_CUDA(KKR_matrix, KKRMatrixSizeCant)
+         !assign part of inverted matrix on process 0
+         do j=1,block_size
+             do i=1,KKRMatrixSizeCant
+                 p_MatrixBand(i+(j-1)*KKRMatrixSizeCant) = KKR_matrix(i, j)
+             enddo
+         enddo
+     endif
+     !distribute the inverted matrix to each process
+     !t3 = getTime()
+     do mpi_i=1,NumPEsInGroup-1
+         if (MyPEinGroup == 0) then
+             call sendMessage(KKR_matrix(:,mpi_i*block_size+1:(mpi_i+1)*block_size),KKRMatrixSizeCant, block_size,1010,mpi_i)
+         endif
+         if (MyPEinGroup == mpi_i) then
+             call recvMessage(p_MatrixBand,block_size * KKRMatrixSizeCant,1010,0)
+         endif
+     enddo
+     !t4 = getTime()
+     !if (MyPEinGroup == 0) then
+     !    print *,"Time for building matrix on PE 0",t4-t3+t2-t1,"seconds"
+     !endif
+     call resetCommunicator(sync=.true.)
 #else
+
+
 #ifdef USE_SCALAPACK
 !     ----------------------------------------------------------------
       if (do_sro) then
          call PZGETRF(OKKRMatrixSizeCant, OKKRMatrixSizeCant,         &
                     p_MatrixBand, 1, 1, DESC_A, IPVT, INFO)
       else
+         !t1 = getTime()
          call PZGETRF(KKRMatrixSizeCant, KKRMatrixSizeCant,           &
                     p_MatrixBand, 1, 1, DESC_A, IPVT, INFO)
+         !t2 = getTime()
       endif
 !     ----------------------------------------------------------------
 !      call PZGETRF(KKRMatrixSizeCant, KKRMatrixSizeCant,              &
@@ -2429,9 +2499,14 @@ contains
          call PZGETRI(OKKRMatrixSizeCant, p_MatrixBand, 1, 1,         &
                    DESC_A, IPVT, WORK_sro, LWORK_sro, IWORK_sro, LIWORK_sro, INFO )
       else
+         !t3 = getTime()
          call PZGETRI(KKRMatrixSizeCant, p_MatrixBand, 1, 1,         &
                    DESC_A, IPVT, WORK, LWORK, IWORK, LIWORK, INFO)
+         !t4 = getTime()
       endif
+      !if (MyPEinGroup == 0) then
+      !    print *,"matrix inverse on PE 0 is",t4-t3+t2-t1,"seconds"
+      !endif
 !     ----------------------------------------------------------------
       if (INFO /= 0) then
 !        -------------------------------------------------------------
