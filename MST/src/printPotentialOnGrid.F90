@@ -59,9 +59,9 @@
    call printDataOnGrid( 'Visual', 'Potential', 'Total', denOnGrid, lprint)
 !
    do id = 1, na
-      call printDataOnLine('Potential',id,getPotentialAtPoint)
-      call printDataOnLine('Coulomb',id,getPotentialAtPoint)
-      call printDataOnLine('En_Exchg',id,getPotentialAtPoint)
+      call printDataOnLine('Visual','Potential',id,getPotentialAtPoint)
+      call printDataOnLine('Visual','Coulomb',id,getPotentialAtPoint)
+      call printDataOnLine('Visual','En_Exchg',id,getPotentialAtPoint)
    enddo
 !
    deallocate( denOnGrid )

@@ -649,7 +649,7 @@ endif
    integer (kind=IntKind) :: i
 !
    if (id < 1 .or. id > NumInputTables) then
-      call ErrorHandler('getNumKeyValues','invalid table index',id)
+      call ErrorHandler('getNumData','invalid table index',id)
    endif
 !
    CurrentPtr => DataTable
@@ -678,7 +678,7 @@ endif
    integer (kind=1), allocatable :: flag(:)
 !
    if (id < 1 .or. id > NumInputTables) then
-      call ErrorHandler('getNumKeyValues','invalid table index',id)
+      call ErrorHandler('getNumKeys','invalid table index',id)
    endif
 !
    CurrentPtr => DataTable
@@ -889,13 +889,18 @@ endif
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getNumKeyValues(id,key) result(n)
+   function getNumKeyValues(id,key,default_param) result(n)
 !  ===================================================================
+   use DefaultParamModule, only : getDefaultValue
    implicit none
    character (len=*), intent(in) :: key
+   character (len=10) :: value
    integer (kind=IntKind), intent(in) :: id
    integer (kind=IntKind) :: n
    integer (kind=IntKind) :: i
+!
+   logical, optional, intent(in) :: default_param
+   logical :: dp
 !
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getNumKeyValues','invalid table index',id)
@@ -916,6 +921,19 @@ endif
          n = n+1
       endif
    enddo
+!
+   if (n == 0) then
+      if (present(default_param)) then
+         dp = default_param
+      else
+         dp = .true.
+      endif
+      if (dp) then
+         if (getDefaultValue(key,value) == 0) then 
+            n = 1
+         endif
+      endif
+   endif
 !
    end function getNumKeyValues
 !  ===================================================================

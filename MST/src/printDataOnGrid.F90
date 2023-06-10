@@ -1,5 +1,5 @@
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine printDataOnGrid( grid_name, value_name, value_type, denOnGrid, lmax )
+   subroutine printDataOnGrid( grid_name, value_name, value_type, denOnGrid, iprint )
 !  ===================================================================
    use KindParamModule, only : IntKind, RealKind
    use ErrorHandlerModule, only : ErrorHandler
@@ -31,7 +31,7 @@
 !
    type (UniformGridStruct), pointer :: gp
 !
-   integer (kind=IntKind), intent(in) :: lmax
+   integer (kind=IntKind), intent(in) :: iprint
 !
    real (kind=RealKind), intent(in) :: denOnGrid(:)
 !
@@ -74,20 +74,20 @@
 !
    if ( isCharge ) then
       printFormat = getDensityPrintFormat()
-      fname = getDensityPrintFile(lmax,trim(value_type))
+      fname = getDensityPrintFile(iprint,trim(value_type))
    else if ( isPotential ) then
       printFormat = getPotentialPrintFormat()
-      fname = getPotentialPrintFile(lmax,trim(value_type))
+      fname = getPotentialPrintFile(iprint,trim(value_type))
    else if ( isWave ) then
       printFormat = getWavePrintFormat()
-      fname = getWavePrintFile(lmax,trim(value_type))
+      fname = getWavePrintFile(iprint,trim(value_type))
    endif
 !
    funit = 11
    open(unit=funit, file=trim(fname), status='unknown')
    if ( printFormat == 0 ) then
 !
-      write(funit, *) "# xyz sqrt(r^2) format"
+      write(funit, *) "# FORMAT: x    y    z    value"
       ig = 0
       do k = gp%gstart(3), gp%gend(3)
          do j = gp%gstart(2), gp%gend(2)
@@ -96,8 +96,9 @@
                rg = gp%grid_step_a*(i-1) + gp%grid_step_b*(j-1) + gp%grid_step_c*(k-1) + &
                     gp%vec_origin
                sqrt_rg = sqrt(rg(1)**2+rg(2)**2+rg(3)**2)
-               WRITE(funit,'(5f15.8,2i5)') rg, sqrt_rg, &
-                    denOnGrid(ig), gp%AtomOnGrid%NumLocalAtoms, gp%AtomOnGrid%NumGridPointsOnCellBound
+!              WRITE(funit,'(5f15.8,2i5)') rg, sqrt_rg, &
+!                   denOnGrid(ig), gp%AtomOnGrid%NumLocalAtoms, gp%AtomOnGrid%NumGridPointsOnCellBound
+               WRITE(funit,'(4f15.8)') rg, denOnGrid(ig)
             enddo
          enddo
       enddo

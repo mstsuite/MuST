@@ -1,7 +1,9 @@
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine printDensityOnGrid(na, lprint)
+   subroutine printDensityOnGrid(na, iprint)
 !  ===================================================================
    use KindParamModule, only : IntKind, RealKind
+!
+   use MathParamModule, only : ZERO, ONE
 !
    use ErrorHandlerModule, only : ErrorHandler
 !
@@ -15,7 +17,7 @@
 !
    implicit none
 !
-   integer (kind=IntKind), intent(in) :: na, lprint
+   integer (kind=IntKind), intent(in) :: na, iprint
    integer (kind=IntKind) :: id, ng
 !
    real (kind=RealKind), allocatable :: denOnGrid(:)
@@ -47,21 +49,39 @@
       end subroutine constructDataOnGrid
    end interface 
 !
+   interface 
+      subroutine printDataOnGrid(grid_name, value_name, value_type, den, iprint)
+         use KindParamModule, only : IntKind, RealKind
+         use PublicTypeDefinitionsModule, only : UniformGridStruct
+         implicit none
+         character (len=*), intent(in) :: grid_name
+         character (len=*), intent(in) :: value_name
+         character (len=*), intent(in) :: value_type
+         real (kind=RealKind), intent(in) :: den(:)
+         integer (kind=IntKind), intent(in), optional :: iprint
+      end subroutine printDataOnGrid
+   end interface 
+!
 !  ng = gp%NumLocalGridPoints
    ng = getNumGridPoints('Visual',local_grid=.true.)
    allocate( denOnGrid(ng) )
 !
+   denOnGrid = ZERO
    call constructDataOnGrid( 'Visual', 'Charge', 'Valence', getChargeDensityAtPoint, denOnGrid )  ! total charge
-   call printDataOnGrid( 'Visual', 'Charge', 'Valence', denOnGrid, lprint)
+   call printDataOnGrid( 'Visual', 'Charge', 'Valence', denOnGrid, iprint)
    call constructDataOnGrid( 'Visual', 'Charge', 'TotalNew', getChargeDensityAtPoint, denOnGrid )  ! total charge
-   call printDataOnGrid( 'Visual', 'Charge', 'TotalNew', denOnGrid, lprint)
+   call printDataOnGrid( 'Visual', 'Charge', 'Total', denOnGrid, iprint)
+!
+if (.false.) then
    do id = 1, na
-      call printDataOnLine('ValenDen',id,getValenceElectronDensityAtPosi)
+      call printDataOnLine('Visual','ValenDen',id,getValenceElectronDensityAtPosi)
    enddo
+!
    if ( .not.isSphericalChargeDensity() ) then
       call constructDataOnGrid( 'Visual', 'Charge', 'Pseudo', getChargeDensityAtPoint, denOnGrid )
-      call printDataOnGrid( 'Visual', 'Charge', 'Pseudo', denOnGrid, lprint)
+      call printDataOnGrid( 'Visual', 'Charge', 'Pseudo', denOnGrid, iprint)
    endif
+endif
 !
    deallocate( denOnGrid )
 !

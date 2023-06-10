@@ -41,19 +41,21 @@
 !                     > 0: Three intergers used to define the grid numbers along three Bravais lattice vector directions
 !             Note: Uniform grid is used to generate the new potential. These numbers must be an interger power of 2,
 !                   and will affect the accuracy of the Poisson solver.
-   n = n + 1; Keys(n) = 'Visual Grid Type (0<D<4)';              Values(n) = '1'
+   n = n + 1; Keys(n) = 'Visual Grid Type (0<D<4)';              Values(n) = '3'
 !                     = 1: Define a line (1D); = 2: Define a plane (2D); = 3: Define a rectilinear region (3D)
-   n = n + 1; Keys(n) = 'Grid Scale ';                           Values(n) = '1.00'
-   n = n + 1; Keys(n) = 'Origin Grid Vector';                    Values(n) = '0.0 0.0 0.0'
-   n = n + 1; Keys(n) = 'Grid Vector 1';                         Values(n) = '10.00  0.00  0.00'
-   n = n + 1; Keys(n) = 'Grid Vector 2';                         Values(n) = '0.00 10.00  0.00'
-   n = n + 1; Keys(n) = 'Grid Vector 3';                         Values(n) = '0.00  0.00 10.00'
+   n = n + 1; Keys(n) = 'Visual Grid Scale';                     Values(n) = '1.00'
+   n = n + 1; Keys(n) = 'Visual Grid Origin Vector';             Values(n) = '0.0 0.0 0.0'
+   n = n + 1; Keys(n) = 'Visual Grid Vector 1';                  Values(n) = '10.00  0.00  0.00'
+   n = n + 1; Keys(n) = 'Visual Grid Vector 2';                  Values(n) = '0.00 10.00  0.00'
+   n = n + 1; Keys(n) = 'Visual Grid Vector 3';                  Values(n) = '0.00  0.00 10.00'
 !             Note: Vectors defining the grid boundaries
-   n = n + 1; Keys(n) = 'Grid Points';                           Values(n) = '100 16 16'
+   n = n + 1; Keys(n) = 'Visual Grid Points';                    Values(n) = '10 10 10'
 !             Note: Visual grid will use only first D parameters for Grid Vectors and Grid Points
+   n = n + 1; Keys(n) = 'Visual Line Vector';                    Values(n) = '1.00  0.00  0.00'
+   n = n + 1; Keys(n) = 'Visual Line Points';                    Values(n) = '10'
    n = n + 1; Keys(n) = 'Output Electron Density ID (>= -1)';    Values(n) = '-1'
-!                     = -1: do no print; = 0:  print
-   n = n + 1; Keys(n) = 'Output Density Format';                 Values(n) = '1'
+!                     = -1: do no print; = 0:  print brief data; = 1: print data on visual grid
+   n = n + 1; Keys(n) = 'Output Density Format';                 Values(n) = '0'
 !                     = 0: x y z rho format; = 1: Legacy ".vtk"  format for ParaView visualization
    n = n + 1; Keys(n) = 'Energy (Ryd) Tol (> 0)';                Values(n) = '0.000001'
    n = n + 1; Keys(n) = 'Potential Tol (> 0)';                   Values(n) = '0.0000001'
@@ -269,6 +271,7 @@
    n = n + 1; Keys(n) = 'Uniform Grid Origin';                   Values(n) = '0'
 !                     = 0: Using unit cell corner             
 !                     = 1: Using Unit cell center
+   n = n + 1; Keys(n) = 'Uniform Grid Origin Vector';            Values(n) = '0.0  0.0  0.0'
    n = n + 1; Keys(n) = 'Core States Normalization Range';       Values(n) = '0'
 !                     = 0: Up to bounding sphere radius
 !                     = 1: Up to infinity
