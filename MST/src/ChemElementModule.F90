@@ -80,6 +80,8 @@ public :: getAtomInfo,      &
 !
    integer (kind=IntKind), parameter, public :: MaxLenOfAtomName = 16
 !
+   integer (kind=IntKind), parameter, public :: MaxNumc = 26
+!
 private
    type ElementStruc
       character (len=MaxLenOfAtomName) :: AtomName
@@ -105,8 +107,6 @@ private
    type (ElementStruc), save :: Element(MinZtot:NumElements)
 !
    logical :: Initialized = .false.
-!
-   integer (kind=IntKind), parameter :: MaxNumc = 26
 !
    type AtomicLevel
       character (len=2) :: Symbol

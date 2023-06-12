@@ -536,7 +536,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine readCoreStates()
 !  ===================================================================
-   use ChemElementModule, only : MaxLenOfAtomName
+   use ChemElementModule, only : MaxLenOfAtomName, MaxNumc
    use ChemElementModule, only : getZtot, getZcor, getZsem
    use ChemElementModule, only : getNumCoreStates
    use ChemElementModule, only : getCoreStateN
@@ -552,16 +552,16 @@ contains
    character (len=10) :: acc
 !
    integer (kind=IntKind) :: id, ia, ic, is
-   integer (kind=IntKind) :: MaxNumc, ndeep, nz
+   integer (kind=IntKind) :: ndeep, nz
    integer (kind=IntKind), parameter :: funit=92
 !
    real (kind=RealKind) :: fac1
 !
    do id = 1, LocalNumAtoms
-      MaxNumc = 0
+!06/11/23 MaxNumc = 0
       do ia = 1, Core(id)%NumSpecies
          an = getLocalAtomNickName(id,ia)
-         MaxNumc = max(MaxNumc,getNumCoreStates(an))
+!06/11/23MaxNumc = max(MaxNumc,getNumCoreStates(an))
       enddo
       Core(id)%MaxNumc = MaxNumc
       allocate( Core(id)%nc(1:MaxNumc,Core(id)%NumSpecies) )
@@ -1636,6 +1636,7 @@ contains
 !
    use AtomModule, only : getLocalSpeciesContent, getLocalNumSpecies
    use AtomModule, only : getLocalAtomicNumber
+   use AtomModule, only : getLocalAtomNickName
 !
    use SystemVolumeModule, only : getSystemVolume, getAtomicMTVolume
 !
@@ -1655,6 +1656,7 @@ contains
                                        IntegerMark, IntegerType
 !
    use ChemElementModule, only : getCoreStateIndex
+   use ChemElementModule, only : getNumCoreStates, setNumCoreStates
 !
    use InterpolationModule, only : FitInterp
 !
@@ -2797,6 +2799,27 @@ endif
 !        write(6,'(a,i3)')'    Number of Core Electron States:',getNumCoreStates(an)
       endif
    endif
+!              nsem = 0
+!              do ic = 1, numc
+!                 nsem = nsem + 2*(2*plc(ic)+1)
+!              enddo
+!              if (Core(id)%zsemss(ia) /= nsem) then
+!                 nc = getNumCoreStates(an) + numc - Core(id)%zsemss(ia)/2
+!                 if (print_level >= 0) then
+!                    write(6,'(/,a)') '=========================================================='
+!                    write(6,'(a)')   'WARNING:: The number of semi-core electrons needs updated:'
+!                    write(6,'(a,i3)')'          The estimate number of semi-core electrons: ',Core(id)%zsemss(ia)
+!                    write(6,'(a,i3)')'          The actual   number of semi-core electrons: ',2*numc
+!                 endif
+!                 Core(id)%zsemss(ia) = nsem
+!                 call setNumCoreStates(an,nc)
+!                 if (print_level >= 0) then
+!                    write(6,'(a,i3)')'The total number of core states of ',an,' is reset to: ',nc
+!                    write(6,'(a,i3)')'The total number of valence electrons of ',an,' becomes: ', &
+!                                     (Core(id)%ztotss(ia) - Core(id)%zsemss(ia) - Core(id)zcorss(ia)
+!                    write(6,'(a,/)') '=========================================================='
+!                 endif
+!              endif
 !
    if(stop_routine.eq.sname) then
       call StopHandler(sname)
