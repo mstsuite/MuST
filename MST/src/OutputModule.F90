@@ -322,30 +322,36 @@ contains
          densityPrintFile=trim(densityPrintFile)//'.dat'
       else if ( densityPrintFormat == 1 ) then
          densityPrintFile=trim(densityPrintFile)//'.vtk'
+      else if ( densityPrintFormat == 2 ) then
+         densityPrintFile=trim(densityPrintFile)//'.xsf'
       endif
    endif
 !
    if (potentialPrintFlag >= 0) then
 !     ================================================================
-!     construct filename for electronic density output
+!     construct filename for electronic potential output
 !     ----------------------------------------------------------------
       potentialPrintFile='Pot_'//trim(cnode)
       if (potentialPrintFormat == 0) then
          potentialPrintFile=trim(potentialPrintFile)//'.dat'
       else if ( potentialPrintFormat == 1 ) then
          potentialPrintFile=trim(potentialPrintFile)//'.vtk'
+      else if ( potentialPrintFormat == 2 ) then
+         potentialPrintFile=trim(potentialPrintFile)//'.xsf'
       endif
    endif
 !
    if (wavePrintFlag >= 0) then
 !     ================================================================
-!     construct filename for electronic density output
+!     construct filename for electronic wavefunction output
 !     ----------------------------------------------------------------
       wavePrintFile='WaveFunction_'//trim(cnode)
       if (wavePrintFormat == 0) then
          wavePrintFile=trim(wavePrintFile)//'.dat'
       else if ( wavePrintFormat == 1 ) then
          wavePrintFile=trim(wavePrintFile)//'.vtk'
+      else if ( wavePrintFormat == 2 ) then
+         wavePrintFile=trim(wavePrintFile)//'.xsf'
       endif
    endif
 !

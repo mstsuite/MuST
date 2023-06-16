@@ -9,7 +9,7 @@
 !
    use PublicTypeDefinitionsModule, only : UniformGridStruct
 !
-   use Uniform3DGridModule, only : getNumGridPoints
+   use Uniform3DGridModule, only : getUniform3DGrid, getNumGridPoints
 !   
    implicit none
 !
@@ -17,6 +17,8 @@
    integer (kind=IntKind) :: id, ng
 !
    real (kind=RealKind), allocatable :: denOnGrid(:)
+!
+   type (UniformGridStruct), pointer :: gp
 !
    interface 
       subroutine constructDataOnGrid(grid_name, value_name, value_type, getData, den, lmax, spin, tol_in)
@@ -45,18 +47,33 @@
       end subroutine constructDataOnGrid
    end interface 
 !
+   interface
+      subroutine printDataOnGrid(gp, value_name, value_type, den, iprint)
+         use KindParamModule, only : IntKind, RealKind
+         use PublicTypeDefinitionsModule, only : UniformGridStruct
+         implicit none
+         character (len=*), intent(in) :: value_name
+         character (len=*), intent(in) :: value_type
+         real (kind=RealKind), intent(in), target :: den(:)
+         integer (kind=IntKind), intent(in), optional :: iprint
+         type (UniformGridStruct), intent(in) :: gp
+      end subroutine printDataOnGrid
+   end interface
+!
+   gp => getUniform3DGrid('Visual')
+!
 !  ng = gp%NumLocalGridPoints
    ng = getNumGridPoints('Visual',local_grid=.true.)
    allocate( denOnGrid(ng) )
 !
    call constructDataOnGrid( 'Visual', 'Potential', 'Coulomb', getPotentialAtPoint, denOnGrid )
-   call printDataOnGrid( 'Visual', 'Potential', 'Coulomb', denOnGrid, lprint)
+   call printDataOnGrid( gp, 'Potential', 'Coulomb', denOnGrid, lprint)
 !
    call constructDataOnGrid( 'Visual', 'Potential', 'Exchg', getPotentialAtPoint, denOnGrid )
-   call printDataOnGrid( 'Visual', 'Potential', 'Exchg', denOnGrid, lprint)
+   call printDataOnGrid( gp, 'Potential', 'Exchg', denOnGrid, lprint)
 !
    call constructDataOnGrid( 'Visual', 'Potential', 'Total', getPotentialAtPoint, denOnGrid )
-   call printDataOnGrid( 'Visual', 'Potential', 'Total', denOnGrid, lprint)
+   call printDataOnGrid( gp, 'Potential', 'Total', denOnGrid, lprint)
 !
    do id = 1, na
       call printDataOnLine('Visual','Potential',id,getPotentialAtPoint)

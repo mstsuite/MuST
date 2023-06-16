@@ -99,7 +99,8 @@ BroydenLib.o \
 AndersonLib.o \
 newtc.o \
 decompose3Index.o \
-breakLine.o
+breakLine.o \
+arrayTools.o
 
 ifdef ESSL_WORKAROUND
   LOBS += essl_workaround.o

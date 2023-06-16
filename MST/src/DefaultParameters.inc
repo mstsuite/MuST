@@ -55,8 +55,10 @@
    n = n + 1; Keys(n) = 'Visual Line Points';                    Values(n) = '10'
    n = n + 1; Keys(n) = 'Output Electron Density ID (>= -1)';    Values(n) = '-1'
 !                     = -1: do no print; = 0:  print brief data; = 1: print data on visual grid
-   n = n + 1; Keys(n) = 'Output Density Format';                 Values(n) = '0'
-!                     = 0: x y z rho format; = 1: Legacy ".vtk"  format for ParaView visualization
+   n = n + 1; Keys(n) = 'Output Density Format';                 Values(n) = '2'
+!                     = 0: x y z rho format; 
+!                     = 1: Legacy ".vtk"  format for ParaView visualization
+!                     = 2: ".xsf" format for VESTA
    n = n + 1; Keys(n) = 'Energy (Ryd) Tol (> 0)';                Values(n) = '0.000001'
    n = n + 1; Keys(n) = 'Potential Tol (> 0)';                   Values(n) = '0.0000001'
    n = n + 1; Keys(n) = 'Fermi Energy Tol (> 0)';                Values(n) = '0.0000001'

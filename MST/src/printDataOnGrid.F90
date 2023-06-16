@@ -1,12 +1,12 @@
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine printDataOnGrid( grid_name, value_name, value_type, denOnGrid, iprint )
+   subroutine printDataOnGrid( gp, value_name, value_type, denOnGrid, iprint )
 !  ===================================================================
    use KindParamModule, only : IntKind, RealKind
    use ErrorHandlerModule, only : ErrorHandler
 !
    use PublicTypeDefinitionsModule, only : UniformGridStruct
 !
-   use Uniform3DGridModule, only : getUniform3DGrid
+   use Uniform3DGridModule, only : getUniform3DGrid, getGridPosition
 !
    use OutputModule, only : getDensityPrintFlag,     &
                             getDensityPrintFile,     &
@@ -17,7 +17,9 @@
                             getWavePrintFlag,        &
                             getWavePrintFile,        &
                             getWavePrintFormat
-
+!
+   use SystemModule, only : getNumAtoms, getBravaisLattice, getAtomName
+   use SystemModule, only : getAtomPosition
 !
    implicit none
 !
@@ -25,15 +27,17 @@
 !  Variables
 !  ==================================================================
 !
-   character(len=*), intent(in) :: grid_name
+!  character(len=*), intent(in) :: grid_name
    character(len=*), intent(in) :: value_name
    character(len=*), intent(in) :: value_type
 !
-   type (UniformGridStruct), pointer :: gp
+   type (UniformGridStruct), intent(in) :: gp
 !
    integer (kind=IntKind), intent(in) :: iprint
 !
-   real (kind=RealKind), intent(in) :: denOnGrid(:)
+   real (kind=RealKind), intent(in), target :: denOnGrid(:)
+   real (kind=RealKind), pointer :: p_denOnGrid(:,:,:)
+   real (kind=RealKind) :: bravais(3,3)
 !
    logical :: isCharge
    logical :: isPotential
@@ -41,7 +45,7 @@
 !
    character (len=90) :: fname
 !
-   integer (kind=IntKind) :: i, j, k, ig
+   integer (kind=IntKind) :: i, j, k, ig, na
    integer (kind=IntKind) :: printFormat, funit
 !
    real (kind=RealKind) :: rg(3), sqrt_rg
@@ -54,7 +58,17 @@
       end function nocaseCompare
    end interface
 !
-   gp => getUniform3DGrid(grid_name)
+   interface
+      function aliasArray3_r(a,n1,n2,n3) result(p)
+         use KindParamModule, only : IntKind, RealKind
+         implicit none
+         integer(kind=IntKind), intent(in) :: n1,n2,n3
+         real(kind=RealKind), target :: a(n1,n2,n3)
+         real(kind=RealKind), pointer :: p(:,:,:)
+      end function aliasArray3_r
+   end interface
+!
+!  gp => getUniform3DGrid(grid_name)
    isCharge    = .false.
    isPotential = .false.
    isWave      = .false.
@@ -86,25 +100,27 @@
    funit = 11
    open(unit=funit, file=trim(fname), status='unknown')
    if ( printFormat == 0 ) then
-!
       write(funit, *) "# FORMAT: x    y    z    value"
-      ig = 0
-      do k = gp%gstart(3), gp%gend(3)
-         do j = gp%gstart(2), gp%gend(2)
-            do i = gp%gstart(1), gp%gend(1)
-               ig = ig + 1
-               rg = gp%grid_step_a*(i-1) + gp%grid_step_b*(j-1) + gp%grid_step_c*(k-1) + &
-                    gp%vec_origin
-               sqrt_rg = sqrt(rg(1)**2+rg(2)**2+rg(3)**2)
+!!    ig = 0
+!!    do k = gp%gstart(3), gp%gend(3)
+!!       do j = gp%gstart(2), gp%gend(2)
+!!          do i = gp%gstart(1), gp%gend(1)
+!!             ig = ig + 1
+!!             rg = gp%grid_step_a*(i-1) + gp%grid_step_b*(j-1) + gp%grid_step_c*(k-1) + &
+!!                  gp%vec_origin
+!!             sqrt_rg = sqrt(rg(1)**2+rg(2)**2+rg(3)**2)
 !              WRITE(funit,'(5f15.8,2i5)') rg, sqrt_rg, &
 !                   denOnGrid(ig), gp%AtomOnGrid%NumLocalAtoms, gp%AtomOnGrid%NumGridPointsOnCellBound
-               WRITE(funit,'(4f15.8)') rg, denOnGrid(ig)
-            enddo
-         enddo
+!!             WRITE(funit,'(4f15.8)') rg, denOnGrid(ig)
+!!          enddo
+!!       enddo
+!!    enddo
+      do ig = 1, gp%ng
+         rg = getGridPosition(gp,ig)
+         WRITE(funit,'(4f15.8)') rg, denOnGrid(ig)
       enddo
 !
    else if (printFormat == 1) then
-!
       write(funit, '(''# vtk DataFile Version 1.0'')')
       write(funit, '(''value on the grid example'')')
       write(funit, '(''ASCII'')')
@@ -127,10 +143,51 @@
       write(funit, '(a)')      "SCALARS value double 1"
       write(funit, '(a)')      "LOOKUP_TABLE default"
 !
-      do ig = 1, gp%NumLocalGridPoints
+!!    do ig = 1, gp%NumLocalGridPoints
+      do ig = 1, gp%ng
          write (funit, '(f15.8)') denOnGrid(ig)
       enddo
 !
+   else if (printFormat == 2) then ! writing the data is xsf format
+!
+      p_denOnGrid =>  aliasArray3_r(denOnGrid,gp%nga,gp%ngb,gp%ngc)
+      bravais = getBravaisLattice() 
+      write(funit, '(a)')'CRYSTAL'
+      write(funit, '(a)')'PRIMVEC'
+      write(funit, '(3(2x,f15.11))')bravais(1:3,1)
+      write(funit, '(3(2x,f15.11))')bravais(1:3,2)
+      write(funit, '(3(2x,f15.11))')bravais(1:3,3)
+      write(funit, '(a)')'PRIMCOORD'
+      na = getNumAtoms(); i = 1
+      write(funit, '(2i5)')na, i
+      do i = 1, na
+         write(funit,'(2x,a2,3(2x,f15.11))')getAtomName(i),getAtomPosition(i)
+      enddo
+      write(funit,'(a)')'BEGIN_BLOCK_DATAGRID_3D'
+      write(funit,'(2x,a)')value_name//'_density'
+      write(funit,'(2x,a)')'BEGIN_DATAGRID_3D'//' '//value_name//'_density'
+      write(funit,'(2x,3i5)')gp%nga,gp%ngb,gp%ngc
+      write(funit,'(2x,3f10.5)')gp%vec_origin(1:3)
+      write(funit,'(2x,3f10.5)')gp%cell(1:3,1)
+      write(funit,'(2x,3f10.5)')gp%cell(1:3,2)
+      write(funit,'(2x,3f10.5)')gp%cell(1:3,3)
+!     write(funit,'(2x,3f10.5)')gp%grid_step_a(1:3)
+!     write(funit,'(2x,3f10.5)')gp%grid_step_b(1:3)
+!     write(funit,'(2x,3f10.5)')gp%grid_step_c(1:3)
+      do k = 1, gp%ngc
+         do j = 1, gp%ngb
+            write(funit,'(2x,$)')
+            do i = 1, gp%nga
+               write(funit,'(F12.5,$)')p_denOnGrid(i,j,k)
+            enddo
+            write(funit,'(a)')' '
+         enddo
+         if (k < gp%ngc) then
+            write(funit,'(a)')' '
+         endif
+      enddo
+      write(funit,'(2x,a)')'END_DATAGRID_3D'
+      write(funit,'(a)')'END_BLOCK_DATAGRID_3D'
    endif
    call FlushFile(funit)
    close(funit)
