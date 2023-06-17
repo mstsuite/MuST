@@ -2,9 +2,14 @@
    subroutine printDataOnGrid( gp, value_name, value_type, denOnGrid, iprint )
 !  ===================================================================
    use KindParamModule, only : IntKind, RealKind
+!
+   use MathParamModule, only : PI2
+!
    use ErrorHandlerModule, only : ErrorHandler
 !
    use PublicTypeDefinitionsModule, only : UniformGridStruct
+!
+   use PhysParamModule, only : Bohr2Angstrom
 !
    use Uniform3DGridModule, only : getUniform3DGrid, getGridPosition
 !
@@ -19,7 +24,7 @@
                             getWavePrintFormat
 !
    use SystemModule, only : getNumAtoms, getBravaisLattice, getAtomName
-   use SystemModule, only : getAtomPosition
+   use SystemModule, only : getAtomPosition, getNumVacancies
 !
    implicit none
 !
@@ -152,39 +157,51 @@
 !
       p_denOnGrid =>  aliasArray3_r(denOnGrid,gp%nga,gp%ngb,gp%ngc)
       bravais = getBravaisLattice() 
+      write(funit, '(a)')'# This XSF file is produced by MuST'
+      write(funit, '(a)')'# The quantities in this file are in the unit of Angstroms'
       write(funit, '(a)')'CRYSTAL'
       write(funit, '(a)')'PRIMVEC'
-      write(funit, '(3(2x,f15.11))')bravais(1:3,1)
-      write(funit, '(3(2x,f15.11))')bravais(1:3,2)
-      write(funit, '(3(2x,f15.11))')bravais(1:3,3)
+      write(funit, '(3(2x,f15.11))')bravais(1:3,1)*Bohr2Angstrom
+      write(funit, '(3(2x,f15.11))')bravais(1:3,2)*Bohr2Angstrom
+      write(funit, '(3(2x,f15.11))')bravais(1:3,3)*Bohr2Angstrom
       write(funit, '(a)')'PRIMCOORD'
       na = getNumAtoms(); i = 1
-      write(funit, '(2i5)')na, i
+      if (getNumVacancies() > 0) then
+         write(funit, '(a)')    '# Including vacancies:'
+         write(funit, '(a,2i5)')'#',na, i
+         write(funit, '(a)')    '# Excluding vacancies:'
+      endif
+      write(funit, '(2i5)')na-getNumVacancies(), i
       do i = 1, na
-         write(funit,'(2x,a2,3(2x,f15.11))')getAtomName(i),getAtomPosition(i)
+         if (getAtomName(i) /= 'Va') then
+            write(funit,'(2x,a2,3(2x,f15.11))')getAtomName(i),getAtomPosition(i)*Bohr2Angstrom
+         endif
       enddo
+      if (getNumVacancies() > 0) then
+         do i = 1, na
+            if (getAtomName(i) == 'Va') then
+               write(funit,'(a,3(2x,f15.11))')'# Va',getAtomPosition(i)*Bohr2Angstrom
+            endif
+         enddo
+      endif
       write(funit,'(a)')'BEGIN_BLOCK_DATAGRID_3D'
       write(funit,'(2x,a)')value_name//'_density'
-      write(funit,'(2x,a)')'BEGIN_DATAGRID_3D'//' '//value_name//'_density'
+      write(funit,'(2x,a)')'BEGIN_DATAGRID_3D'//'_'//value_name//'_density'
       write(funit,'(2x,3i5)')gp%nga,gp%ngb,gp%ngc
-      write(funit,'(2x,3f10.5)')gp%vec_origin(1:3)
-      write(funit,'(2x,3f10.5)')gp%cell(1:3,1)
-      write(funit,'(2x,3f10.5)')gp%cell(1:3,2)
-      write(funit,'(2x,3f10.5)')gp%cell(1:3,3)
-!     write(funit,'(2x,3f10.5)')gp%grid_step_a(1:3)
-!     write(funit,'(2x,3f10.5)')gp%grid_step_b(1:3)
-!     write(funit,'(2x,3f10.5)')gp%grid_step_c(1:3)
+      write(funit,'(2x,3f10.5)')gp%vec_origin(1:3)*Bohr2Angstrom
+      write(funit,'(2x,3f10.5)')gp%cell(1:3,1)*Bohr2Angstrom
+      write(funit,'(2x,3f10.5)')gp%cell(1:3,2)*Bohr2Angstrom
+      write(funit,'(2x,3f10.5)')gp%cell(1:3,3)*Bohr2Angstrom
+!     write(funit,'(2x,3f10.5)')gp%grid_step_a(1:3)*Bohr2Angstrom
+!     write(funit,'(2x,3f10.5)')gp%grid_step_b(1:3)*Bohr2Angstrom
+!     write(funit,'(2x,3f10.5)')gp%grid_step_c(1:3)*Bohr2Angstrom
       do k = 1, gp%ngc
          do j = 1, gp%ngb
-            write(funit,'(2x,$)')
-            do i = 1, gp%nga
-               write(funit,'(F12.5,$)')p_denOnGrid(i,j,k)
-            enddo
-            write(funit,'(a)')' '
+            write(funit,'(2x,5F12.5)')(p_denOnGrid(i,j,k)/Bohr2Angstrom**3,i=1,gp%nga)
          enddo
-         if (k < gp%ngc) then
-            write(funit,'(a)')' '
-         endif
+!        if (k < gp%ngc) then
+!           write(funit,'(a)')' '
+!        endif
       enddo
       write(funit,'(2x,a)')'END_DATAGRID_3D'
       write(funit,'(a)')'END_BLOCK_DATAGRID_3D'
