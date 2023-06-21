@@ -39,6 +39,7 @@ public :: initSMatrixPoles,          &
                                           ! an energy in the resonance region
           printSMatrixPoleInfo,      &
           printBoundStateDensity,    &
+          examBoundStateDegen,       &
           isSMatrixPolesInitialized
 !
    interface computeBoundStateDensity
@@ -2568,5 +2569,53 @@ contains
    n0 = n0 + 4
 !
    end subroutine decodeDOSDATA
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine examBoundStateDegen(id,ia,is,r_econtour,modified)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: is, id, ia
+   integer (kind=IntKind) :: ib, ibx, iby, jb, jbx, jby
+!
+   real (kind=RealKind), intent(inout) :: r_econtour
+!
+   logical, intent(out) :: modified
+!
+   modified = .false.         ! No action is taken...
+!
+   ib = 1
+   do while (ib < Pole(id)%NumBoundPoles(is,ia))
+      ibx = Pole(id)%BoundSI(ib,is,ia)
+      iby = Pole(id)%BoundSI(ib+1,is,ia)
+      if (abs(Pole(id)%BoundState(ibx,is,ia)%PoleE -                  &
+              Pole(id)%BoundState(iby,is,ia)%PoleE) < TWO*r_econtour) then
+         Pole(id)%BoundState(ibx,is,ia)%NumDegens = Pole(id)%BoundState(ibx,is,ia)%NumDegens + &
+                                                    Pole(id)%BoundState(iby,is,ia)%NumDegens
+         Pole(id)%BoundState(ibx,is,ia)%PoleE = HALF*(Pole(id)%BoundState(ibx,is,ia)%PoleE + &
+                                                      Pole(id)%BoundState(iby,is,ia)%PoleE)
+         if (Pole(id)%BoundState(ibx,is,ia)%PoleE + r_econtour -      &
+            Pole(id)%BoundState(iby,is,ia)%PoleE < 0.002d0) then
+            r_econtour = r_econtour + 0.002d0  ! enlarge the contour is needed.
+         endif
+         do jb = ib+1, Pole(id)%NumBoundPoles(is,ia)-1
+            jbx = Pole(id)%BoundSI(jb,is,ia)
+            jby = Pole(id)%BoundSI(jb+1,is,ia)
+            Pole(id)%BoundState(jbx,is,ia)%NumDegens = Pole(id)%BoundState(jby,is,ia)%NumDegens
+            Pole(id)%BoundState(jbx,is,ia)%PoleE  = Pole(id)%BoundState(jby,is,ia)%PoleE
+            Pole(id)%BoundState(jby,is,ia)%NumDegens = 0
+            Pole(id)%BoundState(jby,is,ia)%PoleE = ZERO
+         enddo
+         Pole(id)%NumBoundPoles(is,ia) = Pole(id)%NumBoundPoles(is,ia) - 1
+         modified = .true.
+      else
+         ib = ib + 1
+      endif
+   enddo
+!
+   end subroutine examBoundStateDegen
 !  ===================================================================
 end module SMatrixPolesModule

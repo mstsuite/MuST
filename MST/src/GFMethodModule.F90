@@ -2876,8 +2876,10 @@ contains
                                   getResonanceStateEnergy,      &
                                   getBoundStateEnergy,          &
                                   getNumBoundStates,            &
+                                  getNumBoundStateDegen,        &
                                   computeResonanceStateDensity, &
                                   computeBoundStateDensity,     &
+                                  examBoundStateDegen,          &
                                   printSMatrixPoleInfo
 !
    use SineMatrixZerosModule, only : findSineMatrixZeros,       &
@@ -2909,13 +2911,14 @@ contains
 !
    real (kind=RealKind), intent(in), optional :: Ebegin, Eend
    logical, intent(in), optional :: relativity !xianglin
-   logical :: contour_int
+   logical :: contour_int, modified = .false.
    logical, parameter :: romberg = .true.
 !
    real (kind=RealKind) :: ssdos_int, IDOS_cell, ps, e0, ps0, ssDOS, width
    real (kind=RealKind) :: scaling_factor, IDOS_space, IDOS_out, sfac
    real (kind=RealKind) :: resonance_contour_radius, resonance_width
    real (kind=RealKind) :: ebot, etop, er, ep, ei, e1, e2, e_delta, e_bound, w, rfac, maxd, err
+   real (kind=RealKind) :: contour_radius
    real (kind=RealKind), allocatable :: xg(:), wg(:)
 !
    complex (kind=CmplxKind) :: int_test, ec, es, cfac
@@ -3373,7 +3376,9 @@ contains
 !
 !     ================================================================
 !     In case there are shallow bound states in (ErBottom, 0.0), 
-!     calculate the density associated with these bound states
+!     calculate the density associated with these bound states using
+!     contour integration around the poles associated with thesse
+!     bound state. The radius of the contour is stored in e_bound
 !     ================================================================
       rstatus = getKeyValue(1,'Bound State Contour Integration Radius (>0.0)',e_bound)
       if (rstatus /= 0 .or. e_bound < TEN2m6 .or. e_bound > ONE) then
@@ -3389,10 +3394,31 @@ contains
                ns = 4
             endif
             do ia = 1, ssLastValue(id)%NumSpecies
+               contour_radius = e_bound
+!              =======================================================
+!              In the case that two or more neighboring bound state poles are
+!              so close to one another that their distance are less than 2*e_bound,
+!              these bound states will be considered as "degenerate"
+!              The contour radius could be modified as well.
+!              -------------------------------------------------------
+               call examBoundStateDegen(id,ia,is,contour_radius,modified)
+!              -------------------------------------------------------
+               if (modified .and. MyPE == 0) then
+                  write(6,'(a)')'The number of shallow bound states has been modified.'
+                  write(6,'(3(a,i3),2x,a,i3)')'id = ',id,', is = ',is,', ia = ',ia, &
+                                              ', Modified number of bound states = ',getNumBoundStates(id,ia,is)
+                  do ib = 1, getNumBoundStates(id,ia,is)
+                     write(6,'(a,f20.12)')'Modified bound state energy = ', &
+                                          getBoundStateEnergy(id,ia,is,ib,sorted =.true.)
+                     write(6,'(a,i5)')'Modified bound state degeneracy = ', &
+                                          getNumBoundStateDegen(id,ia,is,ib,sorted=.true.)
+                  enddo
+               endif
+!
                info(1) = is; info(2) = id; info(3) = ia; info(4) = 1; info(5) = lmax_phi(id) 
                do ib = 1, getNumBoundStates(id,ia,is)
 !                 ----------------------------------------------------
-                  call computeBoundStateDensity(id,ia,is,e_bound,ib,chempot,wk_dos)
+                  call computeBoundStateDensity(id,ia,is,contour_radius,ib,chempot,wk_dos)
 !                 ----------------------------------------------------
 !                 ====================================================
 !                 The bound state density will be added to ssIntegrValue
