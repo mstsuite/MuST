@@ -2261,6 +2261,8 @@ contains
    use SpinRotationModule, only : calSpinRotation, printSpinRotation
    use SpinRotationModule, only : transformDensityMatrix
 !
+   use PublicTypeDefinitionsModule, only : PDOSStruct
+!
    implicit none
 !
    character (len=10) :: fname
@@ -2284,14 +2286,15 @@ contains
 !
    type (GridStruct), pointer :: Grid
 !
-   type PDOSStruct
-      real (kind=RealKind), pointer :: dos_ws(:,:), dos_mt(:,:)
-      real (kind=RealKind), pointer :: ss_dos_ws(:,:), ss_dos_mt(:,:)
-      real (kind=RealKind), pointer :: phase_shift(:,:,:)
-      real (kind=RealKind), pointer :: ss_pdos_ws(:,:,:), ss_pdos_mt(:,:,:)
-      real (kind=RealKind), pointer :: ms_pdos_ws(:,:,:), ms_pdos_mt(:,:,:)
-      real (kind=RealKind), pointer :: partial_dos_ws(:,:,:), partial_dos_mt(:,:,:)
-   end type PDOSStruct
+!  type PDOSStruct
+!     integer (kind=IntKind) :: kmax_phi
+!     real (kind=RealKind), pointer :: dos_ws(:,:), dos_mt(:,:)
+!     real (kind=RealKind), pointer :: ss_dos_ws(:,:), ss_dos_mt(:,:)
+!     real (kind=RealKind), pointer :: phase_shift(:,:,:)
+!     real (kind=RealKind), pointer :: ss_pdos_ws(:,:,:), ss_pdos_mt(:,:,:)
+!     real (kind=RealKind), pointer :: ms_pdos_ws(:,:,:), ms_pdos_mt(:,:,:)
+!     real (kind=RealKind), pointer :: partial_dos_ws(:,:,:), partial_dos_mt(:,:,:)
+!  end type PDOSStruct
 !
    type (PDOSStruct), allocatable :: PartialDOS(:)
 !
@@ -2363,6 +2366,7 @@ contains
 !  
    allocate( PartialDOS(LocalNumAtoms) )
    do id = 1, LocalNumAtoms
+      PartialDOS(id)%kmax_phi = kmax_phi(id)
       num_species = getLocalNumSpecies(id)
       allocate( PartialDOS(id)%dos_ws(n_spin_pola,num_species) )      
       allocate( PartialDOS(id)%dos_mt(n_spin_pola,num_species) )
@@ -2566,19 +2570,9 @@ contains
       iprint = 0
    endif
 !
-   do id = 1, LocalNumAtoms
-      do ia = 1, getLocalNumSpecies(id)
-!        -------------------------------------------------------------
-         call gaspari_gyorffy_formula(kmax_phi_max,kmax_phi(id),n_spin_pola, &
-                                      getLocalAtomicNumber(id,ia),           &
-                                      PartialDOS(id)%ss_dos_mt(1,ia),        &
-                                      PartialDOS(id)%dos_mt(1,ia),           &
-                                      PartialDOS(id)%phase_shift(1,1,ia),    &
-                                      PartialDOS(id)%ss_pdos_mt(1,1,ia),     &
-                                      PartialDOS(id)%partial_dos_mt(1,1,ia),iprint)
-!        -------------------------------------------------------------
-      enddo
-   enddo
+!  -------------------------------------------------------------------
+   call gaspari_gyorffy_formula(LocalNumAtoms,n_spin_pola,chempot,PartialDOS,iprint)
+!  -------------------------------------------------------------------
 !
    if ( (MyPEinEGroup == 0 .and. GlobalNumAtoms < 10) .or. node_print_level >= 0 ) then
       do id = 1, LocalNumAtoms
