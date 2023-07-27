@@ -2323,6 +2323,10 @@ contains
 !     ----------------------------------------------------------------
    endif
 !
+   write(6,'(20x,a)')'*****************************'
+   write(6,'(20x,a)')'* Output from calPartialDOS *'
+   write(6,'(20x,a)')'*****************************'
+!
    do id = 1,LocalNumAtoms
       evec(1:3) = getLocalEvec(id,'old')
       if (n_spin_cant == 2) then
@@ -2570,6 +2574,7 @@ contains
       iprint = 0
    endif
 !
+print *,'calling gaspari-gyorffy formula'
 !  -------------------------------------------------------------------
    call gaspari_gyorffy_formula(LocalNumAtoms,n_spin_pola,chempot,PartialDOS,iprint)
 !  -------------------------------------------------------------------
@@ -2902,6 +2907,7 @@ contains
    integer (kind=IntKind) :: NumBoundStates, nz
    integer (kind=IntKind) :: NumGQPs, nsize
    integer (kind=IntKind), parameter :: MaxGQPs = 200
+   integer (kind=IntKind), parameter :: MaxShallowBoundStates = 10
 !
    real (kind=RealKind), intent(in), optional :: Ebegin, Eend
    logical, intent(in), optional :: relativity !xianglin
@@ -2912,7 +2918,7 @@ contains
    real (kind=RealKind) :: scaling_factor, IDOS_space, IDOS_out, sfac
    real (kind=RealKind) :: resonance_contour_radius, resonance_width
    real (kind=RealKind) :: ebot, etop, er, ep, ei, e1, e2, e_delta, e_bound, w, rfac, maxd, err
-   real (kind=RealKind) :: contour_radius
+   real (kind=RealKind) :: contour_radius(MaxShallowBoundStates)
    real (kind=RealKind), allocatable :: xg(:), wg(:)
 !
    complex (kind=CmplxKind) :: int_test, ec, es, cfac
@@ -3330,6 +3336,11 @@ contains
                   call printSMatrixPoleInfo(id,ia,is)
 !                 ----------------------------------------------------
                endif
+               if (getNumBoundStates(id,ia,is) > MaxShallowBoundStates) then
+                  call ErrorHandler('calSingleScatteringIDOS',   &
+                                    'NumBoundStates > MaxShallowBoundStates', &
+                                    getNumBoundStates(id,ia,is), MaxShallowBoundStates)
+               endif
             enddo
          enddo
       enddo
@@ -3412,7 +3423,7 @@ contains
                info(1) = is; info(2) = id; info(3) = ia; info(4) = 1; info(5) = lmax_phi(id) 
                do ib = 1, getNumBoundStates(id,ia,is)
 !                 ----------------------------------------------------
-                  call computeBoundStateDensity(id,ia,is,contour_radius,ib,chempot,wk_dos)
+                  call computeBoundStateDensity(id,ia,is,contour_radius(ib),ib,chempot,wk_dos)
 !                 ----------------------------------------------------
 !                 ====================================================
 !                 The bound state density will be added to ssIntegrValue

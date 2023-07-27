@@ -305,6 +305,9 @@
 !              If one gets error message for determining the corners or edges of a polyhedron, it is
 !              likely that this tolerance value needs to be adjusted.
    n = n + 1; Keys(n) = 'Ewald parameter for KKR';               Values(n) = '0.5d0'
+   n = n + 1; Keys(n) = 'Calculate Superconducting Tc';          Values(n) = '0'
+!                     = 0: No
+!                     = 1: Yes
 !  =============================================================================
 !  Additional input parameters can be added to this table using the 
 !  following format:

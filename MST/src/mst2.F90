@@ -286,7 +286,7 @@ program mst2
    integer (kind=IntKind) :: NumRotations
    integer (kind=IntKind) :: LocalNumAtoms
    integer (kind=IntKind) :: node_print_level
-!  integer (kind=IntKind) :: ng_uniform(3)
+   integer (kind=IntKind) :: rstatus, calTc
    integer (kind=IntKind), pointer :: AtomicNumber(:)
    integer (kind=IntKind), allocatable :: atom_print_level(:)
    integer (kind=IntKind), allocatable :: GlobalIndex(:)
@@ -1910,7 +1910,8 @@ program mst2
          endif
 !
          if (ScfConverged .or. nscf == 1) then
-            if ( .not.isRelativisticValence() .and. node_print_level >= 1) then
+            rstatus = getKeyValue(def_id,'Calculate Superconducting Tc',calTc)
+            if ( .not.isRelativisticValence() .and. calTc > 0 ) then
 !              changed by xianglin because calPartialDOS has not been implemented for REL
 !              -------------------------------------------------------
                call calPartialDOS(getFermiEnergy())

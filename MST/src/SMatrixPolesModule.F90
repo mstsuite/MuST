@@ -7,7 +7,7 @@ module SMatrixPolesModule
 !
    use KindParamModule, only : IntKind, RealKind, CmplxKind
 !
-   use MathParamModule, only : ZERO, TEN2m6, HALF, ONE, TWO, CONE,    &
+   use MathParamModule, only : ZERO, TEN2m6, HALF, ONE, TWO, FOUR, CONE, &
                                Ten2m8, FOURTH, CZERO, TEN2m7, TEN2m12, TEN2m10
 !
    use ErrorHandlerModule, only : ErrorHandler, WarningHandler
@@ -363,11 +363,14 @@ contains
       call ErrorHandler('getNumBoundStateDegen','Invalid bound state index',ibs)
    endif
 !
-   ib = ibs
    if (present(sorted)) then
       if (sorted) then
          ib = Pole(id)%BoundSI(ibs,is,ia)
+      else
+         ib = ibs
       endif
+   else
+      ib = Pole(id)%BoundSI(ibs,is,ia)
    endif
 !
    n = Pole(id)%BoundState(ib,is,ia)%NumDegens
@@ -394,11 +397,14 @@ contains
       call ErrorHandler('getBoundStateEnergy','Invalid bound state index',ibs)
    endif
 !
-   ib = ibs
    if (present(sorted)) then
       if (sorted) then
          ib = Pole(id)%BoundSI(ibs,is,ia)
+      else
+         ib = ibs
       endif
+   else
+      ib = Pole(id)%BoundSI(ibs,is,ia)
    endif
 !
    e = Pole(id)%BoundState(ib,is,ia)%PoleE
@@ -426,11 +432,14 @@ contains
       call ErrorHandler('getBoundStateChargeInCell','Invalid bound state index',ibs)
    endif
 !
-   ib = ibs
    if (present(sorted)) then
       if (sorted) then
          ib = Pole(id)%BoundSI(ibs,is,ia)
+      else
+         ib = ibs
       endif
+   else
+      ib = Pole(id)%BoundSI(ibs,is,ia)
    endif
 !
    qvp = Pole(id)%BoundState(ib,is,ia)%Qvp
@@ -472,11 +481,14 @@ contains
       call ErrorHandler('getBoundStateDensity','Invalid bound state index',ibs)
    endif
 !
-   ib = ibs
    if (present(sorted)) then
       if (sorted) then
          ib = Pole(id)%BoundSI(ibs,is,ia)
+      else
+         ib = ibs
       endif
+   else
+      ib = Pole(id)%BoundSI(ibs,is,ia)
    endif
 !
    if (present(derivative)) then
@@ -524,11 +536,14 @@ contains
       call ErrorHandler('getNumResonanceStateDegen','Invalid resonance state index',ibs)
    endif
 !
-   ib = ibs
    if (present(sorted)) then
       if (sorted) then
          ib = Pole(id)%ResSI(ibs,is,ia)
+      else
+         ib = ibs
       endif
+   else
+      ib = Pole(id)%ResSI(ibs,is,ia)
    endif
 !
    n = Pole(id)%ResState(ib,is,ia)%NumDegens
@@ -556,11 +571,14 @@ contains
       call ErrorHandler('getResonanceStateEnergy','Invalid resonance state index',ibs)
    endif
 !
-   ib = ibs
    if (present(sorted)) then
       if (sorted) then
          ib = Pole(id)%ResSI(ibs,is,ia)
+      else
+         ib = ibs
       endif
+   else
+      ib = Pole(id)%ResSI(ibs,is,ia)
    endif
 !
    e = Pole(id)%ResState(ib,is,ia)%PoleE
@@ -601,11 +619,14 @@ contains
    enddo LOOP_i
 !
    if (present(res_id)) then
-      res_id = j
       if (present(sorted)) then
          if (sorted) then
             res_id = Pole(site)%ResSI(j,spin,atom)
+         else
+            res_id = j
          endif
+      else
+         res_id = Pole(site)%ResSI(j,spin,atom)
       endif
    endif
 !
@@ -648,11 +669,14 @@ contains
                         'Invalid resonance state index',rstate)
    endif
 !
-   ib = rstate
    if (present(sorted)) then
       if (sorted) then
          ib = Pole(site)%ResSI(rstate,spin,atom)
+      else
+         ib = rstate
       endif
+   else
+      ib = Pole(site)%ResSI(rstate,spin,atom)
    endif
 !
    if (present(derivative)) then
@@ -709,11 +733,14 @@ contains
                         'Invalid resonance state index',rstate)
    endif
 !
-   ib = rstate
    if (present(sorted)) then
       if (sorted) then
          ib = Pole(site)%ResSI(rstate,spin,atom)
+      else
+         ib = rstate
       endif
+   else
+      ib = Pole(site)%ResSI(rstate,spin,atom)
    endif
 !
 !  -------------------------------------------------------------------
@@ -1761,7 +1788,8 @@ contains
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine computeBSD_coutour(id,ia,is,bse_rad,bse_index,chempot,wk_dos)
+   subroutine computeBSD_coutour(id,ia,is,bse_rad,bse_index_in,chempot, &
+                                 wk_dos,sorted)
 !  ===================================================================
 !  Note: This routine uses contour integration method to compute the
 !        density due to the S-matrix poles, i.e. the bound states. 
@@ -1792,7 +1820,8 @@ contains
    implicit none
 !
    integer (kind=IntKind), intent(in) :: id, is, ia
-   integer (kind=IntKind), intent(in) :: bse_index
+   integer (kind=IntKind), intent(in) :: bse_index_in
+   integer (kind=IntKind) :: bse_index
 !
    integer (kind=IntKind) :: ie, info(6), rstatus, nsize, jl, ir
    integer (kind=IntKind) :: jmax_rho, kmax_rho, NumRs, NumBPs
@@ -1810,15 +1839,17 @@ contains
    complex (kind=CmplxKind) :: ec
    complex (kind=CmplxKind), allocatable :: wk_tmp(:)
 !
+   logical, optional, intent(in) :: sorted
+!
    type (GridStruct), pointer :: Grid
 !
    NumBPs = Pole(id)%NumBoundPoles(is,ia)
    if (NumBPs < 1) then
       return
-   else if (bse_index < 1) then
-      call ErrorHandler('computeBoundStateDensity','bse_index < 1',bse_index)
-   else if (bse_index > NumBPs) then
-      call ErrorHandler('computeBoundStateDensity','bse_index > NumBPs',bse_index,NumBPs)
+   else if (bse_index_in < 1) then
+      call ErrorHandler('computeBoundStateDensity','bse_index_in < 1',bse_index_in)
+   else if (bse_index_in > NumBPs) then
+      call ErrorHandler('computeBoundStateDensity','bse_index_in > NumBPs',bse_index_in,NumBPs)
    endif
 !
    if (id < 1 .or. id > LocalNumAtoms) then
@@ -1828,6 +1859,16 @@ contains
    if (ia < 1 .or. ia > Pole(id)%NumSpecies) then
       call ErrorHandler('computeBoundStateDensity','local atom species index is out of bound', &
                         ia, Pole(id)%NumSpecies)
+   endif
+!
+   if (present(sorted)) then
+      if (sorted) then
+         bse_index = Pole(id)%BoundSI(bse_index_in,is,ia)
+      else
+         bse_index = bse_index_in
+      endif
+   else
+      bse_index = Pole(id)%BoundSI(bse_index_in,is,ia)
    endif
 !
    jmax_rho = Pole(id)%jmax_rho
@@ -1845,7 +1886,7 @@ contains
 !  ===================================================================
    Grid => getGrid(id)
    r_mesh => Grid%r_mesh
-
+!
 !  ===================================================================
 !  Setup Gaussian quadrature on a semi-circle contour with radius = bse_rad
 !  ===================================================================
@@ -2581,7 +2622,7 @@ contains
    integer (kind=IntKind), intent(in) :: is, id, ia
    integer (kind=IntKind) :: ib, ibx, iby, jb, jbx, jby
 !
-   real (kind=RealKind), intent(inout) :: r_econtour
+   real (kind=RealKind), intent(inout) :: r_econtour(:)
 !
    logical, intent(out) :: modified
 !
@@ -2592,14 +2633,15 @@ contains
       ibx = Pole(id)%BoundSI(ib,is,ia)
       iby = Pole(id)%BoundSI(ib+1,is,ia)
       if (abs(Pole(id)%BoundState(ibx,is,ia)%PoleE -                  &
-              Pole(id)%BoundState(iby,is,ia)%PoleE) < TWO*r_econtour) then
+              Pole(id)%BoundState(iby,is,ia)%PoleE) < FOUR*r_econtour(ib)) then
+!             Pole(id)%BoundState(iby,is,ia)%PoleE) < TWO*r_econtour(ib)) then
          Pole(id)%BoundState(ibx,is,ia)%NumDegens = Pole(id)%BoundState(ibx,is,ia)%NumDegens + &
                                                     Pole(id)%BoundState(iby,is,ia)%NumDegens
          Pole(id)%BoundState(ibx,is,ia)%PoleE = HALF*(Pole(id)%BoundState(ibx,is,ia)%PoleE + &
                                                       Pole(id)%BoundState(iby,is,ia)%PoleE)
-         if (Pole(id)%BoundState(ibx,is,ia)%PoleE + r_econtour -      &
+         if (Pole(id)%BoundState(ibx,is,ia)%PoleE + r_econtour(ib) -      &
             Pole(id)%BoundState(iby,is,ia)%PoleE < 0.002d0) then
-            r_econtour = r_econtour + 0.002d0  ! enlarge the contour is needed.
+            r_econtour(ib) = r_econtour(ib) + 0.002d0  ! enlarge the contour is needed.
          endif
          do jb = ib+1, Pole(id)%NumBoundPoles(is,ia)-1
             jbx = Pole(id)%BoundSI(jb,is,ia)
