@@ -44,8 +44,8 @@ $$
 - $A$: Additive constant
 - $D$: Dissociation energy
 - $\lambda$: Constant determining the curvature near the minimum energy
-- $V$: Volume of the system
-- $V_0$: Equilibrium volume
+- $V$: Volume per atom of the system
+- $V_0$: Equilibrium volume per atom
 
 Fit the data to the Birch-Murnaghan equation of state to extract parameters such as equilibrium energy, equilibrium volume, bulk modulus, and its pressure derivative.
 
@@ -54,8 +54,8 @@ $$
 E_{\text{bm}}(V) = E_0 + \frac{9 V_0 B_0}{16} \left(\left(\frac{V}{V_0}\right)^{\frac{2}{3}} - 1\right)^3 B_0^{\prime} + \left(\left(\frac{V}{V_0}\right)^{\frac{2}{3}} - 1\right)^2 \left(6 - 4 \left(\frac{V}{V_0}\right)^{\frac{2}{3}}\right)
 $$
 - $E_0$: Equilibrium energy
-- $V$: Volume of the system
-- $V_0$: Equilibrium volume
+- $V$: Volume per atom of the system
+- $V_0$: Equilibrium volume per atom
 - $B_0$: Bulk modulus
 - $B_0^{\prime}$: Pressure derivative of the bulk modulus
 
