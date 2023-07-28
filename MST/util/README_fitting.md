@@ -41,9 +41,9 @@ The Morse function is defined as:
 $$
 E_{\text{morse}}(V) = A - 2 D \exp\left(-\lambda \left(\frac{3}{4 \pi}\right)^{\frac{1}{3}} \left(V^{\frac{1}{3}} - V_0^{\frac{1}{3}}\right)\right) + D \exp\left(-2 \lambda \left(\frac{3}{4 \pi}\right)^{\frac{1}{3}} \left(V^{\frac{1}{3}} - V_0^{\frac{1}{3}}\right)\right)
 $$
-- $A$: Equilibrium energy
-- $D$: Depth of the potential well
-- $\lambda$: Width of the potential well
+- $A$: Additive constant
+- $D$: Dissociation energy
+- $\lambda$: Constant determining the curvature near the minimum energy
 - $V$: Volume of the system
 - $V_0$: Equilibrium volume
 
