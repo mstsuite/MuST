@@ -15,7 +15,7 @@ interface getDefaultValue
 end interface
 !
 private
-   integer (kind=IntKind), parameter :: MaxParams = 150
+   integer (kind=IntKind), parameter :: MaxParams = 200
    integer (kind=intKind) :: NumParams
 !
    character (len=50), allocatable :: StoredKeys(:)

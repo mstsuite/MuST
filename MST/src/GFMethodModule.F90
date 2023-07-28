@@ -2323,9 +2323,12 @@ contains
 !     ----------------------------------------------------------------
    endif
 !
-   write(6,'(20x,a)')'*****************************'
-   write(6,'(20x,a)')'* Output from calPartialDOS *'
-   write(6,'(20x,a)')'*****************************'
+   if ( node_print_level >= 0 ) then
+      write(6,'(80("-"),/)')
+      write(6,'(10x,a)')'***************************************************************'
+      write(6,'(10x,a)')'* The following output is produced from calling calPartialDOS *'
+      write(6,'(10x,a)')'***************************************************************'
+   endif
 !
    do id = 1,LocalNumAtoms
       evec(1:3) = getLocalEvec(id,'old')
@@ -2574,7 +2577,6 @@ contains
       iprint = 0
    endif
 !
-print *,'calling gaspari-gyorffy formula'
 !  -------------------------------------------------------------------
    call gaspari_gyorffy_formula(LocalNumAtoms,n_spin_pola,chempot,PartialDOS,iprint)
 !  -------------------------------------------------------------------

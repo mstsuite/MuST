@@ -306,8 +306,15 @@
 !              likely that this tolerance value needs to be adjusted.
    n = n + 1; Keys(n) = 'Ewald parameter for KKR';               Values(n) = '0.5d0'
    n = n + 1; Keys(n) = 'Calculate Superconducting Tc';          Values(n) = '0'
-!                     = 0: No
+!                     = 0: No (Default)
 !                     = 1: Yes
+   n = n + 1; Keys(n) = 'mu* (e-e interaction constant)';        Values(n) = '0'
+!                     = 0: Bennemann and Garland formula (Default)
+!                     = 1: Modified BG formula by Papaconstantopoulos
+!                     = A real positive number (< 1.0)
+   n = n + 1; Keys(n) = 'Debye Temperature (K)';                 Values(n) = '0'
+!                     = 0: getting from the internal database
+!                     = A real positive number provided by user
 !  =============================================================================
 !  Additional input parameters can be added to this table using the 
 !  following format:
