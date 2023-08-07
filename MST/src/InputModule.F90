@@ -584,6 +584,14 @@ endif
    integer (kind=IntKind), intent(in) :: id
    integer (kind=IntKind) :: i
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('printKeyName','invalid table index',id)
    endif
@@ -599,7 +607,7 @@ endif
 !
    key=' '
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) /= key) then
+      if (.not.nocaseCompare(CurrentPtr%KeyName(i),key)) then
          key=CurrentPtr%KeyName(i)
          write(6,'(a15,a)')'Key Name: ',key
       endif
@@ -677,6 +685,14 @@ endif
    integer (kind=IntKind) :: i, j
    integer (kind=1), allocatable :: flag(:)
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getNumKeys','invalid table index',id)
    endif
@@ -698,8 +714,7 @@ endif
          do j=i+1,CurrentPtr%NumData
             if (flag(j) == 0_1) then
                cycle
-            else if(CurrentPtr%KeyName(i) == &
-                    CurrentPtr%KeyName(j)) then
+            else if(nocaseCompare(CurrentPtr%KeyName(i),CurrentPtr%KeyName(j))) then
                n = n-1
                flag(j)=0_1
             endif
@@ -725,6 +740,14 @@ endif
 !
    logical :: found
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('isKeyExisting','invalid table index',id)
    endif
@@ -740,7 +763,7 @@ endif
 !
    found = .false.
    LOOP_i1: do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          found = .true.
          exit LOOP_i1
       endif
@@ -773,6 +796,14 @@ endif
       end function isInteger
    end interface
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('isIndexValueForm','invalid table index',id)
    endif
@@ -788,7 +819,7 @@ endif
 !
    y = .false.
    LOOP_i1: do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          call setString(trim(CurrentPtr%KeyValue(i)))
          if (getNumTokens() > 1) then
             call readToken(1,v1)
@@ -842,6 +873,14 @@ endif
       end function isNumber
    end interface
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('isLabelValueForm','invalid table index',id)
    endif
@@ -857,7 +896,7 @@ endif
 !
    y = .false.
    LOOP_i1: do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          call setString(trim(CurrentPtr%KeyValue(i)))
          if (getNumTokens() > 1) then
             call readToken(1,v1)
@@ -902,6 +941,14 @@ endif
    logical, optional, intent(in) :: default_param
    logical :: dp
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getNumKeyValues','invalid table index',id)
    endif
@@ -917,7 +964,7 @@ endif
 !
    n=0
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          n = n+1
       endif
    enddo
@@ -952,6 +999,14 @@ endif
    logical, optional, intent(in) :: default_param
    logical :: found, dp
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyValue','invalid table index',id)
    endif
@@ -967,7 +1022,7 @@ endif
 !
    found = .false.
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          value=trim(adjustl(CurrentPtr%KeyValue(i)))
          found = .true.
          exit
@@ -1009,6 +1064,14 @@ endif
    integer (kind=IntKind) :: i, m, status
    logical :: found
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyValue','invalid table index',id)
    endif
@@ -1025,7 +1088,7 @@ endif
    found = .false.
    m=0
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          m = m+1
          value(m)=trim(adjustl(CurrentPtr%KeyValue(i)))
          found = .true.
@@ -1060,6 +1123,14 @@ endif
    integer (kind=IntKind) :: i, m, status
    logical :: found
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyValue','invalid table index',id)
    endif
@@ -1076,7 +1147,7 @@ endif
    found = .false.
    m=0
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          m = m+1
          s=adjustl(CurrentPtr%KeyValue(i))
          read(s,'(80a)',iostat=status)value(1:k,m)
@@ -1117,6 +1188,14 @@ endif
    logical, optional, intent(in) :: default_param
    logical :: found, dp
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyValue','invalid table index',id)
    endif
@@ -1132,7 +1211,7 @@ endif
 !
    found = .false.
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          s=adjustl(CurrentPtr%KeyValue(i))
          read(s,'(80a)',iostat=status)value(1:k)
          if (status /= 0) then
@@ -1180,6 +1259,14 @@ endif
    logical, optional, intent(in) :: default_param
    logical :: found, dp
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyValue','invalid table index',id)
    endif
@@ -1195,7 +1282,7 @@ endif
 !
    found = .false.
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          read(CurrentPtr%KeyValue(i),*,iostat=status)value
          if (status /= 0) then
             call ErrorHandler('getKeyValue','Invalid value',          &
@@ -1241,6 +1328,14 @@ endif
    integer (kind=IntKind) :: i, m, status
    logical :: found
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyValue','invalid table index',id)
    endif
@@ -1257,7 +1352,7 @@ endif
    found = .false.
    m=0
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          m = m+1
          read(CurrentPtr%KeyValue(i),*,iostat=status)value(m)
          if (status /= 0) then
@@ -1295,6 +1390,14 @@ endif
    integer (kind=IntKind) :: i, m, status
    logical :: found
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyValue','invalid table index',id)
    endif
@@ -1311,7 +1414,7 @@ endif
    found = .false.
    m=0
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          m = m+1
          read(CurrentPtr%KeyValue(i),*,iostat=status)value(1:k,m)
          if (status /= 0) then
@@ -1351,6 +1454,14 @@ endif
    logical, optional, intent(in) :: default_param
    logical :: found, dp
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyValue','invalid table index',id)
    endif
@@ -1366,7 +1477,7 @@ endif
 !
    found = .false.
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          read(CurrentPtr%KeyValue(i),*,iostat=status)value(1:k)
          if (status /= 0) then
             call ErrorHandler('getKeyValue','Invalid value',          &
@@ -1413,6 +1524,14 @@ endif
    logical, optional, intent(in) :: default_param
    logical :: found, dp
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyValue','invalid table index',id)
    endif
@@ -1428,7 +1547,7 @@ endif
 !
    found = .false.
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          read(CurrentPtr%KeyValue(i),*,iostat=status)value
          if (status /= 0) then
             call ErrorHandler('getKeyValue','Invalid value',          &
@@ -1474,6 +1593,14 @@ endif
    integer (kind=IntKind) :: i, m, status
    logical :: found
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyValue','invalid table index',id)
    endif
@@ -1490,7 +1617,7 @@ endif
    found = .false.
    m=0
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          m = m+1
          read(CurrentPtr%KeyValue(i),*,iostat=status)value(m)
          if (status /= 0) then
@@ -1528,6 +1655,14 @@ endif
    integer (kind=IntKind) :: i, m, status
    logical :: found
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyValue','invalid table index',id)
    endif
@@ -1544,7 +1679,7 @@ endif
    found = .false.
    m=0
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          m = m+1
          read(CurrentPtr%KeyValue(i),*,iostat=status)value(1:k,m)
          if (status /= 0) then
@@ -1584,6 +1719,14 @@ endif
    logical, optional, intent(in) :: default_param
    logical :: found, dp
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyValue','invalid table index',id)
    endif
@@ -1599,7 +1742,7 @@ endif
 !
    found = .false.
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          read(CurrentPtr%KeyValue(i),*,iostat=status)value(1:k)
          if (status /= 0) then
             call ErrorHandler('getKeyValue','Invalid value',          &
@@ -1646,6 +1789,14 @@ endif
    logical, optional, intent(in) :: default_param
    logical :: found, dp
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyValue','invalid table index',id)
    endif
@@ -1661,7 +1812,7 @@ endif
 !
    found = .false.
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          read(CurrentPtr%KeyValue(i),*,iostat=status)value
          if (status /= 0) then
             call ErrorHandler('getKeyValue','Invalid value',          &
@@ -1707,6 +1858,14 @@ endif
    integer (kind=IntKind) :: i, m, status
    logical :: found
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyValue','invalid table index',id)
    endif
@@ -1723,7 +1882,7 @@ endif
    found = .false.
    m=0
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          m = m+1
          read(CurrentPtr%KeyValue(i),*,iostat=status)value(m)
          if (status /= 0) then
@@ -1761,6 +1920,14 @@ endif
    integer (kind=IntKind) :: i, m, status
    logical :: found
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyValue','invalid table index',id)
    endif
@@ -1777,7 +1944,7 @@ endif
    found = .false.
    m=0
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          m = m+1
          read(CurrentPtr%KeyValue(i),*,iostat=status)value(1:k,m)
          if (status /= 0) then
@@ -1824,6 +1991,14 @@ endif
    logical, optional, intent(in) :: default_param
    logical :: found, dp
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyValue','invalid table index',id)
    endif
@@ -1839,7 +2014,7 @@ endif
 !
    found = .false.
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          read(CurrentPtr%KeyValue(i),*,iostat=status)value(1:k)
          if (status /= 0) then
             call ErrorHandler('getKeyValue','Invalid value',          &
@@ -1899,6 +2074,14 @@ endif
    integer (kind=IntKind), intent(out) :: k_index(n)
    integer (kind=IntKind) :: i, m, k, status
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyIndex','invalid table index',id)
    endif
@@ -1917,7 +2100,7 @@ endif
    status = 0
    m = 0
    LOOP_i: do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == indKey) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),indKey)) then
          read(CurrentPtr%KeyValue(i),*,iostat=status)k
          if (status /= 0) then
             call ErrorHandler('getKeyIndex','Invalid value',          &
@@ -1925,7 +2108,7 @@ endif
          else if (k > n .or. k < 1) then
             call ErrorHandler('getKeyIndex','k is out of range',k)
          endif
-      else if (CurrentPtr%KeyName(i) == key) then
+      else if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          m = m + 1
          k_index(k)=m
       endif
@@ -1964,6 +2147,14 @@ endif
       end function getTokenPosition
    end interface
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyIndexValue','invalid table index',id)
    endif
@@ -1981,7 +2172,7 @@ endif
    found = .false.
    value(:) = ' '
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          s=trim(adjustl(CurrentPtr%KeyValue(i)))
          p1 = getTokenPosition(1,s)
          p2 = getTokenPosition(2,s)
@@ -2041,6 +2232,14 @@ endif
       end function getTokenPosition
    end interface
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyIndexValue','invalid table index',id)
    endif
@@ -2059,7 +2258,7 @@ endif
    value(1:n)(:) = ' '
    m=0
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          m = m+1
          s=trim(adjustl(CurrentPtr%KeyValue(i)))
          p1 = getTokenPosition(1,s)
@@ -2116,6 +2315,14 @@ endif
       end function isInteger
    end interface
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyIndexValue','invalid table index',id)
    endif
@@ -2134,7 +2341,7 @@ endif
    value(1:k,1:n)(:) = ' '
    m=0
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          m = m+1
          call setString(adjustl(CurrentPtr%KeyValue(i)))
          if (getNumTokens() > k) then
@@ -2189,6 +2396,14 @@ endif
       end function isInteger
    end interface
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyIndexValue','invalid table index',id)
    endif
@@ -2206,7 +2421,7 @@ endif
    found = .false.
    value(1:k)(:) = ' '
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          call setString(adjustl(CurrentPtr%KeyValue(i)))
          if (getNumTokens() > k) then
             call readToken(1,s)
@@ -2262,6 +2477,14 @@ endif
       end function getTokenPosition
    end interface
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyIndexValue','invalid table index',id)
    endif
@@ -2279,7 +2502,7 @@ endif
    found = .false.
    value = 0
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          s=trim(adjustl(CurrentPtr%KeyValue(i)))
          p1 = getTokenPosition(1,s)
          p2 = getTokenPosition(2,s)
@@ -2338,6 +2561,14 @@ endif
       end function getTokenPosition
    end interface
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyIndexValue','invalid table index',id)
    endif
@@ -2356,7 +2587,7 @@ endif
    value(1:n) = 0
    m=0
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          m = m+1
          s=trim(adjustl(CurrentPtr%KeyValue(i)))
          p1 = getTokenPosition(1,s)
@@ -2421,6 +2652,14 @@ endif
       end function getTokenPosition
    end interface
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyIndexValue','invalid table index',id)
    endif
@@ -2439,7 +2678,7 @@ endif
    value(1:k,1:n) = 0
    m=0
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          m = m+1
          s=trim(adjustl(CurrentPtr%KeyValue(i)))
          p1 = getTokenPosition(1,s)
@@ -2504,6 +2743,14 @@ endif
       end function getTokenPosition
    end interface
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyIndexValue','invalid table index',id)
    endif
@@ -2521,7 +2768,7 @@ endif
    found = .false.
    value(1:k) = 0
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          s=trim(adjustl(CurrentPtr%KeyValue(i)))
          p1 = getTokenPosition(1,s)
          p2 = getTokenPosition(2,s)
@@ -2580,6 +2827,14 @@ endif
       end function getTokenPosition
    end interface
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyIndexValue','invalid table index',id)
    endif
@@ -2597,7 +2852,7 @@ endif
    found = .false.
    value = ZERO
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          s=trim(adjustl(CurrentPtr%KeyValue(i)))
          p1 = getTokenPosition(1,s)
          p2 = getTokenPosition(2,s)
@@ -2657,6 +2912,14 @@ endif
       end function getTokenPosition
    end interface
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyIndexValue','invalid table index',id)
    endif
@@ -2675,7 +2938,7 @@ endif
    value(1:n) = ZERO
    m=0
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          m = m+1
          s=trim(adjustl(CurrentPtr%KeyValue(i)))
          p1 = getTokenPosition(1,s)
@@ -2740,6 +3003,14 @@ endif
       end function getTokenPosition
    end interface
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyIndexValue','invalid table index',id)
    endif
@@ -2758,7 +3029,7 @@ endif
    value(1:k,1:n) = ZERO
    m=0
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          m = m+1
          s=trim(adjustl(CurrentPtr%KeyValue(i)))
          p1 = getTokenPosition(1,s)
@@ -2823,6 +3094,14 @@ endif
       end function getTokenPosition
    end interface
 !
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
    if (id < 1 .or. id > NumInputTables) then
       call ErrorHandler('getKeyIndexValue','invalid table index',id)
    endif
@@ -2840,7 +3119,7 @@ endif
    found = .false.
    value(1:k) = ZERO
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          s=trim(adjustl(CurrentPtr%KeyValue(i)))
          p1 = getTokenPosition(1,s)
          p2 = getTokenPosition(2,s)
@@ -2917,7 +3196,7 @@ endif
    found = .false.
    value(:) = ' '
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          s=adjustl(CurrentPtr%KeyValue(i))
          p1 = getTokenPosition(1,s)
          p2 = getTokenPosition(2,s)
@@ -2990,7 +3269,7 @@ endif
    found = .false.
    value(1:k)(:) = ' '
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          call setString(adjustl(CurrentPtr%KeyValue(i)))
          if (getNumTokens() > k) then
             call readToken(1,s)
@@ -3054,7 +3333,7 @@ endif
    found = .false.
    value = 0
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          read(CurrentPtr%KeyValue(i),*,iostat=status)s,value
          if (status /= 0) then
             call WarningHandler('getKeyLabelValue','Invalid value form', &
@@ -3117,7 +3396,7 @@ endif
    found = .false.
    value(1:k) = 0
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          read(CurrentPtr%KeyValue(i),*,iostat=status)s,value(1:k)
          if (status /= 0) then
             call WarningHandler('getKeyLabelValue','Invalid value form', &
@@ -3179,7 +3458,7 @@ endif
    found = .false.
    value = ZERO
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          read(CurrentPtr%KeyValue(i),*,iostat=status)s,value
          if (status /= 0) then
             call WarningHandler('getKeyLabelValue','Invalid value form', &
@@ -3242,7 +3521,7 @@ endif
    found = .false.
    value(1:k) = ZERO
    do i=1,CurrentPtr%NumData
-      if (CurrentPtr%KeyName(i) == key) then
+      if (nocaseCompare(CurrentPtr%KeyName(i),key)) then
          read(CurrentPtr%KeyValue(i),*,iostat=status)s,value(1:k)
          if (status /= 0) then
             call WarningHandler('getKeyLabelValue','Invalid value form', &

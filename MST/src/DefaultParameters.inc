@@ -315,6 +315,8 @@
    n = n + 1; Keys(n) = 'Debye Temperature (K)';                 Values(n) = '0'
 !                     = 0: getting from the internal database
 !                     = A real positive number provided by user
+   n = n + 1; Keys(n) = 'Negative charge density tolerance';     Values(n) = '0.00001'
+!        Note: this is a tolerence value for rho(r) < 0: if -tol < rho(r) < 0, we will set rho(r) = 0.
 !  =============================================================================
 !  Additional input parameters can be added to this table using the 
 !  following format:
