@@ -25,6 +25,8 @@ This repository is actively developed and maintained - please check for regular 
 ## User Guide
 All the relevant information and instructions are provided in the <a href="https://must.readthedocs.io/en/latest/index.html#">documentation</a>
 
+For using MuST without compilations, please check out the Docker image <a href="https://hub.docker.com/r/liangstein/must">here</a>
+
 ## Available Scientific Packages
 <ul>
   <li> <b>MST</b>: Perform KKR, LSMS, single-site and Cluster Averaged KKR-CPA.
