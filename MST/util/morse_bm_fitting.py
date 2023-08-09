@@ -21,20 +21,17 @@ output_file_path = input("Enter the path to save the output file (e.g., /path/to
 def read_system_data(file_path):
     system_data = {}
     with open(file_path, 'r') as file:
-        for line_num, line in enumerate(file, 1):  # Track the line number
-            if line.startswith('#'):  # Skip comments
+        for line in file:
+            if line.startswith('#'):
+                # Skip comments
                 continue
-            if line.strip() == '':  # Skip empty lines
+            if line.strip() == '':
+                # Skip empty lines
                 continue
-            if ':' not in line:  # Handle lines without a colon separator
-                print(f"Error: Line {line_num} in the input file is not in the expected format.")
-                continue
-
+            if ':' not in line:
+                break
             key, value = line.strip().split(':', 1)
             system_data[key.strip()] = value.strip()
-
-    if not system_data:
-        print("Error: No valid system data found in the input file.")
     return system_data
 
 # Read and extract system-related data
@@ -62,12 +59,14 @@ def read_data(file_path):
     E_data, V_data = [], []
     with open(file_path, 'r') as file:
         for line in file:
-            try:
-                energy, volume = map(float, line.strip().split())
-                E_data.append(energy)
-                V_data.append(volume)
-            except ValueError:
-                print(f"Error: Invalid format in line: {line}")
+            stripped_line = line.strip()
+            if stripped_line and (stripped_line[0].isdigit() or stripped_line[0] == '-'):
+                try:
+                    energy, volume = map(float, stripped_line.split())
+                    E_data.append(energy)
+                    V_data.append(volume)
+                except ValueError:
+                    print(f"Error: Invalid format in line: {line}")
     return E_data, V_data
 
 # Read the energy and volume per atom data from the input file
@@ -130,7 +129,7 @@ print("B0_prime =", B0_prime_fit)
 
 # Conversion factor (from Ry/a.u.^3 to GPa)
 conversion_factor = 13.6 / 0.5291 ** 3 * 160.21766208
-# conversion_factor = 0.5 * 2.9421912 * 10 ** 13 / 10 ** 9  # another way of conversion, with the same result
+# conversion_factor = 0.5 * 2.9421912 * 10 ** 13 / 10 ** 9  # another way of conversion, which gives the same result
 
 # Calculate P as the derivative of E_morse with respect to V
 def calculate_P_morse(D, lmbda, V, V0):
@@ -140,30 +139,12 @@ def calculate_P_morse(D, lmbda, V, V0):
     P = - term1 * term2 * term3
     return P
 
-# Calculate P_morse
-P_morse = [
-    calculate_P_morse(D_fit, lambda_fit, v, V0_morse_fit)
-    for v in V_data
-]
-
-# Convert P_morse to GPa
-P_morse_GPa = [p * conversion_factor for p in P_morse]
-
-#  third-order Birch–Murnaghan isothermal equation of state
+# Third-order Birch–Murnaghan isothermal equation of state
 def calculate_P_bm(B0, B0_prime, V, V0):
     term1 = (3 * B0 / 2) * ((V0 / V) ** (7 / 3) - (V0 / V) ** (5 / 3))
     term2 = 1 + (3 / 4) * (B0_prime - 4) * ((V0 / V) ** (2 / 3) - 1)
     P = term1 * term2
     return P
-
-# Calculate P_bm
-P_bm = [
-    calculate_P_bm(B0_fit, B0_prime_fit, v, V0_bm_fit)
-    for v in V_data
-]
-
-# Convert P_bm to GPa
-P_bm_GPa = [p * conversion_factor for p in P_bm]
 
 # Bulk Moduli Calculations -------------------------------------------------------------------------------------------
 
@@ -188,42 +169,49 @@ print(f"B0 (BM fit) = {B0_bm_GPa:.2f} GPa")
 
 # Plotting -----------------------------------------------------------------------------------------------------------
 
+# Create a finer grid for plotting
+V_plot = np.linspace(min(V_data), max(V_data), 100)
+
 # Plot the Morse function and Birch–Murnaghan function
-V_plot = np.linspace(min(V_data), max(V_data), 100)  # Create a finer grid for plotting
 E_morse = morse(V_plot, E0_morse_fit, D_fit, lambda_fit, V0_morse_fit)  # Compute E_morse values for the plot
 E_bm = bm(V_plot, E0_bm_fit, V0_bm_fit, B0_fit, B0_prime_fit)  # Compute E_bm values for the plot
 
 # Create the plot
-# fig, ax1 = plt.subplots()
-fig, ax1 = plt.subplots(figsize=(20, 12))
+fig, ax1 = plt.subplots(figsize=(22, 12))
 
 # Plot the energy data
 ax1.plot(V_data, E_data, 'bo', markersize=8, label='$E$ Data')  # Plot the E data points
-ax1.plot(V_plot, E_morse, 'r-', linewidth=1.5, label='$E$ Fit (Morse)')  # Plot the Morse function
-ax1.plot(V_plot, E_bm, 'm-', linewidth=1.5, label='$E$ Fit (BM)')  # Plot the Birch-Murnaghan function
-ax1.set_xlabel('$V$ [(a.u.)$^3$]', fontsize=20)
-ax1.set_ylabel('$E$ [Ry]', color='blue', fontsize=20)
-ax1.tick_params(axis='x', labelsize=18)
-ax1.tick_params(axis='y', colors='blue', labelsize=18)
+ax1.plot(V_plot, E_morse, 'r-', linewidth=2, label='$E$ Fit (Morse)')  # Plot the Morse function
+ax1.plot(V_plot, E_bm, 'c-', linewidth=2, label='$E$ Fit (BM)')  # Plot the Birch-Murnaghan function
+ax1.set_xlabel('$V$ [(a.u.)$^3$]', fontsize=25)
+ax1.set_ylabel('$E$ [Ry]', color='blue', fontsize=25)
+ax1.tick_params(axis='x', labelsize=22)
+ax1.tick_params(axis='y', colors='blue', labelsize=22)
 
-# Get the current y-axis labels and update the font size for the first label
-y_labels = ax1.get_yticks().tolist()
-y_labels[0] = f'{y_labels[0]:.2e}'  # Format the first label as a scientific notation
-ax1.set_yticks(ax1.get_yticks())  # Set the tick positions
-ax1.set_yticklabels(y_labels, fontsize=18)  # Larger font size for y-axis labels
+# Get the current y-axis tick locations
+y_ticks = ax1.get_yticks()
+formatted_labels = [f'{label:.2f}' for label in y_ticks]
+# Set the tick locations and labels
+ax1.set_yticks(y_ticks)
+ax1.set_yticklabels(formatted_labels, fontsize=22)
 
 # Create a secondary y-axis for pressure in GPa
 ax2 = ax1.twinx()
 
+# Calculate and convert the pressure data
+P_morse = calculate_P_morse(D_fit, lambda_fit, V_plot, V0_morse_fit)  # Calculate P_morse
+P_morse_GPa = [p * conversion_factor for p in P_morse]  # Convert P_morse to GPa
+P_bm = calculate_P_bm(B0_fit, B0_prime_fit, V_plot, V0_bm_fit)  # Calculate P_bm
+P_bm_GPa = [p * conversion_factor for p in P_bm]  # Convert P_bm to GPa
+
 # Plot the pressure data
-# ax2.plot(V_data, P_data_GPa, 'g--', linewidth=1.5, label='P (3PV)')  # Plot P data in GPa
-ax2.plot(V_data, P_morse_GPa, 'c--', linewidth=1.5, label='$P$ (Morse)')  # Plot P_morse in GPa
-ax2.plot(V_data, P_bm_GPa, 'y--', linewidth=1.5, label='$P$ (BM)')  # Plot P_bm in GPa
-ax2.set_ylabel('$P$ [GPa]', color='green', fontsize=20)
-ax2.tick_params(axis='y', colors='green', labelsize=18)
+ax2.plot(V_data, P_morse_GPa, 'm--', linewidth=1.8, label='$P$ (Morse)')  # Plot P_morse in GPa
+ax2.plot(V_data, P_bm_GPa, 'y--', linewidth=1.8, label='$P$ (BM)')  # Plot P_bm in GPa
+ax2.set_ylabel('$P$ [GPa]', color='green', fontsize=25)
+ax2.tick_params(axis='y', colors='green', labelsize=22)
 
 # Add horizontal line at P = 0
-ax2.axhline(y=0, color='black', linestyle=':', linewidth=1.5)
+ax2.axhline(y=0, color='black', linestyle=':', linewidth=1.8)
 
 # Mark the point (V0_morse_fit, E0_morse_fit) with a red triangle
 ax1.plot(V0_morse_fit, 
@@ -233,7 +221,7 @@ ax1.plot(V0_morse_fit,
          label='$(V_0, E_0)$ (Morse)')
 
 # Add a vertical line at V0_morse_fit
-ax1.axvline(x=V0_morse_fit, color='gray', linestyle=':', linewidth=1.5)
+ax1.axvline(x=V0_morse_fit, color='gray', linestyle=':', linewidth=1.8)
 
 # Add text annotation for V0_morse_fit
 ax1.annotate(f'{V0_morse_fit:.1f}', 
@@ -241,18 +229,18 @@ ax1.annotate(f'{V0_morse_fit:.1f}',
              xytext=(-15, 10), 
              textcoords='offset points', 
              ha='center', 
-             fontsize=18, 
+             fontsize=20, 
              color='red')
 
 # Mark the point (V0_bm_fit, E0_bm_fit) with a magenta triangle
 ax1.plot(V0_bm_fit, 
          bm(V0_bm_fit, E0_bm_fit, V0_bm_fit, B0_fit, B0_prime_fit), 
-         'm^', 
+         'c^', 
          markersize=8, 
          label='$(V_0, E_0)$ (BM)') 
 
 # Add a vertical line at V0_bm_fit
-ax1.axvline(x=V0_bm_fit, color='gray', linestyle=':', linewidth=1.5)
+ax1.axvline(x=V0_bm_fit, color='gray', linestyle=':', linewidth=1.8)
 
 # Add text annotation for V0_bm_fit
 ax1.annotate(f'{V0_bm_fit:.1f}', 
@@ -260,18 +248,18 @@ ax1.annotate(f'{V0_bm_fit:.1f}',
              xytext=(15, 10), 
              textcoords='offset points', 
              ha='center', 
-             fontsize=18, 
-             color='magenta')
+             fontsize=20, 
+             color='cyan')
 
 # Adjust the layout to prevent overlapping labels and increase spacing
 plt.tight_layout(pad=2)
 
 # Set the title of the plot
-plt.title(f"Energy-Volume and Pressure-Volume Curves for {system} {variation}", fontsize=20)
+plt.title(f"Energy-Volume and Pressure-Volume Curves for {system} {variation}", fontsize=25)
 
 # Add legend
-ax1.legend(loc="upper left", bbox_to_anchor=(0.1, 1), fontsize=20)
-ax2.legend(loc="upper right", bbox_to_anchor=(0.9, 1), fontsize=20)
+ax1.legend(loc="upper left", bbox_to_anchor=(0.1, 1), fontsize=22)
+ax2.legend(loc="upper right", bbox_to_anchor=(0.9, 1), fontsize=22)
 
 # Adjust the layout to make space for the title
 plt.subplots_adjust(top=0.95)
