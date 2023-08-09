@@ -38,9 +38,7 @@ The script reads the energy and volume per atom data from the input file and per
 
 Fit the data to the Morse potential to extract optimal parameters.
 The Morse function is defined as:
-$$
-E_{\text{morse}}(V) = A - 2 D \exp\left(-\lambda \left(\frac{3}{4 \pi}\right)^{\frac{1}{3}} \left(V^{\frac{1}{3}} - V_0^{\frac{1}{3}}\right)\right) + D \exp\left(-2 \lambda \left(\frac{3}{4 \pi}\right)^{\frac{1}{3}} \left(V^{\frac{1}{3}} - V_0^{\frac{1}{3}}\right)\right)
-$$
+$$E_{\text{morse}}(V) = A - 2 D \exp\left(-\lambda \left(\frac{3}{4 \pi}\right)^{\frac{1}{3}} \left(V^{\frac{1}{3}} - V_0^{\frac{1}{3}}\right)\right) + D \exp\left(-2 \lambda \left(\frac{3}{4 \pi}\right)^{\frac{1}{3}} \left(V^{\frac{1}{3}} - V_0^{\frac{1}{3}}\right)\right)$$
 - $A$: Additive constant
 - $D$: Dissociative energy
 - $\lambda$: Constant determining the curvature near the curve's minimum
@@ -50,9 +48,7 @@ $$
 Fit the data to the Birch-Murnaghan equation of state to extract parameters such as equilibrium energy, equilibrium volume, bulk modulus, and its pressure derivative.
 
 The Birch-Murnaghan function is defined as:
-$$
-E_{\text{bm}}(V) = E_0 + \frac{9 V_0 B_0}{16} \left(\left(\frac{V}{V_0}\right)^{\frac{2}{3}} - 1\right)^3 B_0^{\prime} + \left(\left(\frac{V}{V_0}\right)^{\frac{2}{3}} - 1\right)^2 \left(6 - 4 \left(\frac{V}{V_0}\right)^{\frac{2}{3}}\right)
-$$
+$$E_{\text{bm}}(V) = E_0 + \frac{9 V_0 B_0}{16} \left(\left(\frac{V}{V_0}\right)^{\frac{2}{3}} - 1\right)^3 B_0^{\prime} + \left(\left(\frac{V}{V_0}\right)^{\frac{2}{3}} - 1\right)^2 \left(6 - 4 \left(\frac{V}{V_0}\right)^{\frac{2}{3}}\right)$$
 - $E_0$: Equilibrium energy
 - $V$: Volume per atom of the system
 - $V_0$: Equilibrium volume per atom
@@ -63,16 +59,14 @@ $$
 
 The pressure `P_morse` is calculated as the negative derivative of the Morse potential energy function `E_morse` with respect to volume `V`. The function is defined as follows:
 
-$$
-P_{\text{morse}}(V) = - D \lambda \left(\frac{9 \pi V^2}{2}\right)^{-\frac{1}{3}} \exp\left(-\lambda \left(\frac{3}{4\pi}\right)^{\frac{1}{3}} \left(V^{\frac{1}{3}} - V_0^{\frac{1}{3}}\right)\right) \left[1 - \exp\left(-\lambda \left(\frac{3}{4\pi}\right)^{\frac{1}{3}} \left(V^{\frac{1}{3}} - V_0^{\frac{1}{3}}\right)\right)\right]
-$$
+$$P_{\text{morse}}(V) = - D \lambda \left(\frac{9 \pi V^2}{2}\right)^{-\frac{1}{3}} \exp\left(-\lambda \left(\frac{3}{4\pi}\right)^{\frac{1}{3}} \left(V^{\frac{1}{3}} - V_0^{\frac{1}{3}}\right)\right) \left[1 - \exp\left(-\lambda \left(\frac{3}{4\pi}\right)^{\frac{1}{3}} \left(V^{\frac{1}{3}} - V_0^{\frac{1}{3}}\right)\right)\right]$$
 
 The parameters `V0`, `D` and `lambda` are the fitted Morse parameters obtained earlier. 
 
 The pressure `P_bm` is calculated using the third-order Birch–Murnaghan isothermal equation of state and the fitted parameters. The function is defined as follows:
 
 $$
-P_{\text{bm}}(V) = \frac{3B_{0}}{2}\left[\left(\frac{V_{0}}{V}\right)^{\frac{7}{3}} - \left(\frac{V_{0}}{V}\right)^{\frac{5}{3}}\right] \left\{1 + \frac{3}{4}\left(B_{0}^{\prime} - 4\right)\left[\left(\frac{V_{0}}{V}\right)^{\frac{2}{3}} - 1\right]\right\}
+P_{\text{bm}}(V) = \frac{3B_{0}}{2}\left[\left(\frac{V_{0}}{V}\right)^{\frac{7}{3}} - \left(\frac{V_{0}}{V}\right)^{\frac{5}{3}}\right] \left(1 + \frac{3}{4}\left(B_{0}^{\prime} - 4\right)\left[\left(\frac{V_{0}}{V}\right)^{\frac{2}{3}} - 1\right]\right)
 $$
 
 Here, `V0`, `B0` and `B0_prime` are the fitted Birch-Murnaghan parameters. 
@@ -105,9 +99,7 @@ The plot is saved to an image file specified by `output_plot_path`.
 ### Debye Temperatures Calculations
 
 The Debye temperature $\theta_D$ is calculated with:
-$$
-\theta_D = 41.63 \times \left(\frac{3V_0}{4\pi}\right)^{\frac{1}{6}} B^{\frac{1}{2}} M^{-\frac{1}{2}}
-$$
+$$\Theta_D = 41.63 \times \left(\frac{3V_0}{4\pi}\right)^{\frac{1}{6}} B^{\frac{1}{2}} M^{-\frac{1}{2}}$$
 where $V_0$ is the volume per atom at the minimum energy configuration, $B$ is the bulk modulus at the minimum energy configuration, and $M$ is the average atomic mass per atom.
 
 Using the calculated Morse and Birch-Murnaghan parameters, we can determine the Debye temperature for each fit.
