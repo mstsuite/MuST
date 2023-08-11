@@ -6426,7 +6426,7 @@ contains
    integer (kind=IntKind) :: DOSpid
    integer (kind=IntKind) :: s, ie, id, iv, n, gid, kGID, MyPEinKGroup
    integer (kind=IntKind) :: nume_dos, it, ntypes, ia
-   integer (kind=IntKind), parameter :: fu = 250, maxatoms = 20
+   integer (kind=IntKind), parameter :: fu = 250, maxatoms = 200
 !
    real (kind=RealKind), allocatable, target :: aver_dos(:,:,:)
    real (kind=RealKind), pointer :: p_dos(:,:), p_tdos(:,:)
