@@ -211,10 +211,9 @@ subroutine setupRadGridAndCell(LocalNumAtoms,lmax_max)
 !        -------------------------------------------------------------
          call printStepFunction(i)
 !        -------------------------------------------------------------
+         call testStepFunction(i)
+!        -------------------------------------------------------------
       endif
-!     ----------------------------------------------------------------
-      call testStepFunction(i)
-!     ----------------------------------------------------------------
    enddo
 !
 end subroutine setupRadGridAndCell

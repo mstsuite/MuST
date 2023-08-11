@@ -1,5 +1,5 @@
 program mst2
-!  use ISO_FORTRAN_ENV, only : compiler_version, compiler_options
+   use ISO_FORTRAN_ENV, only : compiler_version, compiler_options
 !
    use KindParamModule, only : IntKind, RealKind, CmplxKind
 !
@@ -251,6 +251,8 @@ program mst2
 !
    use KreinModule, only : initKrein, endKrein
 !
+   use CmdLineOptionModule, only : getCmdLineOptionValue
+!
    implicit none
 !
    logical :: ScfConverged = .false.
@@ -260,6 +262,7 @@ program mst2
    logical :: FrozenCoreFileExist = .false.
    logical :: StandardInputExist = .false.
    logical :: isDOSCalculationOnly = .false.
+   logical :: Symmetrize_mod = .false.
 !
    character (len=80) :: info_table, info_path
    character (len=160) :: itname, cmd
@@ -271,6 +274,7 @@ program mst2
    character (len=50) :: FrozenCoreFileName = 'FrozenCoreDensity.dat'
 !
    integer (kind=IntKind) :: MyPE, NumPEs
+   integer (kind=IntKind) :: NumWriteProcs, NumReadProcs
    integer (kind=IntKind) :: funit_sysmov, en_movie
    integer (kind=IntKind) :: def_id, info_id
    integer (kind=IntKind) :: i, id, ig, is, jl, nk, ne, n, na, ia
@@ -282,7 +286,7 @@ program mst2
    integer (kind=IntKind) :: NumRotations
    integer (kind=IntKind) :: LocalNumAtoms
    integer (kind=IntKind) :: node_print_level
-!  integer (kind=IntKind) :: ng_uniform(3)
+   integer (kind=IntKind) :: rstatus, calTc
    integer (kind=IntKind), pointer :: AtomicNumber(:)
    integer (kind=IntKind), allocatable :: atom_print_level(:)
    integer (kind=IntKind), allocatable :: GlobalIndex(:)
@@ -604,6 +608,13 @@ program mst2
 !  Initialize the Brillouin zone mesh for k-space integration
 !  ===================================================================
    if (isKKR() .or. isScreenKKR_LSMS() .or. isKKRCPA() .or. isKKRCPASRO()) then
+!     ================================================================
+      if (isFullPotential() .and. getLmaxKKR() >= 6 .and. Symmetrize /= 0) then
+         Symmetrize = 0
+         Symmetrize_mod = .true.
+      endif
+!     ================================================================
+!
       if (isReadKmesh()) then
 !        -------------------------------------------------------------
          call initBZone(getKmeshFileName(),istop,-1)
@@ -639,13 +650,39 @@ program mst2
    call createParallelization()
 !  -------------------------------------------------------------------
 #else
+#ifdef ACCEL
+!  -------------------------------------------------------------------
+   call createParallelization()
+!  -------------------------------------------------------------------
+#else
 !  -------------------------------------------------------------------
    call createParallelization(isLSMS())
 !  -------------------------------------------------------------------
 #endif
-   call initParallelIO(getGroupID('Unit Cell'),1) ! only the 1st cluster
-                                                  ! in the group performs
-                                                  ! writing potential data
+#endif
+!  ===================================================================
+!  Note: only the 1st cluster in the group performs writing potential data
+!  ===================================================================
+   n = getCmdLineOptionValue('Number of Writing Processes',NumWriteProcs)
+   n = getCmdLineOptionValue('Number of Reading Processes',NumReadProcs)
+   if (NumWriteProcs > 0 .and. NumReadProcs > 0) then
+!     ----------------------------------------------------------------
+      call initParallelIO(getGroupID('Unit Cell'), 1,                 &
+                          nin=NumReadProcs, nout=NumWriteProcs)
+!     ----------------------------------------------------------------
+   else if (NumWriteProcs > 0) then
+!     ----------------------------------------------------------------
+      call initParallelIO(getGroupID('Unit Cell'), 1, nout=NumWriteProcs)
+!     ----------------------------------------------------------------
+   else if (NumReadProcs > 0) then
+!     ----------------------------------------------------------------
+      call initParallelIO(getGroupID('Unit Cell'), 1, nin=NumReadProcs)
+!     ----------------------------------------------------------------
+   else
+!     ----------------------------------------------------------------
+      call initParallelIO(getGroupID('Unit Cell'), 1)
+!     ----------------------------------------------------------------
+   endif
 !  -------------------------------------------------------------------
    call initAtom2Proc(GlobalNumAtoms)
 !  -------------------------------------------------------------------
@@ -695,19 +732,19 @@ program mst2
 !     ----------------------------------------------------------------
       write(6,'(a,a)')'Execution command: ',trim(cmd)
 !     ----------------------------------------------------------------
-!     write(6,'(a,a)') 'This code was compiled by ', compiler_version(), &
-!                      ' using the options ', compiler_options()
+      write(6,'(4a)') 'This code was compiled by ', compiler_version(), &
+                      ' using the options ', compiler_options()
 !     ----------------------------------------------------------------
-      n = command_argument_count()
+!     n = command_argument_count()
 !     ----------------------------------------------------------------
-      do i = 1, n
+!     do i = 1, n
 !        -------------------------------------------------------------
-         call get_command_argument(i,cmd)
+!        call get_command_argument(i,cmd)
 !        -------------------------------------------------------------
-         if (len_trim(cmd) > 0) then
-            write(6,'(a,a)')'Command argument: ',trim(cmd)
-         endif
-      enddo
+!        if (len_trim(cmd) > 0) then
+!           write(6,'(a,a)')'Command argument: ',trim(cmd)
+!        endif
+!     enddo
 !     ----------------------------------------------------------------
       call get_environment_variable("HOSTNAME", cmd)
 !     ----------------------------------------------------------------
@@ -766,6 +803,24 @@ program mst2
         write(6,'(/,14x,a,/)')'::::  Embedded-LSMS Electronic Structure Calculation ::::'
      else if ( isSingleSite() ) then
         write(6,'(/,14x,a,/)')'::::  Single Site Electronic Structure Calculation ::::'
+     endif
+!
+     if (Symmetrize_mod) then
+        write(6,'(/)')
+        write(6,'(3x,a)')'::::::::::::::::::::::::::  WARNING  ::::::::::::::::::::::::::::::'
+        write(6,'(3x,a)')'::                                                               ::'
+        write(6,'(3x,a)')':: For Full-potential KKR or KKR-CPA calculations with lmax > 5, ::'
+        write(6,'(3x,a)')':: the k-space integration is forced to take place in the entire ::'
+        write(6,'(3x,a)')':: first Brillouin zone (B.Z.), rather than in the irreducible   ::'
+        write(6,'(3x,a)')':: B.Z., since the rotation symmetry of the single site regular  ::'
+        write(6,'(3x,a)')':: solutions and the single site scattering matrices are found   ::'
+        write(6,'(3x,a)')':: broken numerically that the symmetry opertation in B.Z. is no ::'
+        write(6,'(3x,a)')':: longer valid.                                                 ::'
+        write(6,'(3x,a)')':: This rotation symmetry broken problem will be addressed in a  ::'
+        write(6,'(3x,a)')':: future code release.                                          ::'
+        write(6,'(3x,a)')'::                                                               ::'
+        write(6,'(3x,a)')':::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::'
+        write(6,'(/)')
      endif
    endif
 !
@@ -1855,7 +1910,8 @@ program mst2
          endif
 !
          if (ScfConverged .or. nscf == 1) then
-            if ( .not.isRelativisticValence() .and. node_print_level >= 1) then
+            rstatus = getKeyValue(def_id,'Calculate Superconducting Tc',calTc)
+            if ( .not.isRelativisticValence() .and. calTc > 0 ) then
 !              changed by xianglin because calPartialDOS has not been implemented for REL
 !              -------------------------------------------------------
                call calPartialDOS(getFermiEnergy())

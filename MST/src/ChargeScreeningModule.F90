@@ -134,14 +134,14 @@ contains
       j = getGlobalIndex(na)
       do ia = 1, getLocalNumSpecies(na)
         lig = global_table_line(j) + ia
-        qtemp = getLocalAtomicNumber(j, ia) - Q_Table(lig)
-        if (isKKRCPASRO() .and. 1 == 2) then
+        qtemp = getLocalAtomicNumber(na, ia) - Q_Table(lig)
+        if (isKKRCPASRO() .and. 1 == 2) then ! This needs some work 8/3/22
            scr(na)%vmt1_corr(ia) = ZERO
            do ns = 1, NumSROShells
               avq = ZERO
-              do ja = 1, getLocalNumSpecies(na)
+              do ja = 1, getLocalNumSpecies(na) ! ???
                  mig = global_table_line(j) + ja
-                 dq = getLocalAtomicNumber(j,ja) - Q_Table(mig)
+                 dq = getLocalAtomicNumber(na,ja) - Q_Table(mig)
                  avq = avq + w_ab(ia,ja,ns)*dq
               enddo
               scr(na)%vmt1_corr(ia) = scr(na)%vmt1_corr(ia)     &
@@ -202,14 +202,14 @@ contains
       j = getGlobalIndex(na)
       do ia = 1, getLocalNumSpecies(na)
         lig = global_table_line(j) + ia
-        qtemp = getLocalAtomicNumber(j, ia) - Q_Table(lig)
-        if (isKKRCPASRO() .and. 1 == 2) then
+        qtemp = getLocalAtomicNumber(na, ia) - Q_Table(lig)
+        if (isKKRCPASRO() .and. 1 == 2) then ! This needs some work 8/3/22
            uc = ZERO
            do ns = 1, NumSROShells
               avq = ZERO
-              do ja = 1, getLocalNumSpecies(na)
+              do ja = 1, getLocalNumSpecies(na) ! ???
                  mig = global_table_line(j) + ja
-                 dq = getLocalAtomicNumber(j,ja) - Q_Table(mig)
+                 dq = getLocalAtomicNumber(na,ja) - Q_Table(mig)
                  avq = avq + w_ab(ia,ja,ns)*dq
               enddo
               uc = uc + avq*getNumAtomsOnShell(na,ns)/getShellRadius(na,ns)

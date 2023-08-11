@@ -71,7 +71,7 @@ mst MST:
 lsms:
 	@cd lsms; make "EXTERN_LIB_PATH=$(MuST_PATH)/external" "SUFFIX=$(SUFFIX)"
 
-clean: clean-lsms clean-MST clean-external
+clean: clean-lsms clean-MST clean-external clean-KUBO
 	$(eval SUFFIX := "$(shell tail -n 1 bin/.SUFFIX)")
 	@if [ "${SUFFIX}" ]; then rm -f bin/$(SUFFIX)/*; else rm -f bin/*; fi
 
@@ -83,11 +83,15 @@ clean-lsms:
 	@if [ "${SUFFIX}" ]; then rm -f bin/$(SUFFIX)/lsms bin/$(SUFFIX)/wl-lsms; else rm -f bin/lsms bin/wl-lsms; fi
 
 clean-MST:
-	cd MST; make "SUFFIX=$(SUFFIX)" distclean
+	cd MST; make "SUFFIX=$(SUFFIX)" clean
+
+clean-KUBO:
+	cd KUBO; make "SUFFIX=$(SUFFIX)" clean
 
 distclean:
 	@cd external; make "SUFFIX=$(SUFFIX)" distclean
 # We temporarily disabled buidling lsms package, since it is not needed at the moment --2/18/2022
 # @cd lsms; make "SUFFIX=$(SUFFIX)" distclean
 	@cd MST; make "SUFFIX=$(SUFFIX)" distclean
+	@cd KUBO; make "SUFFIX=$(SUFFIX)" distclean
 	rm -rf bin

@@ -66,7 +66,7 @@ private
    integer (kind=IntKind) :: n_spin_pola
    integer (kind=IntKind) :: n_spin_cant
    integer (kind=IntKind), allocatable :: print_level(:)
-   integer (kind=IntKind), allocatable :: SiteMaxNumc(:)
+!06/11/23   integer (kind=IntKind), allocatable :: SiteMaxNumc(:)
    integer (kind=IntKind) :: jmtmax
    integer (kind=IntKind) :: jwsmax
    integer (kind=IntKind) :: numcmax
@@ -123,6 +123,8 @@ private
    integer (kind=IntKind), allocatable :: NonSphPot_DataAccum(:)
    integer (kind=IntKind), allocatable :: NumSpecies(:)
 !
+!06/11/23   logical :: SiteMaxNumc_updated = .false.
+!
 contains
 !
    include '../lib/arrayTools.F90'
@@ -132,7 +134,7 @@ contains
 !  ===================================================================
    use GroupCommModule, only : getGroupID, GlobalMaxInGroup, getNumPEsInGroup
    use GroupCommModule, only : GlobalSumInGroup, getMyClusterIndex
-   use ChemElementModule, only : MaxLenOfAtomName, getNumCoreStates
+   use ChemElementModule, only : MaxLenOfAtomName, getNumCoreStates, MaxNumc
    use SystemModule, only : getAtomName, getNumAtoms, getNumAlloyElements, &
                             getAlloyElementName
    use Atom2ProcModule, only : getGlobalIndex, getMaxLocalNumAtoms,  &
@@ -370,9 +372,10 @@ contains
    endif
 !
    allocate( Potential(LocalNumAtoms), efermi_in(MaxNumSpecies, LocalNumAtoms) )
-   allocate( SiteMaxNumc(LocalNumAtoms) )
-   SiteMaxNumc(1:LocalNumAtoms) = 0
-   numcmax = 0
+!06/11/23   allocate( SiteMaxNumc(LocalNumAtoms) )
+!06/11/23   SiteMaxNumc(1:LocalNumAtoms) = 0
+!06/11/23   SiteMaxNumc_updated = .false.
+!  numcmax = 0
    do id = 1, LocalNumAtoms
       lmax_pot=lmax(id)
       Grid => getGrid(id)
@@ -422,25 +425,34 @@ contains
       do ia = 1, Potential(id)%NumSpecies
          atname = getAlloyElementName(ig,ia)
          numc = getNumCoreStates(atname)
-         SiteMaxNumc(id) = max(SiteMaxNumc(id),numc)
+!06/11/23         SiteMaxNumc(id) = max(SiteMaxNumc(id),numc)
       enddo
       iend=max(iend,jend)
-      numcmax = max(numcmax, SiteMaxNumc(id))
+!06/11/23     numcmax = max(numcmax, SiteMaxNumc(id))
    enddo
+!  ===================================================================
+   numcmax = MaxNumc   ! To avoid some potential problems, we choose to set
+                       ! numcmax to MaxNumc, 06/11/23
+!  ===================================================================
 !
    if ( .not.isDataStorageExisting('OldEstimatedCoreEnergy') ) then
       do id = 1,LocalNumAtoms
-         DataSize(id) = SiteMaxNumc(id)*n_spin_pola*Potential(id)%NumSpecies
-         if (DataSize(id) < 1) then      ! in case of empty cell
-            DataSize(id) = n_spin_pola
-         endif
+!        =============================================================
+!        The following line is modified on 06/11/23
+!        =============================================================
+!06/11/23DataSize(id) = SiteMaxNumc(id)*n_spin_pola*Potential(id)%NumSpecies
+!06/11/23if (DataSize(id) < 1) then      ! in case of empty cell
+!06/11/23   DataSize(id) = n_spin_pola
+!06/11/23endif
+         DataSize(id) = numcmax*n_spin_pola*Potential(id)%NumSpecies
+!        =============================================================
       enddo
-!     ---------------------------------------------------------------
-      call createDataStorage(LocalNumAtoms,'OldEstimatedCoreEnergy', &
+!     ----------------------------------------------------------------
+      call createDataStorage(LocalNumAtoms,'OldEstimatedCoreEnergy',  &
                              DataSize,RealType)
-      call createDataStorage(LocalNumAtoms,'OldEstimatedCoreStates', &
+      call createDataStorage(LocalNumAtoms,'OldEstimatedCoreStates',  &
                              DataSize,IntegerType)
-!     ---------------------------------------------------------------
+!     ----------------------------------------------------------------
    endif
 !
    msg(1) = jmtmax
@@ -550,7 +562,8 @@ contains
       endif
       nullify(Potential(id)%Grid)
    enddo
-   deallocate(Potential, print_level, SiteMaxNumc)
+   deallocate(Potential, print_level)
+!06/11/23 deallocate(SiteMaxNumc)
    deallocate( lofj, mofj, kofj, lofk, mofk, jofk, m1m )
    deallocate( efermi_in )
    deallocate( NonSphPot_DataAccum )
@@ -1964,12 +1977,16 @@ contains
 !
    ThisP=>Potential(id)
 !
-   if (SiteMaxNumc(id) >= 1) then
-      ec => getDataStorage(id,'OldEstimatedCoreEnergy', SiteMaxNumc(id), n_spin_pola, &
+!06/11/23   if (SiteMaxNumc(id) >= 1) then
+!06/11/23  ec => getDataStorage(id, 'OldEstimatedCoreEnergy', SiteMaxNumc(id), n_spin_pola, &
+!06/11/23                       NumSpecies(id), RealMark)
+      ec => getDataStorage(id, 'OldEstimatedCoreEnergy', numcmax, n_spin_pola, &
                            NumSpecies(id), RealMark)
-      pc0 => getDataStorage( id, 'OldEstimatedCoreStates',            &
-                             SiteMaxNumc(id), n_spin_pola, NumSpecies(id), IntegerMark)
-   endif
+!06/11/23 pc0 => getDataStorage(id, 'OldEstimatedCoreStates', SiteMaxNumc(id), n_spin_pola, &
+!06/11/23                       NumSpecies(id), IntegerMark)
+      pc0 => getDataStorage(id, 'OldEstimatedCoreStates', numcmax, n_spin_pola, &
+                            NumSpecies(id), IntegerMark)
+!06/11/23   endif
 !
    nr = getNumRmesh(id)
    allocate(rhotot(nr))
@@ -2057,18 +2074,13 @@ contains
             endif
          enddo
 !
-         if (numc > getNumCoreStates(atname)) then
+         if (numc /= getNumCoreStates(atname)) then
             if (print_level(id) >= 0) then
-               call WarningHandler(sname,'numc > getNumCoreStates()',numc,&
+               call WarningHandler(sname,'numc <> getNumCoreStates()',numc,&
                                    getNumCoreStates(atname))
             endif
             call setNumCoreStates(atname,numc)
-         else if (numc < getNumCoreStates(atname) ) then
-            if (print_level(id) >= 0) then
-               call WarningHandler(sname,'numc < getNumCoreStates', numc, &
-                                   getNumCoreStates(atname))
-            endif
-            call setNumCoreStates(atname,numc)
+!06/11/23   SiteMaxNumc_updated = .true.
          endif
 !
          if (nrcor > 0) then
@@ -2429,12 +2441,14 @@ contains
 !
    rho0 => getDataStorage( id, 'OldSphericalElectronDensity',         &
                            nr+1, NumSpecies(id), RealMark )
-   if (SiteMaxNumc(id) >= 1) then
+!06/11/23   if (SiteMaxNumc(id) >= 1) then
       ec0  => getDataStorage( id, 'OldEstimatedCoreEnergy',           &
-                              SiteMaxNumc(id),n_spin_pola, NumSpecies(id), RealMark )
+!06/11/23                     SiteMaxNumc(id),n_spin_pola, NumSpecies(id), RealMark )
+                              numcmax,n_spin_pola, NumSpecies(id), RealMark )
       pc0 => getDataStorage( id, 'OldEstimatedCoreStates',            &
-                             SiteMaxNumc(id), n_spin_pola, NumSpecies(id), IntegerMark)
-   endif
+!06/11/23                    SiteMaxNumc(id), n_spin_pola, NumSpecies(id), IntegerMark)
+                             numcmax, n_spin_pola, NumSpecies(id), IntegerMark)
+!06/11/23   endif
    if (n_spin_pola == 2) then
       mom0 => getDataStorage(id,'OldSphericalMomentDensity', &
                              nr+1, NumSpecies(id), RealMark )
@@ -2666,14 +2680,16 @@ contains
 !     ----------------------------------------------------------------
    endif
 !
-   if (SiteMaxNumc(id) >= 1) then
+!06/11/23   if (SiteMaxNumc(id) >= 1) then
 !     ----------------------------------------------------------------
       ec0 => getDataStorage( id, 'NewEstimatedCoreEnergy',            &
-                             SiteMaxNumc(id), n_spin_pola, NumSpecies(id), RealMark)
+!06/11/23                    SiteMaxNumc(id), n_spin_pola, NumSpecies(id), RealMark)
+                             numcmax, n_spin_pola, NumSpecies(id), RealMark)
       pc0 => getDataStorage( id, 'NewEstimatedCoreStates',            &
-                             SiteMaxNumc(id), n_spin_pola, NumSpecies(id), IntegerMark)
+!06/11/23                    SiteMaxNumc(id), n_spin_pola, NumSpecies(id), IntegerMark)
+                             numcmax, n_spin_pola, NumSpecies(id), IntegerMark)
 !     ----------------------------------------------------------------
-   endif
+!06/11/23   endif
 !
    do ia = 1, NumSpecies(id)
       filename = getOutPotFileName(id,ia)
@@ -2861,14 +2877,16 @@ contains
       nspin = 3
    endif
 !
-   if (SiteMaxNumc(id) >= 1) then
+!06/11/23   if (SiteMaxNumc(id) >= 1) then
 !     ----------------------------------------------------------------
       ec0 => getDataStorage( id, 'NewEstimatedCoreEnergy',            &
-                             SiteMaxNumc(id), n_spin_pola, NumSpecies(id), RealMark)
+!06/11/23                    SiteMaxNumc(id), n_spin_pola, NumSpecies(id), RealMark)
+                             numcmax, n_spin_pola, NumSpecies(id), RealMark)
       pc0 => getDataStorage( id, 'NewEstimatedCoreStates',            &
-                             SiteMaxNumc(id), n_spin_pola, NumSpecies(id), IntegerMark)
+!06/11/23                    SiteMaxNumc(id), n_spin_pola, NumSpecies(id), IntegerMark)
+                             numcmax, n_spin_pola, NumSpecies(id), IntegerMark)
 !     ----------------------------------------------------------------
-   endif
+!06/11/23   endif
 !
    do ia = 1, NumSpecies(id)
       do is = 1,n_spin_pola

@@ -91,6 +91,7 @@ program testStrConst
 !
 !  -------------------------------------------------------------------
    call initMPP()
+   call initTimer()
    call initDataServiceCenter()
    call initInput()
    call readInputs(def_id,info_id)
@@ -190,7 +191,6 @@ program testStrConst
    allocate(scm(kmax_phi,kmax_phi),scmST(kmax_phi,kmax_phi))
 !
 !  --------------------------------------------------------------------
-   call initTimer()
    call initStrConst(lmax_phi,NumAtoms,AtomPosition,Bravais,istop,iprint)
 !  --------------------------------------------------------------------
    do ie=1,ne

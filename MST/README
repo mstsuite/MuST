@@ -167,6 +167,22 @@ Execution:
 An example input file for newss, Mg_ss_in, for generating Mg starting potential for KKR/KKR-CPA/LSMS
 can be found under $(MuST_PATH)/MST/sample/Mg/Atom/.
 
+8. morse_bm_fitting
+A utility code ($(MuST_PATH)/util/morse_bm_fitting.py) that performs fitting using the Morse potential and 
+Birch-Murnaghan equation to analyze energy-volume and pressure-volume curves of a system, and extract fitting
+pararmeters including equilibrium volume, bulk modulus, and Debye temperature. 
+Requirements:
+   * `numpy`
+   * `scipy`
+   * `matplotlib`
+   * `chempy`
+Input files: 
+   * a text file in a specfic format (please refer to $(MuST_PATH)/MST/util/README_fitting.md) 
+     containing system parameters, energy, and volume per atom data.
+Output files:
+   * a plot showing the fitting results
+   * a text file containing the fitting results
+
 How to generate a starting potential
 ====================================
 The starting potentials for a set of elements are available under $(MuST_PATH)/Potential/. To generate a

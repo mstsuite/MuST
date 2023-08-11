@@ -113,7 +113,7 @@ CDEBUG
        Nfix=0
 c       call absc_weight(Nqp,abscissas,weight)
 
-        call gauleg(-1.0d0,+1.0d0,abscissas,weight,Nqp)       
+        call gauleg2(-1.0d0,+1.0d0,abscissas,weight,Nqp)       
 
        do 230 nAtom=1,tnAtom 
         !---[use Sym.]---
@@ -661,7 +661,7 @@ C       if(iRmt>iDis) stop 'muffin-tin radius exceed the VP boundary!'
 C    Calculate the abscissa and weights for Gauss Quadr. Integration
 !=======================================================================
 
-       SUBROUTINE gauleg(x1,x2,x,w,n)
+       SUBROUTINE gauleg2(x1,x2,x,w,n)
 c     ------------------------------------------------------------------
 c     given the lower and upper limits of integration x1 and x2, and
 c     given n, this routine returns arrays x(1:n) and w(1:n) containing

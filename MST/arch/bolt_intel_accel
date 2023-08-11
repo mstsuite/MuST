@@ -1,5 +1,4 @@
 ACCEL_PATH = /usr/local/cuda
-MKLROOT = /opt/intel/compilers_and_libraries_2019.3.199/linux/mkl
 MKLPATH = $(MKLROOT)/lib/intel64
 LIBXC_PATH = /usr/local/libxc/libxc-5.0.0/INTEL
 FFTW_PATH = /usr/local/fftw/fftw-3.3.8/INTEL
@@ -16,8 +15,8 @@ PREPROC = $(FC)
 EXEC_NAME = mst2_accel
 
 ACCEL     = CUDA
-ACCEL_CXX = nvcc -arch=sm_35
-ACCEL_OPT = -I$(ACCEL_PATH)/include -I. -DLSMS2 -DCUDA
+ACCEL_CXX = nvcc -arch=sm_35 --std c++11
+#ACCEL_OPT = -I$(ACCEL_PATH)/include -I. -DLSMS2 -DCUDA
 
 ARCHV_LSMS = xiar
 ARCHV_OPT = -r
@@ -52,7 +51,7 @@ CPPFLAGS=-DUnderscore
 #  /lvol/intel/composer_xe_2013.1.117/compiler/lib/intel64/libiomp5.a
 ADD_LIBS = -L$(MKLPATH) -lmkl_scalapack_lp64 \
          -Wl,--start-group -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lmkl_blacs_intelmpi_lp64 -Wl,--end-group \
-         -lpthread -L$(ACCEL_PATH)/lib64 -lcudart -lcuda -lcublas -lstdc++ \
+         -lpthread -L$(ACCEL_PATH)/lib64 -lcudart -lcuda -lcublas -lstdc++ -lcusolver \
          -lm /opt/intel/compilers_and_libraries_2019.3.199/linux/compiler/lib/intel64/libiomp5.a
 
 ifdef LIBXC_PATH

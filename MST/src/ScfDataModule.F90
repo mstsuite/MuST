@@ -211,6 +211,7 @@ contains
 !  ===================================================================
    use MathParamModule, only : TEN2m6, TEN2m8, ZERO, TEN2m4, ONE
    use PublicParamDefinitionsModule, only : ASA, MuffinTin, MuffinTinASA
+   use CheckPointModule, only : insertStopPoint
    use InputModule, only : getKeyValue
    implicit none
 !
@@ -270,6 +271,10 @@ contains
          endif
       endif
    endif
+!
+!  -------------------------------------------------------------------
+   call insertStopPoint(istop)
+!  -------------------------------------------------------------------
 !
    if (movie == 0) then
       printSysMovie = 0

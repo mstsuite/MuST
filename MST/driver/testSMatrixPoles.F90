@@ -129,7 +129,7 @@ program testSMatrixPoles
    call initializeModules()
 !  -------------------------------------------------------------------
    call initCoreStates(LocalNumAtoms,EvBottom,n_spin_pola,            &
-                       isNonRelativisticCore(),istop,1)
+                       isNonRelativisticCore(),istop,node_print_level)
 !  -------------------------------------------------------------------
    call initSSSolver(LocalNumAtoms, getLocalNumSpecies, getLocalAtomicNumber, &
                      lmax_kkr, lmax_phi, lmax_pot, lmax_step, lmax_green,  &
@@ -168,7 +168,9 @@ program testSMatrixPoles
       enddo
    enddo
 !
-   write(6,'(/,a,f12.5,a)') 'Setup time: ',getTime() - t0,' sec.'
+   if (node_print_level >= 0) then
+      write(6,'(/,a,f12.5,a)') 'Setup time: ',getTime() - t0,' sec.'
+   endif
 !
 !  ===================================================================
 !  read core states and density data of local atoms from file
@@ -197,7 +199,7 @@ program testSMatrixPoles
 !
 !  -------------------------------------------------------------------
    call initSMatrixPoles(LocalNumAtoms,n_spin_pola,n_spin_cant,LocalNumSpecies, &
-                         lmax_kkr,lmax_rho,iprint=0)
+                         min(lmax_kkr,4),lmax_rho,iprint=node_print_level)
 !  -------------------------------------------------------------------
 !
    rstatus = getKeyValue(1,'Resonance State Max Width (>0.0)',resonance_width)
@@ -380,8 +382,8 @@ contains
 !  ===================================================================
 !  initilize GauntFactors:
 !  ===================================================================
-!  call initGauntFactors(2*lmax_max,istop,0)
-   call initGauntFactors(lmax_max,istop,0)
+!  call initGauntFactors(2*lmax_max,istop,node_print_level)
+   call initGauntFactors(lmax_max,istop,node_print_level)
 !  -------------------------------------------------------------------
 !
    do i=1,LocalNumAtoms
@@ -407,7 +409,7 @@ contains
 !  initialize potential module
 !  -------------------------------------------------------------------
    call initMadelung(LocalNumAtoms,NumAtoms,GlobalIndex,              &
-                     lmax_rho_max,lmax_pot_max,bravais,AtomPosition,0)
+                     lmax_rho_max,lmax_pot_max,bravais,AtomPosition,node_print_level)
 !  -------------------------------------------------------------------
 !
 !  -------------------------------------------------------------------
@@ -469,7 +471,9 @@ contains
             enddo
             potr_0 =>  getSphPotr(id,1,is)
          enddo
-         write(6,'(/)')
+         if (node_print_level >= 0) then
+            write(6,'(/)')
+         endif
          pflag => getPotComponentFlag(id)
          jl = 0
          do l = 0, lmax_pot(id)
@@ -481,7 +485,9 @@ contains
             enddo
          enddo
          if (isFullPotential()) then
-            write(6,'(/)')
+            if (node_print_level >= 0) then
+               write(6,'(/)')
+            endif
             pflag => getTruncatedPotComponentFlag(id)
             jl = 0
             do l = 0, lmax_pot(id)
@@ -494,7 +500,9 @@ contains
             enddo
          endif
          do is = 1,n_spin_pola
-            write(6,'(/,a,i2)')'spin = ',is
+            if (node_print_level >= 0) then
+               write(6,'(/,a,i2)')'spin = ',is
+            endif
             pot_jl => getPotential(id,1,is)
             jl = 0
             do l = 0, lmax_pot(id)
@@ -513,7 +521,9 @@ contains
                enddo
             enddo
             if (isFullPotential()) then
-               write(6,'(/)')
+               if (node_print_level >= 0) then
+                  write(6,'(/)')
+               endif
                pot_jl => getTruncatedPotential(id,1,is)
                jl = 0
                do l = 0, getTruncPotLmax(id)
@@ -556,15 +566,17 @@ contains
 !
    EPoint => getEPoint()
    NumEsOnMyProc = getNumEsOnMyProc()
-   write(6,'(/,a)')'=================================================='
-   write(6,'(  a)')'Energy #                    Energy Value'
-   write(6,'(  a)')'--------------------------------------------------'
-   do ie_loc = 1, NumEsOnMyProc
-      ie_glb = getEnergyIndex(ie_loc)
-      energy = EPoint(ie_glb)
-      write(6,'(i5,12x,2d16.8)')ie_glb,energy
-   enddo
-   write(6,'(  a)')'=================================================='
+   if (node_print_level >= 0) then
+      write(6,'(/,a)')'=================================================='
+      write(6,'(  a)')'Energy #                    Energy Value'
+      write(6,'(  a)')'--------------------------------------------------'
+      do ie_loc = 1, NumEsOnMyProc
+         ie_glb = getEnergyIndex(ie_loc)
+         energy = EPoint(ie_glb)
+         write(6,'(i5,12x,2d16.8)')ie_glb,energy
+      enddo
+      write(6,'(  a)')'=================================================='
+   endif
 !
    if (getSingleSiteSolverMethod() == -1) then
       call initSurfElements('none',-1)

@@ -55,8 +55,8 @@ contains
 !
    integer (kind=IntKind), intent(in) :: myid
 !
-   character (len=6)  :: cnode
-   character (len=80) :: text, text_sav
+   character (len=8)  :: cnode
+   character (len=100) :: text, text_sav
 !
    integer (kind=IntKind), parameter :: offset = 10**(len(cnode)-1)
    integer (kind=IntKind) :: i, id, status, rflag
@@ -67,7 +67,7 @@ contains
    num_columns_old = 0
    FileExist = .false.
 !
-   write(cnode,'(i6)')myid+offset
+   write(cnode,'(i8)')myid+offset
 !
    if (myid >= offset) then
 !      ---------------------------------------------------------------
@@ -85,7 +85,7 @@ contains
 !
       rflag = 0
 !     ----------------------------------------------------------------
-      call initString(80)
+      call initString(len(text))
 !     ----------------------------------------------------------------
       LOOP_1: do
          read(funit,'(a)',iostat=status)text

@@ -111,13 +111,23 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function isQuadraticMatrixInitialized() result(y)
+   function isQuadraticMatrixInitialized(n) result(y)
 !  ===================================================================
    implicit   none
 !
    logical :: y
 !
+   integer (kind=IntKind), optional, intent(out) :: n
+!
    y = isInitialized
+! 
+   if (present(n)) then
+      if (y) then
+         n = ndim
+      else
+         n = 0
+      endif
+   endif
 !
    end function isQuadraticMatrixInitialized
 !  ===================================================================

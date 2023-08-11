@@ -15,7 +15,7 @@ interface getDefaultValue
 end interface
 !
 private
-   integer (kind=IntKind), parameter :: MaxParams = 150
+   integer (kind=IntKind), parameter :: MaxParams = 200
    integer (kind=intKind) :: NumParams
 !
    character (len=50), allocatable :: StoredKeys(:)
@@ -497,7 +497,7 @@ contains
 !
    n = 0; Keys = ' '; Values = ' '
 !
-   include '../src/DefaultParameters.h'
+   include '../src/DefaultParameters.inc'
 !
    if (n > size(Keys)) then
       call ErrorHandler('loadDefaultKeyValues','n > size of Keys',n,size(Keys))

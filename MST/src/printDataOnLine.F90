@@ -1,5 +1,5 @@
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine printDataOnLine( data_name, id, getData)
+   subroutine printDataOnLine(grid_name, data_name, id, getData)
 !  ===================================================================
    use KindParamModule, only : IntKind, RealKind
    use ErrorHandlerModule, only : ErrorHandler
@@ -19,6 +19,7 @@
 !
    implicit none
 !
+   character(len=*), intent(in) :: grid_name
    character(len=*), intent(in) :: data_name
 !
    integer (kind=IntKind), intent(in) :: id
@@ -26,7 +27,7 @@
    character (len=80) :: fname, svalue
    character (len=10) :: key_name
 !
-   integer (kind=IntKind) :: ig, i, j, k, n
+   integer (kind=IntKind) :: ig, i, j, k, n, rstatus
    integer (kind=IntKind) :: funit, num_points, num_vectors
    integer (kind=IntKind), parameter :: MaxVecs = 50
 !
@@ -47,21 +48,20 @@
       end function getData
    end interface
 !
-   if ( getKeyValue(TableID,'Origin Grid Vector', svalue) == 0 ) then
+   if ( getKeyValue(TableID,grid_name//' '//'Grid Origin Vector', svalue) == 0 ) then
       read(svalue,*)x0, y0, z0
    else
-      call ErrorHandler('printDataOnLine','Origin Grid Vector','Not exist')
+      call ErrorHandler('printDataOnLine',grid_name//' '//'Grid Origin Vector','Not exist')
    endif
-   num_vectors = getNumKeyValues(TableID,'Grid Vector')
-   if (num_vectors < 1) then
-      call ErrorHandler('printDataOnLine','Num vectors < 1',num_vectors)
-   else if (num_vectors > MaxVecs) then
-      call ErrorHandler('printDataOnLine','Num vectors > MaxVecs',num_vectors,MaxVecs)
+!  num_vectors = getNumKeyValues(TableID,grid_name//' '//'Line Vector')
+   num_vectors = getNumKeyValues(TableID,grid_name//' '//'Line Vector')
+   if (num_vectors < 1 .or. num_vectors > MaxVecs) then
+      call ErrorHandler('printDataOnLine','Num vectors is out of range',num_vectors,MaxVecs)
    endif
-   if ( getKeyValue(TableID,'Grid Points', svalue) == 0 ) then
+   if ( getKeyValue(TableID,grid_name//' '//'Line Points', svalue) == 0 ) then
       read(svalue,*)num_points
    else
-      call ErrorHandler('printDataOnLine','Grid Points','Not exist')
+      call ErrorHandler('printDataOnLine',grid_name//' '//'Line Points','Not exist')
    endif
 !
    if ( getMyPEinGroup(getGroupID('K-Mesh')) + getMyPEinGroup(getGroupID('Energy Mesh')) == 0) then
@@ -71,8 +71,13 @@
    if ( print_pe ) then
       ig = getGlobalIndex(id)
       rg = getRadialGridRadius(id)
-      if ( getKeyValue(TableID,'Grid Vector', 3, vec, num_vectors) /= 0 ) then
-         call ErrorHandler('printDataOnLine','Grid Vector','Invalid data')
+      if (num_vectors == 1) then
+         rstatus = getKeyValue(TableID,grid_name//' '//'Line Vector', 3, vec(:,1))
+      else
+         rstatus = getKeyValue(TableID,grid_name//' '//'Line Vector', 3, vec, num_vectors)
+      endif
+      if ( rstatus /= 0 ) then
+         call ErrorHandler('printDataOnLine',grid_name//' '//'Line Vector','Invalid data')
       endif
       do k = 1, num_vectors
          r = sqrt(vec(1,k)**2+vec(2,k)**2+vec(3,k)**2)

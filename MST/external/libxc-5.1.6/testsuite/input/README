@@ -1,0 +1,15 @@
+This directory contains data from realistic atomic and molecular system.
+Contents:
+
+H:	Hydrogen atom (spin unrestricted)
+Li:	Lithium atom (spin unrestricted)
+BrOH:	Bromuous acid, RHF/un-aug-cc-pVQZ calculation
+	with relativistic effects at DKH2 level of theory
+BrOH+:	Same as above, but cation at UHF level of theory
+
+The files contain 13 columns of data in the format 
+    rhoa rhob sigmaaa sigmaab sigmabb lapla laplb taua taub
+for the spin up and spin down densities, the dot products of the gradients,
+the Laplacians of the densities and the kinetic energy densities.
+
+The first line contains the number of data rows.

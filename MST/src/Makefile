@@ -10,6 +10,7 @@ MatrixBlockInversionModule.o \
 BinvMatrix.o \
 WriteFunctionModule.o \
 DefaultParamModule.o \
+CmdLineOptionModule.o \
 LatticeModule.o \
 IBZRotationModule.o \
 CheckPointModule.o
@@ -186,7 +187,8 @@ clean:
 
 printSystemMovie.o: $(Modules_2)
 
-DefaultParamModule.o: DefaultParameters.h
-InputModule.o: DefaultParamModule.o
+DefaultParamModule.o: DefaultParameters.inc
+CmdLineOptionModule.o: CmdLineOptions.inc
+InputModule.o: DefaultParamModule.o CmdLineOptionModule.o
 
 keep.o: git_version.h

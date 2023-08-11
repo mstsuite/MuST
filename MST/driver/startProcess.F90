@@ -119,7 +119,6 @@ subroutine startProcess(ss_mode)
 !        -------------------------------------------------------------
       else if (NumKMeshs > 0) then
 !        -------------------------------------------------------------
-print *, ' Kdiv = ',Kdiv(1:3,1)
          call initBZone(NumKMeshs,kGenScheme,Kdiv,Symmetrize,bravais, &
                         NumAtoms,AtomPosition,AtomicNumber,'none',-1)
 !        -------------------------------------------------------------
