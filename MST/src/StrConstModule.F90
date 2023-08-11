@@ -183,6 +183,13 @@ private
    complex (kind=CmplxKind), allocatable :: facr(:)
    complex (kind=CmplxKind), allocatable, target :: strcon_matrix(:)
 !
+!  ===================================================================
+!  We use the following energy point to help determining the cut-off
+!  radius for the lattice in the real and reciprocal spaces
+!  This energy point is found necessary for a large unit cell.
+!  ===================================================================
+   complex (kind=CmplxKind), parameter :: ec0 = (0.8d0, 0.001d0)
+!
    type (ScmBlockStruct), allocatable, target :: scm_blocks(:,:)
 !
    integer (kind=IntKind) :: ni_sav = 0
@@ -200,6 +207,9 @@ private
    real (kind=RealKind), allocatable :: knlat_z_fep(:)
    real (kind=RealKind), allocatable :: knlatsq_fep(:)
 !
+   integer (kind=IntKind), parameter :: MaxFact = 200
+   real (kind=RealKind) :: logfact(0:MaxFact), ri
+!
 contains
 !
    include '../lib/arrayTools.F90'
@@ -209,7 +219,7 @@ contains
 !  ===================================================================
    implicit   none
    integer (kind=IntKind), intent(in) :: lmax
-   integer (kind=IntKind) :: l, m, kl, lp
+   integer (kind=IntKind) :: l, m, kl, lp, i
 !
    kl=0
    do l=0,lmax
@@ -229,6 +239,12 @@ contains
          illp(l,lp)=ilp1(l)/ilp1(lp) ! illp = i**(l-lp)
 !        illp(l,lp)=-ilp1(l)*ilp1(lp)  ! !!!This needs to be figured out "why?"
       enddo
+   enddo
+!
+   logfact(0) = ZERO
+   do i = 1, MaxFact
+      ri = i
+      logfact(i) = logfact(i-1) + log(ri)
    enddo
 !
    end subroutine genFactors
@@ -662,15 +678,17 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine calScalingFactor(Bravais,sfac,efac)
 !  ===================================================================
+   use InputModule, only : getKeyValue
+!
    implicit none
 !
    real (kind=RealKind), intent(in) :: Bravais(3,3)
    real (kind=RealKind), intent(out) :: sfac, efac
 !
-   integer (kind=IntKind) :: nm1, nm2, nm3, iter
+   integer (kind=IntKind) :: nm1, nm2, nm3, iter, rstatus
    integer (kind=IntKind), parameter :: max_iter = 1000
 !
-   real (kind=RealKind) :: a0, a1, a2, a3
+   real (kind=RealKind) :: a0, a0p, a1, a2, a3
    real (kind=RealKind) :: vbrar(3,3), vbrak(3,3)
    real (kind=RealKind) :: volr, vfac
    real (kind=RealKind) :: rscut, kncut
@@ -686,9 +704,17 @@ contains
            Bravais(3,2)*Bravais(3,2) )
    a3=sqrt(Bravais(1,3)*Bravais(1,3)+Bravais(2,3)*Bravais(2,3)+ &
            Bravais(3,3)*Bravais(3,3) )
+   a0=min(a1,a2,a3); a0p=max(a1,a2,a3)
 !
-   a0=min(a1,a2,a3)
-   efac=half+0.05*max(a1,a2,a3)/a0
+   efac = 0.75d0
+   rstatus = getKeyValue(1,'Ewald parameter for KKR',efac,default_param=.false.)
+   if (rstatus /= 0) then
+      if (a0 < PI2 + TWO) then
+         efac = HALF + 0.05*a0p/a0
+      else
+         efac=a0/PI2 + 0.05*a0p/a0
+      endif
+   endif
 !
    sfac=a0/PI2
 !
@@ -717,7 +743,7 @@ contains
 !     ================================================================
 !     calculate rscut, the radius of real space truncation sphere.....
 !     ----------------------------------------------------------------
-      call getscut(rsfunc,efac,lmax_max2,                             &
+      call getscut(rsfunc,ec0,efac,lmax_max2,                         &
                    vbrar(1:3,1),vbrar(1:3,2),vbrar(1:3,3),rscut,nm1,nm2,nm3)
       call numlat(vbrar,rscut,nm1,nm2,nm3,nrslat)
 !     ----------------------------------------------------------------
@@ -725,7 +751,7 @@ contains
 !     ================================================================
 !     calculate rscut, the radius of real space truncation sphere.
 !     ----------------------------------------------------------------
-      call getscut(knfunc,efac,lmax_max2,                             &
+      call getscut(knfunc,ec0,efac,lmax_max2,                         &
                    vbrak(1:3,1),vbrak(1:3,2),vbrak(1:3,3),kncut,nm1,nm2,nm3)
       call numlat(vbrak,kncut,nm1,nm2,nm3,nknlat)
 !     ----------------------------------------------------------------
@@ -1555,6 +1581,7 @@ contains
 !  *                                                                 *
 !  *******************************************************************
 !
+use MPPModule, only : MyPE
    implicit   none
 !
    character (len= 7), parameter :: sname='caldlke'
@@ -1642,8 +1669,10 @@ contains
    complex (kind=CmplxKind) :: sum
    complex (kind=CmplxKind) :: sum0
    complex (kind=CmplxKind) :: term
-!   integer (kind=IntKind) ::   n
-!   complex (kind=CmplxKind) :: eoe
+   complex (kind=CmplxKind) :: eoe
+!
+   integer (kind=IntKind) ::   n
+   integer (kind=IntKind) :: sum_scheme = 0
 !
 !  *******************************************************************
 !  *                           inf                                   *
@@ -1651,33 +1680,78 @@ contains
 !  *                           n=0                                   *
 !  *******************************************************************
 !
-!!!eoe = energy/eta
-!!!term = CONE
-!!!rn = ZERO
-!!!do while (abs(term) > ten2m14)
-!!!   rn = rn + one
-!!!   term = term*eoe/rn 
-!!!enddo
-!!!sum = term/(two*rn-one)
-!!!n = rn
-!!!do i = n-1,1,-1
-!!!   rn = i
-!!!   term = term*rn/eoe
-!!!   sum=sum+term/(two*rn-one)
-!!!enddo
-!!!sum = sum - CONE ! add n=0 term
-   rn=zero
-   sum0=czero
-   sum=-cone
-   term=cone
-   do while (abs(sum-sum0).ge.ten2m8)
-      sum0=sum
-      do i=1,50
-         rn=rn+one
-         term=term*energy/(eta*rn)
+   eoe = energy/eta
+!
+   term = CONE
+   n = 0
+   do while (abs(term) > ten2m14)
+      n = n + 1 
+      term = term*eoe/real(n,RealKind) 
+   enddo
+!
+   if (abs(eoe) > ONE) then
+      sum_scheme = 0  ! Using the forward scheme
+   else if (n > MaxFact) then
+      sum_scheme = 2
+   else
+      sum_scheme = 1  ! Using the backward scheme
+   endif
+!
+   if (sum_scheme == -1) then
+!     ================================================================
+!     Despite using the backward summation to avoid round-off error, the
+!     following scheme has a problem: a slight numerical error in the nth term
+!     will propagate to the 1st term. So we will not use this scheme
+!     ================================================================
+      rn = n
+      sum = term/(two*rn-one)
+      do i = n-1,1,-1
+         rn = i
+         term = term*rn/eoe
          sum=sum+term/(two*rn-one)
+      enddo
+      sum = sum - CONE ! add n=0 term
+!     write(6,'(a,i5,2x,2d15.8)')'n, backward sum = ',n,sum
+   else if (sum_scheme == 0) then
+      sum = CZERO
+      term = CONE
+      do i = 1, n
+         rn = i
+         term = term*eoe/rn
+         sum = sum + term/(two*rn-one)
+      enddo
+      sum = sum - CONE
+!     write(6,'(a,i5,2x,2d15.8)')'n, forward  sum = ',n,sum
+   else if (sum_scheme == 1) then
+      if (n > MaxFact) then
+         call ErrorHandler('cald3','n > MaxFact',n,MaxFact)
+      endif
+      sum = CZERO
+      do i = n, 1, -1
+         sum = sum + eoe**i*exp(-logfact(i))/(two*i-one)
+      enddo
+      sum = sum - CONE
+!     write(6,'(a,i5,2x,2d15.8)')'n, Backward Sum = ',n,sum
+   else
+!     ================================================================
+!     The following scheme adds more terms to the summation.
+!     ----------------------------------------------------------------
+      rn=zero
+      sum0=czero
+      sum=-cone
+      term=cone
+      do while (abs(sum-sum0) > ten2m14)
+         sum0=sum
+         do i=1,50
+            rn=rn+one
+!           term=term*energy/(eta*rn)
+            term=term*eoe/rn
+            sum=sum+term/(two*rn-one)
+         end do
       end do
-   end do
+!     write(6,'(a,i5,2x,2d15.8)')'n, alternat sum = ',int(rn),sum
+   endif
+!  ===================================================================
    d3term=-sqrt(eta)/pi2*sum
 !
    end subroutine cald3
@@ -1686,7 +1760,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine getscut(func,eta,lmax,a1,a2,a3,scut,nm1,nm2,nm3)
+   subroutine getscut(func,e,eta,lmax,a1,a2,a3,scut,nm1,nm2,nm3)
 !  ===================================================================
    use MathParamModule, only : ten2m14
    implicit   none
@@ -1700,6 +1774,7 @@ contains
    integer (kind=IntKind) :: j
    integer (kind=IntKind) :: k
 !
+   complex (kind=CmplxKind), intent(in) ::  e
    real (kind=RealKind), intent(in) ::  eta
    real (kind=RealKind), intent(in) ::  a1(3)
    real (kind=RealKind), intent(in) ::  a2(3)
@@ -1709,14 +1784,17 @@ contains
    real (kind=RealKind) ::  r(3)
    real (kind=RealKind) ::  rm
    real (kind=RealKind) ::  term
+   real (kind=RealKind) ::  delta = 1.0d-16
 !
    interface
-      function func(x,eta,l)
+      function func(x,e,eta,l)
          use KindParamModule, only : IntKind
          use KindParamModule, only : RealKind
+         use KindParamModule, only : CmplxKind
          real (kind=RealKind) :: func
          real (kind=RealKind) :: x
          real (kind=RealKind) :: eta
+         complex (kind=CmplxKind) :: e
          integer (kind=IntKind)  :: l
       end function func
    end interface
@@ -1727,26 +1805,26 @@ contains
    r(1)=sqrt(a1(1)*a1(1)+a1(2)*a1(2)+a1(3)*a1(3))
    term=one
    nm1=0
-   do while(term.gt.ten2m14)
+   do while(abs(term).gt.delta)
       nm1=nm1+1
       rm=nm1*r(1)
-      term=func(rm,eta,lmax)
+      term=func(rm,e,eta,lmax)
    enddo
    r(2)=sqrt(a2(1)*a2(1)+a2(2)*a2(2)+a2(3)*a2(3))
    term=one
    nm2=0
-   do while(term.gt.ten2m14)
+   do while(abs(term).gt.delta)
       nm2=nm2+1
       rm=nm2*r(2)
-      term=func(rm,eta,lmax)
+      term=func(rm,e,eta,lmax)
    enddo
    r(3)=sqrt(a3(1)*a3(1)+a3(2)*a3(2)+a3(3)*a3(3))
    term=one
    nm3=0
-   do while(term.gt.ten2m14)
+   do while(abs(term).gt.delta)
       nm3=nm3+1
       rm=nm3*r(3)
-      term=func(rm,eta,lmax)
+      term=func(rm,e,eta,lmax)
    enddo
 !
 !  ===================================================================
@@ -1808,7 +1886,7 @@ contains
 !  ===================================================================
 !  calculate rscut, the radius of real space truncation sphere.....
 !  -------------------------------------------------------------------
-   call getscut(rsfunc,eta,lmax_dlm,                                  &
+   call getscut(rsfunc,ec0,eta,lmax_dlm,                              &
                 vbrar(1:3,1),vbrar(1:3,2),vbrar(1:3,3),rscut,nm1,nm2,nm3)
    call numlat(vbrar,rscut,nm1,nm2,nm3,nrslat)
 !  -------------------------------------------------------------------
@@ -1853,7 +1931,7 @@ contains
 !  ===================================================================
 !  calculate rscut, the radius of real space truncation sphere.
 !  -------------------------------------------------------------------
-   call getscut(knfunc,eta,lmax_dlm,                                  &
+   call getscut(knfunc,ec0,eta,lmax_dlm,                              &
                 vbrak(1:3,1),vbrak(1:3,2),vbrak(1:3,3),kncut,nm1,nm2,nm3)
    call numlat(vbrak,kncut,nm1,nm2,nm3,nknlat)
 !  -------------------------------------------------------------------
@@ -2455,7 +2533,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function rsfunc(x,eta0,l)
+   function rsfunc(x,e,eta0,l)
 !  ===================================================================
 !
    implicit none
@@ -2466,6 +2544,7 @@ contains
    real (kind=RealKind) :: rsfunc
    real (kind=RealKind) :: x
    real (kind=RealKind) :: eta0
+   complex (kind=CmplxKind) :: e
 !
    if(x.lt.ten2m8) then
       rsfunc=1.0d+14
@@ -2473,7 +2552,7 @@ contains
    endif
 !
 !  -------------------------------------------------------------------
-   call intfac(x,czero,eta0,l,facr(0))
+   call intfac(x,e,eta0,l,facr(0))
 !  -------------------------------------------------------------------
    rsfunc=abs(facr(0))
    do lp=1,l
@@ -2486,7 +2565,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function knfunc(x,eta0,l)
+   function knfunc(x,e,eta0,l)
 !  ===================================================================
 !
    implicit none
@@ -2496,6 +2575,7 @@ contains
    real (kind=RealKind) :: knfunc
    real (kind=RealKind) :: x
    real (kind=RealKind) :: eta0
+   complex (kind=CmplxKind) :: e
 !
    real (kind=RealKind) :: x2
 !
@@ -2506,9 +2586,9 @@ contains
 !
    x2=x*x
    if(x.lt.one) then
-      knfunc=exp(-x2/eta0)/x2
+      knfunc=abs(exp(-(x2-e)/eta0)/(x2-e))
    else
-      knfunc=x**l*exp(-x2/eta0)/x2
+      knfunc=abs(x**l*exp(-(x2-e)/eta0)/(x2-e))
    endif
 !
    end function knfunc

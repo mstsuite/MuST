@@ -1,0 +1,10 @@
+The current main developers of libxc are
+ * Miguel A. L. Marques (marques@tddft.org)
+ * Micael Oliveira
+ * Susi Lehtola
+
+Previous contributors to libxc include
+ * Xavier Andrade
+ * Tobias Burnus
+ * Georg Madsen (XC_GGA_X_PBEA)
+ * David Strubbe

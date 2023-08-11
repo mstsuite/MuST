@@ -66,7 +66,7 @@ private
 !
    character (len=1), allocatable :: c_str(:)
 !
-   integer (kind=IntKind) :: nstr
+   integer (kind=IntKind) :: nstr = 0
    integer (kind=IntKind) :: NumTokens
    integer (kind=IntKind), allocatable :: TokenIndex(:)
    integer (kind=IntKind), allocatable :: TokenLen(:)
@@ -86,11 +86,17 @@ contains
    character (len=1), intent(in), optional :: separators(:)
 !
    if (Initialized) then
-      call ErrorHandler('initString','String module is already initialized')
+      if (nstr < len(str)) then
+         deallocate(c_str, TokenIndex, TokenLen)
+         Initialized = .false.
+      endif
+!     call ErrorHandler('initString','String module is already initialized')
    endif
 !
-   nstr = len(str)
-   allocate( c_str(1:nstr), TokenIndex(1:nstr), TokenLen(1:nstr) )
+   if (.not.Initialized) then
+      nstr = len(str)
+      allocate( c_str(1:nstr), TokenIndex(1:nstr), TokenLen(1:nstr) )
+   endif
 !
    if (present(separator)) then
       call processString(str,sp=separator)
@@ -115,11 +121,17 @@ contains
    integer (kind=IntKind), intent(in) :: l
 !
    if (Initialized) then
-      call ErrorHandler('initString','String module is already initialized')
+      if (nstr < l) then
+         deallocate(c_str, TokenIndex, TokenLen)
+         Initialized = .false.
+      endif
+!     call ErrorHandler('initString','String module is already initialized')
    endif
 !
-   nstr = l
-   allocate( c_str(1:nstr), TokenIndex(1:nstr), TokenLen(1:nstr) )
+   if (.not.Initialized) then
+      nstr = l
+      allocate( c_str(1:nstr), TokenIndex(1:nstr), TokenLen(1:nstr) )
+   endif
 !
    Initialized = .true.
 !
@@ -249,7 +261,9 @@ contains
    implicit none
 !
    if (.not.Initialized) then
-      call ErrorHandler('endString','String module not initialized')
+!     call ErrorHandler('endString','String module not initialized')
+      nstr = 0
+      return
    endif
 !
    deallocate( c_str, TokenIndex, TokenLen )

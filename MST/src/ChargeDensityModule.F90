@@ -173,6 +173,7 @@ private
                                                     ! interpolation
    real(kind=RealKind) :: rho0_neutral, rhoint
    real(kind=RealKind), parameter :: rho_tol = TEN2m6
+   real(kind=RealKind) :: negchg_tol = TEN2m5
 !
    complex (kind=CmplxKind), pointer :: MultipoleMom(:,:)
 !
@@ -212,6 +213,7 @@ contains
    use ScfDataModule, only : isChargeSymm, isFittedChargeDen
    use ValenceDensityModule, only : getValenceElectronDensity, getValenceMomentDensity
    use PolyhedraModule, only : getInscrSphRadius
+   use InputModule, only : getKeyValue
 !
    implicit none
 !
@@ -271,6 +273,10 @@ contains
 !
    if ( lmax_max /= 0 .or. isFullPotential() ) then
       isSphericalCharge = .false.
+   endif
+!
+   if (getKeyValue(1,'Negative charge density tolerance',negchg_tol) /= 0) then
+      negchg_tol = TEN2m5
    endif
 !
    allocate( ws_ylm((lmax_max+1)*(lmax_max+1)) )
@@ -2402,7 +2408,7 @@ contains
 !        =============================================================
          do ir = 1, nr
             if (rho0(ir) < ZERO) then
-               if (rho0(ir) > -TEN2m5 .or. getLocalAtomicNumber(id,ia) < 2) then
+               if (rho0(ir) > -negchg_tol .or. getLocalAtomicNumber(id,ia) < 2) then
                   rho0(ir) = TEN2m5
                else
                   write(6,'(a,i5,a,i5,a,f12.8)')'For id = ',id,', ir = ',ir, ', r(ir) = ',r_mesh(ir)

@@ -3,13 +3,13 @@
 !  ===================================================================
    use KindParamModule, only : IntKind, RealKind
 !
-   use MathParamModule, only : ZERO, HALF, ONE, TWO, TEN2m6, TEN2m10
+   use MathParamModule, only : ZERO, HALF, ONE, TWO, THREE, FOUR, TEN2m6, TEN2m10
 !
-   use ErrorHandlerModule, only : ErrorHandler
+   use ErrorHandlerModule, only : ErrorHandler, StopHandler
 !
    use SortModule, only : HeapSort
 !
-   use ChemElementModule, only : getZtot
+   use ChemElementModule, only : getZtot, getName
 !
    use StringModule, only : initString, endString, setString, getNumTokens, readToken
 !
@@ -28,25 +28,29 @@
    integer (kind=IntKind), parameter :: MaxBounds = 50
    integer (kind=IntKind), parameter :: MaxBasis = 250
    integer (kind=IntKind), parameter :: MaxClusters = 10
+   integer (kind=IntKind), parameter :: MaxECA = 20 ! max number of empty cell atoms in small cell
+   integer (kind=IntKind), parameter :: VaZ = 200   ! Shift the vacancy Z by VaZ
 !
    character (len=2) :: Cluster(MaxAtomTypes)
    character (len=2) :: Medium(MaxAtomTypes)
    character (len=2) :: MediumBasis(MaxBasis)
    character (len=2) :: ClusterBasis(MaxBasis)
    character (len=60) :: text, file_name, anm
+   character (len=80) :: string80
 !
    character (len=2), pointer :: AtomName_medium(:)
    character (len=2), pointer :: AtomName_cluster(:)
 !
    integer (kind=IntKind) :: alen, ClusterShape, lattice, NumBounds, iconv
    integer (kind=IntKind) :: NumBasis(3), nbasis, na, nb, nc, NumAtoms
-   integer (kind=IntKind) :: i, j, k, ib, n, ncl
+   integer (kind=IntKind) :: i, j, k, ib, n, ncl, status
    integer (kind=IntKind) :: NumMediumAtomTypes, NumClusterAtomTypes
    integer (kind=IntKind) :: NumClusters
    integer (kind=IntKind) :: NumMediumAtoms, NumClusterAtoms(MaxClusters)
    integer (kind=IntKind) :: ordered, embed, rloop
    integer (kind=IntKind) :: ftype
    integer (kind=IntKind) :: nshell
+   integer (kind=IntKind) :: add_eca, num_eca, eca_index(MaxECA), basis2eca(MaxBasis)
 !
    integer (kind=IntKind) :: NumMediumAtomsOfType(MaxAtomTypes)
    integer (kind=IntKind) :: NumClusterAtomsOfType(MaxAtomTypes)
@@ -56,6 +60,8 @@
    integer (kind=IntKind), allocatable :: IndexN(:)
    integer (kind=IntKind), allocatable :: AtomZ_Cluster(:)
    integer (kind=IntKind), allocatable :: IndexN_Cluster(:)
+!
+   integer (kind=IntKind) :: str_type
 ! GDS
    integer (kind=IntKind) :: ipiv(3), lwork, info
 !
@@ -75,9 +81,11 @@
 !
    real (kind=RealKind), parameter :: anstr2au = 1.88973000d0
    real (kind=RealKind), parameter :: au2anstr = 0.52917000d0
-   real (kind=RealKind) :: uconv, fact
+   real (kind=RealKind) :: uconv, fact, a0, b0, c0, x, y, z
 ! GDS   
    real (kind=RealKind) :: work(3)
+!
+   logical :: isDirect
 !
 !  data a0/3.8525, 3.8525, 3.7133/
 !  data cut/19.3/
@@ -89,6 +97,36 @@
       & /ZERO, ZERO, ZERO, HALF, HALF, HALF, ZERO, ZERO, ZERO, ZERO, ZERO, ZERO/
    data BasisVec(1:3,1:4,3) &
       & /ZERO, ZERO, ZERO, ZERO, ZERO, ZERO, ZERO, ZERO, ZERO, ZERO, ZERO, ZERO/
+!
+   interface
+      function isNumber(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isNumber
+   end interface
+!
+   interface
+      function isRealNumber(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isRealNumber
+   end interface
+!
+   interface
+      function isInteger(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isInteger
+   end interface
+!
+   interface
+      function getTokenPosition(k,s,n) result(p)
+         character (len=*), intent(in) :: s
+         integer, intent(in) :: k
+         integer, intent(out), optional :: n
+         integer :: p
+      end function getTokenPosition
+   end interface
 !
    write(6,'(/)')
    write(6,'(10x,a)')'*******************************************************'
@@ -110,10 +148,21 @@
    lattice = -1
    do while (lattice < 0 .or. lattice > 4)
       write(6,'(/,2x,a,$)')     &
-  'Choose (1. Face Centered;  2. Body Centered;  3. Orthorhombic;  4. VASP positions:  0. Other): '
+  'Choose (1. Face Centered;  2. Body Centered;  3. Orthorhombic;  4. POSCAR;  0. MuST position file): '
       read(5,*)lattice
    enddo
    write(6,'(i3)')lattice
+!
+   if (lattice == 1) then
+      str_type = -1
+      do while (str_type < 0 .or. str_type > 2)
+         write(6,'(/,2x,a,$)')'Choose crystal structure type (1. NaCl;  2. Diamond or ZnS;  0. Other): '
+         read(5,*)str_type
+      enddo
+      write(6,'(a,i3)')'Structure type of the FCC lattice: ',str_type
+   else
+      str_type = 0
+   endif
 !
    iconv = -1
    write(6,'(//,a)')  &
@@ -129,41 +178,107 @@
        uconv = anstr2au
    endif
 !
+   num_eca = 0
+   eca_index = 0
+   basis2eca = 0
+!
    if (lattice == 0) then
       write(6,'(/,2x,a,$)') 'Name of the Underlying Lattice File: '
       read(5,'(a)')file_name
       write(6,'(a)')trim(adjustl(file_name))
       file_name = adjustl(file_name)
+!     ================================================================
       open(unit=11,file=file_name,form='formatted',status='old')
-      read(11,*)small_box(1:3,1)
-      read(11,*)small_box(1:3,2)
-      read(11,*)small_box(1:3,3)
-      small_box(1:3,1:3) = small_box(1:3,1:3)*uconv
-      read(11,*)nbasis
-      if (nbasis < 1 .or. nbasis > MaxBasis) then
-         call ErrorHandler('main','Number of basis is out of range',nbasis)
-      endif
-      do i=1, nbasis
-         read(11,'(a)')text
-         call initString(text)
-         text = adjustl(text)
-         na = getNumTokens()
-         if (na == 4) then
-            read(text(1:3),'(a)')MediumBasis(i)
-            read(text(4:),*)bv(1:3,i)
-         else if (na == 3) then
-            read(text,*)bv(1:3,i)
-         else
-            call ErrorHandler('main','Invalid input data',trim(text))
+!     ================================================================
+!     read line-by-line of the position file and process the data
+!     ----------------------------------------------------------------
+      call initString(80)
+!     ----------------------------------------------------------------
+      isDirect = .false.  ! Using Cartisian coordinates is the default
+      a0 = ONE
+      bv = ZERO
+      ib = 0
+      nbasis = 0
+      LOOP_do: do  
+         read(11,'(a)',iostat=status) string80
+         if (status < 0) then
+            exit LOOP_do
          endif
-         bv(1:3,i) = bv(1:3,i)*uconv
-         call endString()
-      enddo
+         string80 = trim(adjustl(string80))
+         if (string80(1:1) == '#' .or. string80(1:1) == '!' .or. len_trim(string80) == 0) then
+            cycle LOOP_do
+         endif
+!        -------------------------------------------------------------
+         call setString(string80)
+!        -------------------------------------------------------------
+         n = getNumTokens()
+         if (n == 1) then
+            if (isNumber(string80)) then
+               read(string80,*,iostat=status)a0
+               if (status > 0) then
+                  call ErrorHandler('main','Invalid line',trim(string80))
+               endif
+            else
+               if (string80(1:1) == 'D' .or. string80(1:1) == 'd') then
+                  isDirect = .true.
+               else if (string80(1:1) == 'C' .or. string80(1:1) == 'c') then
+                  isDirect = .false.
+               else
+                  call ErrorHandler('main','Invalid line',trim(string80))
+               endif
+            endif
+         else if (n == 3) then
+            ib = ib + 1
+            if (ib > 3) then
+               call ErrorHandler('main','The number of Bravais lattice vectors > 3')
+            endif
+            read(string80,*,iostat=status)small_box(1:3,ib)
+            if (status > 0) then
+               call ErrorHandler('main','Invalid line',trim(string80))
+            endif
+         else if (n > 3) then
+            nbasis = nbasis + 1
+            if (nbasis > MaxBasis) then
+               call ErrorHandler('main','nbasis > MaxBasis',nbasis,MaxBasis)
+            endif
+            k = getTokenPosition(2,string80)
+            read(string80(1:k-1),'(a)')anm
+            if (isNumber(anm)) then
+               read(anm,*)n
+               MediumBasis(nbasis) = getName(n)
+            else if (len_trim(anm) > 2) then
+               call ErrorHandler('main','Invalid element name',trim(anm))
+            else
+               MediumBasis(nbasis) = trim(anm)
+            endif
+            read(string80(k:),*)bv(1:3,nbasis)
+         else
+            call ErrorHandler('main','Invalid line',trim(string80))
+         endif
+      enddo LOOP_do
+!     ================================================================
       close(11)
+!     ================================================================
+      if (ib /= 3) then
+         call ErrorHandler('main','The number of Bravais lattice vectors /= 3')
+      endif
+      if (isDirect) then
+         do i = 1, nbasis
+            x = bv(1,i)
+            y = bv(2,i)
+            z = bv(3,i)
+            bv(1,i) = x*small_box(1,1)+y*small_box(1,2)+z*small_box(1,3)
+            bv(2,i) = x*small_box(2,1)+y*small_box(2,2)+z*small_box(2,3)
+            bv(3,i) = x*small_box(3,1)+y*small_box(3,2)+z*small_box(3,3)
+         enddo
+      endif
+!!    small_box = small_box*a0
+!!    bv = bv*a0
    else if (lattice == 4 ) then
-      write(6,'(/,2x,a,$)') 'Name of the Underlying Lattice File (e.g., POSCAR): '
-      read(5,'(a)')file_name
-      file_name = adjustl(file_name)
+!     write(6,'(/,2x,a,$)') 'Name of the Underlying Lattice File (e.g., POSCAR): '
+!     read(5,'(a)')file_name
+!     file_name = adjustl(file_name)
+      file_name = 'POSCAR'
       write(6,'(a)')trim(file_name)
       open(unit=11,file=file_name,form='formatted',status='old')
       read(11,'(a)')text
@@ -171,7 +286,8 @@
       read(11,*)small_box(1:3,1)
       read(11,*)small_box(1:3,2)
       read(11,*)small_box(1:3,3)
-      uconv = uconv*fact
+!!    uconv = uconv*fact
+      a0 = fact*uconv
       small_box(1:3,1:3) = small_box(1:3,1:3)*uconv
       read(11,'(a)')text
       call initString(text)
@@ -213,6 +329,12 @@
          call ErrorHandler('main','Number of basis is out of range',nbasis)
       endif
       read(11,'(a)')text
+      text = adjustl(trim(text))
+      if (text(1:1) == 'c' .or. text(1:1) == 'C' .or. text(1:1) == 'k' .or.  text(1:1) == 'K') then
+         isDirect = .false.
+      else
+         isDirect = .true.
+      endif
       do i = 1,nbasis
          read(11,'(a)')text
          call initString(text)
@@ -224,29 +346,119 @@
             call ErrorHandler('main','Invalid input data',trim(text))
          endif
          call endString()  
-         do j = 1,3
-            bv(j,i) = small_box(j,1)*rpos(1)+small_box(j,2)*rpos(2)+small_box(j,3)*rpos(3)
-         enddo
+         if (isDirect) then
+            do j = 1,3
+               bv(j,i) = small_box(j,1)*rpos(1)+small_box(j,2)*rpos(2)+small_box(j,3)*rpos(3)
+            enddo
+         else
+            do j = 1,3
+               bv(j,i) = rpos(j)*uconv
+            enddo
+         endif
       enddo
       close(11)
    else
       small_box(1:3,1:3) = ZERO
-      if (iconv == 0) then
-         write(6,'(/,2x,a,$)')     &
-         'Lattice Constants a, b, c (in a.u. seperated by space or comma): '
+      if (lattice == 3) then
+         if (iconv == 0) then
+            write(6,'(/,2x,a,$)')     &
+            'Lattice Constants a0, b0, c0 (in a.u. seperated by space or comma): '
+         else
+            write(6,'(/,2x,a,$)')     &
+            'Lattice Constants a0, b0, c0 (in Angstrom seperated by space or comma): '
+         endif
+         read(5,*)a0, b0, c0
+         small_box(1,1) = ONE
+         small_box(2,2) = b0/a0
+         small_box(3,3) = c0/a0
       else
-         write(6,'(/,2x,a,$)')     &
-         'Lattice Constants a, b, c (in Angstrom seperated by space or comma): '
+         if (iconv == 0) then
+            write(6,'(/,2x,a,$)')'Lattice Constants a0 (in a.u.): '
+         else
+            write(6,'(/,2x,a,$)')'Lattice Constants a0 (in Angstrom): '
+         endif
+         read(5,*)a0
+         small_box(1,1) = ONE
+         small_box(2,2) = ONE
+         small_box(3,3) = ONE
       endif
-      read(5,*)small_box(1,1),small_box(2,2),small_box(3,3)
+      a0 = a0*uconv
       small_box(1,1) = small_box(1,1)*uconv
       small_box(2,2) = small_box(2,2)*uconv
       small_box(3,3) = small_box(3,3)*uconv
-      nbasis = NumBasis(lattice)
-      do i=1, nbasis
-         bv(1,i) = BasisVec(1,i,lattice)*small_box(1,1)
-         bv(2,i) = BasisVec(2,i,lattice)*small_box(2,2)
-         bv(3,i) = BasisVec(3,i,lattice)*small_box(3,3)
+      if (str_type == 1) then ! NaCl
+         nbasis = 0
+         do i = 1, 4
+            nbasis = nbasis + 1
+            bv(1,nbasis) = BasisVec(1,i,1)
+            bv(2,nbasis) = BasisVec(2,i,1)
+            bv(3,nbasis) = BasisVec(3,i,1)
+            nbasis = nbasis + 1
+            bv(1,nbasis) = BasisVec(1,i,1) + HALF
+            bv(2,nbasis) = BasisVec(2,i,1)
+            bv(3,nbasis) = BasisVec(3,i,1)
+         enddo
+      else if (str_type == 2) then ! diamond or ZnS structure
+         add_eca = -1
+         do while (add_eca /= 0 .and. add_eca /= 1)
+            write(6,'(/,2x,a,$)') 'Add empty cell atoms (0. No;  1. Yes): '
+            read(5,*)add_eca
+         enddo
+         nbasis = 0
+         do i = 1, 4
+            nbasis = nbasis + 1
+            bv(1,nbasis) = BasisVec(1,i,1)
+            bv(2,nbasis) = BasisVec(2,i,1)
+            bv(3,nbasis) = BasisVec(3,i,1)
+            nbasis = nbasis + 1
+            bv(1,nbasis) = BasisVec(1,i,1) + ONE/FOUR
+            bv(2,nbasis) = BasisVec(2,i,1) + ONE/FOUR
+            bv(3,nbasis) = BasisVec(3,i,1) + ONE/FOUR
+            if (add_eca == 1) then
+               nbasis = nbasis + 1
+               bv(1,nbasis) = BasisVec(1,i,1) + HALF
+               bv(2,nbasis) = BasisVec(2,i,1) + HALF
+               bv(3,nbasis) = BasisVec(3,i,1) + HALF
+               do j = 1, 3
+                  if (bv(j,nbasis) > ONE) then
+                     bv(j,nbasis) = bv(j,nbasis) - ONE
+                  endif
+               enddo
+               num_eca = num_eca + 1
+               if (num_eca > MaxECA) then
+                  call ErrorHandler('main','num_eca > MaxECA',num_eca,MaxECA)
+               endif
+               eca_index(num_eca) = nbasis
+               basis2eca(nbasis) = num_eca
+               nbasis = nbasis + 1
+               bv(1,nbasis) = BasisVec(1,i,1) + THREE/FOUR
+               bv(2,nbasis) = BasisVec(2,i,1) + THREE/FOUR
+               bv(3,nbasis) = BasisVec(3,i,1) + THREE/FOUR
+               do j = 1, 3
+                  if (bv(j,nbasis) > ONE) then
+                     bv(j,nbasis) = bv(j,nbasis) - ONE
+                  endif
+               enddo
+               num_eca = num_eca + 1
+               if (num_eca > MaxECA) then
+                  call ErrorHandler('main','num_eca > MaxECA',num_eca,MaxECA)
+               endif
+               eca_index(num_eca) = nbasis
+               basis2eca(nbasis) = num_eca
+            endif
+         enddo
+      else
+         nbasis = NumBasis(lattice)
+         do i=1, nbasis
+            bv(1,i) = BasisVec(1,i,lattice)
+            bv(2,i) = BasisVec(2,i,lattice)
+            bv(3,i) = BasisVec(3,i,lattice)
+         enddo
+      endif
+      do i = 1, nbasis
+         bv(1,i) = bv(1,i)*small_box(1,1)
+         bv(2,i) = bv(2,i)*small_box(2,2)
+         bv(3,i) = bv(3,i)*small_box(3,3)
       enddo
    endif
 !
@@ -256,12 +468,12 @@
    write(6,'(3i5)')na,nb,nc
 !
    write(6,'(/,2x,a,$)')       &
-           'Type of output format( 0. generic(x,y.z); 1. i_bigcell; 2. VASP (Direct) ): '
+           'Type of output format( 0. MuST; 1. Legacy LSMS; 2. VASP (Cartesian) ): '
    read(5,*) ftype
    write(6,'(i3)') ftype
 !
 !  --------------------------------------------------------------------------
-   call initSample(nbasis,na,nb,nc,small_box,bv)
+   call initSample(nbasis,na,nb,nc,small_box,bv,basis2eca)
    box => getUnitCell()
    NumAtoms = getNumAtoms()
    x_medium => getAtomPosition(1)
@@ -285,37 +497,64 @@
 !            print *, box_inv(2,1), box_inv(2,2), box_inv(2,3)
 !            print *, box_inv(3,1), box_inv(3,2), box_inv(3,3)
 !
-!  ==========================================================================
-!  read input parameters for the solid solution occupying the lattice
-!  ==========================================================================
-   ordered = -1; rloop = 0
-   do while (ordered < 0 .or. ordered > 2)
-      write(6,'(//,a)')        &
-              'Please Enter the Solid Solution Information as Follows ---->'
+   if (lattice == 0) then
+      RandomMedium = .false.
+   else
+!     =======================================================================
+!     read input parameters for the solid solution occupying the lattice
+!     =======================================================================
+      ordered = -1; rloop = 0
+      do while (ordered < 0 .or. ordered > 2)
+         write(6,'(//,a)')        &
+                 'Please Enter the Solid Solution Information as Follows ---->'
 !
-      write(6,'(2x,a)') 'Is the solid solution ordered or random?'
-      write(6,'(4x,a,$)') 'Enter 0 for ORDERED; 1 for RANDOM; or 2 for RANDOM with SHORT-RANGE ORDER: '
-      read(5,*)ordered
-      write(6,'(i3)')ordered
-      if (ordered == 0) then
-         RandomMedium = .false.
-      else if (ordered == 1 .or. ordered == 2) then
-         RandomMedium = .true.
-      else if (rloop <= 5) then
-         write(6,'(a,i3)')'Undefined input: ',ordered
-         rloop = rloop + 1
-      else
-         call ErrorHandler('main','Undefined input',ordered)
-      endif
-   enddo
-!
-   if (.not.RandomMedium .and. MediumBasis(1) == '   ') then
-      do i = 1, nbasis
-         write(6,'(/,2x,a,3f10.5,a,$)')'Enter Atom Name Located at',   &
-                                     bv(1:3,i)*uconv,' : '
-         read(5,'(a)')MediumBasis(i)
-         write(6,'(a)')trim(adjustl(MediumBasis(i)))
+         write(6,'(2x,a)') 'Is the solid solution ordered or random?'
+         write(6,'(4x,a,$)') 'Enter 0 for ORDERED; 1 for RANDOM; or 2 for RANDOM with SHORT-RANGE ORDER: '
+         read(5,*)ordered
+         write(6,'(i3)')ordered
+         if (ordered == 0) then
+            RandomMedium = .false.
+         else if (ordered == 1 .or. ordered == 2) then
+            RandomMedium = .true.
+         else if (rloop <= 5) then
+            write(6,'(a,i3)')'Undefined input: ',ordered
+            rloop = rloop + 1
+         else
+            call ErrorHandler('main','Undefined input',ordered)
+         endif
       enddo
+   endif
+!
+   if (.not.RandomMedium) then
+      if (MediumBasis(1) == '   ') then
+         if (str_type == 0) then
+            do i = 1, nbasis
+               write(6,'(/,2x,a,3f10.5,a,$)')'Enter Atom Name Located at',   &
+                                             bv(1:3,i)*uconv,' : '
+               read(5,'(a)')MediumBasis(i)
+               write(6,'(a)')trim(adjustl(MediumBasis(i)))
+            enddo
+         else ! This works for NaCl and ZnS or Diadmond structures
+            do i = 1, 2
+               write(6,'(/,2x,a,3f10.5,a,$)')'Enter Atom Name Located at',   &
+                                             bv(1:3,i)*uconv,' : '
+               read(5,'(a)')MediumBasis(i)
+               write(6,'(a)')trim(adjustl(MediumBasis(i)))
+            enddo
+            do i = 3, nbasis
+               if (basis2eca(i) == 0) then
+!                 write(6,'(/,2x,a,3f10.5,a,$)')'Enter Atom Name Located at',   &
+!                                             bv(1:3,i)*uconv,' : '
+!                 read(5,'(a)')MediumBasis(i)
+!                 write(6,'(a)')trim(adjustl(MediumBasis(i)))
+                  j = mod(i-1,2) + 1
+                  MediumBasis(i) = MediumBasis(j)
+               else
+                  MediumBasis(i) = 'Va'
+               endif
+            enddo
+         endif
+      endif
       k = 1
       NumMediumAtomTypes = 1
       Medium(1) = MediumBasis(1)
@@ -336,6 +575,22 @@
       call placeAtoms(nbasis,MediumBasis)
 !     -----------------------------------------------------------------------
    else if (RandomMedium) then
+      if (str_type == 2 .and. add_eca == 1) then
+         write(6,'(/,a)') '=================================================================='
+         write(6,'(2x,a)')'A random alloy with empty cells is currently Under Construction!  '
+         write(6,'(2x,a)')'                                                                  '
+         write(6,'(2x,a)')'A temporary solution is to take the following steps to produce    '
+         write(6,'(2x,a)')'the position data file:                                           '
+         write(6,'(2x,a)')'  1. Run the random sample generation without empty cells, and    '
+         write(6,'(2x,a)')'     rename the position data file (position.dat)                 '
+         write(6,'(2x,a)')'  2. Run an ordered sample generation of the same size but        '
+         write(6,'(2x,a)')'     with empty cells.                                            '
+         write(6,'(2x,a)')'  3. Copy the Va position lines from this newly generated         '
+         write(6,'(2x,a)')'     position.dat file and place them in the renamed position     '
+         write(6,'(2x,a)')'     data file produced by the random sample generation.          '
+         write(6,'(a)')   '=================================================================='
+         call StopHandler('main','The requested calculation is Not Implemented!')
+      endif
       write(6,'(/,2x,a,$)')     &
        'Constituents (atomic name separated by space or comma, e.g., Fe Ni): '
       read(5,'(a)')text
@@ -384,7 +639,7 @@
          read(5,'(a)')text
          call initString(text)
          ib = getNumTokens()
-!     --------------------------------------------------------------------
+!        -----------------------------------------------------------------
          if (ib /= nshell) then
             call ErrorHandler('main','Number of weight of SRO not correct, should be',nshell)
          endif
@@ -454,18 +709,18 @@
    embed = -1; rloop = 0
    do while (embed < 0 .or. embed > 1) 
       write(6,'(//,a)')'Do you need embed cluster(s) into the solid solution?'
-      write(6,'(2x,a,$)')'Enter 0 for YES; or 1 for NO: '
+      write(6,'(2x,a,$)')'Enter 0 for NO; or 1 for YES: '
       read(5,*)embed
       write(6,'(i3)')embed
       if (embed == 0) then
+         NumClusters = 0
+      else if (embed == 1) then
          write(6,'(/,2x,a,$)')'Number of Clusters: '
          read(5,*)NumClusters
          allocate( ClusterFlag(NumAtoms), b_cluster(NumAtoms) )
          allocate( x_cluster(NumAtoms), y_cluster(NumAtoms),            &
                    z_cluster(NumAtoms), AtomName_cluster(NumAtoms),     &
                    AtomZ_Cluster(NumAtoms), IndexN_Cluster(NumAtoms) )
-      else if (embed == 1) then
-         NumClusters = 0
       else if (rloop <= 5) then
          write(6,'(a,i3)')'Invalid input value: ',embed
          rloop = rloop + 1
@@ -485,17 +740,21 @@
    fact = ONE
    if (ftype==2) then
       write(14,'(a)') '#POSCAR file'
-      write(14,*) 1.0d0
+      write(14,*) a0*au2anstr
       fact = au2anstr
    else
-      write(14,'(a)') '# Units:: atomic units( uncomment next line for Angsrtroms )'
-      write(14,'(a,f12.8)')"# ", au2anstr
+      write(14,'(a)') '# Units:: atomic units'
+      write(14,'(f12.8)')a0
+      write(14,'(a)') '# If Angsrtroms is needed, comment out the line above and uncomment the following line'
+      write(14,'(a,f12.8)')'# ', au2anstr*a0
+      write(14,'(a)')      '# =============================================================='
    endif
    write(14,'(2x,3f19.11)')fact*box(1:3,1)
    write(14,'(2x,3f19.11)')fact*box(1:3,2)
    write(14,'(2x,3f19.11)')fact*box(1:3,3)
    if (ftype/=2) then
-      write(14,'(a,i8)')'# Number of clusters: ',NumClusters
+      write(14,'(a)')      '# =============================================================='
+      write(14,'(a,i8)')   '# Number of clusters: ',NumClusters
    endif
 !
    NumMediumAtoms = NumAtoms
@@ -557,7 +816,7 @@
       NumMediumAtomsOfType(ib) = 0
       do i = 1,NumAtoms
          if ( Medium(ib) == AtomName_medium(i) ) then
-            if ( embed==0 ) then
+            if ( embed==1 ) then
                if ( ClusterFlag(i) == 0 ) then
                    NumMediumAtomsOfType(ib) = NumMediumAtomsOfType(ib)+1
                endif
@@ -585,17 +844,24 @@
    allocate( AtomZ(NumAtoms), IndexN(NumAtoms) )
    do i = 1,NumAtoms
       AtomZ(i) = getZtot(AtomName_medium(i))
+      if (AtomZ(i) == 0) then
+         AtomZ(i) = VaZ
+      endif
    enddo
 !  -------------------------------------------------------------------
    call HeapSort(NumAtoms, AtomZ, IndexN)
 !  -------------------------------------------------------------------
 !
-   if (embed == 0) then
+   if (embed == 1) then
       do i = 1, NumMediumAtoms
          k = IndexN(i)
          if (ClusterFlag(i) == 0) then
             if ( ftype==1 ) then
-               n = AtomZ(i)
+               if (AtomZ(i) == VaZ) then
+                  n = 0
+               else
+                  n = AtomZ(i)
+               endif
                write(14,'(i3,1x,3f19.15,1x,f7.4,2x,i5,3x,a)') n,      &
                    x_medium(k),y_medium(k),z_medium(k), 1.0d0, 0, "U"
             else if ( ftype==2) then
@@ -615,10 +881,17 @@
       deallocate( x_cluster, y_cluster, z_cluster, AtomName_cluster )
       deallocate( AtomZ_Cluster, IndexN_Cluster )
    else
+      if ( ftype/=2 ) then
+         write(14,'(a)')'# =============================================================='
+      endif
       do i = 1, NumMediumAtoms
          k = IndexN(i)
          if ( ftype==1 ) then
-            n = AtomZ(i)
+            if (AtomZ(i) == VaZ) then
+               n = 0
+            else
+               n = AtomZ(i)
+            endif
             write(14,'(i3,1x,3f19.15,1x,f7.4,2x,i5,3x,a)') n,      &
                 x_medium(k),y_medium(k),z_medium(k), 1.0d0, 0, "U"
          else if ( ftype==2) then

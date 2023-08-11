@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+if [ -z "$srcdir" ]; then
+  srcdir="./"
+fi
+
+if [ -z "$builddir" ]; then
+  builddir="./"
+fi
+
+funcs=$*
+if [ "x$funcs" = "x" ]; then
+  funcs=$(awk '{print tolower($2)}' ${builddir}../src/xc_funcs.h | sed 's/^xc_//g')
+fi
+
+if [ ! -f $builddir/test-suite.log ]; then
+  echo "Did not find $builddir/test-suite.log"
+  exit
+fi
+
+for func in $funcs; do
+  dir=${func%%_*}
+  tmp=${func//${dir}_/}
+  if [ "x$dir" = "xhyb" ]; then
+    dir=${dir}_${tmp%%_*}
+    tmp=${func//${dir}_/}
+  fi
+  dir=${dir}_${tmp%%_*}
+
+  while read -r lixo lixo2 system nspin type rest; do
+    if [ "x$nspin" = "x1" ]; then
+      spin=unpol
+    else
+      spin=pol
+    fi
+
+    if [ "x$type" = "xexc" ]; then
+      order=0
+    elif [ "x$type" = "xvxc" ]; then
+      order=1
+    else
+      order=2
+    fi
+
+    refname=$func.$system.$spin.$order
+
+    echo "processing $refname"
+
+    $builddir/xc-regression $func $nspin $order $srcdir/input/$system $srcdir/regression/$dir/$refname > /dev/null
+    rm -f $srcdir/regression/$dir/$refname.bz2
+    bzip2 $srcdir/regression/$dir/$refname
+        
+  done < <(grep " \* $func\s" $builddir/test-suite.log | grep -v "OK")
+done

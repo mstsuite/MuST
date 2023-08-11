@@ -99,7 +99,8 @@ BroydenLib.o \
 AndersonLib.o \
 newtc.o \
 decompose3Index.o \
-breakLine.o
+breakLine.o \
+arrayTools.o
 
 ifdef ESSL_WORKAROUND
   LOBS += essl_workaround.o
@@ -145,6 +146,9 @@ endif
 $(MSTLIB): $(MODULE) $(LOBS)
 	$(ARCHV) $(MSTLIB) $(MODULE) $(LOBS)
 	ranlib $(MSTLIB)
+
+IntegrationModule.o: IntegrationModule.F90
+	$(FC) $(PREPROC_FFLAGS) $(FFLAGS_ALT) $<
 
 clear: $(MODULE) $(LOBS)
 	cd $(ODIR); rm -f $(MODULE) $(LOBS)

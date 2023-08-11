@@ -3,7 +3,7 @@
 # Acceleration = 0: otherwise
 #=====================================================================
 Acceleration = 0
-NotUse_P3DFFT = 1
+# NotUse_P3DFFT = 0
 
 #=====================================================================
 # Library paths and elements, e.g.,
@@ -22,7 +22,8 @@ LIBXC_PATH  =
 FFTW_PATH   = 
 P3DFFT_PATH = 
 LUA_PATH    =
-LIBS       += -Mmkl -L/opt/packages/ScaLAPACK/scalapack-2.1.0 -lscalapack
+# LIBS       += -Mmkl -L/opt/packages/ScaLAPACK/scalapack-2.1.0 -lscalapack
+LIBS       += -L$(NVHPC_ROOT)/compilers/lib -lblas_lp64 -llapack_lp64
 ADD_LIBS   += -lm -lstdc++ -pgf90libs
 
 #=====================================================================
@@ -30,8 +31,8 @@ ADD_LIBS   += -lm -lstdc++ -pgf90libs
 #=====================================================================
 CC          = mpicc
 CXX         = mpicxx
-F77         = mpif90
-FC          = mpif90
+F77         = mpifort
+FC          = mpifort
 MPICC       = mpicc
 ACCEL_CXX   = nvcc -arch=sm_35
 ARCHV       = ar -r
@@ -50,7 +51,9 @@ CPPFLAGS    =
 CFLAGS      = -O3
 CXXFLAGS    = -O3 -std=c++14
 OPT_OPENMP  = -fopenmp -mp=gpu -Minfo=mp,accel
-FFLAGS      = -O3 -Mbounds -traceback -Mchkptr -Mchkstk
+FFLAGS      = -O3
+FFLAGS_ALT  = -O2
+# -Mbounds -traceback -Mchkptr -Mchkstk
 # FFLAGS      = -O3 $(OPT_OPENMP)
 F77FLAGS    = $(FFLAGS)
 
@@ -65,4 +68,4 @@ LD          = $(FC) $(LD_FLAGS)
 HDF5_CONFIG_FLAGS   = --enable-fortran --enable-static-exec CC=$(CC) CXX=$(CXX) FC=$(FC)
 LIBXC_CONFIG_FLAGS  = CC=$(CC) CFLAGS="$(CFLAGS)" FC=$(FC) FFLAGS="$(FFLAGS)" LIBS=""
 P3DFFT_CONFIG_FLAGS = --enable-pgi --enable-openmpi --enable-estimate FC=$(FC) CC=$(CC) LIBS="$(LIBS)" CCLD=$(FC) LIBS=""
-FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS)" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)"
+FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS)" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)" LIBS="$(ADD_LIBS)"

@@ -92,7 +92,7 @@ contains
    implicit none
 !
    character (len=1)  :: output_to_screen
-   character (len=6)  :: cnode
+   character (len=8)  :: cnode
    character (len=40)  :: systemid
 !   character (len=70)  :: cpath
    character (len=70)  :: str_pe, str_atom, str_lvl
@@ -288,7 +288,7 @@ contains
 !     ----------------------------------------------------------------
    endif
 !
-   write(cnode,'(i6)')MyPE+offset
+   write(cnode,'(i8)')MyPE+offset
    if (MyPE >= offset) then
 !     ----------------------------------------------------------------
       call WarningHandler('initOutput','Processor logical index is too long')
@@ -317,35 +317,41 @@ contains
 !     ================================================================
 !     construct filename for electronic density output
 !     ----------------------------------------------------------------
-      densityPrintFile='Charge_'//trim(cnode)
+      densityPrintFile='Density_'//trim(cnode)
       if (densityPrintFormat == 0) then
          densityPrintFile=trim(densityPrintFile)//'.dat'
       else if ( densityPrintFormat == 1 ) then
          densityPrintFile=trim(densityPrintFile)//'.vtk'
+      else if ( densityPrintFormat == 2 ) then
+         densityPrintFile=trim(densityPrintFile)//'.xsf'
       endif
    endif
 !
    if (potentialPrintFlag >= 0) then
 !     ================================================================
-!     construct filename for electronic density output
+!     construct filename for electronic potential output
 !     ----------------------------------------------------------------
       potentialPrintFile='Pot_'//trim(cnode)
       if (potentialPrintFormat == 0) then
          potentialPrintFile=trim(potentialPrintFile)//'.dat'
       else if ( potentialPrintFormat == 1 ) then
          potentialPrintFile=trim(potentialPrintFile)//'.vtk'
+      else if ( potentialPrintFormat == 2 ) then
+         potentialPrintFile=trim(potentialPrintFile)//'.xsf'
       endif
    endif
 !
    if (wavePrintFlag >= 0) then
 !     ================================================================
-!     construct filename for electronic density output
+!     construct filename for electronic wavefunction output
 !     ----------------------------------------------------------------
       wavePrintFile='WaveFunction_'//trim(cnode)
       if (wavePrintFormat == 0) then
          wavePrintFile=trim(wavePrintFile)//'.dat'
       else if ( wavePrintFormat == 1 ) then
          wavePrintFile=trim(wavePrintFile)//'.vtk'
+      else if ( wavePrintFormat == 2 ) then
+         wavePrintFile=trim(wavePrintFile)//'.xsf'
       endif
    endif
 !
@@ -510,12 +516,12 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getDensityPrintFile(lmax, rho_type) result(denFile)
+   function getDensityPrintFile(iprint, rho_type) result(denFile)
 !  ===================================================================
    implicit none
 !
    character(len=*), optional :: rho_type
-   integer (kind=IntKind), intent(in) :: lmax
+   integer (kind=IntKind), intent(in) :: iprint
 !
    character (len=120) :: denFile
    character (len=3) :: Lchar
@@ -526,20 +532,22 @@ contains
       call ErrorHandler('endOutput','OutputModule is not initialized')
 !     ----------------------------------------------------------------
    endif
-   if ( lmax<0 ) then
+   if ( iprint<0 ) then
       if (present(rho_type)) then
-         denFile = trim(cpath)//rho_type(1:5)//trim(densityPrintFile)
+         denFile = trim(cpath)//trim(rho_type)//trim(densityPrintFile)
       else
          denFile = trim(cpath)//trim(densityPrintFile)
       endif
    else
-      offset = 100+lmax
+      offset = 100+iprint
       write(Lchar,'(i3)') offset
       Lchar(1:1) = "L"
       if ( present(rho_type) ) then
-         denFile = trim(cpath)//rho_type(1:5)//Lchar//"_"//trim(densityPrintFile)
+!        denFile = trim(cpath)//trim(rho_type)//Lchar//"_"//trim(densityPrintFile)
+         denFile = trim(cpath)//trim(rho_type)//trim(densityPrintFile)
       else
-         denFile = trim(cpath)//Lchar//"_"//trim(densityPrintFile)
+!        denFile = trim(cpath)//Lchar//"_"//trim(densityPrintFile)
+         denFile = trim(cpath)//trim(densityPrintFile)
       endif
    endif
 !
@@ -587,12 +595,12 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getPotentialPrintFile(lmax,pot_type) result(potFile)
+   function getPotentialPrintFile(iprint,pot_type) result(potFile)
 !  ===================================================================
    implicit none
 !
    character(len=*), optional :: pot_type
-   integer (kind=IntKind), intent(in) :: lmax
+   integer (kind=IntKind), intent(in) :: iprint
 !
    character (len=120) :: potFile
    character (len=3) :: Lchar
@@ -603,14 +611,14 @@ contains
       call ErrorHandler('endOutput','OutputModule is not initialized')
 !     ----------------------------------------------------------------
    endif
-   if ( lmax<0 ) then
+   if ( iprint<0 ) then
       if (present(pot_type)) then
          potFile = trim(cpath)//pot_type(1:5)//trim(potentialPrintFile)
       else
          potFile = trim(cpath)//trim(potentialPrintFile)
       endif
    else
-      offset = 100+lmax
+      offset = 100+iprint
       write(Lchar,'(i3)') offset
       Lchar(1:1) = "L"
       if (present(pot_type)) then
@@ -664,12 +672,12 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getWavePrintFile(lmax,wave_type) result(waveFile)
+   function getWavePrintFile(iprint,wave_type) result(waveFile)
 !  ===================================================================
    implicit none
 !
    character(len=*), optional :: wave_type
-   integer (kind=IntKind), intent(in) :: lmax
+   integer (kind=IntKind), intent(in) :: iprint
 !
    character (len=120) :: waveFile
    character (len=3) :: Lchar
@@ -680,14 +688,14 @@ contains
       call ErrorHandler('endOutput','OutputModule is not initialized')
 !     ----------------------------------------------------------------
    endif
-   if ( lmax<0 ) then
+   if ( iprint<0 ) then
       if (present(wave_type)) then
          waveFile = trim(cpath)//wave_type(1:3)//trim(wavePrintFile)
       else
          waveFile = trim(cpath)//trim(wavePrintFile)
       endif
    else
-      offset = 100+lmax
+      offset = 100+iprint
       write(Lchar,'(i3)') offset
       Lchar(1:1) = "L"
       if (present(wave_type)) then

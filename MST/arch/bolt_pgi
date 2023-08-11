@@ -3,7 +3,7 @@ MATHLIB_PATH = /opt/packages/pgi/19.7/linux86-64-llvm/19.7/lib
 LIBXC_PATH = /usr/local/libxc/libxc-5.0.0/PGI
 FFTW_PATH = /usr/local/fftw/fftw-3.3.8/PGI
 P3DFFT_PATH = /usr/local/p3dfft/p3dfft-2.7.9/PGI
-export MKLROOT = /opt/intel/compilers_and_libraries_2019.3.199/linux/mkl
+export MKLROOT = /opt/intel/oneapi/mkl/2021.3.0
 #=====================================================================
 # Compilers and archiver tool
 #=====================================================================
@@ -32,9 +32,11 @@ LD=$(FC)
 
 #=====================================================================
 # Compiler flags
+#    "-O3" is found problematic
 #=====================================================================
 # FFLAGS=-I. -fast -Mbounds -traceback -Mchkptr -Mchkstk
-FFLAGS=-I. -O3
+FFLAGS=-I. -O2 -Mbounds -traceback -Mchkptr -Mchkstk
+# FFLAGS=-I. -O3
 #FFLAGS=-I. -O3
 F77FLAGS=$(FFLAGS)
 FPPDEFS=-Mpreprocess
@@ -170,7 +172,7 @@ endif
 # FPPFLAGS=-DSync_EiLoop -DSync_MST -DMPI -DNo_DataComm -DNo_SuperLU -DUSE_SCALAPACK -DCheckDOS -DONESIDED
 # FPPFLAGS=-DSync_EiLoop -DSync_MST -DMPI -DNo_DataComm -DNo_SuperLU -DUSE_SCALAPACK -DCheckDOS
 FPPFLAGS=$(SuperLU_FLAG) $(Check_TIMING) $(Use_BLAS) $(Use_DEBUG) $(Use_SYNC) $(FFT_FLAG) $(Use_MiscFlags) $(MSGPASS_FLAG) \
-$(MaxIO_FLAG) $(Use_ScaLapack) $(Use_LibXC)
+$(MaxIO_FLAG) $(Use_ScaLapack) $(Use_LibXC) -DNVHPC
 
 #=====================================================================
 # Software path ...

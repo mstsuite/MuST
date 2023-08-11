@@ -10,6 +10,7 @@ $(MST_ODIR)/MatrixBlockInversionModule.o \
 $(MST_ODIR)/BinvMatrix.o \
 $(MST_ODIR)/WriteFunctionModule.o \
 $(MST_ODIR)/DefaultParamModule.o \
+$(MST_ODIR)/CmdLineOptionModule.o \
 $(MST_ODIR)/LatticeModule.o \
 $(MST_ODIR)/IBZRotationModule.o \
 $(MST_ODIR)/CheckPointModule.o

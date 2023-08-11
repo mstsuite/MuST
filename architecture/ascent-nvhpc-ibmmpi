@@ -79,6 +79,7 @@ OPT_OPENMP  = -fopenmp -mp=gpu -Minfo=mp,accel
 # FFLAGS      = -O3 -Mbounds -traceback -Mchkptr -Mchkstk
 FFLAGS      = -O3 $(OPT_OPENMP) -fallow-argument-mismatch
 F77FLAGS    = -O3 $(OPT_OPENMP)
+FFLAGS_ALT  = -O2
 
 LD_FLAGS    =
 LD          = $(FC) $(LD_FLAGS)

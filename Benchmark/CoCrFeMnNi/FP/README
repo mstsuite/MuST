@@ -1,0 +1,39 @@
+This directory contains two performance benchmark cases for the full-potential
+spin-polarized, ab initio electronic structure calculation of CoCrFeMnNi high
+entropy alloys with a FCC underlying lattice. The calculation is performed
+using the LSMS method.
+
+The input files for running mst2 include
+i_mst: 
+   contains the control parameters for running the SCF calculation
+position.dat: 
+   position data of the atoms in the unit cell
+(Co_v, Cr_v, Fe_v, Mn_v, Ni_v) or CoCrFeMnNi_mt_v: 
+   the starting potential data files for the unit cell sample
+
+In the MuST code, the MPI parallelization is performed at multiple levels, 
+depending on the number of available MPI tasks. The primary paralleization
+is performed by distributing the atoms, followed by distributing the energy
+points on the complex energy contour, over the MPI tasks.
+===========================================================================
+u32/: 
+   Input files for a unit cell with 32 atoms. 
+   The input potential for the Co, Cr, Fe, Mn, and Ni atoms is provided by
+   Co_v, Cr_v, Fe_v, Mn_v, and Ni_v, respectively.
+   This random sample was generated using MuST/bin/genap. The input data for 
+   running genap is inp_genap.
+   The calculation uses 32 energy points, and 256x256x256 uniform grid points. 
+   The number of MPI tasks need to be both multiples of 32 and a factor of 
+   256x256x256, e.g.,
+   32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384
+
+u2048/: 
+   Input files for a unit cell with 2048 atoms. 
+   The input potential for this 2048-atom sample is CoCrFeMnNi_mt_v, which is
+   the output potential from a muffin-tin calculation for the same unit cell sample.
+   This random sample was generated using MuST/bin/genap. The input data for 
+   running genap is inp_genap.
+   The calculation uses 32 energy points, and 512x512x512 uniform grid points. 
+   The number of MPI tasks need to be both multiples of 2048 and a factor of
+   512x512x512, e.g.,
+   2048, 4096, 8192, 16384, 32768, 65536

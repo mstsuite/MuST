@@ -7,7 +7,7 @@ module SMatrixPolesModule
 !
    use KindParamModule, only : IntKind, RealKind, CmplxKind
 !
-   use MathParamModule, only : ZERO, TEN2m6, HALF, ONE, TWO, CONE,    &
+   use MathParamModule, only : ZERO, TEN2m6, HALF, ONE, TWO, FOUR, CONE, &
                                Ten2m8, FOURTH, CZERO, TEN2m7, TEN2m12, TEN2m10
 !
    use ErrorHandlerModule, only : ErrorHandler, WarningHandler
@@ -39,6 +39,7 @@ public :: initSMatrixPoles,          &
                                           ! an energy in the resonance region
           printSMatrixPoleInfo,      &
           printBoundStateDensity,    &
+          examBoundStateDegen,       &
           isSMatrixPolesInitialized
 !
    interface computeBoundStateDensity
@@ -60,6 +61,7 @@ private
 !
    integer (kind=IntKind), parameter :: MaxNumBoundStates = 10
    integer (kind=IntKind), parameter :: MaxNumResonanceStates = 5
+!  integer (kind=IntKind), parameter :: MaxNumResonanceStates = 13
 !
    real (kind=RealKind), pointer :: cgnt(:,:,:)
    real (kind=RealKind), allocatable :: gaunt(:,:,:)
@@ -361,11 +363,14 @@ contains
       call ErrorHandler('getNumBoundStateDegen','Invalid bound state index',ibs)
    endif
 !
-   ib = ibs
    if (present(sorted)) then
       if (sorted) then
          ib = Pole(id)%BoundSI(ibs,is,ia)
+      else
+         ib = ibs
       endif
+   else
+      ib = Pole(id)%BoundSI(ibs,is,ia)
    endif
 !
    n = Pole(id)%BoundState(ib,is,ia)%NumDegens
@@ -392,11 +397,14 @@ contains
       call ErrorHandler('getBoundStateEnergy','Invalid bound state index',ibs)
    endif
 !
-   ib = ibs
    if (present(sorted)) then
       if (sorted) then
          ib = Pole(id)%BoundSI(ibs,is,ia)
+      else
+         ib = ibs
       endif
+   else
+      ib = Pole(id)%BoundSI(ibs,is,ia)
    endif
 !
    e = Pole(id)%BoundState(ib,is,ia)%PoleE
@@ -424,11 +432,14 @@ contains
       call ErrorHandler('getBoundStateChargeInCell','Invalid bound state index',ibs)
    endif
 !
-   ib = ibs
    if (present(sorted)) then
       if (sorted) then
          ib = Pole(id)%BoundSI(ibs,is,ia)
+      else
+         ib = ibs
       endif
+   else
+      ib = Pole(id)%BoundSI(ibs,is,ia)
    endif
 !
    qvp = Pole(id)%BoundState(ib,is,ia)%Qvp
@@ -470,11 +481,14 @@ contains
       call ErrorHandler('getBoundStateDensity','Invalid bound state index',ibs)
    endif
 !
-   ib = ibs
    if (present(sorted)) then
       if (sorted) then
          ib = Pole(id)%BoundSI(ibs,is,ia)
+      else
+         ib = ibs
       endif
+   else
+      ib = Pole(id)%BoundSI(ibs,is,ia)
    endif
 !
    if (present(derivative)) then
@@ -522,11 +536,14 @@ contains
       call ErrorHandler('getNumResonanceStateDegen','Invalid resonance state index',ibs)
    endif
 !
-   ib = ibs
    if (present(sorted)) then
       if (sorted) then
          ib = Pole(id)%ResSI(ibs,is,ia)
+      else
+         ib = ibs
       endif
+   else
+      ib = Pole(id)%ResSI(ibs,is,ia)
    endif
 !
    n = Pole(id)%ResState(ib,is,ia)%NumDegens
@@ -554,11 +571,14 @@ contains
       call ErrorHandler('getResonanceStateEnergy','Invalid resonance state index',ibs)
    endif
 !
-   ib = ibs
    if (present(sorted)) then
       if (sorted) then
          ib = Pole(id)%ResSI(ibs,is,ia)
+      else
+         ib = ibs
       endif
+   else
+      ib = Pole(id)%ResSI(ibs,is,ia)
    endif
 !
    e = Pole(id)%ResState(ib,is,ia)%PoleE
@@ -599,11 +619,14 @@ contains
    enddo LOOP_i
 !
    if (present(res_id)) then
-      res_id = j
       if (present(sorted)) then
          if (sorted) then
             res_id = Pole(site)%ResSI(j,spin,atom)
+         else
+            res_id = j
          endif
+      else
+         res_id = Pole(site)%ResSI(j,spin,atom)
       endif
    endif
 !
@@ -646,11 +669,14 @@ contains
                         'Invalid resonance state index',rstate)
    endif
 !
-   ib = rstate
    if (present(sorted)) then
       if (sorted) then
          ib = Pole(site)%ResSI(rstate,spin,atom)
+      else
+         ib = rstate
       endif
+   else
+      ib = Pole(site)%ResSI(rstate,spin,atom)
    endif
 !
    if (present(derivative)) then
@@ -707,11 +733,14 @@ contains
                         'Invalid resonance state index',rstate)
    endif
 !
-   ib = rstate
    if (present(sorted)) then
       if (sorted) then
          ib = Pole(site)%ResSI(rstate,spin,atom)
+      else
+         ib = rstate
       endif
+   else
+      ib = Pole(site)%ResSI(rstate,spin,atom)
    endif
 !
 !  -------------------------------------------------------------------
@@ -918,7 +947,7 @@ contains
    logical, optional, intent(in) :: CheckPoles
    logical, optional, intent(in) :: PanelOnZero
 !
-   integer (kind=IntKind) :: ie, iw, kmax_kkr, NumWindows, info
+   integer (kind=IntKind) :: ie, iw, kmax_kkr, NumWindows, info, kmax_jost
    integer (kind=IntKind) :: i, j, l, m, kl, lp, mp, klp, nv, nb, nr, je, ip
    integer (kind=IntKind) :: MyNumWindows, nb0, nr0, ib, ir
    integer (kind=IntKind) :: bpdeg(kmax_kkr_max), rpdeg(kmax_kkr_max), degens(kmax_kkr_max)
@@ -926,7 +955,7 @@ contains
 !
    logical :: isZeroInterval = .false.
    logical :: chkpole = .false.
-   logical :: found
+   logical :: found, print_matrix
 !
    real (kind=RealKind) :: WindowWidth
    real (kind=RealKind) :: e0, de, de2, dede2, pe, w0, err, w
@@ -1025,6 +1054,12 @@ contains
       kmax_kkr_save = kmax_kkr
    endif
 !
+   if (print_level >= 0) then
+      print_matrix = .true.
+   else
+      print_matrix = .false.
+   endif
+!
    nr = 0; nb = 0
    bpe = ZERO; rpe = CZERO
    bpe_prev = ZERO; rpe_prev = ZERO
@@ -1054,9 +1089,31 @@ contains
 !        -------------------------------------------------------------
          jost_mat => getJostMatrix(spin=is,site=id,atom=ia)
 !        -------------------------------------------------------------
-         call zcopy(kmax_kkr*kmax_kkr,jost_mat,1,s0,1)
-!        -------------------------------------------------------------
+         kmax_jost = size(jost_mat,dim=1)
+         if (kmax_kkr == kmax_jost) then
+!           ----------------------------------------------------------
+            call zcopy(kmax_kkr*kmax_kkr,jost_mat,1,s0,1)
+!           ----------------------------------------------------------
+         else if (kmax_kkr < kmax_jost) then
+            do kl = 1, kmax_kkr
+               do klp = 1, kmax_kkr
+                  s0(klp,kl) = jost_mat(klp,kl)
+               enddo
+            enddo
+         else
+!           ----------------------------------------------------------
+            call ErrorHandler('findSMatrixPoles','kmax_kkr > kmax_jost',kmax_kkr,kmax_jost)
+!           ----------------------------------------------------------
+         endif
       endif
+!     if (print_matrix) then
+!        write(6,'(a,d15.8)')'e0 = ',e0
+!        write(6,'(a,2i5)')'kmax_kkr, kmax_jost = ',kmax_kkr, kmax_jost
+!!       -------------------------------------------------------------
+!        call writeMatrix('s0',s0,kmax_kkr,kmax_kkr,TEN2m8)
+!!       -------------------------------------------------------------
+!        print_matrix = .false.
+!     endif
 !
       e = cmplx(e0+de,ZERO,kind=CmplxKind)
 !     ----------------------------------------------------------------
@@ -1065,8 +1122,22 @@ contains
 !     ----------------------------------------------------------------
       jost_mat => getJostMatrix(spin=is,site=id,atom=ia)
 !     ----------------------------------------------------------------
-      call zcopy(kmax_kkr*kmax_kkr,jost_mat,1,s2,1)
-!     ----------------------------------------------------------------
+      kmax_jost = size(jost_mat,dim=1)
+      if (kmax_kkr == kmax_jost) then
+!        -------------------------------------------------------------
+         call zcopy(kmax_kkr*kmax_kkr,jost_mat,1,s2,1)
+!        -------------------------------------------------------------
+      else if (kmax_kkr < kmax_jost) then
+         do kl = 1, kmax_kkr
+            do klp = 1, kmax_kkr
+               s2(klp,kl) = jost_mat(klp,kl)
+            enddo
+         enddo
+      else
+!        -------------------------------------------------------------
+         call ErrorHandler('findSMatrixPoles','kmax_kkr > kmax_jost',kmax_kkr,kmax_jost)
+!        -------------------------------------------------------------
+      endif
 !
       e = cmplx(e0-de,ZERO,kind=CmplxKind)
 !     ----------------------------------------------------------------
@@ -1075,11 +1146,25 @@ contains
 !     ----------------------------------------------------------------
       jost_mat => getJostMatrix(spin=is,site=id,atom=ia)
 !     ----------------------------------------------------------------
-      call zcopy(kmax_kkr*kmax_kkr,jost_mat,1,s1,1)
-!     ----------------------------------------------------------------
+      kmax_jost = size(jost_mat,dim=1)
+      if (kmax_kkr == kmax_jost) then
+!        -------------------------------------------------------------
+         call zcopy(kmax_kkr*kmax_kkr,jost_mat,1,sm,1)
+!        -------------------------------------------------------------
+      else if (kmax_kkr < kmax_jost) then
+         do kl = 1, kmax_kkr
+            do klp = 1, kmax_kkr
+               sm(klp,kl) = jost_mat(klp,kl)
+            enddo
+         enddo
+      else
+!        -------------------------------------------------------------
+         call ErrorHandler('findSMatrixPoles','kmax_kkr > kmax_jost',kmax_kkr,kmax_jost)
+!        -------------------------------------------------------------
+      endif
 !
-      s1 = (s2 - jost_mat)/de2
-      s2 = (s2 + jost_mat - TWO*s0)/dede2
+      s1 = (s2 - sm)/de2
+      s2 = (s2 + sm - TWO*s0)/dede2
 !
       if (isZeroInterval) then
 !        -------------------------------------------------------------
@@ -1248,7 +1333,8 @@ contains
             e = e0 + ie*0.001d0
             call solveSingleScattering(is, id, e, CZERO, atom=ia)
             jost_mat => getJostMatrix()
-            call calcDet(jost_mat,kmax_kkr,det,diag)
+            kmax_jost = size(jost_mat,dim=1)
+            call calcDet(jost_mat,kmax_jost,det,diag)
             write(6,'(a,f12.5,2x,2d16.8)')'e,det = ',real(e),det
          enddo
          write(6,'(/)')
@@ -1259,7 +1345,8 @@ contains
             e = e0 + ie*0.001d0
             call solveSingleScattering(is, id, e, CZERO, atom=ia)
             jost_mat => getJostMatrix()
-            call calcDet(jost_mat,kmax_kkr,det,diag)
+            kmax_jost = size(jost_mat,dim=1)
+            call calcDet(jost_mat,kmax_jost,det,diag)
             write(6,'(a,f12.5,2x,2d16.8)')'e,det = ',real(e),det
          enddo
          write(6,'(/)')
@@ -1459,7 +1546,6 @@ contains
 !  *******************************************************************
    use SSSolverModule, only : solveSingleScattering, getSineMatrix
    use SSSolverModule, only : getRegSolution, getRegSolutionDerivative
-!  use SSSolverModule, only : getJostInvMatrix, getOmegaHatMatrix
 !  use SSSolverModule, only : computeDOS, getDOS
 !
    use RadialGridModule, only : getGrid
@@ -1480,13 +1566,14 @@ contains
 !
    integer (kind=IntKind) :: ie, ib, info, ip
    integer (kind=IntKind) :: kmax_kkr, jmax_rho, kmax_rho, NumRs, NumBPs
+   integer (kind=IntKind) :: kmax_phi, kmax_sine
    integer (kind=IntKind) :: kl, klp, klp_bar, kl1, kl2, kl3, kl3_bar, m3, mp, ir, jl3
 !
    real (kind=RealKind), pointer :: r_mesh(:)
 !
    complex (kind=CmplxKind), pointer :: Bdensity(:,:)
    complex (kind=CmplxKind), pointer :: Deriv_Bdensity(:,:)
-   complex (kind=CmplxKind), pointer :: sine_mat(:,:), smat_inv(:,:), BSinv(:,:)
+   complex (kind=CmplxKind), pointer :: sine_mat(:,:), smat_inv(:,:), BSinv(:,:), sm(:,:)
    complex (kind=CmplxKind), pointer :: PhiLr(:,:,:), DerPhiLr(:,:,:)
    complex (kind=CmplxKind), pointer :: BPhiLr(:,:,:), DerBPhiLr(:,:,:), PPr(:,:,:)
 !  complex (kind=CmplxKind), pointer :: jost_inv(:,:)
@@ -1513,6 +1600,7 @@ contains
 !  ===================================================================
    smat_inv => aliasArray2_c(wspace0,kmax_kkr,kmax_kkr)
    BSinv => aliasArray2_c(wspace1,kmax_kkr,kmax_kkr)
+   sm => aliasArray2_c(wspace2,kmax_kkr,kmax_kkr)
 !
    Grid => getGrid(id)
    r_mesh => Grid%r_mesh
@@ -1541,11 +1629,28 @@ contains
       call solveSingleScattering(is, id, e, CZERO, atom=ia)
 !     ----------------------------------------------------------------
       sine_mat => getSineMatrix()
+      kmax_sine = size(sine_mat,dim=1)
 !     ================================================================
 !     calculate sine_mat^(-T*) and store the result in smat_inv
-!     ----------------------------------------------------------------
-      call computeAStarTInv(sine_mat,kmax_kkr,kmax_kkr,smat_inv)
-!     ----------------------------------------------------------------
+!     ================================================================
+      if (kmax_kkr == kmax_sine) then
+!        -------------------------------------------------------------
+         call computeAStarTInv(sine_mat,kmax_kkr,kmax_kkr,smat_inv)
+!        -------------------------------------------------------------
+      else if (kmax_kkr < size(sine_mat,dim=1)) then
+         do kl = 1, kmax_kkr
+            do klp = 1, kmax_kkr
+               sm(klp,kl) = sine_mat(klp,kl)
+            enddo
+         enddo
+!        -------------------------------------------------------------
+         call computeAStarTInv(sm,kmax_kkr,kmax_kkr,smat_inv)
+!        -------------------------------------------------------------
+      else
+!        -------------------------------------------------------------
+         call ErrorHandler('computeBSD_residual','kmax_kkr > kmax_sine',kmax_kkr,kmax_sine)
+!        -------------------------------------------------------------
+      endif
 !
 !     ===================================================================
 !     calculate ResidualMat*sine_mat^{-T*} and store the result in BSinv
@@ -1556,9 +1661,10 @@ contains
 !     ----------------------------------------------------------------
 !
       PhiLr => getRegSolution()
+      kmax_phi = size(PhiLr,dim=2)
 !     ----------------------------------------------------------------
       call zgemm('n','n',NumRs*kmax_kkr,kmax_kkr,kmax_kkr,CONE,          &
-                 PhiLr,NumRs*kmax_kkr,BSinv,kmax_kkr,                    &
+                 PhiLr,NumRs*kmax_phi,BSinv,kmax_kkr,                    &
                  CZERO,BPhiLr,NumRs*kmax_kkr)
 !     ----------------------------------------------------------------
       PPr = CZERO
@@ -1595,7 +1701,7 @@ contains
          DerPhiLr => getRegSolutionDerivative()
 !        -------------------------------------------------------------
          call zgemm('n','n',NumRs*kmax_kkr,kmax_kkr,kmax_kkr,CONE,       &
-                    DerPhiLr,NumRs*kmax_kkr,BSinv,kmax_kkr,              &
+                    DerPhiLr,NumRs*kmax_phi,BSinv,kmax_kkr,              &
                     CZERO,DerBPhiLr,NumRs*kmax_kkr)
 !        -------------------------------------------------------------
          PPr = CZERO
@@ -1674,7 +1780,7 @@ contains
       endif
    enddo
 !
-   nullify(sine_mat, BSinv, smat_inv, Grid, r_mesh)
+   nullify(sine_mat, BSinv, smat_inv, Grid, r_mesh, sm)
    nullify(BPhiLr, PhiLr, DerBPhiLr, DerPhiLr, PPr)
    nullify(Bdensity, Deriv_Bdensity)
 !
@@ -1682,7 +1788,8 @@ contains
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine computeBSD_coutour(id,ia,is,bse_rad,bse_index,chempot,wk_dos)
+   subroutine computeBSD_coutour(id,ia,is,bse_rad,bse_index_in,chempot, &
+                                 wk_dos,sorted)
 !  ===================================================================
 !  Note: This routine uses contour integration method to compute the
 !        density due to the S-matrix poles, i.e. the bound states. 
@@ -1690,9 +1797,7 @@ contains
 !        within the contour radius e_rad. Therefore, the density includes
 !        the degeneracy of the poles.
 !  *******************************************************************
-   use SSSolverModule, only : solveSingleScattering, getSineMatrix
-   use SSSolverModule, only : getRegSolution, getRegSolutionDerivative
-!  use SSSolverModule, only : getJostInvMatrix, getOmegaHatMatrix
+   use SSSolverModule, only : solveSingleScattering
 !  use SSSolverModule, only : computeDOS, getDOS
 !
    use RadialGridModule, only : getGrid
@@ -1715,7 +1820,8 @@ contains
    implicit none
 !
    integer (kind=IntKind), intent(in) :: id, is, ia
-   integer (kind=IntKind), intent(in) :: bse_index
+   integer (kind=IntKind), intent(in) :: bse_index_in
+   integer (kind=IntKind) :: bse_index
 !
    integer (kind=IntKind) :: ie, info(6), rstatus, nsize, jl, ir
    integer (kind=IntKind) :: jmax_rho, kmax_rho, NumRs, NumBPs
@@ -1733,15 +1839,17 @@ contains
    complex (kind=CmplxKind) :: ec
    complex (kind=CmplxKind), allocatable :: wk_tmp(:)
 !
+   logical, optional, intent(in) :: sorted
+!
    type (GridStruct), pointer :: Grid
 !
    NumBPs = Pole(id)%NumBoundPoles(is,ia)
    if (NumBPs < 1) then
       return
-   else if (bse_index < 1) then
-      call ErrorHandler('computeBoundStateDensity','bse_index < 1',bse_index)
-   else if (bse_index > NumBPs) then
-      call ErrorHandler('computeBoundStateDensity','bse_index > NumBPs',bse_index,NumBPs)
+   else if (bse_index_in < 1) then
+      call ErrorHandler('computeBoundStateDensity','bse_index_in < 1',bse_index_in)
+   else if (bse_index_in > NumBPs) then
+      call ErrorHandler('computeBoundStateDensity','bse_index_in > NumBPs',bse_index_in,NumBPs)
    endif
 !
    if (id < 1 .or. id > LocalNumAtoms) then
@@ -1749,7 +1857,18 @@ contains
    endif
 !
    if (ia < 1 .or. ia > Pole(id)%NumSpecies) then
-      call ErrorHandler('computeBoundStateDensity','local atom species index is out of bound',ia)
+      call ErrorHandler('computeBoundStateDensity','local atom species index is out of bound', &
+                        ia, Pole(id)%NumSpecies)
+   endif
+!
+   if (present(sorted)) then
+      if (sorted) then
+         bse_index = Pole(id)%BoundSI(bse_index_in,is,ia)
+      else
+         bse_index = bse_index_in
+      endif
+   else
+      bse_index = Pole(id)%BoundSI(bse_index_in,is,ia)
    endif
 !
    jmax_rho = Pole(id)%jmax_rho
@@ -1767,7 +1886,7 @@ contains
 !  ===================================================================
    Grid => getGrid(id)
    r_mesh => Grid%r_mesh
-
+!
 !  ===================================================================
 !  Setup Gaussian quadrature on a semi-circle contour with radius = bse_rad
 !  ===================================================================
@@ -1884,7 +2003,6 @@ contains
 !  *******************************************************************
    use SSSolverModule, only : solveSingleScattering, getSineMatrix
    use SSSolverModule, only : getRegSolution, getRegSolutionDerivative
-!  use SSSolverModule, only : getJostInvMatrix, getOmegaHatMatrix
 !  use SSSolverModule, only : computeDOS, getDOS
 !
    use RadialGridModule, only : getGrid
@@ -1903,6 +2021,7 @@ contains
 !
    integer (kind=IntKind) :: ie, ib, info, ip
    integer (kind=IntKind) :: kmax_kkr, jmax_rho, kmax_rho, NumRs, NumResPs
+   integer (kind=IntKind) :: kmax_phi, kmax_sine
    integer (kind=IntKind) :: kl, klp, klp_bar, kl1, kl2, kl3, kl3_bar, m3, mp, ir, jl3
 !
    real (kind=RealKind), pointer :: r_mesh(:)
@@ -1910,7 +2029,7 @@ contains
    complex (kind=CmplxKind), pointer :: Bdensity(:,:)
    complex (kind=CmplxKind), pointer :: Deriv_Bdensity(:,:)
    complex (kind=CmplxKind), pointer :: sine_mat(:,:), smat_inv(:,:), BSinv(:,:)
-   complex (kind=CmplxKind), pointer :: PhiLr(:,:,:), DerPhiLr(:,:,:)
+   complex (kind=CmplxKind), pointer :: PhiLr(:,:,:), DerPhiLr(:,:,:), sm(:,:)
    complex (kind=CmplxKind), pointer :: BPhiLr(:,:,:), DerBPhiLr(:,:,:), PPr(:,:,:)
 !  complex (kind=CmplxKind), pointer :: dos_r_jl(:,:)
    complex (kind=CmplxKind) :: e, cfac, cfac0, cfac1, cfac2, kappa
@@ -1935,6 +2054,7 @@ contains
 !  ===================================================================
    smat_inv => aliasArray2_c(wspace0,kmax_kkr,kmax_kkr)
    BSinv => aliasArray2_c(wspace1,kmax_kkr,kmax_kkr)
+   sm => aliasArray2_c(wspace3,kmax_kkr,kmax_kkr)
 !
    Grid => getGrid(id)
    r_mesh => Grid%r_mesh
@@ -1965,11 +2085,28 @@ contains
       call solveSingleScattering(is, id, e, CZERO, atom=ia)
 !     ----------------------------------------------------------------
       sine_mat => getSineMatrix()
+      kmax_sine = size(sine_mat,dim=1)
 !     ================================================================
 !     calculate sine_mat^(-T*) and store the result in smat_inv
-!     ----------------------------------------------------------------
-      call computeAStarTInv(sine_mat,kmax_kkr,kmax_kkr,smat_inv)
-!     ----------------------------------------------------------------
+!     ================================================================
+      if (kmax_kkr == kmax_sine) then
+!        -------------------------------------------------------------
+         call computeAStarTInv(sine_mat,kmax_kkr,kmax_kkr,smat_inv)
+!        -------------------------------------------------------------
+      else if (kmax_kkr < size(sine_mat,dim=1)) then
+         do kl = 1, kmax_kkr
+            do klp = 1, kmax_kkr
+               sm(klp,kl) = sine_mat(klp,kl)
+            enddo
+         enddo
+!        -------------------------------------------------------------
+         call computeAStarTInv(sm,kmax_kkr,kmax_kkr,smat_inv)
+!        -------------------------------------------------------------
+      else
+!        -------------------------------------------------------------
+         call ErrorHandler('computeResonanceStateDensity','kmax_kkr > kmax_sine',kmax_kkr,kmax_sine)
+!        -------------------------------------------------------------
+      endif
 !
 !     ===================================================================
 !     calculate ResidualMat*sine_mat^{-T*} and store the result in BSinv
@@ -1980,9 +2117,10 @@ contains
 !     ----------------------------------------------------------------
 !
       PhiLr => getRegSolution()
+      kmax_phi = size(PhiLr,dim=2)
 !     ----------------------------------------------------------------
       call zgemm('n','n',NumRs*kmax_kkr,kmax_kkr,kmax_kkr,CONE,          &
-                 PhiLr,NumRs*kmax_kkr,BSinv,kmax_kkr,                    &
+                 PhiLr,NumRs*kmax_phi,BSinv,kmax_kkr,                    &
                  CZERO,BPhiLr,NumRs*kmax_kkr)
 !     ----------------------------------------------------------------
       PPr = CZERO
@@ -2018,7 +2156,7 @@ contains
          DerPhiLr => getRegSolutionDerivative()
 !        -------------------------------------------------------------
          call zgemm('n','n',NumRs*kmax_kkr,kmax_kkr,kmax_kkr,CONE,       &
-                    DerPhiLr,NumRs*kmax_kkr,BSinv,kmax_kkr,              &
+                    DerPhiLr,NumRs*kmax_phi,BSinv,kmax_kkr,              &
                     CZERO,DerBPhiLr,NumRs*kmax_kkr)
 !        -------------------------------------------------------------
          PPr = CZERO
@@ -2095,7 +2233,7 @@ contains
       endif
    enddo
 !
-   nullify(sine_mat, BSinv, smat_inv, Grid, r_mesh)
+   nullify(sine_mat, BSinv, smat_inv, Grid, r_mesh, sm)
    nullify(BPhiLr, PhiLr, DerBPhiLr, DerPhiLr, PPr)
    nullify(Bdensity, Deriv_Bdensity)
 !
@@ -2109,7 +2247,6 @@ contains
 !
    use SSSolverModule, only : solveSingleScattering, getSineMatrix
    use SSSolverModule, only : getRegSolution, getRegSolutionDerivative
-!  use SSSolverModule, only : getJostInvMatrix, getOmegaHatMatrix
 !  use SSSolverModule, only : computeDOS, getDOS
 !
    use RadialGridModule, only : getGrid
@@ -2128,6 +2265,7 @@ contains
 !
    integer (kind=IntKind) :: ie, info, ip
    integer (kind=IntKind) :: kmax_kkr, jmax_rho, kmax_rho, NumRs, NumResPs
+   integer (kind=IntKind) :: kmax_phi, kmax_sine
    integer (kind=IntKind) :: kl, klp, klp_bar, kl1, kl2, kl3, kl3_bar, m3, mp, ir, jl3
 !
    real (kind=RealKind), pointer :: r_mesh(:)
@@ -2136,7 +2274,7 @@ contains
 !
    complex (kind=CmplxKind), pointer :: Bdensity(:,:)
    complex (kind=CmplxKind), pointer :: Deriv_Bdensity(:,:)
-   complex (kind=CmplxKind), pointer :: sine_mat(:,:), smat_inv(:,:), BSinv(:,:)
+   complex (kind=CmplxKind), pointer :: sine_mat(:,:), smat_inv(:,:), BSinv(:,:), sm(:,:)
    complex (kind=CmplxKind), pointer :: PhiLr(:,:,:), DerPhiLr(:,:,:)
    complex (kind=CmplxKind), pointer :: BPhiLr(:,:,:), DerBPhiLr(:,:,:), PPr(:,:,:)
 !  complex (kind=CmplxKind), pointer :: dos_r_jl(:,:)
@@ -2176,6 +2314,7 @@ contains
    BPhiLr => aliasArray3_c(wspace2,NumRs,kmax_kkr,kmax_kkr)
    PPr => aliasArray3_c(wspace3,NumRs,kmax_kkr,kmax_kkr)
    DerBPhiLr => aliasArray3_c(wspace4,NumRs,kmax_kkr,kmax_kkr)
+   sm => aliasArray2_c(wspace3,kmax_kkr,kmax_kkr)
 !
    ec = e
    kappa = sqrt(ec)
@@ -2184,11 +2323,28 @@ contains
    call solveSingleScattering(is, id, ec, CZERO, atom=ia)
 !  -------------------------------------------------------------------
    sine_mat => getSineMatrix()
+   kmax_sine = size(sine_mat,dim=1)
 !  ===================================================================
 !  calculate sine_mat^(-T*) and store the result in smat_inv
-!  -------------------------------------------------------------------
-   call computeAStarTInv(sine_mat,kmax_kkr,kmax_kkr,smat_inv)
-!  -------------------------------------------------------------------
+!  ===================================================================
+   if (kmax_kkr == kmax_sine) then
+!     ----------------------------------------------------------------
+      call computeAStarTInv(sine_mat,kmax_kkr,kmax_kkr,smat_inv)
+!     ----------------------------------------------------------------
+   else if (kmax_kkr < size(sine_mat,dim=1)) then
+      do kl = 1, kmax_kkr
+         do klp = 1, kmax_kkr
+            sm(klp,kl) = sine_mat(klp,kl)
+         enddo
+      enddo
+!     ----------------------------------------------------------------
+      call computeAStarTInv(sm,kmax_kkr,kmax_kkr,smat_inv)
+!     ----------------------------------------------------------------
+   else
+!     ----------------------------------------------------------------
+      call ErrorHandler('computeResidualRSDensity','kmax_kkr > kmax_sine',kmax_kkr,kmax_sine)
+!     ----------------------------------------------------------------
+   endif
 !
 !  ======================================================================
 !  calculate AuxiliaryMat*sine_mat^{-T*} and store the result in BSinv
@@ -2199,9 +2355,10 @@ contains
 !  -------------------------------------------------------------------
 !
    PhiLr => getRegSolution()
+   kmax_phi = size(PhiLr,dim=2)
 !  -------------------------------------------------------------------
    call zgemm('n','n',NumRs*kmax_kkr,kmax_kkr,kmax_kkr,CONE,          &
-              PhiLr,NumRs*kmax_kkr,BSinv,kmax_kkr,                    &
+              PhiLr,NumRs*kmax_phi,BSinv,kmax_kkr,                    &
               CZERO,BPhiLr,NumRs*kmax_kkr)
 !  -------------------------------------------------------------------
    PPr = CZERO
@@ -2237,7 +2394,7 @@ contains
       DerPhiLr => getRegSolutionDerivative()
 !     ----------------------------------------------------------------
       call zgemm('n','n',NumRs*kmax_kkr,kmax_kkr,kmax_kkr,CONE,       &
-                 DerPhiLr,NumRs*kmax_kkr,BSinv,kmax_kkr,              &
+                 DerPhiLr,NumRs*kmax_phi,BSinv,kmax_kkr,              &
                  CZERO,DerBPhiLr,NumRs*kmax_kkr)
 !     ----------------------------------------------------------------
       PPr = CZERO
@@ -2299,7 +2456,7 @@ contains
       endif
    endif
 !
-   nullify(sine_mat, BSinv, smat_inv, Grid, r_mesh)
+   nullify(sine_mat, BSinv, smat_inv, Grid, r_mesh, sm)
    nullify(BPhiLr, PhiLr, DerBPhiLr, DerPhiLr, PPr)
    nullify(Bdensity, Deriv_Bdensity)
 !
@@ -2453,5 +2610,54 @@ contains
    n0 = n0 + 4
 !
    end subroutine decodeDOSDATA
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine examBoundStateDegen(id,ia,is,r_econtour,modified)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: is, id, ia
+   integer (kind=IntKind) :: ib, ibx, iby, jb, jbx, jby
+!
+   real (kind=RealKind), intent(inout) :: r_econtour(:)
+!
+   logical, intent(out) :: modified
+!
+   modified = .false.         ! No action is taken...
+!
+   ib = 1
+   do while (ib < Pole(id)%NumBoundPoles(is,ia))
+      ibx = Pole(id)%BoundSI(ib,is,ia)
+      iby = Pole(id)%BoundSI(ib+1,is,ia)
+      if (abs(Pole(id)%BoundState(ibx,is,ia)%PoleE -                  &
+              Pole(id)%BoundState(iby,is,ia)%PoleE) < FOUR*r_econtour(ib)) then
+!             Pole(id)%BoundState(iby,is,ia)%PoleE) < TWO*r_econtour(ib)) then
+         Pole(id)%BoundState(ibx,is,ia)%NumDegens = Pole(id)%BoundState(ibx,is,ia)%NumDegens + &
+                                                    Pole(id)%BoundState(iby,is,ia)%NumDegens
+         Pole(id)%BoundState(ibx,is,ia)%PoleE = HALF*(Pole(id)%BoundState(ibx,is,ia)%PoleE + &
+                                                      Pole(id)%BoundState(iby,is,ia)%PoleE)
+         if (Pole(id)%BoundState(ibx,is,ia)%PoleE + r_econtour(ib) -      &
+            Pole(id)%BoundState(iby,is,ia)%PoleE < 0.002d0) then
+            r_econtour(ib) = r_econtour(ib) + 0.002d0  ! enlarge the contour is needed.
+         endif
+         do jb = ib+1, Pole(id)%NumBoundPoles(is,ia)-1
+            jbx = Pole(id)%BoundSI(jb,is,ia)
+            jby = Pole(id)%BoundSI(jb+1,is,ia)
+            Pole(id)%BoundState(jbx,is,ia)%NumDegens = Pole(id)%BoundState(jby,is,ia)%NumDegens
+            Pole(id)%BoundState(jbx,is,ia)%PoleE  = Pole(id)%BoundState(jby,is,ia)%PoleE
+            Pole(id)%BoundState(jby,is,ia)%NumDegens = 0
+            Pole(id)%BoundState(jby,is,ia)%PoleE = ZERO
+         enddo
+         Pole(id)%NumBoundPoles(is,ia) = Pole(id)%NumBoundPoles(is,ia) - 1
+         modified = .true.
+      else
+         ib = ib + 1
+      endif
+   enddo
+!
+   end subroutine examBoundStateDegen
 !  ===================================================================
 end module SMatrixPolesModule

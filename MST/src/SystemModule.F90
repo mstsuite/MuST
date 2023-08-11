@@ -92,6 +92,10 @@ public :: initSystem,             &
       module procedure getAtomName_one, getAtomName_all
    end interface getAtomName
 !
+   interface getAtomTypeName
+      module procedure getAtomTypeName_one, getAtomTypeName_all
+   end interface getAtomTypeName
+!
    interface getAtomicNumber
       module procedure getAtomicNumber_one, getAtomicNumber_all
    end interface getAtomicNumber
@@ -130,7 +134,7 @@ private
    character (len=50) :: file_path
    character (len=1), pointer :: AtomNameCharacter(:)
    character (len=MaxLenOfAtomName), target, allocatable :: AtomName(:)
-   character (len=MaxLenOfAtomName), allocatable :: AtomTypeName(:)
+   character (len=MaxLenOfAtomName), target, allocatable :: AtomTypeName(:)
 !
    integer (kind=IntKind) :: table_size
    integer (kind=IntKind), allocatable :: table_line(:)
@@ -202,7 +206,7 @@ contains
                                        RealType, IntegerType, CharacterType, &
                                        IntegerMark, RealMark, CharacterMark
 !
-   use InputModule, only : getKeyValue, getTableIndex, getKeyIndexValue
+   use InputModule, only : getKeyValue, getTableIndex, getKeyLabelIndexValue
    use InputModule, only : isKeyExisting
 !
    use PublicParamDefinitionsModule, only : ASA, MuffinTin, MuffinTinASA
@@ -219,7 +223,7 @@ contains
 !
    integer (kind=IntKind), intent(in) :: tbl_id
    integer (kind=IntKind) :: i, info_id, ig, j, k, kg, kn, reset_lmax, pot_type
-   integer (kind=IntKind) :: lig
+   integer (kind=IntKind) :: lig, lmax
    integer (kind=IntKind), allocatable :: lmax_kkr(:), ind_lmax_kkr(:)
    integer (kind=IntKind), allocatable :: lmax_phi(:), ind_lmax_phi(:)
    integer (kind=IntKind), allocatable :: lmax_rho(:), ind_lmax_rho(:)
@@ -392,15 +396,53 @@ contains
 !     ----------------------------------------------------------------
    endif
 !
+   NumVacancies = 0
+   NumCoherentPots = 0
+   do i=1,NumAtoms
+      if (AtomicNum(i) == 0) then
+         NumVacancies = NumVacancies + 1
+      else if (AtomicNum(i) == -1) then
+         NumCoherentPots = NumCoherentPots + 1
+      endif
+   enddo
+!
+   allocate(AtomTypeName(NumAtoms),AtomType(NumAtoms))
+   NumAtomTypes = 1
+   AtomTypeName(1) = AtomName(1)
+   AtomType(1) = NumAtomTypes
+   LOOP_i: do i=2,NumAtoms
+      do ig=1,NumAtomTypes
+         if (nocaseCompare(AtomName(i),AtomTypeName(ig)) .and. .not.nocaseCompare(AtomName(i),'CPA')) then
+            AtomType(i) = ig
+            cycle LOOP_i
+         endif
+      enddo
+      NumAtomTypes = NumAtomTypes + 1
+      AtomTypeName(NumAtomTypes) = AtomName(i)
+      AtomType(i) = NumAtomTypes
+   enddo LOOP_i
+   allocate(NumAtomsOfType(NumAtomTypes))
+   do ig=1,NumAtomTypes
+      NumAtomsOfType(ig) = 0
+   enddo
+   do i=1,NumAtoms
+      ig = AtomType(i)
+      NumAtomsOfType(ig) = NumAtomsOfType(ig) + 1
+   enddo
+!
 !  -------------------------------------------------------------------
    rstatus = getKeyValue(info_id,'Default Lmax-T matrix',lmax_kkr(0))
-   rstatus = getKeyIndexValue(info_id,'Lmax-T matrix',ind_lmax_kkr,lmax_kkr(1:NumAtoms),NumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Lmax-T matrix',ind_lmax_kkr,lmax_kkr(1:NumAtoms),NumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Lmax-T matrix',NumAtomTypes,AtomTypeName, &
+                                   NumAtoms,AtomType,ind_lmax_kkr,lmax_kkr(1:NumAtoms))
 !
 !  rstatus = getKeyValue(info_id,'Default Lmax-Wave Func',lmax_phi(0))
    if (getKeyValue(info_id,'Default Lmax-Wave Func',lmax_phi(0),default_param=.false.) /= 0) then
       lmax_phi(0) = lmax_kkr(0)
    endif
-   rstatus = getKeyIndexValue(info_id,'Lmax-Wave Func',ind_lmax_phi,lmax_phi(1:NumAtoms),NumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Lmax-Wave Func',ind_lmax_phi,lmax_phi(1:NumAtoms),NumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Lmax-Wave Func',NumAtomTypes,AtomTypeName, &
+                                   NumAtoms,AtomType,ind_lmax_phi,lmax_phi(1:NumAtoms))
 !
 !  rstatus = getKeyValue(info_id,'Default Lmax-Potential',lmax_pot(0))
    if (getKeyValue(info_id,'Default Lmax-Potential',lmax_pot(0),default_param=.false.) /= 0) then
@@ -411,16 +453,22 @@ contains
          lmax_pot(0) = 2*lmax_kkr(0)
       endif
    endif
-   rstatus = getKeyIndexValue(info_id,'Lmax-Potential',ind_lmax_pot,lmax_pot(1:NumAtoms),NumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Lmax-Potential',ind_lmax_pot,lmax_pot(1:NumAtoms),NumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Lmax-Potential',NumAtomTypes,AtomTypeName, &
+                                   NumAtoms,AtomType,ind_lmax_pot,lmax_pot(1:NumAtoms))
 !
 !  rstatus = getKeyValue(info_id,'Default Lmax-Charge Den',lmax_rho(0))
    if (getKeyValue(info_id,'Default Lmax-Charge Den',lmax_rho(0),default_param=.false.) /= 0) then
       lmax_rho(0) = lmax_pot(0)
    endif
-   rstatus = getKeyIndexValue(info_id,'Lmax-Charge Den',ind_lmax_rho,lmax_rho(1:NumAtoms),NumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Lmax-Charge Den',ind_lmax_rho,lmax_rho(1:NumAtoms),NumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Lmax-Charge Den',NumAtomTypes,AtomTypeName, &
+                                   NumAtoms,AtomType,ind_lmax_rho,lmax_rho(1:NumAtoms))
 !
    rstatus = getKeyValue(info_id,'Default Radical Plane Ratio',radplane(0))
-   rstatus = getKeyIndexValue(info_id,'Radical Plane Ratio',ind_radplane,radplane(1:NumAtoms),NumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Radical Plane Ratio',ind_radplane,radplane(1:NumAtoms),NumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Radical Plane Ratio',NumAtomTypes,AtomTypeName, &
+                                   NumAtoms,AtomType,ind_radplane,radplane(1:NumAtoms))
 !  -------------------------------------------------------------------
    reset_lmax = 0
    do i = 1, NumAtoms
@@ -458,40 +506,6 @@ contains
    deallocate( lmax_rho, ind_lmax_rho )
    deallocate( lmax_pot, ind_lmax_pot )
    deallocate( radplane, ind_radplane )
-!
-   NumVacancies = 0
-   NumCoherentPots = 0
-   do i=1,NumAtoms
-      if (AtomicNum(i) == 0) then
-         NumVacancies = NumVacancies + 1
-      else if (AtomicNum(i) == -1) then
-         NumCoherentPots = NumCoherentPots + 1
-      endif
-   enddo
-!
-   allocate(AtomTypeName(NumAtoms),AtomType(NumAtoms))
-   NumAtomTypes = 1
-   AtomTypeName(1) = AtomName(1)
-   AtomType(1) = NumAtomTypes
-   LOOP_i: do i=2,NumAtoms
-      do ig=1,NumAtomTypes
-         if (nocaseCompare(AtomName(i),AtomTypeName(ig)) .and. .not.nocaseCompare(AtomName(i),'CPA')) then
-            AtomType(i) = ig
-            cycle LOOP_i
-         endif
-      enddo
-      NumAtomTypes = NumAtomTypes + 1
-      AtomTypeName(NumAtomTypes) = AtomName(i)
-      AtomType(i) = NumAtomTypes
-   enddo LOOP_i
-   allocate(NumAtomsOfType(NumAtomTypes))
-   do ig=1,NumAtomTypes
-      NumAtomsOfType(ig) = 0
-   enddo
-   do i=1,NumAtoms
-      ig = AtomType(i)
-      NumAtomsOfType(ig) = NumAtomsOfType(ig) + 1
-   enddo
 !
    allocate(NumAlloyElements(NumAtoms))
    do ig=1,NumAtoms
@@ -754,7 +768,9 @@ contains
 !
    if (nspin > 2) then
       allocate(ind_emix(NumAtoms)); ind_emix = 0
-      rstatus = getKeyIndexValue(info_id,'Evec Mix Param.',ind_emix,emix,NumAtoms)
+!     rstatus = getKeyIndexValue(info_id,'Evec Mix Param.',ind_emix,emix,NumAtoms)
+      rstatus = getKeyLabelIndexValue(info_id,'Evec Mix Param.',NumAtomTypes,AtomTypeName, &
+                                      NumAtoms,AtomType,ind_emix,emix)
       if ( getKeyValue(info_id,'Default Evec Mix Param.',alpev) == 0 ) then
          do i=1,NumAtoms
             if (emix(i) < ZERO) then
@@ -1006,7 +1022,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getAtomTypeName(i) result(a)
+   function getAtomTypeName_one(i) result(a)
 !  ===================================================================
    implicit none
    integer (kind=IntKind), intent(in) :: i
@@ -1018,7 +1034,22 @@ contains
    endif
    a = AtomTypeName(i)
 !
-   end function getAtomTypeName
+   end function getAtomTypeName_one
+!  ===================================================================
+!
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getAtomTypeName_all() result(p_a)
+!  ===================================================================
+   implicit none
+!
+   character (len=MaxLenOfAtomName), pointer :: p_a(:)
+!
+   p_a => AtomTypeName(1:NumAtomTypes)
+!
+   end function getAtomTypeName_all
 !  ===================================================================
 !
 !  *******************************************************************

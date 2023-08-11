@@ -1,0 +1,12 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: libxcf90
+Description: Fortran 90 interface for library of exchange and correlation functionals to be used in DFT codes
+Requires:
+Requires.private: libxc = @VERSION@
+Version: @VERSION@
+Libs: -L${libdir} -lxcf90
+Cflags: -I@FMODDIR@

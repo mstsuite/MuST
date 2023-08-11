@@ -86,20 +86,24 @@ contains
    if ( present(maxp) ) then
       if (maxp < 1) then
          if (isFullPotential) then
-            MaxAtomsPerProc = 4
-         else
             MaxAtomsPerProc = 8
+         else
+            MaxAtomsPerProc = 12
          endif
       else
          MaxAtomsPerProc = maxp
       endif
    else
       if (isFullPotential) then
-         MaxAtomsPerProc = 4
-      else
          MaxAtomsPerProc = 8
+      else
+         MaxAtomsPerProc = 12
       endif
    endif
+!
+!  -------------------------------------------------------------------
+   call checkResources()
+!  -------------------------------------------------------------------
 !
    stop_routine = istop
    print_level = iprint
@@ -133,20 +137,24 @@ contains
    if ( present(maxp) ) then
       if (maxp < 1) then
          if (isFullPotential) then
-            MaxAtomsPerProc = 4
-         else
             MaxAtomsPerProc = 8
+         else
+            MaxAtomsPerProc = 12
          endif
       else
          MaxAtomsPerProc = maxp
       endif
    else
       if (isFullPotential) then
-         MaxAtomsPerProc = 4
-      else
          MaxAtomsPerProc = 8
+      else
+         MaxAtomsPerProc = 12
       endif
    endif
+!
+!  -------------------------------------------------------------------
+   call checkResources()
+!  -------------------------------------------------------------------
 !
    stop_routine = istop
    print_level = iprint
@@ -181,6 +189,48 @@ contains
    Initialized = .false.
 !
    end subroutine endProcMapping
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine checkResources()
+!  ===================================================================
+   use MPPModule, only : MyPE, NumPEs
+!
+   use CmdLineOptionModule, only : getCmdLineOptionValue
+!
+   implicit none
+!
+   integer (kind=IntKind) :: n
+!
+   n = getCmdLineOptionValue('Number of Atoms Per Process',NumAtomsPerProc)
+!
+   if (NumAtomsPerProc == 0) then
+      return
+   else if (MyPE == 0) then
+      write(6,'(a,i5)')'Number of atoms per process = ',NumAtomsPerProc
+   endif
+!
+   if (NumAtomsPerProc > MaxAtomsPerProc) then
+      call ErrorHandler('initProcMapping','NumAtomsPerProc > MaxAtomsPerProc', &
+                        NumAtomsPerProc, MaxAtomsPerProc)
+   else if (NumAtomsPerProc > NumAtoms) then
+      call ErrorHandler('initProcMapping','NumAtomsPerProc > NumAtoms', &
+                        NumAtomsPerProc, NumAtoms)
+   else if (NumAtomsPerProc > 0) then
+      if (mod(NumAtoms,NumAtomsPerProc) /= 0) then
+         call ErrorHandler('initProcMapping',                         &
+                           'NumAtoms is not divisible by NumAtomsPerProc', &
+                           NumAtoms,NumAtomsPerProc)
+      else if (mod(NumPEs*NumAtomsPerProc,NumAtoms) /= 0) then
+         call ErrorHandler('initProcMapping',                         &
+                           'NumPEs*NumAtomsPerProc is not divisible by NumAtoms', &
+                           NumPEs*NumAtomsPerProc,NumAtoms)
+      endif
+   endif
+!
+   end subroutine checkResources
 !  ===================================================================
 !
 !  *******************************************************************
@@ -502,14 +552,14 @@ contains
       call ErrorHandler(sname,'Number of atoms < 1',NumAtoms)
    endif
 !
+   NumPEs = getNumPEs()
+   MyPE = getMyPE()
+!
    if (present(isAtomDistributed)) then
       atom_distributed = isAtomDistributed
    else
       atom_distributed = .true.
    endif
-!
-   NumPEs = getNumPEs()
-   MyPE = getMyPE()
 !
 !  ===================================================================
 !  determine the number of atoms per processor, the number of k-points
@@ -541,9 +591,11 @@ contains
 !        -------------------------------------------------------------
       endif
       factors => getSubFactors(NumPEs,3,m) ! break the total number of processes into three factors
-      do i = 1, m
-         if (NumAtoms_tmp >= factors(1,i) .and. NumKs >= factors(2,i) .and. &
-             NumEs >= factors(3,i)) then
+      LOOP_i1: do i = 1, m
+         if (NumAtomsPerProc > 0 .and. NumAtomsPerProc*factors(1,i) /= NumAtoms) then
+            cycle LOOP_i1
+         else if (NumAtoms_tmp >= factors(1,i) .and. NumKs >= factors(2,i) .and. &
+                  NumEs >= factors(3,i)) then
             ra = mod(NumAtoms_tmp,factors(1,i))
             rk = mod(NumKs,factors(2,i))
             re = mod(NumEs,factors(3,i))
@@ -554,7 +606,10 @@ contains
                nsum = NumAtoms_tmp/na + (NumKs-rk)/nk + rk + (NumEs-re)/ne + re
 !              =======================================================
 !              The following criteria for optimizing the distribution
-!              needs to be further tested
+!              needs to be further tested:
+!                 The goal is to achieve the best load balancing by 
+!                 requiring the smallest total residual values from
+!                 distributing the k- and e- points.
 !              =======================================================
                if (re+rk < re_sav+rk_sav) then
 !              if (nsum < nsum_sav) then
@@ -564,7 +619,7 @@ contains
                endif
             endif
          endif
-      enddo
+      enddo LOOP_i1
    else if (NumKs == 0 .and. NumEs > 0) then
       if (NumPEs > NumAtoms_tmp*NumEs) then
 !        -------------------------------------------------------------
@@ -574,8 +629,10 @@ contains
 !        -------------------------------------------------------------
       endif
       factors => getSubFactors(NumPEs,2,m) ! break the total number of processes into two factors
-      do i = 1, m
-         if (NumAtoms_tmp >= factors(1,i) .and. NumEs >= factors(2,i)) then
+      LOOP_i2: do i = 1, m
+         if (NumAtomsPerProc > 0 .and. NumAtomsPerProc*factors(1,i) /= NumAtoms) then
+            cycle LOOP_i2
+         else if (NumAtoms_tmp >= factors(1,i) .and. NumEs >= factors(2,i)) then
             ra = mod(NumAtoms_tmp,factors(1,i))
             re = mod(NumEs,factors(2,i))
             if (ra == 0) then   ! we only consider the case that atoms are evenly distributed
@@ -591,10 +648,10 @@ contains
                   na_sav = na; ne_sav = ne
                   ra_sav = ra; re_sav = re
                   nsum_sav = nsum
-            endif
+               endif
             endif
          endif
-      enddo
+      enddo LOOP_i2
    else if (NumKs > 0 .and. NumEs == 0) then
       if (NumPEs > NumAtoms_tmp*NumKs) then
 !        -------------------------------------------------------------
@@ -604,8 +661,10 @@ contains
 !        -------------------------------------------------------------
       endif
       factors => getSubFactors(NumPEs,2,m) ! break the total number of processes into two factors
-      do i = 1, m
-         if (NumAtoms_tmp >= factors(1,i) .and. NumKs >= factors(2,i)) then
+      LOOP_i3: do i = 1, m
+         if (NumAtomsPerProc > 0 .and. NumAtomsPerProc*factors(1,i) /= NumAtoms) then
+            cycle LOOP_i3
+         else if (NumAtoms_tmp >= factors(1,i) .and. NumKs >= factors(2,i)) then
             ra = mod(NumAtoms_tmp,factors(1,i))
             rk = mod(NumKs,factors(2,i))
             if (ra == 0) then   ! we only consider the case that atoms are evenly distributed
@@ -624,7 +683,7 @@ contains
                endif
             endif
          endif
-      enddo
+      enddo LOOP_i3
    else
       ra_sav = 0
    endif
@@ -639,18 +698,19 @@ contains
       endif
    endif
 !
-   if (atom_distributed) then
-      NumAtomsPerProc = (NumAtoms-ra_sav)/na_sav + ra_sav
-   else
-      NumAtomsPerProc = NumAtoms
-   endif
-!
-   if (NumAtomsPerProc > MaxAtomsPerProc) then
-!     ----------------------------------------------------------------
-      call WarningHandler(sname,                                   &
-                          'Number of atoms/proc > MaxAtomsPerProc',&
-                          NumAtomsPerProc, MaxAtomsPerProc)
-!     ----------------------------------------------------------------
+   if (NumAtomsPerProc == 0) then
+      if (atom_distributed) then
+         NumAtomsPerProc = (NumAtoms-ra_sav)/na_sav + ra_sav
+      else
+         NumAtomsPerProc = NumAtoms
+      endif
+      if (NumAtomsPerProc > MaxAtomsPerProc) then
+!        -------------------------------------------------------------
+         call WarningHandler(sname,                                   &
+                             'Number of atoms/proc > MaxAtomsPerProc',&
+                             NumAtomsPerProc, MaxAtomsPerProc)
+!        -------------------------------------------------------------
+      endif
    endif
 !
    NumKsPerBox = (NumKs-rk_sav)/nk_sav + rk_sav
@@ -665,13 +725,26 @@ contains
 !
    if (print_level >= 0 .and. MyPE == 0) then
       write(6,'(/,80(''=''))')
-      write(6,'(/,12x,a)')'*********************************************'
-      write(6,'(  12x,a)')'*     Output from createParallelization     *'
-      write(6,'(  12x,a)')'*            in ProcMappingModule           *'
-      write(6,'(12x,a,/)')'*********************************************'
-      write(6,'(a,i5)')'The number of processors in each box :',np
-      write(6,'(a,i5)')'The number of repeats along k-dimen. :',nk
-      write(6,'(a,i5)')'The number of repeats along e-dimen. :',ne
+      write(6,'(/,12x,a)')'***************************************************'
+      write(6,'(  12x,a)')'*        Output from createParallelization        *'
+      write(6,'(  12x,a)')'*               in ProcMappingModule              *'
+      write(6,'(  12x,a)')'*                                                 *'
+      write(6,'(  12x,a)')'*  In this parellaization setup, the entire       *'
+      write(6,'(  12x,a)')'*  available MPI processes are imagined to form a *'
+      write(6,'(  12x,a)')'*  2-D grid, with x-dimention called e-dimension  *'
+      write(6,'(  12x,a)')'*  y-dimension called k-dimention. The process    *'
+      write(6,'(  12x,a)')'*  grid points are divided into equal sized 2-D   *'
+      write(6,'(  12x,a)')'*  boxes. That is, the entire MPI processes are   *'
+      write(6,'(  12x,a)')'*  divided into equal sized process pools, each   *'
+      write(6,'(  12x,a)')'*  of which forms a MPI group. The atoms are      *'
+      write(6,'(  12x,a)')'*  evenly distributed within each box, while the  *'
+      write(6,'(  12x,a)')'*  energy points, and the k-points in KKR, are    *'
+      write(6,'(  12x,a)')'*  distributed between these imagined boxes.      *'
+      write(6,'(12x,a,/)')'***************************************************'
+      write(6,'(a,i5)')'The number of processors in each box for atom parallelization:',np
+      write(6,'(a,i5)')'The number of repeats of the box along the k-dimension :',nk
+      write(6,'(a,i5)')'The number of repeats of the box along the e-dimension :',ne
+      write(6,'(a,i5)')'The product of these three numbers   :',np*nk*ne
    endif
 !
 !  ===================================================================

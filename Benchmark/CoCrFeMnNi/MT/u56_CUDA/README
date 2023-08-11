@@ -1,0 +1,14 @@
+The performance benchmark case for the muffin-tin, spin-canted, 
+ab initio electronic structure calculation of CoCrFeMnNi high 
+entropy alloys with a FCC underlying lattice. The calculation is performed
+using the LSMS method on NVIDIA GPUs.
+
+The MST2 will by default use the first GPU, even on a computing node with multi-GPUs.
+To utilize multi-GPUs, we need to bind the MPI rank on different GPUs. 
+
+In the script file "bind_MPI_to_GPU.sh", variable "ngpus" determines the GPU number in use.
+For example, the MPI ranks will be equally distributed among two GPUs with setting ngpus = 2.
+When there are in total 8 MPI ranks, rank 0-3 is on GPU0 and rank 4-7 is on GPU1.
+
+An example for starting 8 MPI ranks with multi-GPU binding is: 
+"mpirun -n 8 ./bind_MPI_to_GPU.sh mst2 < i_mst"

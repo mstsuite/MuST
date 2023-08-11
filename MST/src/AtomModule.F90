@@ -199,17 +199,19 @@ contains
    use MathParamModule, only : ZERO, ONE, TEN2m3
    use ChemElementModule, only : getZtot, getImplicitMuffinTinRadius
    use ChemElementModule, only : getImplicitCoreRadius
+   use ChemElementModule, only : MaxLenOfAtomName
    use StringModule, only : initString, endString, getNumTokens, readToken
    use MPPModule, only : MyPE
    use PublicParamDefinitionsModule, only : ASA, MuffinTin, MuffinTinASA
    use Atom2ProcModule, only : getLocalNumAtoms, getGlobalIndex
-   use InputModule, only : getKeyValue, getKeyIndexValue
+   use InputModule, only : getKeyValue, getKeyLabelIndexValue
    use ScfDataModule, only : inputpath, isKKRCPA, isKKRCPASRO, getPotentialTypeParam
    use SystemModule, only : getNumAtoms, getNumAlloyElements, getAlloyElementContent
    use SystemModule, only : getAlloyElementName
    use SystemModule, only : getAtomPosition
    use SystemModule, only : getMomentDirection, getConstrainField
    use SystemModule, only : getMomentDirectionMixingParam
+   use SystemModule, only : getAtomType, getNumAtomTypes, getAtomTypeName
 !
    implicit none
 !
@@ -222,6 +224,7 @@ contains
    character (len=150), allocatable :: lmax_shell(:)
    character (len=150), allocatable :: potinname(:)
    character (len=50), allocatable :: potoutname(:)
+   character (len=MaxLenOfAtomName), pointer :: atname(:)
 !
    logical :: f_exist, pr
 !
@@ -269,6 +272,8 @@ contains
    integer (kind=IntKind), allocatable :: ind_potscreen(:)
    integer (kind=IntKind), allocatable :: ind_rmt_input(:)
    integer (kind=IntKind), allocatable :: ind_rcr_input(:)
+!
+   integer (kind=IntKind), pointer :: atype(:)
 !
    real (kind=RealKind), allocatable :: alpha_rho(:)
    real (kind=RealKind), allocatable :: alpha_pot(:)
@@ -398,8 +403,15 @@ contains
    else
       f_exist = .true.
    endif
-   if (getKeyIndexValue(info_id,'Potential Input File Name',          &
-                        ind_potinname,potinname(1:GlobalNumAtoms),GlobalNumAtoms) == 0) then
+!
+   nt = getNumAtomTypes()
+   atname => getAtomTypeName()
+   atype => getAtomType()
+!
+!  if (getKeyIndexValue(info_id,'Potential Input File Name',          &
+!                       ind_potinname,potinname(1:GlobalNumAtoms),GlobalNumAtoms) == 0) then
+   if (getKeyLabelIndexValue(info_id,'Potential Input File Name',nt,atname,  &
+                             GlobalNumAtoms,atype,ind_potinname,potinname(1:GlobalNumAtoms)) == 0) then
       do i = 1, GlobalNumAtoms
          write(ci,'(i5,a)') i,', '
          call MessageHandler('initAtom','Input potential file name: ',ci,potinname(i),force_to_print=pr)
@@ -416,8 +428,10 @@ contains
    else
       f_exist = .true.
    endif
-   if (getKeyIndexValue(info_id,'Potential Input File Form',          &
-                        ind_potinform,potinform(1:GlobalNumAtoms),GlobalNumAtoms) == 0) then
+!  if (getKeyIndexValue(info_id,'Potential Input File Form',          &
+!                       ind_potinform,potinform(1:GlobalNumAtoms),GlobalNumAtoms) == 0) then
+   if (getKeyLabelIndexValue(info_id,'Potential Input File Form',nt,atname,  &
+                             GlobalNumAtoms,atype,ind_potinform,potinform(1:GlobalNumAtoms)) == 0) then
       do i = 1, GlobalNumAtoms
          call MessageHandler('initAtom','Input potential file format: ',i,potinform(i),force_to_print=pr)
       enddo
@@ -430,21 +444,27 @@ contains
    if (getKeyValue(info_id,'Default Potential Output File Name',potoutname(0)) /= 0) then
       call ErrorHandler('initAtom','Output potential file name is missing from input')
    endif
-   rstatus = getKeyIndexValue(info_id,'Potential Output File Name',   &
-                              ind_potoutname,potoutname(1:GlobalNumAtoms),GlobalNumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Potential Output File Name',   &
+!                             ind_potoutname,potoutname(1:GlobalNumAtoms),GlobalNumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Potential Output File Name',nt,atname,  &
+                                   GlobalNumAtoms,atype,ind_potoutname,potoutname(1:GlobalNumAtoms))
 !
    if (getKeyValue(info_id,'Default Potential Output File Form',potoutform(0)) /= 0) then
       call ErrorHandler('initAtom','Output potential file form is missing from input')
    endif
-   rstatus = getKeyIndexValue(info_id,'Potential Output File Form',   &
-                              ind_potoutform,potoutform(1:GlobalNumAtoms), GlobalNumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Potential Output File Form',   &
+!                             ind_potoutform,potoutform(1:GlobalNumAtoms), GlobalNumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Potential Output File Form',nt,atname,  &
+                                   GlobalNumAtoms,atype,ind_potoutform,potoutform(1:GlobalNumAtoms))
 !
    if (getKeyValue(info_id,'Default Lmax-T matrix',lmax_kkr(0)) /= 0) then
       call ErrorHandler('initAtom','Lmax for T-matrix is missing from input')
    endif
    ind_lmax_kkr = 0
-   rstatus = getKeyIndexValue(info_id,'Lmax-T matrix',                &
-                              ind_lmax_kkr,lmax_kkr(1:GlobalNumAtoms),GlobalNumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Lmax-T matrix',                &
+!                             ind_lmax_kkr,lmax_kkr(1:GlobalNumAtoms),GlobalNumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Lmax-T matrix',nt,atname,               &
+                                   GlobalNumAtoms,atype,ind_lmax_kkr,lmax_kkr(1:GlobalNumAtoms))
 !
    if (getKeyValue(info_id,'Default Lmax-Potential',lmax_pot(0),default_param=.false.) /= 0) then
       if (getPotentialTypeParam() == ASA .or. getPotentialTypeParam() == MuffinTin .or. &
@@ -455,30 +475,38 @@ contains
       endif
    endif
    ind_lmax_pot = 0
-   rstatus = getKeyIndexValue(info_id,'Lmax-Potential',               &
-                              ind_lmax_pot,lmax_pot(1:GlobalNumAtoms),GlobalNumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Lmax-Potential',               &
+!                             ind_lmax_pot,lmax_pot(1:GlobalNumAtoms),GlobalNumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Lmax-Potential',nt,atname,              &
+                                   GlobalNumAtoms,atype,ind_lmax_pot,lmax_pot(1:GlobalNumAtoms))
 !
    if (getKeyValue(info_id,'Default Lmax-Wave Func',lmax_phi(0),default_param=.false.) /= 0) then
       lmax_phi(0) = lmax_kkr(0)
    endif
    ind_lmax_phi = 0
-   rstatus = getKeyIndexValue(info_id,'Lmax-Wave Func',               &
-                              ind_lmax_phi,lmax_phi(1:GlobalNumAtoms),GlobalNumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Lmax-Wave Func',               &
+!                             ind_lmax_phi,lmax_phi(1:GlobalNumAtoms),GlobalNumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Lmax-Wave Func',nt,atname,              &
+                              GlobalNumAtoms,atype,ind_lmax_phi,lmax_phi(1:GlobalNumAtoms))
 !
    if (getKeyValue(info_id,'Default Lmax-Step Func',lmax_step(0),default_param=.false.) /= 0) then
 !     call ErrorHandler('initAtom','Lmax for step function is missing from input')
       lmax_step(0) = 4*lmax_kkr(0)
    endif
    ind_lmax_step = 0
-   rstatus = getKeyIndexValue(info_id,'Lmax-Step Func',               &
-                              ind_lmax_step,lmax_step(1:GlobalNumAtoms),GlobalNumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Lmax-Step Func',               &
+!                             ind_lmax_step,lmax_step(1:GlobalNumAtoms),GlobalNumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Lmax-Step Func',nt,atname,              &
+                                   GlobalNumAtoms,atype,ind_lmax_step,lmax_step(1:GlobalNumAtoms))
 !
    if (getKeyValue(info_id,'Default Lmax-Trunc Pot',lmax_pot_trunc(0),default_param=.false.) /= 0) then
       lmax_pot_trunc(0) = lmax_pot(0)
    endif
    ind_lmax_pot_trunc = 0
-   rstatus = getKeyIndexValue(info_id,'Lmax-Trunc Pot',               &
-                              ind_lmax_pot_trunc,lmax_pot_trunc(1:GlobalNumAtoms),GlobalNumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Lmax-Trunc Pot',               &
+!                             ind_lmax_pot_trunc,lmax_pot_trunc(1:GlobalNumAtoms),GlobalNumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Lmax-Trunc Pot',nt,atname,              &
+                                   GlobalNumAtoms,atype,ind_lmax_pot_trunc,lmax_pot_trunc(1:GlobalNumAtoms))
    if (rstatus /= 0) then
       lmax_pot_trunc(1:GlobalNumAtoms) = lmax_pot(1:GlobalNumAtoms) + 4
    else 
@@ -496,23 +524,29 @@ contains
       lmax_rho(0) = lmax_pot(0)
    endif
    ind_lmax_rho = 0
-   rstatus = getKeyIndexValue(info_id,'Lmax-Charge Den',              &
-                              ind_lmax_rho,lmax_rho(1:GlobalNumAtoms),GlobalNumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Lmax-Charge Den',              &
+!                             ind_lmax_rho,lmax_rho(1:GlobalNumAtoms),GlobalNumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Lmax-Charge Den',nt,atname,             &
+                                   GlobalNumAtoms,atype,ind_lmax_rho,lmax_rho(1:GlobalNumAtoms))
 !
    if (.not.isKKRCPA()) then
       if (getKeyValue(info_id,'Default LIZ # Neighbors',nmax_liz(0)) /= 0) then
          call ErrorHandler('initAtom','Default LIZ # Neighbors is missing from input')
       endif
       ind_nmax_liz = 0
-      rstatus = getKeyIndexValue(info_id,'LIZ # Neighbors',              &
-                                 ind_nmax_liz,nmax_liz(1:GlobalNumAtoms),GlobalNumAtoms)
+!     rstatus = getKeyIndexValue(info_id,'LIZ # Neighbors',              &
+!                                ind_nmax_liz,nmax_liz(1:GlobalNumAtoms),GlobalNumAtoms)
+      rstatus = getKeyLabelIndexValue(info_id,'LIZ # Neighbors',nt,atname,          &
+                                      GlobalNumAtoms,atype,ind_nmax_liz,nmax_liz(1:GlobalNumAtoms))
 !
       if (getKeyValue(info_id,'Default LIZ # NN Shells',num_shells(0),default_param=.false.) /= 0) then
          num_shells(0) = 8
       endif
       ind_num_shells = 0
-      rstatus = getKeyIndexValue(info_id,'LIZ # NN Shells',              &
-                                 ind_num_shells,num_shells(1:GlobalNumAtoms),GlobalNumAtoms)
+!     rstatus = getKeyIndexValue(info_id,'LIZ # NN Shells',              &
+!                                ind_num_shells,num_shells(1:GlobalNumAtoms),GlobalNumAtoms)
+      rstatus = getKeyLabelIndexValue(info_id,'LIZ # NN Shells',nt,atname,          &
+                                      GlobalNumAtoms,atype,ind_num_shells,num_shells(1:GlobalNumAtoms))
 !
       if (getKeyValue(info_id,'Default LIZ Shell Lmax',lmax_shell(0)) /= 0) then
          write(s2,'(i2)')lmax_kkr(0)
@@ -526,15 +560,19 @@ contains
          call endString()
       endif
       ind_lmax_shell = 0
-      rstatus = getKeyIndexValue(info_id,'LIZ Shell Lmax',               &
-                                 ind_lmax_shell,lmax_shell(1:GlobalNumAtoms),GlobalNumAtoms)
+!     rstatus = getKeyIndexValue(info_id,'LIZ Shell Lmax',               &
+!                                ind_lmax_shell,lmax_shell(1:GlobalNumAtoms),GlobalNumAtoms)
+      rstatus = getKeyLabelIndexValue(info_id,'LIZ Shell Lmax',nt,atname,           &
+                                      GlobalNumAtoms,atype,ind_lmax_shell,lmax_shell(1:GlobalNumAtoms))
 !
       if (getKeyValue(info_id,'Default LIZ Cutoff Radius',cutoff_r(0)) /= 0) then
          call ErrorHandler('initAtom','Default LIZ Cutoff Radius is missing from input')
       endif
       ind_cutoff_r = 0
-      rstatus = getKeyIndexValue(info_id,'LIZ Cutoff Radius',            &
-                                 ind_cutoff_r,cutoff_r(1:GlobalNumAtoms),GlobalNumAtoms)
+!     rstatus = getKeyIndexValue(info_id,'LIZ Cutoff Radius',            &
+!                                ind_cutoff_r,cutoff_r(1:GlobalNumAtoms),GlobalNumAtoms)
+      rstatus = getKeyLabelIndexValue(info_id,'LIZ Cutoff Radius',nt,atname,        &
+                                      GlobalNumAtoms,atype,ind_cutoff_r,cutoff_r(1:GlobalNumAtoms))
    else ! In the case of CA-KKR-CPA calculations, we setup local cluster with the following parameters
       nmax_liz(0) = 90 
       ind_nmax_liz = 0
@@ -552,13 +590,17 @@ contains
 !
    rstatus = getKeyValue(info_id,'Default Rcut-Screen',cutoff_r_s(0))
    ind_cutoff_r_s = 0
-   rstatus = getKeyIndexValue(info_id,'Rcut-Screen',                  &
-                              ind_cutoff_r_s,cutoff_r_s(1:GlobalNumAtoms),GlobalNumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Rcut-Screen',                  &
+!                             ind_cutoff_r_s,cutoff_r_s(1:GlobalNumAtoms),GlobalNumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Rcut-Screen',nt,atname,                 &
+                                   GlobalNumAtoms,atype,ind_cutoff_r_s,cutoff_r_s(1:GlobalNumAtoms))
 !
    rstatus = getKeyValue(info_id,'Default Pseudo Charge Radius',pseudo_r(0))
    ind_pseudo_r = 0
-   rstatus = getKeyIndexValue(info_id,'Pseudo Charge Radius',         &
-                              ind_pseudo_r,pseudo_r(1:GlobalNumAtoms),GlobalNumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Pseudo Charge Radius',         &
+!                             ind_pseudo_r,pseudo_r(1:GlobalNumAtoms),GlobalNumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Pseudo Charge Radius',nt,atname,        &
+                                   GlobalNumAtoms,atype,ind_pseudo_r,pseudo_r(1:GlobalNumAtoms))
 !
    if (getKeyValue(info_id,'Default Rho  Mix Param.',alpha_rho(0),default_param=.false.) /= 0) then
       if (getKeyValue(info_id,'Default Mixing Parameter',alpha_rho(0)) /= 0) then
@@ -566,8 +608,10 @@ contains
       endif
    endif
    ind_alpha_rho = 0
-   rstatus = getKeyIndexValue(info_id,'Rho  Mix Param.',              &
-                              ind_alpha_rho,alpha_rho(1:GlobalNumAtoms),GlobalNumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Rho  Mix Param.',              &
+!                             ind_alpha_rho,alpha_rho(1:GlobalNumAtoms),GlobalNumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Rho  Mix Param.',nt,atname,             &
+                                   GlobalNumAtoms,atype,ind_alpha_rho,alpha_rho(1:GlobalNumAtoms))
 !
    if (getKeyValue(info_id,'Default Pot  Mix Param.',alpha_pot(0),default_param=.false.) /= 0) then
       if (getKeyValue(info_id,'Default Mixing Parameter',alpha_pot(0)) /= 0) then
@@ -575,8 +619,10 @@ contains
       endif
    endif
    ind_alpha_pot = 0
-   rstatus = getKeyIndexValue(info_id,'Pot  Mix Param.',              &
-                              ind_alpha_pot,alpha_pot(1:GlobalNumAtoms),GlobalNumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Pot  Mix Param.',              &
+!                             ind_alpha_pot,alpha_pot(1:GlobalNumAtoms),GlobalNumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Pot  Mix Param.',nt,atname,             &
+                                   GlobalNumAtoms,atype,ind_alpha_pot,alpha_pot(1:GlobalNumAtoms))
 !
    if (getKeyValue(info_id,'Default Mom  Mix Param.',alpha_mom(0),default_param=.false.) /= 0) then
       if (getKeyValue(info_id,'Default Mixing Parameter',alpha_mom(0)) /= 0) then
@@ -584,58 +630,76 @@ contains
       endif
    endif
    ind_alpha_mom = 0
-   rstatus = getKeyIndexValue(info_id,'Mom  Mix Param.',              &
-                              ind_alpha_mom,alpha_mom(1:GlobalNumAtoms),GlobalNumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Mom  Mix Param.',              &
+!                             ind_alpha_mom,alpha_mom(1:GlobalNumAtoms),GlobalNumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Mom  Mix Param.',nt,atname,             &
+                                   GlobalNumAtoms,atype,ind_alpha_mom,alpha_mom(1:GlobalNumAtoms))
 !
    if (getKeyValue(info_id,'Default Chg  Mix Param.',alpha_chg(0)) /= 0) then
       call ErrorHandler('initAtom','Default Chg  Mix Param is missing from input')
    endif
    ind_alpha_chg = 0
-   rstatus = getKeyIndexValue(info_id,'Chg  Mix Param.',              &
-                              ind_alpha_chg,alpha_chg(1:GlobalNumAtoms),GlobalNumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Chg  Mix Param.',              &
+!                             ind_alpha_chg,alpha_chg(1:GlobalNumAtoms),GlobalNumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Chg  Mix Param.',nt,atname,             &
+                                   GlobalNumAtoms,atype,ind_alpha_chg,alpha_chg(1:GlobalNumAtoms))
 !
    if (getKeyValue(info_id,'Default No. Rad Points ndivin',ndivin(0)) /= 0) then
       call ErrorHandler('initAtom','Default No. Rad Points ndivin is missing from input')
    endif
    ind_ndivin = 0
-   rstatus = getKeyIndexValue(info_id,'No. Rad Points ndivin',        &
-                              ind_ndivin,ndivin(1:GlobalNumAtoms), GlobalNumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'No. Rad Points ndivin',        &
+!                             ind_ndivin,ndivin(1:GlobalNumAtoms), GlobalNumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'No. Rad Points ndivin',nt,atname,       &
+                                   GlobalNumAtoms,atype,ind_ndivin,ndivin(1:GlobalNumAtoms))
 !
    if (getKeyValue(info_id,'Default No. Rad Points ndivout',ndivout(0)) /= 0) then
       call ErrorHandler('initAtom','No. Rad Points ndivout is missing from input')
    endif
    ind_ndivout = 0
-   rstatus = getKeyIndexValue(info_id,'No. Rad Points ndivout',       &
-                              ind_ndivout,ndivout(1:GlobalNumAtoms), GlobalNumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'No. Rad Points ndivout',       &
+!                             ind_ndivout,ndivout(1:GlobalNumAtoms), GlobalNumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'No. Rad Points ndivout',nt,atname,      &
+                                   GlobalNumAtoms,atype,ind_ndivout,ndivout(1:GlobalNumAtoms))
 !
    if (getKeyValue(info_id,'Default Integer Factor nmult',nmult(0)) /= 0) then
       call ErrorHandler('initAtom','Integer Factor nmult is missing from input')
    endif
    ind_nmult = 0
-   rstatus = getKeyIndexValue(info_id,'Integer Factor nmult',         &
-                              ind_nmult, nmult(1:GlobalNumAtoms), GlobalNumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Integer Factor nmult',         &
+!                             ind_nmult, nmult(1:GlobalNumAtoms), GlobalNumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Integer Factor nmult',nt,atname,        &
+                                   GlobalNumAtoms,atype,ind_nmult,nmult(1:GlobalNumAtoms))
 !
    if (getKeyValue(info_id,'Default Radial Grid Exponential Step',hin(0)) /= 0) then
       call ErrorHandler('initAtom','Radial Grid Exponential Step hin is missing from input')
    endif
    ind_hin = 0
-   rstatus = getKeyIndexValue(info_id,'Radial Grid Exponential Step', &
-                              ind_hin, hin(1:GlobalNumAtoms), GlobalNumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Radial Grid Exponential Step', &
+!                             ind_hin, hin(1:GlobalNumAtoms), GlobalNumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Radial Grid Exponential Step',nt,atname, &
+                                   GlobalNumAtoms,atype,ind_hin,hin(1:GlobalNumAtoms))
 !
    rstatus = getKeyValue(info_id,'Default Screen Potential',potScreen(0))
    ind_potScreen = 0
-   rstatus = getKeyIndexValue(info_id,'Screen Potential',             &
-                              ind_potScreen,potScreen(1:GlobalNumAtoms),GlobalNumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Screen Potential',             &
+!                             ind_potScreen,potScreen(1:GlobalNumAtoms),GlobalNumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Screen Potential',nt,atname,      &
+                                    GlobalNumAtoms,atype,ind_potScreen,potScreen(1:GlobalNumAtoms))
 !
    rstatus = getKeyValue(info_id,'Default Muffin-tin Radius',rmt_input(0))
    ind_rmt_input = 0
-   rstatus = getKeyIndexValue(info_id,'Muffin-tin Radius',    &
-                              ind_rmt_input,rmt_input(1:GlobalNumAtoms),GlobalNumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Muffin-tin Radius',    &
+!                             ind_rmt_input,rmt_input(1:GlobalNumAtoms),GlobalNumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Muffin-tin Radius',nt,atname,      &
+                                   GlobalNumAtoms,atype,ind_rmt_input,rmt_input(1:GlobalNumAtoms))
 !
    rstatus = getKeyValue(info_id,'Default Core Radius',rcr_input(0))
    ind_rcr_input = 0
-   rstatus = getKeyIndexValue(info_id,'Core Radius',          &
-                              ind_rcr_input,rcr_input(1:GlobalNumAtoms),GlobalNumAtoms)
+!  rstatus = getKeyIndexValue(info_id,'Core Radius',          &
+!                             ind_rcr_input,rcr_input(1:GlobalNumAtoms),GlobalNumAtoms)
+   rstatus = getKeyLabelIndexValue(info_id,'Core Radius',nt,atname,                &
+                                   GlobalNumAtoms,atype,ind_rcr_input,rcr_input(1:GlobalNumAtoms))
 !
 !  ===================================================================
 !  Process ind_potinname(:) to taking care of the fact that potinname(0)

@@ -1191,9 +1191,21 @@ use MPPModule, only : MyPE, syncAllPEs
 !      BigMatrix((dsize-1)*dsize-kkrsz_ns-1),BigMatrix(kkrsz_ns*dsize+2)
 !call syncAllPEs()
 !        -------------------------------------------------------------
+!         print *,"In calClusterMatrix"
+!         print *,"my_atom = ",my_atom
+!         print *,"pBlockMatrix shape", shape(pBlockMatrix)
+!         print *,"kkrsz_ns",kkrsz_ns
+!         print *,"dsize = ",dsize
+!         print *,"BigMatrix shape",shape(BigMatrix)
+#ifdef ACCEL
+         pBigMatrix => aliasArray2_c(BigMatrix, dsize, dsize)
+         call invertMatrixLSMS_CUDA(my_atom, pBlockMatrix, kkrsz_ns,  &
+                                 pBigMatrix, dsize )
+!         print *,"CUDA pBlockMatrix(:, 1) = ",pBlockMatrix(:,1)
+#else
          call invertMatrixBlock( my_atom, pBlockMatrix, kkrsz_ns, kkrsz_ns,  &
                                  BigMatrix, dsize, dsize )
-!        call writeMatrix('BlockMatrix',pBlockMatrix, kkrsz_ns, kkrsz_ns)
+#endif
 !        -------------------------------------------------------------
 !write(6,'(a,i5,2f9.5,2x,4d16.8)')'Block =',MyPE,energy,pBlockMatrix(1,1),pBlockMatrix(3,3)
 !call syncAllPEs()
@@ -1222,6 +1234,7 @@ use MPPModule, only : MyPE, syncAllPEs
                       wau_g, kkrsz_ns, info )
 !        -------------------------------------------------------------
          nullify( pBlockMatrix )
+         nullify( pBigMatrix )
 !        -------------------------------------------------------------
 !        call writeMatrix('wau_g', wau_g, kkrsz_ns, kkrsz_ns)
 !        =============================================================

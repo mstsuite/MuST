@@ -517,7 +517,7 @@ contains
       if (.not.isSMatrixPolesInitialized()) then
 !        -------------------------------------------------------------
          call initSMatrixPoles(LocalNumAtoms,n_spin_pola,n_spin_cant,LocalNumSpecies,&
-                               lmax_kkr,lmax_rho,iprint)
+                               min(lmax_kkr,4),lmax_rho,iprint)
 !        -------------------------------------------------------------
       endif
       allocate(ws_prod(g2last*jmax_prod), ws_den(g2last*jmax_rho))
@@ -536,7 +536,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine readCoreStates()
 !  ===================================================================
-   use ChemElementModule, only : MaxLenOfAtomName
+   use ChemElementModule, only : MaxLenOfAtomName, MaxNumc
    use ChemElementModule, only : getZtot, getZcor, getZsem
    use ChemElementModule, only : getNumCoreStates
    use ChemElementModule, only : getCoreStateN
@@ -552,16 +552,16 @@ contains
    character (len=10) :: acc
 !
    integer (kind=IntKind) :: id, ia, ic, is
-   integer (kind=IntKind) :: MaxNumc, ndeep, nz
+   integer (kind=IntKind) :: ndeep, nz
    integer (kind=IntKind), parameter :: funit=92
 !
    real (kind=RealKind) :: fac1
 !
    do id = 1, LocalNumAtoms
-      MaxNumc = 0
+!06/11/23 MaxNumc = 0
       do ia = 1, Core(id)%NumSpecies
          an = getLocalAtomNickName(id,ia)
-         MaxNumc = max(MaxNumc,getNumCoreStates(an))
+!06/11/23MaxNumc = max(MaxNumc,getNumCoreStates(an))
       enddo
       Core(id)%MaxNumc = MaxNumc
       allocate( Core(id)%nc(1:MaxNumc,Core(id)%NumSpecies) )
@@ -1636,6 +1636,7 @@ contains
 !
    use AtomModule, only : getLocalSpeciesContent, getLocalNumSpecies
    use AtomModule, only : getLocalAtomicNumber
+   use AtomModule, only : getLocalAtomNickName
 !
    use SystemVolumeModule, only : getSystemVolume, getAtomicMTVolume
 !
@@ -1655,6 +1656,7 @@ contains
                                        IntegerMark, IntegerType
 !
    use ChemElementModule, only : getCoreStateIndex
+   use ChemElementModule, only : getNumCoreStates, setNumCoreStates
 !
    use InterpolationModule, only : FitInterp
 !
@@ -1669,7 +1671,7 @@ contains
    use SMatrixPolesModule, only : findSMatrixPoles, computeBoundStateDensity, &
                                   getBoundStateDensity, getNumBoundStates,    &
                                   getBoundStateEnergy, getBoundStateChargeInCell,&
-                                  getNumBoundStateDegen,                      &
+                                  getNumBoundStateDegen, examBoundStateDegen, &
                                   printSMatrixPoleInfo, printBoundStateDensity
 !
    use IntegerFactorsModule, only : lofj, mofj
@@ -1681,6 +1683,7 @@ contains
    character (len=13), parameter ::  sname='calCoreStates'
 !
    integer (kind=IntKind), parameter :: formula = 0
+   integer (kind=IntKind), parameter :: MaxSemiCoreStates = 10
 !
    integer (kind=IntKind) :: id, ia
    integer (kind=IntKind) :: is, ig, i, j, ir, numc, ib, nb, jl, jmax_rho
@@ -1694,6 +1697,7 @@ contains
    real (kind=RealKind), optional, intent(out) :: evb
 !
    logical :: sss_init = .false.
+   logical :: modified = .false.
 !
    real (kind=RealKind), allocatable :: wrk1(:),wrk2(:)
    real (kind=RealKind), parameter :: tolch=TEN2m5
@@ -1707,6 +1711,7 @@ contains
    real (kind=RealKind), parameter :: PI8 = PI4*TWO
    real (kind=RealKind) :: msemmt, mcormt, msemws, mcorws, vint_vp, vint_mt
    real (kind=RealKind) :: estep, e1, e2, fac, qws, qmt, occ, norm_fac
+   real (kind=RealKind) :: contour_radius(MaxSemiCoreStates)
 !
    real (kind=RealKind), allocatable :: sqrt_r(:)
    real (kind=RealKind), allocatable :: r_mesh_t(:)
@@ -1930,6 +1935,7 @@ endif
                                          'Error in reading Bound State Contour Integration Radius',e_delta)
                      e_delta = 0.001d0
                   endif
+                  contour_radius = e_delta
 !
                   e1 = ecs(1) - HALF
                   e2 = ecs(numc) + HALF
@@ -1939,7 +1945,25 @@ endif
 !                 ---------------------------------------------------
                   call findSMatrixPoles(id,ia,is,e1,e2,Delta=estep,CheckPoles =.false.)
 !                 ---------------------------------------------------
-!                 call computeBoundStateDensity(id,ia,is)
+!                 ====================================================
+!                 In the case that two or more neighboring bound state poles are
+!                 so close to one another that their distance are less than 2*e_bound,
+!                 these bound states will be considered as "degenerate"
+!                 The contour radius could be modified as well.
+!                 ----------------------------------------------------
+                  call examBoundStateDegen(id,ia,is,contour_radius,modified)
+!                 ----------------------------------------------------
+                  if (modified .and. MyPE == 0) then
+                     write(6,'(a)')'The number of semi-core states has been modified.'
+                     write(6,'(3(a,i3),2x,a,i3)')'id = ',id,', is = ',is,', ia = ',ia, &
+                                                 ', Modified number of bound states = ',getNumBoundStates(id,ia,is)
+                     do ib = 1, getNumBoundStates(id,ia,is)
+                        write(6,'(a,f20.12)')'Modified bound state energy = ', &
+                                             getBoundStateEnergy(id,ia,is,ib)
+                        write(6,'(a,i5)')'Modified bound state degeneracy = ', &
+                                             getNumBoundStateDegen(id,ia,is,ib)
+                     enddo
+                  endif
 !                 ---------------------------------------------------
                   fsem => Core(id)%fp_semden(:,:,is,ia)
                   dfsem => Core(id)%fp_dsemden(:,:,is,ia)
@@ -1947,7 +1971,7 @@ endif
                   nb = getNumBoundStates(id,ia,is)
                   do ib = 1, nb
 !                    ------------------------------------------------
-                     call computeBoundStateDensity(id,ia,is,e_delta,ib,getPotEf(),wk_dos)
+                     call computeBoundStateDensity(id,ia,is,contour_radius(ib),ib,getPotEf(),wk_dos)
 !                    ------------------------------------------------
                      nullify(dfden)
                      fden => getBoundStateDensity(id,ia,is,ib,NumRs=nr,jmax_rho=jmax_rho,derivative=dfden)
@@ -1960,6 +1984,10 @@ endif
                         norm_fac = ONE
                      endif
                      if (print_level >= 0) then
+                        write(6,'(a,f20.12)')'Modified bound state energy = ', &
+                                             getBoundStateEnergy(id,ia,is,ib)
+                        write(6,'(a,i5,a,d15.8)')'Num. degen = ',getNumBoundStateDegen(id,ia,is,ib), &
+                                                 ', Charge in the cell = ',getBoundStateChargeInCell(id,ia,is,ib)
                         write(6,'(a,d15.8)')'Normalization factor = ',norm_fac
                      endif
                      if (Core(id)%jmax_rho /= jmax_rho) then
@@ -2797,6 +2825,27 @@ endif
 !        write(6,'(a,i3)')'    Number of Core Electron States:',getNumCoreStates(an)
       endif
    endif
+!              nsem = 0
+!              do ic = 1, numc
+!                 nsem = nsem + 2*(2*plc(ic)+1)
+!              enddo
+!              if (Core(id)%zsemss(ia) /= nsem) then
+!                 nc = getNumCoreStates(an) + numc - Core(id)%zsemss(ia)/2
+!                 if (print_level >= 0) then
+!                    write(6,'(/,a)') '=========================================================='
+!                    write(6,'(a)')   'WARNING:: The number of semi-core electrons needs updated:'
+!                    write(6,'(a,i3)')'          The estimate number of semi-core electrons: ',Core(id)%zsemss(ia)
+!                    write(6,'(a,i3)')'          The actual   number of semi-core electrons: ',2*numc
+!                 endif
+!                 Core(id)%zsemss(ia) = nsem
+!                 call setNumCoreStates(an,nc)
+!                 if (print_level >= 0) then
+!                    write(6,'(a,i3)')'The total number of core states of ',an,' is reset to: ',nc
+!                    write(6,'(a,i3)')'The total number of valence electrons of ',an,' becomes: ', &
+!                                     (Core(id)%ztotss(ia) - Core(id)%zsemss(ia) - Core(id)zcorss(ia)
+!                    write(6,'(a,/)') '=========================================================='
+!                 endif
+!              endif
 !
    if(stop_routine.eq.sname) then
       call StopHandler(sname)

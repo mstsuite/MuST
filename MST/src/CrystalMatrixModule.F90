@@ -495,7 +495,7 @@ contains
    enddo
 !
 !  ===================================================================
-   if ( max_print_level >0 .or. MyPE==0 ) then
+   if ( max_print_level >0 .and. MyPE==0 ) then
       write(6,*) "===================================================="
       write(6,*) "init CrystalMatrix Module ::  "
       write(6,'(a,i5)') "   LocalNumAtoms   : ", LocalNumAtoms
@@ -956,8 +956,11 @@ contains
    use SROModule, only : obtainPosition
    use StrConstModule, only : checkFreeElectronPoles, getFreeElectronPoleFactor
    use WriteMatrixModule,  only : writeMatrix
+   use Atom2ProcModule, only : getGlobalIndex
+   use ScfDataModule, only : isKKR
 !
    implicit none
+!
 !
    logical, intent(in), optional :: tau_needed
    logical, intent(in), optional :: use_tmat
@@ -1280,6 +1283,7 @@ contains
          endif
    !     call writeMatrix('KKR_MatrixBand',KKR_MatrixBand,KKRMatrixSizeCant, &
    !                      BandSizeCant,TEN2m8)
+         !print *,"1 Times in sumk loop",t2-t1,t3-t2,t4-t3
       enddo
    !  -------------------------------------------------------------------
       call GlobalSumInGroup(kGID,KKR_MatrixBand,KKRMatrixSizeCant*BandSizeCant)
@@ -1311,8 +1315,13 @@ contains
 !           ----------------------------------------------------------------
          endif
       endif
+      if (method == 2 .and. isKKR()) then ! Avoid calling calKauFromTau in
+                                          ! the KKR-CPA case
+!        -------------------------------------------------------------------
+         call calKauFromTau(getSingleScatteringMatrix,site_config)
+!        -------------------------------------------------------------------
+      endif
    endif
- 
    nullify( weight, kpts )
 !
    if (trim(stop_routine) ==trim(sname)) then
@@ -1330,6 +1339,7 @@ contains
 !  ===================================================================
    use StrConstModule, only : getStrConstMatrix
    use StrConstModule, only : checkFreeElectronPoles, getFreeElectronPoleFactor
+   use ScfDataModule, only : isKKR
 !
    implicit none
 !
@@ -1448,6 +1458,11 @@ contains
 !     ----------------------------------------------------------------
       call computeTauMatrix(getSingleScatteringMatrix,site_config)
 !     ----------------------------------------------------------------
+      if (isKKR()) then  ! Avoid calling calKauFromTau in the KKR-CPA case
+!        -------------------------------------------------------------
+         call calKauFromTau(getSingleScatteringMatrix,site_config)
+!        -------------------------------------------------------------
+      endif
    else
 !     ----------------------------------------------------------------
       call ErrorHandler('calCrystalMatrix_k','The method is invalid',method)
@@ -1485,7 +1500,7 @@ contains
    complex (kind=CmplxKind), pointer :: sm1(:,:), sm2(:,:), pw(:,:), poi(:,:)
    complex (kind=CmplxKind), pointer :: tm(:,:), om(:,:), oim(:,:)
    complex (kind=CmplxKind), pointer :: wau_g(:,:), wau_l(:,:,:), p1(:)
-   complex (kind=CmplxKind),allocatable :: mat_tmp(:,:) , mat_tmp2(:,:)!xianglin
+   complex (kind=CmplxKind), pointer :: mat_tmp(:,:) , mat_tmp2(:,:)!xianglin
 !
    interface
       function getSingleScatteringMatrix(smt,spin,site,atom,dsize) result(sm)
@@ -1609,15 +1624,21 @@ contains
             tm => getSingleScatteringMatrix('T-Matrix',site=j,atom=site_config(j))
             kau_l => MatrixBand(j)%MatrixBlock(i)%kau_l(:,:,1)
             tau_l => MatrixBand(j)%MatrixBlock(i)%tau_l(:,:,1)
-            allocate(mat_tmp(kmaxj_ns,kmaxj_ns))
-            allocate(mat_tmp2(kmaxj_ns,kmaxj_ns))
+!
+            p1 => WORK(1:kmaxj_ns*kmaxj_ns)
+            mat_tmp => aliasArray2_c(p1,kmaxj_ns,kmaxj_ns)
+            p1 => WORK(kmaxj_ns*kmaxj_ns+1:2*kmaxj_ns*kmaxj_ns)
+            mat_tmp2 => aliasArray2_c(p1,kmaxj_ns,kmaxj_ns)
+!           allocate(mat_tmp(kmaxj_ns,kmaxj_ns))
+!           allocate(mat_tmp2(kmaxj_ns,kmaxj_ns))
+!
             mat_tmp2=kau_l !note in the following CONE/kappa**2 used instead of divide by energy
             call zgemm( 'n', 't', kmaxj_ns, kmaxj_ns, kmaxj_ns, CONE/kappa**2,&
             mat_tmp2, kmaxj_ns, sm2, kmaxj_ns, CZERO, mat_tmp, kmaxj_ns)
             call zgemm( 'n', 'n', kmaxj_ns, kmaxj_ns, kmaxj_ns, CONE,&
             sm1, kmaxj_ns, mat_tmp, kmaxj_ns, CZERO, tau_l, kmaxj_ns)
             tau_l = tau_l + tm
-            deallocate(mat_tmp, mat_tmp2)
+!           deallocate(mat_tmp, mat_tmp2)
          else
             ns = 0
             do js = 1, nSpinCant
@@ -1846,6 +1867,120 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine calKauFromTau(getSingleScatteringMatrix,site_config)
+!  ===================================================================
+!
+!  Note: given Tau00, compute Kau00
+!
+!        Kau00 = energy*S^{-1}*[Tau00 - t_matrix]*S^{-*T}
+!
+!  *******************************************************************
+   use MatrixModule, only : computeUAU, computeUAUts
+!
+   use MatrixInverseModule, only : MtxInv_LU
+!
+   use WriteMatrixModule, only : writeMatrix
+!
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: site_config(:)
+   integer(kind=IntKind) :: i, j, ig, ns, js, is, kmaxj, kmaxj_ns
+!
+   complex(kind=CmplxKind), target :: SinvMat1(kmax_kkr_max*kmax_kkr_max*nSpinCant*nspinCant)
+   complex(kind=CmplxKind), target :: SinvMat2(kmax_kkr_max*kmax_kkr_max*nSpinCant*nspinCant)
+   complex(kind=CmplxKind), target :: p1(kmax_kkr_max*kmax_kkr_max*nSpinCant*nspinCant)
+!
+   complex(kind=CmplxKind), pointer :: Jinv(:,:), Tinv(:,:)
+   complex(kind=CmplxKind), pointer :: Jost(:,:), OH(:,:), sm(:,:), tm(:,:)
+   complex(kind=CmplxKind), pointer :: kau_l(:,:), tau_l(:,:)
+   complex(kind=CmplxKind), pointer :: mat_tmp(:,:), SinvL(:,:), SinvR(:,:)
+!
+   interface
+      function getSingleScatteringMatrix(smt,spin,site,atom,dsize) result(sm)
+         use KindParamModule, only : IntKind, CmplxKind
+         character (len=*), intent(in) :: smt
+         integer (kind=IntKind), intent(in), optional :: spin, site, atom
+         integer (kind=IntKind), intent(out), optional :: dsize
+         complex (kind=CmplxKind), pointer :: sm(:,:)
+      end function getSingleScatteringMatrix
+   end interface
+!
+   do j = 1, LocalNumAtoms
+      ig = MatrixBand(j)%global_index
+      i = gid_array(ig)
+      kmaxj = MatrixBand(j)%MatrixBlock(i)%kmax_kkr
+      kmaxj_ns = kmaxj*nSpinCant
+      if (isRelativistic) then
+         SinvL => aliasArray2_c(SinvMat1,kmaxj_ns,kmaxj_ns)
+         SinvR => aliasArray2_c(SinvMat2,kmaxj_ns,kmaxj_ns)
+         sm => getSingleScatteringMatrix('Sine-Matrix',site=j,atom=site_config(j))
+         SinvL = sm
+!        -------------------------------------------------------------
+         call Mtxinv_LU(SinvL,kmaxj_ns)
+!        -------------------------------------------------------------
+         SinvR = SinvL
+!
+         mat_tmp => aliasArray2_c(p1,kmaxj_ns,kmaxj_ns)
+!
+         tau_l => MatrixBand(j)%MatrixBlock(i)%tau_l(:,:,1)
+         tm => getSingleScatteringMatrix('T-Matrix',site=j,atom=site_config(j))
+         mat_tmp = tau_l - tm !note in the following kappa**2 is used instead of energy
+!
+         kau_l => MatrixBand(j)%MatrixBlock(i)%kau_l(:,:,1)
+!        -------------------------------------------------------------
+         call computeUAUts(SinvL,kmaxj_ns,kmaxj_ns,SinvR,kmaxj_ns,kappa*kappa,   &
+                           mat_tmp,kmaxj_ns,CZERO,kau_l,kmaxj_ns,WORK)
+!        -------------------------------------------------------------
+      else
+         SinvL => aliasArray2_c(SinvMat1,kmaxj,kmaxj)
+         SinvR => aliasArray2_c(SinvMat2,kmaxj,kmaxj)
+         ns = 0
+         do js = 1, nSpinCant
+            Jinv => getSingleScatteringMatrix('JostInv-Matrix',spin=js,site=j,atom=site_config(j))
+            Tinv => getSingleScatteringMatrix('TInv-Matrix',spin=js,site=j,atom=site_config(j))
+            SinvL => aliasArray2_c(SinvMat1,kmaxj,kmaxj)
+!           ==========================================================
+!           S^{-1} = Jost^{-1}*tmat^{-1}/kappa
+!           ----------------------------------------------------------
+            call zgemm( 'n', 'n', kmaxj, kmaxj, kmaxj, CONE/kappa,    &
+                       Jinv, kmaxj, Tinv, kmaxj, CZERO, SinvL, kmaxj)
+!           ----------------------------------------------------------
+            do is = 1, nSpinCant
+               Jost => getSingleScatteringMatrix('Jost-Matrix',spin=is,site=j,atom=site_config(j))
+               OH => getSingleScatteringMatrix('OmegaHat-Matrix',spin=is,site=j,atom=site_config(j))
+               SinvR => aliasArray2_c(SinvMat2,kmaxj,kmaxj)
+!              =======================================================
+!              OmegaHat = S^{-1} * tmat * S^{-T*}/kappa
+!              S^{-T*} = Jost*OmegaHat
+!              -------------------------------------------------------
+               call zgemm( 'n', 'n', kmaxj, kmaxj, kmaxj, CONE,       &
+                           Jost, kmaxj, OH, kmaxj, CZERO, SinvR, kmaxj)
+!              -------------------------------------------------------
+               ns = ns + 1
+               tau_l => MatrixBand(j)%MatrixBlock(i)%tau_l(:,:,ns)
+               mat_tmp => aliasArray2_c(p1,kmaxj,kmaxj)
+               if (is == js) then
+                  tm => getSingleScatteringMatrix('T-Matrix',spin=is,site=j,atom=site_config(j))
+                  mat_tmp = tau_l - tm
+               else
+                  mat_tmp = tau_l
+               endif
+               kau_l => MatrixBand(j)%MatrixBlock(i)%kau_l(:,:,ns)
+!              -------------------------------------------------------
+               call computeUAU(SinvL,kmaxj,kmaxj,SinvR,kmaxj,kappa*kappa, &
+                               mat_tmp, kmaxj,CZERO,kau_l,kmaxj,WORK)
+!              -------------------------------------------------------
+            enddo
+         enddo
+      endif
+   enddo
+!
+   end subroutine calKauFromTau
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine computeMatrixBand(p_MatrixBand,method,fepf,fixed_g,fixed_l,&
                         use_sro, getSingleScatteringMatrix)
 !  ===================================================================
@@ -1855,8 +1990,14 @@ contains
 !
    use WriteMatrixModule,  only : writeMatrix
 !
+   use MPPModule, only : MyPE, sendMessage, recvMessage
+   use MPPModule, only : setCommunicator, resetCommunicator
+   use GroupCommModule, only : getGroupID, getGroupCommunicator
+!   use TimerModule, only : getTime
    implicit none
+!   double precision :: t1,t2,t3,t4
 !
+   integer (kind=IntKind) :: comm
    integer (kind=IntKind), intent(in) :: method
    integer (kind=IntKind), intent(in), optional :: fixed_g, fixed_l
    logical, optional, intent(in) :: use_sro
@@ -1873,6 +2014,10 @@ contains
    complex (kind=CmplxKind), pointer :: p_sinej(:), w2(:,:)
    complex (kind=CmplxKind), intent(out), target :: p_MatrixBand(:)
    complex (kind=CmplxKInd) :: cfac, wfac
+#ifdef ACCEL
+   complex (kind=CmplxKind), allocatable :: KKR_matrix(:,:)
+   integer (kind=IntKind) :: mpi_i, mpi_j, block_size
+#endif
 !
    logical :: do_sro = .false.
 !
@@ -2206,8 +2351,13 @@ contains
       call zcopy(KKRMatrixSizeCant*KKRMatrixSizeCant,WORK,1,p_MatrixBand,1)
    endif
 !
+
    if (NumPEsInGroup == 1) then  ! BandSizeCant = KKRMatrixSizeCant
 !    ----------------------------------------------------------------
+#ifdef ACCEL
+     !no atom parallelism, just invert the p_MatrixBand on process 0
+     call invertMatrixKKR_CUDA(p_MatrixBand, KKRMatrixSizeCant)
+#else
      if(do_sro) then
          call ZGETRF(OKKRMatrixSizeCant, OKKRMatrixSizeCant,               &
                      p_MatrixBand, OKKRMatrixSizeCant, IPVT, INFO)
@@ -2224,15 +2374,76 @@ contains
          call ErrorHandler('calCrystalMatrix','Failed in ZGETRF',INFO)
 !        -------------------------------------------------------------
      endif
+#endif
    else
+
+
+#ifdef ACCEL
+     GroupID = getGroupID('Unit Cell')
+     comm = getGroupCommunicator(GroupID)
+     call setCommunicator(comm,MyPEinGroup,NumPEsInGroup,sync=.true.)
+     !there is atom parallelism, should invert the KKR matrix on process 0
+     block_size = KKRMatrixSizeCant/NumPEsInGroup
+     !assign KKR matrix on process 0 first
+     !t1 = getTime()
+     if (MyPEinGroup == 0) then
+         allocate(KKR_matrix(KKRMatrixSizeCant, KKRMatrixSizeCant))
+     endif
+     if (MyPEinGroup == 0) then
+         do j=1,block_size
+             do i=1,KKRMatrixSizeCant
+                 KKR_matrix(i, j) = p_MatrixBand(i+(j-1)*KKRMatrixSizeCant)
+             enddo
+         enddo
+     endif
+     !collect part of KKR matrix from each process, p_MatrixBand is part of KKR matrix
+     do mpi_i=1,NumPEsInGroup-1
+         if (MyPEinGroup == mpi_i) then
+             call sendMessage(p_MatrixBand,block_size * KKRMatrixSizeCant,1010,0)!sendMessage(message,size1,msgtype,target_node)
+         endif
+         if (MyPEinGroup == 0) then
+             call recvMessage(KKR_matrix(:,mpi_i*block_size+1:(mpi_i+1)*block_size), KKRMatrixSizeCant, block_size,1010,mpi_i)!recvMessage(message,size1,msgtype,source_node)
+         endif
+     enddo
+     !t2 = getTime()
+     !invert the KKR matrix
+     if (MyPEinGroup == 0) then 
+         call invertMatrixKKR_CUDA(KKR_matrix, KKRMatrixSizeCant)
+         !assign part of inverted matrix on process 0
+         do j=1,block_size
+             do i=1,KKRMatrixSizeCant
+                 p_MatrixBand(i+(j-1)*KKRMatrixSizeCant) = KKR_matrix(i, j)
+             enddo
+         enddo
+     endif
+     !distribute the inverted matrix to each process
+     !t3 = getTime()
+     do mpi_i=1,NumPEsInGroup-1
+         if (MyPEinGroup == 0) then
+             call sendMessage(KKR_matrix(:,mpi_i*block_size+1:(mpi_i+1)*block_size),KKRMatrixSizeCant, block_size,1010,mpi_i)
+         endif
+         if (MyPEinGroup == mpi_i) then
+             call recvMessage(p_MatrixBand,block_size * KKRMatrixSizeCant,1010,0)
+         endif
+     enddo
+     !t4 = getTime()
+     !if (MyPEinGroup == 0) then
+     !    print *,"Time for building matrix on PE 0",t4-t3+t2-t1,"seconds"
+     !endif
+     call resetCommunicator(sync=.true.)
+#else
+
+
 #ifdef USE_SCALAPACK
 !     ----------------------------------------------------------------
       if (do_sro) then
          call PZGETRF(OKKRMatrixSizeCant, OKKRMatrixSizeCant,         &
                     p_MatrixBand, 1, 1, DESC_A, IPVT, INFO)
       else
+         !t1 = getTime()
          call PZGETRF(KKRMatrixSizeCant, KKRMatrixSizeCant,           &
                     p_MatrixBand, 1, 1, DESC_A, IPVT, INFO)
+         !t2 = getTime()
       endif
 !     ----------------------------------------------------------------
 !      call PZGETRF(KKRMatrixSizeCant, KKRMatrixSizeCant,              &
@@ -2262,8 +2473,10 @@ contains
 !        -------------------------------------------------------------
       endif
 #endif
+#endif
    endif
 !
+#ifndef ACCEL
    if (NumPEsInGroup == 1) then  ! BandSizeCant = KKRMatrixSizeCant
 !     ----------------------------------------------------------------
       if (do_sro) then
@@ -2286,9 +2499,14 @@ contains
          call PZGETRI(OKKRMatrixSizeCant, p_MatrixBand, 1, 1,         &
                    DESC_A, IPVT, WORK_sro, LWORK_sro, IWORK_sro, LIWORK_sro, INFO )
       else
+         !t3 = getTime()
          call PZGETRI(KKRMatrixSizeCant, p_MatrixBand, 1, 1,         &
                    DESC_A, IPVT, WORK, LWORK, IWORK, LIWORK, INFO)
+         !t4 = getTime()
       endif
+      !if (MyPEinGroup == 0) then
+      !    print *,"matrix inverse on PE 0 is",t4-t3+t2-t1,"seconds"
+      !endif
 !     ----------------------------------------------------------------
       if (INFO /= 0) then
 !        -------------------------------------------------------------
@@ -2314,6 +2532,7 @@ contains
       endif
 #endif
    endif
+#endif
 !  ==================================================================
 !  Since we are only dealing with method = 2 for SRO, no need to make
 !  any changes here

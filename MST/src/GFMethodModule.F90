@@ -487,7 +487,7 @@ contains
       endif
 !     ----------------------------------------------------------------
       call initSMatrixPoles(LocalNumAtoms,n_spin_pola,n_spin_cant,LocalNumSpecies,&
-                            lmax_kkr,lmax_green,iprint_loc)
+                            min(lmax_kkr,4),lmax_green,iprint_loc)
 !     ----------------------------------------------------------------
    endif
 !
@@ -499,7 +499,7 @@ contains
       endif
 !     ----------------------------------------------------------------
       call initSineMatrixZeros(LocalNumAtoms,n_spin_pola,LocalNumSpecies,&
-                            lmax_kkr,lmax_green,iprint_loc)
+                               min(lmax_kkr,4),lmax_green,iprint_loc)
 !     ----------------------------------------------------------------
    endif
 !
@@ -2261,6 +2261,8 @@ contains
    use SpinRotationModule, only : calSpinRotation, printSpinRotation
    use SpinRotationModule, only : transformDensityMatrix
 !
+   use PublicTypeDefinitionsModule, only : PDOSStruct
+!
    implicit none
 !
    character (len=10) :: fname
@@ -2284,14 +2286,15 @@ contains
 !
    type (GridStruct), pointer :: Grid
 !
-   type PDOSStruct
-      real (kind=RealKind), pointer :: dos_ws(:,:), dos_mt(:,:)
-      real (kind=RealKind), pointer :: ss_dos_ws(:,:), ss_dos_mt(:,:)
-      real (kind=RealKind), pointer :: phase_shift(:,:,:)
-      real (kind=RealKind), pointer :: ss_pdos_ws(:,:,:), ss_pdos_mt(:,:,:)
-      real (kind=RealKind), pointer :: ms_pdos_ws(:,:,:), ms_pdos_mt(:,:,:)
-      real (kind=RealKind), pointer :: partial_dos_ws(:,:,:), partial_dos_mt(:,:,:)
-   end type PDOSStruct
+!  type PDOSStruct
+!     integer (kind=IntKind) :: kmax_phi
+!     real (kind=RealKind), pointer :: dos_ws(:,:), dos_mt(:,:)
+!     real (kind=RealKind), pointer :: ss_dos_ws(:,:), ss_dos_mt(:,:)
+!     real (kind=RealKind), pointer :: phase_shift(:,:,:)
+!     real (kind=RealKind), pointer :: ss_pdos_ws(:,:,:), ss_pdos_mt(:,:,:)
+!     real (kind=RealKind), pointer :: ms_pdos_ws(:,:,:), ms_pdos_mt(:,:,:)
+!     real (kind=RealKind), pointer :: partial_dos_ws(:,:,:), partial_dos_mt(:,:,:)
+!  end type PDOSStruct
 !
    type (PDOSStruct), allocatable :: PartialDOS(:)
 !
@@ -2318,6 +2321,13 @@ contains
       call ErrorHandler('calpartialDOS',                              &
                         'module needs to be initialized first')
 !     ----------------------------------------------------------------
+   endif
+!
+   if ( node_print_level >= 0 ) then
+      write(6,'(80("-"),/)')
+      write(6,'(10x,a)')'***************************************************************'
+      write(6,'(10x,a)')'* The following output is produced from calling calPartialDOS *'
+      write(6,'(10x,a)')'***************************************************************'
    endif
 !
    do id = 1,LocalNumAtoms
@@ -2363,6 +2373,7 @@ contains
 !  
    allocate( PartialDOS(LocalNumAtoms) )
    do id = 1, LocalNumAtoms
+      PartialDOS(id)%kmax_phi = kmax_phi(id)
       num_species = getLocalNumSpecies(id)
       allocate( PartialDOS(id)%dos_ws(n_spin_pola,num_species) )      
       allocate( PartialDOS(id)%dos_mt(n_spin_pola,num_species) )
@@ -2566,19 +2577,9 @@ contains
       iprint = 0
    endif
 !
-   do id = 1, LocalNumAtoms
-      do ia = 1, getLocalNumSpecies(id)
-!        -------------------------------------------------------------
-         call gaspari_gyorffy_formula(kmax_phi_max,kmax_phi(id),n_spin_pola, &
-                                      getLocalAtomicNumber(id,ia),           &
-                                      PartialDOS(id)%ss_dos_mt(1,ia),        &
-                                      PartialDOS(id)%dos_mt(1,ia),           &
-                                      PartialDOS(id)%phase_shift(1,1,ia),    &
-                                      PartialDOS(id)%ss_pdos_mt(1,1,ia),     &
-                                      PartialDOS(id)%partial_dos_mt(1,1,ia),iprint)
-!        -------------------------------------------------------------
-      enddo
-   enddo
+!  -------------------------------------------------------------------
+   call gaspari_gyorffy_formula(LocalNumAtoms,n_spin_pola,chempot,PartialDOS,iprint)
+!  -------------------------------------------------------------------
 !
    if ( (MyPEinEGroup == 0 .and. GlobalNumAtoms < 10) .or. node_print_level >= 0 ) then
       do id = 1, LocalNumAtoms
@@ -2876,8 +2877,10 @@ contains
                                   getResonanceStateEnergy,      &
                                   getBoundStateEnergy,          &
                                   getNumBoundStates,            &
+                                  getNumBoundStateDegen,        &
                                   computeResonanceStateDensity, &
                                   computeBoundStateDensity,     &
+                                  examBoundStateDegen,          &
                                   printSMatrixPoleInfo
 !
    use SineMatrixZerosModule, only : findSineMatrixZeros,       &
@@ -2906,16 +2909,18 @@ contains
    integer (kind=IntKind) :: NumBoundStates, nz
    integer (kind=IntKind) :: NumGQPs, nsize
    integer (kind=IntKind), parameter :: MaxGQPs = 200
+   integer (kind=IntKind), parameter :: MaxShallowBoundStates = 10
 !
    real (kind=RealKind), intent(in), optional :: Ebegin, Eend
    logical, intent(in), optional :: relativity !xianglin
-   logical :: contour_int
+   logical :: contour_int, modified = .false.
    logical, parameter :: romberg = .true.
 !
    real (kind=RealKind) :: ssdos_int, IDOS_cell, ps, e0, ps0, ssDOS, width
    real (kind=RealKind) :: scaling_factor, IDOS_space, IDOS_out, sfac
    real (kind=RealKind) :: resonance_contour_radius, resonance_width
    real (kind=RealKind) :: ebot, etop, er, ep, ei, e1, e2, e_delta, e_bound, w, rfac, maxd, err
+   real (kind=RealKind) :: contour_radius(MaxShallowBoundStates)
    real (kind=RealKind), allocatable :: xg(:), wg(:)
 !
    complex (kind=CmplxKind) :: int_test, ec, es, cfac
@@ -3333,9 +3338,17 @@ contains
                   call printSMatrixPoleInfo(id,ia,is)
 !                 ----------------------------------------------------
                endif
+               if (getNumBoundStates(id,ia,is) > MaxShallowBoundStates) then
+                  call ErrorHandler('calSingleScatteringIDOS',   &
+                                    'NumBoundStates > MaxShallowBoundStates', &
+                                    getNumBoundStates(id,ia,is), MaxShallowBoundStates)
+               endif
             enddo
          enddo
       enddo
+!     ----------------------------------------------------------------
+      call syncAllPEs()
+!     ----------------------------------------------------------------
 !
       e_delta = ZERO
       rstatus = getKeyValue(1,'Resonance State Contour Integration Radius (>0.0)',e_delta)
@@ -3357,7 +3370,7 @@ contains
                   call computeSineZeroDensity(id,ia,is)
 !                 ----------------------------------------------------
                enddo
-               if (node_print_level >= 0) then
+               if (node_print_level >= 0 .and. getNumResonanceStates(id,ia,is) > 0) then
 !                 ----------------------------------------------------
                   call printSineMatrixZerosInfo(id,ia,is)
 !                 ----------------------------------------------------
@@ -3370,7 +3383,9 @@ contains
 !
 !     ================================================================
 !     In case there are shallow bound states in (ErBottom, 0.0), 
-!     calculate the density associated with these bound states
+!     calculate the density associated with these bound states using
+!     contour integration around the poles associated with thesse
+!     bound state. The radius of the contour is stored in e_bound
 !     ================================================================
       rstatus = getKeyValue(1,'Bound State Contour Integration Radius (>0.0)',e_bound)
       if (rstatus /= 0 .or. e_bound < TEN2m6 .or. e_bound > ONE) then
@@ -3386,10 +3401,31 @@ contains
                ns = 4
             endif
             do ia = 1, ssLastValue(id)%NumSpecies
+               contour_radius = e_bound
+!              =======================================================
+!              In the case that two or more neighboring bound state poles are
+!              so close to one another that their distance are less than 2*e_bound,
+!              these bound states will be considered as "degenerate"
+!              The contour radius could be modified as well.
+!              -------------------------------------------------------
+               call examBoundStateDegen(id,ia,is,contour_radius,modified)
+!              -------------------------------------------------------
+               if (modified .and. MyPE == 0) then
+                  write(6,'(a)')'The number of shallow bound states has been modified.'
+                  write(6,'(3(a,i3),2x,a,i3)')'id = ',id,', is = ',is,', ia = ',ia, &
+                                              ', Modified number of bound states = ',getNumBoundStates(id,ia,is)
+                  do ib = 1, getNumBoundStates(id,ia,is)
+                     write(6,'(a,f20.12)')'Modified bound state energy = ', &
+                                          getBoundStateEnergy(id,ia,is,ib,sorted =.true.)
+                     write(6,'(a,i5)')'Modified bound state degeneracy = ', &
+                                          getNumBoundStateDegen(id,ia,is,ib,sorted=.true.)
+                  enddo
+               endif
+!
                info(1) = is; info(2) = id; info(3) = ia; info(4) = 1; info(5) = lmax_phi(id) 
                do ib = 1, getNumBoundStates(id,ia,is)
 !                 ----------------------------------------------------
-                  call computeBoundStateDensity(id,ia,is,e_bound,ib,chempot,wk_dos)
+                  call computeBoundStateDensity(id,ia,is,contour_radius(ib),ib,chempot,wk_dos)
 !                 ----------------------------------------------------
 !                 ====================================================
 !                 The bound state density will be added to ssIntegrValue
@@ -3780,7 +3816,8 @@ contains
                      write(6,'(a,i4,2x,f12.8,2x,d15.8)')'Bound state id, e, and DOS = ',&
                        ib,getBoundStateEnergy(id=id,ia=ia,is=is,ibs=ib),ssDOS
                      write(6,'(a,i4,2x,d15.8)')'Bound state id, ssDOS = ',ib,ssDOS
-                     write(6,'(a,i4,2x,d15.8)')'Bound state id, ssLastValue =',ib,real(ssLastValue(id)%dos(ns,ia),kind=RealKind)
+                     write(6,'(a,i4,2x,d15.8)')'Bound state id, ssLastValue =',ib,          &
+                                               real(ssLastValue(id)%dos(ns,ia),kind=RealKind)
                   endif
                enddo
                if ( node_print_level >= 0) then
@@ -3962,6 +3999,8 @@ contains
    use MultiScatteringDOSModule, only : setMScatteringDOSParam
    use MultiScatteringDOSModule, only : getMScatteringDOS, getRelMScatteringDOS
 !
+   use CheckPointModule, only : isStopPoint, takeStopAction
+!
    implicit none
 !
    logical, intent(in) :: useIrregularSolution
@@ -3971,6 +4010,7 @@ contains
    integer (kind=IntKind) :: ie, id, is, js, info(6), ia
    integer (kind=IntKind) :: e_loc
    integer (kind=IntKind) :: NumEsOnMyProc, NumRedunEs
+   integer (kind=IntKind) :: point_id
 !
    real (kind=RealKind) :: time_ie, ssDOS, msDOS(2), ChargeInLowContour(LocalNumAtoms)
 !
@@ -3980,6 +4020,8 @@ contains
 !  complex (kind=CmplxKind) :: test_result_c1(LocalNumAtoms)
 !
    type (ElectroStruct), pointer :: pCurrentValue
+!
+   character (len=25) :: sname = 'calMultipleScatteringIDOS'
 !
    interface adjustEnergy
       function adjustEnergy_r(is,e) result(energy)
@@ -4207,6 +4249,10 @@ contains
 !     ----------------------------------------------------------------
       call sumESVAL_r(IntegrValue,eGID)
 !     ----------------------------------------------------------------
+   endif
+!
+   if (isStopPoint(sname,point_id)) then
+      call takeStopAction(point_id,0)
    endif
 !
    end subroutine calMultipleScatteringIDOS

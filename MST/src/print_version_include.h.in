@@ -1,0 +1,7 @@
+! 
+! this routine is automatically generated at compilation time
+! DO NOT EDIT 
+! 
+   write(myunit,'("# ",t5,a,t30,": ",a)') "username",trim("@USERNAME@")
+   write(myunit,'("# ",t5,a,t30,": ",a)') "system name",trim("@FQDN@")
+   write(myunit,'("# ",t5,a,t30,": ",a)') "code compiled",trim("@TIME@")
