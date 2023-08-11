@@ -296,7 +296,7 @@ contains
    allocate( BigMatrix(dsize_max*dsize_max) )
 !  Allocate matrices for tauij calculation (i,j != 0)
    if (istauij_needed) then
-     allocate (BigMatrixInv(dsize_max, dsize_max))
+!    allocate (BigMatrixInv(dsize_max, dsize_max))
 !    allocate (ClusterMatrix(LocalNumAtoms*kmax_max,LocalNumAtoms*kmax_max))
 !    allocate (ClusterKau(LocalNumAtoms*kmax_max,LocalNumAtoms*kmax_max))
 !    allocate (ClusterTau(LocalNumAtoms*kmax_max,LocalNumAtoms*kmax_max))
@@ -954,12 +954,10 @@ use MPPModule, only : MyPE, syncAllPEs
 !     Construct BigMatrix for local atom: my_atom
 !     ================================================================
       dsize = dsize_l(my_atom)  ! This is the number of rows of BigMatrix
-
 !     ================================================================
 !     initialize BigMatrix so that it is a unit matrix to begin with..
 !     ================================================================
       call setupUnitMatrix(dsize,BigMatrix)
-      BigMatrixInv = CZERO
 !     ================================================================
 !     loop over cluster neighbors to build BigMatrix [1-Jinv*G*S]
 !
@@ -1156,6 +1154,8 @@ use MPPModule, only : MyPE, syncAllPEs
 !              = (1-pBlockMatrix)^{-1}*pBlockMatrix
 !        =============================================================
          if (istauij_needed) then
+           allocate(BigMatrixInv(dsize, dsize))
+           BigMatrixInv = CZERO
            call zcopy(dsize*dsize, BigMatrix,1,BigMatrixInv,1) 
           !pBigMatrix => aliasArray2_c(BigMatrixInv,dsize,dsize)
            call MtxInv_LU(BigMatrixInv, dsize)
@@ -1176,6 +1176,7 @@ use MPPModule, only : MyPE, syncAllPEs
            enddo
   !        call writeMatrix("BigMatrixInv00",Tau00(my_atom)%neighMat(1)%wau_l, kkrsz_ns, kkrsz_ns)
   !        call writeMatrix("BigMatrixInv10",pBigMatrix(kkrsz_ns+1:2*kkrsz_ns, 1:kkrsz_ns), kkrsz_ns, kkrsz_ns)
+           deallocate(BigMatrixInv)
          endif
          BlockMatrix = CZERO
          pBlockMatrix => aliasArray2_c(BlockMatrix,kkrsz_ns,kkrsz_ns)
