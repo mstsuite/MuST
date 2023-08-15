@@ -2234,6 +2234,8 @@ contains
 !  ===================================================================
    use Atom2ProcModule, only : getGlobalIndex
 !
+   use InputModule, only : getKeyValue
+!
    use SSSolverModule, only : initSSSolver, endSSSolver
    use SSSolverModule, only : solveSingleScattering, computePDOS,     &
                               computePhaseShift, getPhaseShift,       &
@@ -2274,7 +2276,7 @@ contains
 !
    real (kind=RealKind) :: Timing_SS = ZERO
    real (kind=RealKind), intent(in) :: er
-   real (kind=RealKind) :: sfac, evec(3), check_ws, check_mt, t0
+   real (kind=RealKind) :: sfac, evec(3), check_ws, check_mt, t0, ei
    real (kind=RealKind), pointer :: ps(:)
    real (kind=RealKind), pointer :: pdos_ws(:), pdos_mt(:)
    real (kind=RealKind) :: ms_dos_ws(n_spin_cant*n_spin_pola), ms_dos_mt(n_spin_cant*n_spin_pola)
@@ -2389,6 +2391,10 @@ contains
    enddo
 !  
    sfac= TWO/real(n_spin_pola,kind=RealKind)
+!
+   if (getKeyValue(1,'Imaginary energy shift',ei) /= 0) then
+      ei = 0.001d0
+   endif
 !  
    if ( (MyPEinEGroup == 0 .and. GlobalNumAtoms < 10) .or. node_print_level >= 0 ) then
       do id = 1, LocalNumAtoms
@@ -2464,7 +2470,7 @@ contains
 !
 !  ==================================================================
 !  Solve the multiple scattering problem for e = er, which is
-!  set to be (er,0.001) in KKR case.
+!  set to be (er,ei) in KKR case.
 !
 !  initialize Multiple scattering solver
 !  -------------------------------------------------------------------
@@ -2476,9 +2482,9 @@ contains
    ns_sqr = n_spin_cant*n_spin_cant
    do is = 1, n_spin_pola/n_spin_cant
       if (isKKR() .or. isKKRCPA() .or. isKKRCPASRO()) then
-         ec = adjustEnergy(is,cmplx(er,0.001d0,kind=CmplxKind))
+         ec = adjustEnergy(is,cmplx(er,ei,kind=CmplxKind))
       else
-         ec = adjustEnergy(is,cmplx(er,0.000d0,kind=CmplxKind))
+         ec = adjustEnergy(is,cmplx(er,ZERO,kind=CmplxKind))
       endif
 !     
 !     ===============================================================
