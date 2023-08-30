@@ -95,6 +95,8 @@ pzgetrf_nopivot.o \
 pz_LogTrace.o \
 PrimeFactorsModule.o \
 computeProdExpan.o \
+computeRealProdExpan.o \
+computeCmplxProdExpan.o \
 BroydenLib.o \
 AndersonLib.o \
 newtc.o \

@@ -38,6 +38,7 @@ public :: initScfData,                 &
           isSingleSite,                &
           isFrozenCore,                &
           isLloyd,                     &
+          isDMFTenabled,               &
           getLloydMode,                &
           getKmeshFileName,            &
           getEmeshFileName,            &
@@ -164,6 +165,8 @@ public
    character (len=1),  private :: j_ij
    character (len=50), private :: UJfile
 !
+   integer (kind=IntKind), private :: DMFT = 0
+!
    integer (kind=IntKind), private :: ss_integral_method = -1
    integer (kind=IntKind), private :: ss_solution_method = -1
    integer (kind=IntKind), private :: sss_method = 2
@@ -202,7 +205,6 @@ public
    real (kind=RealKind), private, allocatable :: intercepts(:)
    real (kind=RealKind), private :: cvm_params(2)
    integer (kind=IntKind), private :: is_cvm = 0
-
 !
 contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -520,6 +522,8 @@ contains
    if (efermi_mix_switch < ZERO) then
       call ErrorHandler('initScfData','Invalid efermi_mix_switch value',efermi_mix_switch)
    endif
+!
+   rstatus = getKeyValue(tbl_id,'Perform DFT+DMFT Calculation',DMFT)
 !
    CurrentScfIteration = 0
 !
@@ -925,6 +929,24 @@ contains
        md = .false.
    endif
    end function isSingleSite
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isDMFTenabled()  result(c)
+!  ===================================================================
+   implicit none
+!
+   logical :: c
+!
+   if (DMFT == 0) then
+      c = .false.
+   else
+      c = .true.
+   endif
+!
+   end function isDMFTenabled
 !  ===================================================================
 !
 !  *******************************************************************

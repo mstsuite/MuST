@@ -50,7 +50,7 @@ $(ODIR)/buildSendTable.o \
 $(ODIR)/BZoneModule.o \
 $(ODIR)/IBZRotationModule.o \
 $(ODIR)/ChemElementModule.o \
-$(ODIR)/MatsubaraModule.o \
+$(ODIR)/MatsubaraApproxModule.o \
 $(ODIR)/ContourModule.o \
 $(ODIR)/CoreStatesModule.o \
 $(ODIR)/GauntFactorsModule.o \

@@ -1269,11 +1269,23 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getNumRmesh(id) result(n)
+   function getNumRmesh(id,end_point) result(n)
 !  ===================================================================
    implicit none
    integer (kind=IntKind), intent(in) :: id
+!
+   character (len=*), intent(in), optional :: end_point
+!
    integer (kind=IntKind) :: n
+!
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         implicit none
+         logical :: t
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+      end function nocaseCompare
+   end interface
 !
    if (.not.Initialized) then
 !     ----------------------------------------------------------------
@@ -1285,7 +1297,21 @@ contains
 !     ----------------------------------------------------------------
    endif
 !
-   n = Grid(id)%jend
+   if (.not.present(end_point)) then
+      n = Grid(id)%jend
+   else
+      if (nocaseCompare(end_point,'MT')) then
+         n = Grid(id)%jmt
+      else if (nocaseCompare(end_point,'BSR')) then ! Bounding sphere radius
+         n = Grid(id)%jend
+      else if (nocaseCompare(end_point,'Max')) then
+         n = Grid(id)%jend_plus_n
+      else
+!        -------------------------------------------------------------
+         call ErrorHandler('getNumRmesh','The end point is undefined',end_point)
+!        -------------------------------------------------------------
+      endif
+   endif
 !
    end function getNumRmesh
 !  ===================================================================

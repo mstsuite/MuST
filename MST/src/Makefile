@@ -36,7 +36,7 @@ PotentialTypeModule.o \
 ExchCorrFunctionalModule.o \
 SystemModule.o \
 BZoneModule.o \
-MatsubaraModule.o \
+MatsubaraApproxModule.o \
 ContourModule.o \
 ProcMappingModule.o \
 Atom2ProcModule.o \
@@ -100,6 +100,8 @@ MSSolverModule.o \
 RelMSSolverModule.o \
 MultiScatteringDOSModule.o \
 RelGreenFunctionModule.o \
+OrbitalBasisModule.o \
+LocalGFModule.o \
 GFMethodModule.o
 
 Routines = \
@@ -133,7 +135,7 @@ fetchVisualDomainParameters.o \
 printDensityOnGrid.o \
 printPotentialOnGrid.o \
 printScfResults.o \
-adjustEnergy.o
+adjustEnergy.o \
 
 .SUFFIXES:	.o .f .c .f90 .F90
 

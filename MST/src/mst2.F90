@@ -27,6 +27,7 @@ program mst2
                                            UniformGridStruct
 !
    use PublicParamDefinitionsModule, only : PrintDOSswitchOff, ButterFly
+   use PublicParamDefinitionsModule, only : VertLine, MatsubaraPoles
    use PublicParamDefinitionsModule, only : StandardInputFile
 !
    use InputModule, only : initInput, endInput, readInputData
@@ -94,6 +95,7 @@ program mst2
    use ScfDataModule, only : getSingleSiteSolverType, getDOSrunID
    use ScfDataModule, only : NumSS_IntEs, isSSIrregularSolOn
    use ScfDataModule, only : isFrozenCore, CurrentScfIteration
+   use ScfDataModule, only : isDMFTenabled
 !
    use PotentialTypeModule, only : initPotentialType, endPotentialType,      &
                                    isASAPotential, isMuffinTinPotential,     &
@@ -568,6 +570,26 @@ program mst2
       call initContour(getEmeshFileName(), istop, -1)
 !     ----------------------------------------------------------------
    else
+      if (isDMFTenabled()) then
+         if (ContourType /= VertLine) then
+            if (MyPE == 0) then
+               call WarningHandler('main','The energy contour is changed to Vertical line')
+            endif
+            ContourType = VertLine
+         endif
+         if (eGridType /= MatsubaraPoles) then
+            if (MyPE == 0) then
+               call WarningHandler('main','The energy grid type is changed to Matsubara poles')
+            endif
+            eGridType = MatsubaraPoles
+         endif
+         if (Temperature < TEN2m6) then
+            if (MyPE == 0) then
+               call WarningHandler('main','The temperature is too low and is change to 1000 Kelvin')
+            endif
+            Temperature = 1000
+         endif
+      endif
 !     ----------------------------------------------------------------
       call initContour( ContourType, eGridType, NumEs, Temperature,   &
                         istop, -1, .true.)

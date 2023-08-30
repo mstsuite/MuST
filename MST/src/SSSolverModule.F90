@@ -29,6 +29,7 @@ public :: initSSSolver,          &
           getTMatrix,            &
           getSMatrix,            &
           getRegSolution,        &
+          getIrrSolution,        &
           getSolutionFlags,      &
           getSolutionRmeshSize,  & 
           getDOS,                &
@@ -42,6 +43,7 @@ public :: initSSSolver,          &
           getGreenFunction,      &
           getDOSDerivative,      &
           getRegSolutionDerivative, &
+          getIrrSolutionDerivative, &
           getGreenFunctionDerivative, &
           getFreeElectronHighLDOS, &
           getFreeElectronDOS,    &
@@ -5131,6 +5133,45 @@ use MPPModule, only : MyPE, syncAllPEs
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getIrrSolutionDerivative(spin, site, atom) result(dis)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in), optional :: spin, site, atom
+   integer (kind=IntKind) :: is, id, ic
+!
+   complex (kind=CmplxKind), pointer :: dis(:,:,:)
+!
+   if (.not.Initialized) then
+      call ErrorHandler('getIrrSolutionDerivative','module not initialized')
+   endif
+!
+   if (present(spin)) then
+      is = min(NumSpins,spin)
+   else
+      is = LocalSpin
+   endif
+!
+   if (present(site)) then
+      id = site
+   else
+      id = LocalIndex
+   endif
+!
+   if (present(atom)) then
+      ic = atom
+   else
+      ic = 1
+   endif
+!
+   dis => Scatter(id)%Solutions(ic,is)%irr_dsol
+!
+   end function getIrrSolutionDerivative
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getGreenFunctionDerivative(spin, site, atom) result(dg)
 !  ===================================================================
    implicit none
@@ -5982,6 +6023,45 @@ use MPPModule, only : MyPE, syncAllPEs
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getIrrSolution(spin, site, atom) result(irr_sol)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in), optional :: spin, site, atom
+   integer (kind=IntKind) :: is, id, ic
+!
+   complex (kind=CmplxKind), pointer :: irr_sol(:,:,:)
+!
+   if (.not.Initialized) then
+      call ErrorHandler('getIrrSolution','module not initialized')
+   endif
+!
+   if (present(spin)) then
+      is = min(NumSpins,spin)
+   else
+      is = LocalSpin
+   endif
+!
+   if (present(site)) then
+      id = site
+   else
+      id = LocalIndex
+   endif
+!
+   if (present(atom)) then
+      ic = atom
+   else
+      ic = 1
+   endif
+!
+   irr_sol => Scatter(id)%Solutions(ic,is)%irr_sol
+!
+   end function getIrrSolution
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getSolutionFlags(site) result(sol_flags)
 !  ===================================================================
    implicit none
@@ -5992,7 +6072,7 @@ use MPPModule, only : MyPE, syncAllPEs
    integer (kind=IntKind), pointer :: sol_flags(:,:)
 !
    if (.not.Initialized) then
-      call ErrorHandler('getRegSolution','module not initialized')
+      call ErrorHandler('getSolutionFlags','module not initialized')
    else if (present(site)) then
       id = site
    else

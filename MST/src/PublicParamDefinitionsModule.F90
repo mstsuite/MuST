@@ -16,7 +16,7 @@ public :: checkParameter,  &
    integer (kind=IntKind), parameter :: HorizLine=2
    integer (kind=IntKind), parameter :: VertLine=3
    integer (kind=IntKind), parameter :: ButterFly=4
-   integer (kind=IntKind), parameter :: MatsubaraPoles=5
+   integer (kind=IntKind), parameter :: MatsubaraApproximant=5
    integer (kind=IntKind), parameter :: ec_min = 0
    integer (kind=IntKind), parameter :: ec_max = 5
    character (len=20), parameter :: &
@@ -25,7 +25,7 @@ public :: checkParameter,  &
                                                   'Horizontal line',  &
                                                   'Vertical line  ',  &
                                                   'ButterFly shape',  &
-                                                  'Matsubara poles'/)
+                                                  'Matsubara approximant'/)
 !
 !  ===================================================================
 !  E-grid  type parameters:
@@ -35,13 +35,15 @@ public :: checkParameter,  &
    integer (kind=IntKind), parameter :: GaussianPoints=1
    integer (kind=IntKind), parameter :: LogInterval=2
    integer (kind=IntKind), parameter :: NicholsonPoints=3
+   integer (kind=IntKind), parameter :: MatsubaraPoles=4
    integer (kind=IntKind), parameter :: eg_min = 0
-   integer (kind=IntKind), parameter :: eg_max = 3
+   integer (kind=IntKind), parameter :: eg_max = 4
    character (len=20), parameter :: &
                        eg_info(eg_min:eg_max) = (/'Uniform mesh       ', &
                                                   'Gaussian point mesh', &
                                                   'Logrithm mesh      ', &
-                                                  'Nicholson pole mesh'/)
+                                                  'Nicholson pole mesh', &
+                                                  'Matsubara poles'/)
 !
 !  ===================================================================
 !  Print DOS instruction parameters:

@@ -91,6 +91,7 @@ module MSSolverModule
 public :: initMSSolver,            &
           endMSSolver,             &
           computeMSGreenFunction,  &
+          computeMSTMatrix,        &
           computeMSPDOS,           &
           getMSGreenFunction,      &        ! Returns Green function in Local frame
           getMSGreenMatrix,        &

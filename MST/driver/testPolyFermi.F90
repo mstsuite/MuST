@@ -43,7 +43,7 @@ program testPolyFermi
    use DataServiceCenterModule, only : isDataStorageExisting, &
                                        getDataStorage, RealMark
 !
-   use ContourModule, only : setupContour, isMatsubaraContour
+   use ContourModule, only : setupContour, isMatsubaraApproxContour
    use ContourModule, only : getEPoint, getEWeight, getNumEs
    use ContourModule, only : initContour, endContour
 !
@@ -226,9 +226,9 @@ program testPolyFermi
 !  deallocate(atom_print_level,lmax_step,lmax_pot,GlobalIndex,AtomPosition)
 !
 !  ===================================================================
-!  Test the new ContourModule, which uses MatsubaraModule
+!  Test the new ContourModule, which uses MatsubaraApproxModule
 !  ===================================================================
-   if (isMatsubaraContour()) then
+   if (isMatsubaraApproxContour()) then
 do i = 1, 10
       call endContour()
       call initContour( ContourType, eGridType, NumEs, Temperature, 'none', &
