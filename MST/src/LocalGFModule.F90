@@ -68,7 +68,7 @@ contains
    implicit none
 !
    integer (kind=IntKind), intent(in) :: na, lmax
-   integer (kind=IntKind), intent(in) :: ne(na), norb(na)
+   integer (kind=IntKind), intent(in) :: ne, norb(na)
    integer (kind=IntKind), intent(in) :: pola, cant, rel
    integer (kind=IntKind) :: nsize, nr, id, MaxNumOrbitals
 !
@@ -91,12 +91,12 @@ contains
 !
    MaxNumOrbitals = 0
    do id = 1,NumLocalAtoms
-      local_gf(id)%NumEs = ne(id)
+      local_gf(id)%NumEs = ne
       local_gf(id)%NumSpecies = getLocalNumSpecies(id)
       local_gf(id)%NumOrbitals = norb(id)
       nsize = local_gf(id)%NumOrbitals*local_gf(id)%NumOrbitals
       nsize = nsize*n_spin_cant*n_spin_cant*local_gf(id)%NumEs*local_gf(id)%NumSpecies
-      allocate(local_gf(id)%energy(ne(id)), local_gf(id)%gf(nsize))
+      allocate(local_gf(id)%energy(ne), local_gf(id)%gf(nsize))
       local_gf(id)%energy = CZERO; local_gf(id)%gf = CZERO
       MaxNumOrbitals = max(MaxNumOrbitals, norb(id))
    enddo
