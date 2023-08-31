@@ -36,7 +36,7 @@ $(MST_ODIR)/PotentialTypeModule.o \
 $(MST_ODIR)/ExchCorrFunctionalModule.o \
 $(MST_ODIR)/SystemModule.o \
 $(MST_ODIR)/BZoneModule.o \
-$(MST_ODIR)/MatsubaraModule.o \
+$(MST_ODIR)/MatsubaraApproxModule.o \
 $(MST_ODIR)/ContourModule.o \
 $(MST_ODIR)/ProcMappingModule.o \
 $(MST_ODIR)/Atom2ProcModule.o \
@@ -100,6 +100,8 @@ $(MST_ODIR)/MSSolverModule.o \
 $(MST_ODIR)/RelMSSolverModule.o \
 $(MST_ODIR)/MultiScatteringDOSModule.o \
 $(MST_ODIR)/RelGreenFunctionModule.o \
+$(MST_ODIR)/OrbitalBasisModule.o \
+$(MST_ODIR)/LocalGFModule.o \
 $(MST_ODIR)/GFMethodModule.o
 
 Modules_Kubo = \
