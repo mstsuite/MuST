@@ -7,10 +7,10 @@ module SendRecvTmatModule
 public :: initSendRecvTmat,        &
           endSendRecvTmat,         &
           getMaxNeighbors,         &
-          getNumProcWiseNeighbors, &      ! returns number of unique neighbors of all the local atoms
-          getNumNonLocalNeighbors, &      ! returns number of unique neighbors of all the local atoms which are on remote proc
-          getProcWiseNeighbors,    &
-          getNonLocalNeighbors,    &
+          getNumProcWiseNeighbors, & ! returns number of unique neighbors of all the local atoms on the present proc.
+          getNumNonLocalNeighbors, & ! returns number of unique neighbors of all the local atoms which are on remote proc
+          getProcWiseNeighbors,    & ! returns the global index of a unique neighbor on the present proc
+          getNonLocalNeighbors,    & ! returns the global index of a unique neighbor on the remote proc
           getNumProcWiseSends,     &
           getNumProcWiseReceives,  &
           getProcWiseTargetProcs,  &

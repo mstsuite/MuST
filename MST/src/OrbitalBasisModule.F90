@@ -16,6 +16,8 @@ private
    integer (kind=IntKind) :: MaxNumSpecies
    integer (kind=IntKind) :: BasisType
 !
+   complex (kind=CmplxKind) :: BasisFactor   ! This is a prefactor for the basis function
+!
    type LocalOrbitalStruct
       integer (kind=IntKind) :: NumOrbitals
       integer (kind=IntKind) :: NumRs
@@ -108,7 +110,7 @@ contains
 !  Note: spin = 1 or n_spin_pola/n_spin_cant
 !
 !  *******************************************************************
-   use MathParamModule, only : CZERO
+   use MathParamModule, only : CZERO, TWO, PI, CONE
 !
    use IntegerFactorsModule, only : m1m, mofk
 !
@@ -166,6 +168,8 @@ contains
          call ErrorHandler('computeOrbitalBasis',                     &
                            'Energy parameter is required for this basis type.')
       endif
+!     BasisFactor = sqrt(TWO*e/PI) ! This needs to be checked...
+      BasisFactor = CONE
       if (isFullPotential()) then
          do js = 1, n_spin_cant
             ns = max(js,spin)
@@ -202,6 +206,7 @@ contains
       enddo
    else
       call ErrorHandler('computeOrbitalBasis','Invalid basis function type',BasisType)
+      BasisFactor = CONE
    endif
 !
    nullify(f_star)
@@ -210,7 +215,7 @@ contains
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getOrbitalBasis(spin,site,atom,orb,rpow,star) result(f)
+   function getOrbitalBasis(spin,site,atom,orb,rpow,star,bfac) result(f)
 !  ===================================================================
 !
 !  Note: spin = 1 or n_spin_cant
@@ -222,9 +227,9 @@ contains
    integer (kind=IntKind), intent(out) :: rpow
    integer (kind=IntKind) :: NumRs, NumOrbitals
 !
-   logical, intent(in), optional :: star
-   logical :: apply_star = .false.
+   logical, intent(in) :: star
 !
+   complex (kind=CmplxKind), intent(out) :: bfac
    complex (kind=CmplxKind), pointer :: f(:,:) ! returns the basis function multiplied by r^rpow
    complex (kind=CmplxKind), pointer :: f_star(:,:,:)
 !
@@ -232,13 +237,7 @@ contains
       call ErrorHandler('getOrbitalBasis','The orbital basis functions are not available')
    endif
 !
-   if (present(star)) then
-      apply_star = star
-   else
-      apply_star = .false.
-   endif
-!
-   if (apply_star) then
+   if (star) then
       NumOrbitals = LocalOrbitals(spin,atom,site)%NumOrbitals
       NumRs = LocalOrbitals(spin,atom,site)%NumRs
       f_star => aliasArray3_c(LocalOrbitals(spin,atom,site)%orbital_star,NumRs,kmax_kkr,NumOrbitals)
@@ -247,6 +246,8 @@ contains
       f => LocalOrbitals(spin,atom,site)%orbital(:,:,orb)
    endif
    rpow = LocalOrbitals(spin,atom,site)%r_power
+!
+   bfac = BasisFactor
 !
    end function getOrbitalBasis
 !  ===================================================================

@@ -32,7 +32,7 @@
         use IntegerFactorsModule, only : lofk, mofk
         use InputModule, only : getKeyValue
         use ChemElementModule, only : getDebyeTemperature, getAtomicMass
-        use MPPModule, only : myPE
+        use MPPModule, only : MyPE
         use AtomModule, only : getLocalNumSpecies, getLocalAtomicNumber,      &
                                getLocalSpeciesContent, getLocalAtomName
         use GroupCommModule, only : GlobalSumInGroup, getGroupID, getMyPEinGroup
@@ -61,7 +61,7 @@
         real (kind=RealKind) :: Phonon_Freq2
         real (kind=RealKind) :: EPC, EPCnum,EPCden
         real (kind=RealKind) :: AtomMass
-        real (kind=RealKind) :: Coulomb,Coulombnum,Coulombden
+        real (kind=RealKind) :: Coulomb,Coulombnum,Coulombden,mu_star
         real (kind=RealKind) :: SuperTemp,SuperTempExp
         real (kind=RealKind) :: SumI,Iconst
         real (kind=RealKind) :: DebyeTemp
@@ -69,7 +69,6 @@
         real (kind=RealKind) :: total_dos, dos_per_spin, total_dos_mt, dos_mt_per_spin, Ef
         real (kind=RealKind) :: spdos, cpdos
         real (kind=RealKind) :: nr(0:4)  ! assuming lmax <= 4
-        real (kind=RealKind) :: ps(0:4)  ! assuming lmax <= 4
 !
         if (MyPE == 0 .and. iprint >= 0) then
            write(6,*), ' '
@@ -98,6 +97,7 @@
         endif
 !
 !       Determine the Debye Temperature and phonon frequency
+!       ==============================================================
         if (getKeyValue(1,'Debye Temperature (K)',DebyeTemp, default_param=.false.) /= 0) then
            if (getNumAtomTypes() == 1)  then
               atomic_number = getLocalAtomicNumber(1,1)
@@ -122,6 +122,7 @@
         endif
 !
 !       Calculate total dos
+!       ==============================================================
         total_dos = ZERO
         total_dos_mt = ZERO
         if (getNumAtoms() > 1) then
@@ -165,6 +166,7 @@
         Iconst = efermi/PI**2/dos_per_spin**2 ! Ryd^3
 !
 !       Calculate Lamda (or EPC) ...........
+!       ==============================================================
         nr = ZERO
         EPC = ZERO
         do id = 1, LocalNumAtoms  ! Loop atomic sites
@@ -231,23 +233,77 @@
         endif
 !
 !       Calculate mu ...
+!       ==============================================================
         Coulombnum = 0.26D0*total_dos/Ryd2eV
         Coulombden = ONE+total_dos/Ryd2eV
         Coulomb = Coulombnum/Coulombden
         if (MyPE == 0) then
-           write(6,*), 'mu* (Coulomb pseudopotential): ', Coulomb
+           write(6,*), 'Calculated mu* (Coulomb pseudopotential): ', Coulomb
         endif
+        if (getKeyValue(1,'mu* (e-e interaction constant)',mu_star, default_param=.false.) == 0) then
+           Coulomb = mu_star
+           if (MyPE == 0) then
+              write(6,*), 'Using the input mu* (Coulomb pseudopotential): ', Coulomb
+           endif
+        endif
+!
+!       if (EPC-Coulomb*(ONE+0.62D0*EPC) < ZERO) then
+!          if (MyPE == 0) then
+!             write(6,*), 'Warning: EPC-Coulomb*(ONE+0.62D0*EPC) < 0'
+!             write(6,*), 'EPC/(ONE+0.62D0*EPC) =', EPC/(ONE+0.62D0*EPC)
+!          endif
+!       endif
 !
 !       Calculate Tc ...
-        SuperTempExp = -1.04D0*(ONE+EPC)/(EPC-Coulomb*(ONE+0.62D0*EPC))
-        SuperTemp=DebyeTemp*exp(SuperTempExp)/1.45D0
+!       ==============================================================
+        if (EPC > Coulomb) then
+           if (MyPE == 0) then
+              write(6,*), 'EPC-Coulomb*(ONE+0.62D0*EPC) =', EPC-Coulomb*(ONE+0.62D0*EPC)
+           endif
+           SuperTempExp = -1.04D0*(ONE+EPC)/(EPC-Coulomb*(ONE+0.62D0*EPC))
+           SuperTemp=DebyeTemp*exp(SuperTempExp)/1.45D0
+        else
+           if (MyPE == 0) then
+              write(6,'(1x,a)') 'EPC <= Coulomb'
+           endif
+           SuperTemp=ZERO
+        endif
         if (MyPE == 0) then
-           write(6,*), 'Superconducting Transition Temp: ', SuperTemp
+           write(6,'(/,1x,a)')'***************************************************'
+           write(6,'(1x,a,f14.6)')'Superconducting Transition Temp (K): ',SuperTemp
+           write(6,'(1x,a,/)')'***************************************************'
         endif
 !
 !       ==============================================================
+!       Using the partial phase shift and DOS data published in PRB 15, 4221
+!       (1977) to check against the calculated Tc published in the paper
+!       --------------------------------------------------------------
+        call testPRB15_4221_1977()
+!       --------------------------------------------------------------
+!
+        end subroutine gaspari_gyorffy_formula
+!   ==================================================================
+!
+!   cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+    subroutine testPRB15_4221_1977()
+!   ==================================================================
+!
 !       Test the data published in PRB 15, 4221 (1977)
-!       ==============================================================
+!
+!       **************************************************************
+        use KindParamModule, only : IntKind, RealKind
+        use MathParamModule, only : ZERO, HALF, ONE, TWO, PI
+        use PhysParamModule, only : Boltzmann, Ryd2eV, Bohr2Angstrom,         &
+                                    LightSpeed, MassUnit2Ryd, Kelvin2Ryd
+        use MPPModule, only : MyPE
+!
+        integer (kind=IntKind) :: atomic_number
+!
+        real (kind=RealKind) :: nr(0:4)  ! assuming lmax <= 4
+        real (kind=RealKind) :: ps(0:4)  ! assuming lmax <= 4
+        real (kind=RealKind) :: DebyeTemp, Ef, dos_per_spin
+        real (kind=RealKind) :: EPCnum,EPC,Coulomb,SuperTemp
+!
         if (MyPE == 0) then
            write(6,'(a)')  '............................................'
            write(6,'(/,a)')'Check against the data for Nb, Ti, and V published in PRB 15, 4221 (1977)'
@@ -261,7 +317,7 @@
         nr(0) = 0.807; nr(1) = 2.927; nr(2) = 0.681; nr(3) = 3.845
         DebyeTemp = 275.0D0; Ef = 0.676; dos_per_spin = 9.71
 !
-        call testPRB15_4221_1977(atomic_number,ps,nr,DebyeTemp,Ef,    &
+        call calculateMcMillanTc(atomic_number,ps,nr,DebyeTemp,Ef,    &
                                  dos_per_spin,EPCnum,EPC,Coulomb,SuperTemp)
 !
         if (MyPE == 0) then
@@ -279,7 +335,7 @@
         nr(0) = 0.414; nr(1) = 3.101; nr(2) = 0.788; nr(3) = 6.382
         DebyeTemp = 420.0D0; Ef = 0.588; dos_per_spin = 12.38
 !
-        call testPRB15_4221_1977(atomic_number,ps,nr,DebyeTemp,Ef,    &
+        call calculateMcMillanTc(atomic_number,ps,nr,DebyeTemp,Ef,    &
                                  dos_per_spin,EPCnum,EPC,Coulomb,SuperTemp)
 !
         if (MyPE == 0) then
@@ -297,7 +353,7 @@
         nr(0) = 0.550; nr(1) = 2.842; nr(2) = 0.634; nr(3) = 6.935
         DebyeTemp = 380.0D0; Ef = 0.675; dos_per_spin = 12.70
 !
-        call testPRB15_4221_1977(atomic_number,ps,nr,DebyeTemp,Ef,    &
+        call calculateMcMillanTc(atomic_number,ps,nr,DebyeTemp,Ef,    &
                                  dos_per_spin,EPCnum,EPC,Coulomb,SuperTemp)
 !
         if (MyPE == 0) then
@@ -308,12 +364,33 @@
            write(6,'(a,f12.5)')'Superconducting Transition Temp (K): ', SuperTemp
         endif
 !       ==============================================================
+!       For K: Input from Table II and Table IV
+!       --------------------------------------------------------------
+        atomic_number = 19
+        ps(0) = -0.165; ps(1) = -0.026; ps(2) = 0.033; ps(3) = 0.001
+        nr(0) = 1.200; nr(1) = 1.178; nr(2) = 1.037; nr(3) = 0.934
+        DebyeTemp = 91.0D0; Ef = 0.159; dos_per_spin = 5.26
 !
-        end subroutine gaspari_gyorffy_formula
+        call calculateMcMillanTc(atomic_number,ps,nr,DebyeTemp,Ef,    &
+                                 dos_per_spin,EPCnum,EPC,Coulomb,SuperTemp)
+!
+        if (MyPE == 0) then
+           write(6,'(/,a)')'For Potassium'
+           write(6,'(a,f12.5)')'eta (eV/A^2): ', EPCnum*Ryd2eV/Bohr2Angstrom**2
+           write(6,'(a,f12.5)')'lamda = ',EPC
+           write(6,'(a,f12.5)')'mu* (Coulomb pseudopotential): ', Coulomb
+           if (SuperTemp < 100000.0D0) then
+              write(6,'(a,f12.5)')'Superconducting Transition Temp (K): ', SuperTemp
+           else
+              write(6,'(a,d12.5)')'Superconducting Transition Temp (K): ', SuperTemp
+           endif
+        endif
+!
+    end subroutine testPRB15_4221_1977
 !   ==================================================================
 !
 !   cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-    subroutine testPRB15_4221_1977(anum,ps,nr,thetaD,Ef,dos_per_spin, &
+    subroutine calculateMcMillanTc(anum,ps,nr,thetaD,Ef,dos_per_spin, &
                                    eta,lamda,mu,Tc)
 !   ==================================================================
     use KindParamModule, only : IntKind, RealKind
@@ -355,6 +432,10 @@
     mu = Coulombnum/Coulombden
 !
     SuperTempExp = -1.04D0*(ONE+lamda)/(lamda-mu*(ONE+0.62D0*lamda))
-    Tc=thetaD*exp(SuperTempExp)/1.45D0
+    if (mu < lamda) then
+       Tc=thetaD*exp(SuperTempExp)/1.45D0
+    else
+       Tc = ZERO
+    endif
 !
-    end subroutine testPRB15_4221_1977
+    end subroutine calculateMcMillanTc

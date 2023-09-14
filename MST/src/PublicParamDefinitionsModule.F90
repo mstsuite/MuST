@@ -19,13 +19,13 @@ public :: checkParameter,  &
    integer (kind=IntKind), parameter :: MatsubaraApproximant=5
    integer (kind=IntKind), parameter :: ec_min = 0
    integer (kind=IntKind), parameter :: ec_max = 5
-   character (len=20), parameter :: &
-                       ec_info(ec_min:ec_max) = (/'Half circle    ',  &
-                                                  'Rectangluar box',  &
-                                                  'Horizontal line',  &
-                                                  'Vertical line  ',  &
-                                                  'ButterFly shape',  &
-                                                  'Matsubara approximant'/)
+   character (len=25), parameter :: &
+                       ec_info(ec_min:ec_max) = (/'Half circle              ',  &
+                                                  'Rectangluar box          ',  &
+                                                  'Horizontal line          ',  &
+                                                  'Vertical line            ',  &
+                                                  'ButterFly shape          ',  &
+                                                  'Matsubara approximant    '/)
 !
 !  ===================================================================
 !  E-grid  type parameters:
@@ -39,11 +39,11 @@ public :: checkParameter,  &
    integer (kind=IntKind), parameter :: eg_min = 0
    integer (kind=IntKind), parameter :: eg_max = 4
    character (len=20), parameter :: &
-                       eg_info(eg_min:eg_max) = (/'Uniform mesh       ', &
-                                                  'Gaussian point mesh', &
-                                                  'Logrithm mesh      ', &
-                                                  'Nicholson pole mesh', &
-                                                  'Matsubara poles'/)
+                       eg_info(eg_min:eg_max) = (/'Uniform mesh        ', &
+                                                  'Gaussian point mesh ', &
+                                                  'Logrithm mesh       ', &
+                                                  'Nicholson pole mesh ', &
+                                                  'Matsubara poles     '/)
 !
 !  ===================================================================
 !  Print DOS instruction parameters:
@@ -54,7 +54,7 @@ public :: checkParameter,  &
    integer (kind=IntKind), parameter :: PrintEachAtomDOS=-1
    integer (kind=IntKind), parameter :: pd_min = -1
    integer (kind=IntKind), parameter :: pd_max = 1
-   character (len=80), parameter :: &
+   character (len=70), parameter :: &
       pd_info(pd_min:pd_max) = (/'Calculate DOS and print the DOS of each atom and system average       ', &
                                  'DOS is not calculated and printed                                     ', &
                                  'Calculate DOS and print the DOS of a specified atom and system average'/)
@@ -74,16 +74,16 @@ public :: checkParameter,  &
    integer (kind=IntKind), parameter :: MuffinTinFullPot = 8
    integer (kind=IntKind), parameter :: pt_min = 0
    integer (kind=IntKind), parameter :: pt_max = 8
-   character (len=50), parameter :: &
-                       pt_info(pt_min:pt_max) = (/'Muffin-Tin                               ', &
-                                                  'ASA                                      ', &
-                                                  'Muffin-Tin ASA                           ', &
-                                                  'Full-Potential                           ', &
-                                                  'Muffin-Tin Potential Test                ', &
-                                                  'Full-Potential and Empty Lattice Test    ', &
-                                                  'Full-Potential and Mathieu Potential Test', &
-                                                  'Coulomb Potential Test                   ', &
-                                                  'Full-Potential inside Muffin-Tin         '/)
+   character (len=42), parameter :: &
+                       pt_info(pt_min:pt_max) = (/'Muffin-Tin                                ', &
+                                                  'ASA                                       ', &
+                                                  'Muffin-Tin ASA                            ', &
+                                                  'Full-Potential                            ', &
+                                                  'Muffin-Tin Potential Test                 ', &
+                                                  'Full-Potential and Empty Lattice Test     ', &
+                                                  'Full-Potential and Mathieu Potential Test ', &
+                                                  'Coulomb Potential Test                    ', &
+                                                  'Full-Potential inside Muffin-Tin          '/)
 !
 !  ===================================================================
 !  Mixing type parameters:                

@@ -414,7 +414,22 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine printSystemVolume()
 !  ===================================================================
+   use MathParamModule, only : THIRD, THREE, PI4
+!
    implicit none
+!
+   real (kind=RealKind) :: MaxVPVolume, MinVPVolume
+   real (kind=RealKind) :: MaxMTVolume, MinMTVolume
+   real (kind=RealKind) :: MaxMTRadius, MinMTRadius
+   real (kind=RealKind) :: MaxInsVolume, MinInsVolume
+   real (kind=RealKind) :: MaxInsRadius, MinInsRadius
+!
+   MaxVPVolume = maxval(AtomicVoronoiPolyhedraVolume)
+   MinVPVolume = minval(AtomicVoronoiPolyhedraVolume)
+   MaxMTVolume = maxval(AtomicMuffinTinVolume); MaxMTRadius = (THREE*MaxMTVolume/PI4)**THIRD
+   MinMTVolume = minval(AtomicMuffinTinVolume); MinMTRadius = (THREE*MinMTVolume/PI4)**THIRD
+   MaxInsVolume = maxval(AtomicInscribedVolume); MaxInsRadius = (THREE*MaxInsVolume/PI4)**THIRD
+   MinInsVolume = minval(AtomicInscribedVolume); MinInsRadius = (THREE*MinInsVolume/PI4)**THIRD
 !
    write(6,'(/,80(''-''))')
    write(6,'(/,24x,a)')'*************************************'
@@ -427,6 +442,16 @@ contains
    write(6,'(''Total Inscribed Sphere Volume : '',f19.8)')TotalInscribedVolume
    write(6,'(''Total Muffintin Sphere Volume : '',f19.8)')TotalMuffintinVolume
    write(6,'(''Total Interstitial Volume     : '',f19.8)')TotalInterstitialVolume
+   write(6,'(''Maximum Atomic VP Sphere Volume:'',f19.8)')MaxVPVolume
+   write(6,'(''Minimum Atomic VP Sphere Volume:'',f19.8)')MinVPVolume
+   write(6,'(''Maximum Atomic MT Sphere Volume:'',f19.8)')MaxMTVolume
+   write(6,'(''Minimum Atomic MT Sphere Volume:'',f19.8)')MinMTVolume
+   write(6,'(''Maximum Atomic InsSphere Volume:'',f19.8)')MaxInsVolume
+   write(6,'(''Minimum Atomic InsSphere Volume:'',f19.8)')MinInsVolume
+   write(6,'(''Maximum Atomic MT Sphere Radius:'',f19.8)')MaxMTRadius
+   write(6,'(''Minimum Atomic MT Sphere Radius:'',f19.8)')MinMTRadius
+   write(6,'(''Maximum Atomic InsSphere Radius:'',f19.8)')MaxInsRadius
+   write(6,'(''Minimum Atomic InsSphere Radius:'',f19.8)')MinInsRadius
    write(6,'(80(''=''))')
 !
    end subroutine printSystemVolume

@@ -4068,12 +4068,13 @@ contains
    logical :: REL
 !
    integer (kind=IntKind) :: ie, id, is, js, info(6), ia
-   integer (kind=IntKind) :: e_loc, js1, js2, num_orbs
+   integer (kind=IntKind) :: e_loc, js1, js2, num_orbs, kl
    integer (kind=IntKind) :: NumEsOnMyProc, NumRedunEs
    integer (kind=IntKind) :: point_id
 !
    real (kind=RealKind) :: time_ie, ssDOS, msDOS(2), ChargeInLowContour(LocalNumAtoms)
 !
+   complex (kind=CmplxKind) :: trace_gf
    complex (kind=CmplxKind), pointer :: EPoint(:)
    complex (kind=CmplxKind), pointer :: EWght(:)
    complex (kind=CmplxKind), pointer :: local_gf(:,:)
@@ -4206,11 +4207,16 @@ contains
                            local_gf => getLocalGF(site=id,atom=ia,       &
                                                   ie=e_loc,jsr=js2,jsl=js1)
 !                          ----------------------------------------------
+                           trace_gf = CZERO
+                           do kl = 1, num_orbs
+                              trace_gf = trace_gf + local_gf(kl,kl)
+                           enddo
                            if (MyPE == 0) then
 !                             -------------------------------------------
                               call writeMatrix('Local GF',local_gf,      &
                                                num_orbs,num_orbs,TEN2m6)
 !                             -------------------------------------------
+                              write(6,'(a,2d16.8)')'Tr[Local G] =',trace_gf
                            endif
                         enddo
                      enddo

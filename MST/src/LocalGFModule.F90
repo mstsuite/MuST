@@ -194,7 +194,7 @@ contains
    complex (kind=CmplxKind), pointer :: kau00(:,:,:), p_kau00(:,:)
    complex (kind=CmplxKind), pointer :: gfe(:,:,:), gf(:,:,:)
    complex (kind=CmplxKind), pointer :: pk(:,:), pt(:,:), JostInv(:,:)
-   complex (kind=CmplxKind) :: cfac
+   complex (kind=CmplxKind) :: cfac, bfac, bfac_bar
 !
    interface
       subroutine computeCmplxProdExpan(n,lf,f,act,lg,g,lh,h)
@@ -261,21 +261,21 @@ contains
             PhiLr => getRegSolution(spin=js,site=site,atom=atom)
             HLr => getIrrSolution(spin=js,site=site,atom=atom)
             do iorb = 1, local_gf(site)%NumOrbitals
-               bf => getOrbitalBasis(spin=js,site=site,atom=atom,orb=iorb,rpow=rpow)
+               bf => getOrbitalBasis(spin=js,site=site,atom=atom,orb=iorb,rpow=rpow,star=.false.,bfac=bfac)
                if (rpow < 0 .or. rpow > 1) then
                   call ErrorHandler('computeLocalGF','rpow < 0 or rpow > 1',rpow)
                endif
                if (isFullPotential()) then  ! The following code for the full-potential case needs some work ...
-                  bf_bar => getOrbitalBasis(spin=js,site=site,atom=atom,orb=iorb,rpow=rpow,star=.true.)
+                  bf_bar => getOrbitalBasis(spin=js,site=site,atom=atom,orb=iorb,rpow=rpow,star=.true.,bfac=bfac_bar)
                   do kl = 1, kmax_kkr
 !                    -------------------------------------------------
                      call computeCmplxProdExpan(site,kmax_kkr,bf_bar,'c',kmax_kkr,PhiLr(:,:,kl),kmax_gf,prod_fp)
 !                    -------------------------------------------------
-                     bsp(kl,iorb,js) = getVolumeIntegration(site,iend,r_mesh,kmax_gf,rpow+1,prod_fp)
+                     bsp(kl,iorb,js) = bfac_bar*getVolumeIntegration(site,iend,r_mesh,kmax_gf,rpow+1,prod_fp)
 !
                      m = mofk(kl)
                      kl_bar = kl-2*m
-                     cfac = m1m(m)
+                     cfac = m1m(m)*bfac
 !                    -------------------------------------------------
                      call computeCmplxProdExpan(site,kmax_kkr,PhiLr(:,:,kl_bar),'s',kmax_kkr,bf,kmax_gf,prod_fp)
 !                    -------------------------------------------------
@@ -287,22 +287,25 @@ contains
                      hsb(kl,iorb,js) = cfac*getVolumeIntegration(site,iend,r_mesh,kmax_gf,rpow+1,prod_fp)
                   enddo
                else
+!                 ====================================================
+!                 In the muffin-tin case, bsp is aliased to psb.
+!                 ====================================================
                   do kl = 1, kmax_kkr
                      do ir = 1, iend 
                         prod(ir) = PhiLr(ir,kl,kl)*bf(ir,kl)
                      enddo
                      if (rpow == 0) then
-                        psb(kl,iorb,js) = getRadialIntegration(site,iend,prod,rpow=1)
+                        psb(kl,iorb,js) = bfac*getRadialIntegration(site,iend,prod,rpow=1)
                      else
-                        psb(kl,iorb,js) = getRadialIntegration(site,iend,prod)
+                        psb(kl,iorb,js) = bfac*getRadialIntegration(site,iend,prod)
                      endif
                      do ir = 1, iend 
                         prod(ir) = HLr(ir,kl,kl)*bf(ir,kl)
                      enddo
                      if (rpow == 0) then
-                        hsb(kl,iorb,js) = getRadialIntegration(site,iend,prod,rpow=1)
+                        hsb(kl,iorb,js) = bfac*getRadialIntegration(site,iend,prod,rpow=1)
                      else
-                        hsb(kl,iorb,js) = getRadialIntegration(site,iend,prod)
+                        hsb(kl,iorb,js) = bfac*getRadialIntegration(site,iend,prod)
                      endif
                   enddo
                endif
