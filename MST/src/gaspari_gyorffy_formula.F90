@@ -218,6 +218,7 @@
                  write(6,'(/,1x,a,a)')'For species: ',getLocalAtomName(id,ia)
                  write(6,*), 'SumI: ', SumI
                  write(6,*), 'I (eV^2/A^2): ', I_Total*(Ryd2eV/Bohr2Angstrom)**2
+                 write(6,*), 'I (Ryd^2/au^2): ', I_Total
                  write(6,*), 'AtomicMass (Ryd/c^2): ', AtomMass
                  write(6,*), 'eta (Ryd/au^2): ', EPCnum
                  write(6,*), 'eta (eV/A^2): ', EPCnum*Ryd2eV/Bohr2Angstrom**2
@@ -238,7 +239,7 @@
         Coulombden = ONE+total_dos/Ryd2eV
         Coulomb = Coulombnum/Coulombden
         if (MyPE == 0) then
-           write(6,*), 'Calculated mu* (Coulomb pseudopotential): ', Coulomb
+           write(6,*), 'mu* (Coulomb pseudopotential): ', Coulomb
         endif
         if (getKeyValue(1,'mu* (e-e interaction constant)',mu_star, default_param=.false.) == 0) then
            Coulomb = mu_star
@@ -324,8 +325,8 @@
            write(6,'(/,a)')'For Niobium'
            write(6,'(a,f12.5)')'eta (eV/A^2): ', EPCnum*Ryd2eV/Bohr2Angstrom**2
            write(6,'(a,f12.5)')'lamda = ',EPC
-           write(6,'(a,f12.5)')'mu* (Coulomb pseudopotential): ', Coulomb
-           write(6,'(a,f12.5)')'Superconducting Transition Temp (K): ', SuperTemp
+           write(6,'(a,f12.5)')'Mu* (Coulomb pseudopotential): ', Coulomb
+           write(6,'(a,f12.5)')'Superconducting Transition Temp: ', SuperTemp
         endif
 !       ==============================================================
 !       For Ti: Input from Table II and Table IV
@@ -342,8 +343,8 @@
            write(6,'(/,a)')'For Titanium'
            write(6,'(a,f12.5)')'eta (eV/A^2): ', EPCnum*Ryd2eV/Bohr2Angstrom**2
            write(6,'(a,f12.5)')'lamda = ',EPC
-           write(6,'(a,f12.5)')'mu* (Coulomb pseudopotential): ', Coulomb
-           write(6,'(a,f12.5)')'Superconducting Transition Temp (K): ', SuperTemp
+           write(6,'(a,f12.5)')'Mu* (Coulomb pseudopotential): ', Coulomb
+           write(6,'(a,f12.5)')'Superconducting Transition Temp: ', SuperTemp
         endif
 !       ==============================================================
 !       For V: Input from Table II and Table IV
@@ -360,8 +361,8 @@
            write(6,'(/,a)')'For Vanadium'
            write(6,'(a,f12.5)')'eta (eV/A^2): ', EPCnum*Ryd2eV/Bohr2Angstrom**2
            write(6,'(a,f12.5)')'lamda = ',EPC
-           write(6,'(a,f12.5)')'mu* (Coulomb pseudopotential): ', Coulomb
-           write(6,'(a,f12.5)')'Superconducting Transition Temp (K): ', SuperTemp
+           write(6,'(a,f12.5)')'Mu* (Coulomb pseudopotential): ', Coulomb
+           write(6,'(a,f12.5)')'Superconducting Transition Temp: ', SuperTemp
         endif
 !       ==============================================================
 !       For K: Input from Table II and Table IV
@@ -378,11 +379,11 @@
            write(6,'(/,a)')'For Potassium'
            write(6,'(a,f12.5)')'eta (eV/A^2): ', EPCnum*Ryd2eV/Bohr2Angstrom**2
            write(6,'(a,f12.5)')'lamda = ',EPC
-           write(6,'(a,f12.5)')'mu* (Coulomb pseudopotential): ', Coulomb
+           write(6,'(a,f12.5)')'Mu* (Coulomb pseudopotential): ', Coulomb
            if (SuperTemp < 100000.0D0) then
-              write(6,'(a,f12.5)')'Superconducting Transition Temp (K): ', SuperTemp
+              write(6,'(a,f12.5)')'Superconducting Transition Temp: ', SuperTemp
            else
-              write(6,'(a,d12.5)')'Superconducting Transition Temp (K): ', SuperTemp
+              write(6,'(a,d12.5)')'Superconducting Transition Temp: ', SuperTemp
            endif
         endif
 !
