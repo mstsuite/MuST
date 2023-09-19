@@ -47,6 +47,7 @@ program kubo
    use ScfDataModule, only : Temperature
    use ScfDataModule, only : istop, NumKMeshs, kGenScheme, Kdiv, Symmetrize
    use ScfDataModule, only : isKKRCPA, isKKRCPASRO, getSingleSiteSolverType
+   use ScfDataModule, only : pole_step
 
    use LatticeModule, only : initLattice, endLattice, getLatticeType
 
@@ -118,6 +119,10 @@ program kubo
    use WriteMatrixModule, only : writeMatrix
    use MatrixInverseModule, only : MtxInv_LU
 
+   use SineMatrixZerosModule, only : initSineMatrixZeros, endSineMatrixZeros
+   use SineMatrixZerosModule, only : findSineMatrixZeros, printSineMatrixZerosInfo, &
+                                     getNumSineMatrixZeros
+
 !  ===================================================================
    implicit none
 !
@@ -136,7 +141,7 @@ program kubo
    integer (kind=IntKind) :: lmax_max, lmax_kkr_max
    integer (kind=IntKind) :: lmax_rho_max, lmax_pot_max, lmax_gaunt
    integer (kind=IntKind) :: GlobalNumAtoms, LocalNumAtoms
-   integer (kind=IntKind) :: i, j, k, ig, id, n, na, ne, nk
+   integer (kind=IntKind) :: i, j, k, ig, id, n, na, ne, nk, is, ia, ib
    integer (kind=IntKind) :: ndivin, ndivout, nmult
    integer (kind=IntKind) :: node_print_level
    integer (kind=IntKind), pointer :: AtomicNumber(:)
@@ -150,10 +155,11 @@ program kubo
    integer (kind=IntKind), allocatable :: lmax_green(:)
    integer (kind=IntKind), allocatable :: lmax_mad(:)
    integer (kind=IntKind), allocatable :: ngr(:), ngt(:)
+   integer (kind=IntKind), allocatable :: LocalNumSpecies(:)
    integer (kind=IntKind) :: MaxVal_Integer(2)
 !
    real (kind=RealKind) :: Efermi, t0, t2, t3, t_inp, t_outp
-   real (kind=RealKind) :: rmt, rinsc, rend, rws, hin, rmt_grid, rc
+   real (kind=RealKind) :: rmt, rinsc, rend, rws, hin, rmt_grid, rc, ei
    real (kind=RealKind) :: bravais(3,3)
    real (kind=RealKind), pointer :: AtomPosition(:,:)
    real (kind=RealKind), allocatable :: final_sigma(:,:,:)
@@ -634,6 +640,42 @@ program kubo
    call initConductivity(LocalNumAtoms, lmax_kkr, lmax_phi, lmax_green, &
            n_spin_pola, n_spin_cant, 0, istop, atom_print_level, vc)
 
+!=====================================================================
+!  Determine if there are sine matrix zeros within (0.0, Ef)
+!*********************************************************************
+   if (getKeyValue(def_id,'Imaginary energy shift',ei) /= 0) then
+      ei = 0.001d0
+   endif
+   allocate(LocalNumSpecies(LocalNumAtoms))
+   do id = 1, LocalNumAtoms
+      LocalNumSpecies(id) = getLocalNumSpecies(id)
+   enddo
+!  -------------------------------------------------------------------
+   call initSineMatrixZeros(LocalNumAtoms,n_spin_pola,LocalNumSpecies,  &
+                            lmax_kkr,lmax_rho,node_print_level)
+!  -------------------------------------------------------------------
+   do id =  1, LocalNumAtoms
+      do is = 1, n_spin_pola
+         do ia = 1, LocalnumSpecies(id)
+!           ----------------------------------------------------------
+            call findSineMatrixZeros(id,ia,is,ZERO,Efermi,EiBound=ei,Delta=pole_step)
+!           ----------------------------------------------------------
+            if (node_print_level >= 0 .and. getNumSineMatrixZeros(id,ia,is) > 0) then
+!              -------------------------------------------------------
+               call printSineMatrixZerosInfo(id,ia,is)
+!              -------------------------------------------------------
+            endif
+         enddo
+      enddo
+   enddo
+!  -------------------------------------------------------------------
+   call endSineMatrixZeros()
+!  -------------------------------------------------------------------
+   deallocate(LocalNumSpecies)
+!*********************************************************************
+!  End of finding sine matrix poles
+!=====================================================================
+
    call calConductivity(Efermi, LocalNumAtoms, n_spin_pola)
   
    do i = 1, 3
@@ -737,9 +779,7 @@ program kubo
    call endScfData
    call endKuboData()
    call endBZone()
-   if (isKKRCPA() .or. isKKRCPASRO()) then
-     call endIBZRotation()
-   endif
+   call endIBZRotation()
 
 !  ==================================================================
    call date_and_time(exec_date,exec_time)
