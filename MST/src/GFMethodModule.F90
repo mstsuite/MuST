@@ -2,8 +2,8 @@ module GFMethodModule
    use KindParamModule, only : IntKind, RealKind, CmplxKind
    use MathParamModule, only : ZERO, ONE, THREE, TEN, SQRT_PI, PI, PI2, PI4, &
                                CZERO, CONE, TWO, HALF, SQRTm1, Y0, FIVE, THIRD
-   use MathParamModule, only : Ten2m2, Ten2m3, Ten2m6, Ten2m4, Ten2m5,&
-                       Ten2m7, TEN2m12, TEN2m10, TEN2m8, TEN2m14, TEN2m16
+   use MathParamModule, only : Ten2m2, Ten2m3, Ten2m4, Ten2m6,  &
+                               Ten2m7, TEN2m12, TEN2m10, TEN2m8, TEN2m14, TEN2m16
    use ErrorHandlerModule, only : StopHandler, ErrorHandler, WarningHandler
    use IntegerFactorsModule, only : lofk, lofj, mofj, m1m, mofk, jofk
    use PublicTypeDefinitionsModule, only : GridStruct, LloydStruct
@@ -207,6 +207,7 @@ contains
    use ScfDataModule, only : isLloyd
    use ScfDataModule, only : isReadEmesh, getEmeshFileName, Harris
    use ScfDataModule, only : getAdaptiveIntegrationMethod
+   use ScfDataModule, only : isDMFTenabled
 !
    use NeighborModule, only  : getNumNeighbors
 !
@@ -221,6 +222,10 @@ contains
    use SingleScatteringDOSModule, only : setSScatteringDOSParam
 !
    use MultiScatteringDOSModule, only : setMScatteringDOSParam
+!
+   use LocalGFModule, only : initLocalGF
+!
+   use CheckPointModule, only : insertStopPoint
 !
    implicit none
 !
@@ -239,6 +244,7 @@ contains
    integer (kind=IntKind) :: lmax_max, jmax, green_size, green_ind
    integer (kind=IntKind), allocatable :: NumRs(:)
    integer (kind=IntKind), allocatable :: LocalNumSpecies(:)
+   integer (kind=IntKind), allocatable :: norb(:)
 !
    real (kind=RealKind), intent(in) :: posi_in(3,na)
    real (kind=RealKind), pointer :: p1(:)
@@ -511,6 +517,28 @@ contains
 !
    deallocate(LocalNumSpecies)
 !
+!  ===================================================================
+!  Initialize the Local GF module if LDA+DMFT calculation is enabled.
+!  Note: for now, we set the number of local orbitals to be kmax_kkr
+!  ===================================================================
+   if (isDMFTenabled()) then
+      allocate(norb(LocalNumAtoms))
+      do id = 1, LocalNumAtoms
+         norb(id) = (lmax_kkr_in(id)+1)**2
+      enddo
+!     ----------------------------------------------------------------
+      call initLocalGF(LocalNumAtoms,lmax_kkr_max,getNumEsOnMyProc(),norb,&
+                       n_spin_pola,n_spin_cant,RelativisticFlag)
+!     ----------------------------------------------------------------
+      deallocate(norb)
+!     ================================================================
+!     Once the DMFT solver is fully implemented, the following line will
+!     be commented out.
+!     ----------------------------------------------------------------
+      call insertStopPoint('calMultipleScatteringIDOS')
+!     ----------------------------------------------------------------
+   endif
+!
    end subroutine initGFMethod
 !  ===================================================================
 !
@@ -527,6 +555,10 @@ contains
 !
    use SineMatrixZerosModule, only : isSineMatrixZerosInitialized,    &
                                      endSineMatrixZeros
+!
+   use ScfDataModule, only : isDMFTenabled
+!
+   use LocalGFModule, only : endLocalGF
 !
    implicit none
    integer (kind=IntKind) :: id
@@ -582,6 +614,12 @@ contains
    if (isSineMatrixZerosInitialized()) then
 !     ----------------------------------------------------------------
       call endSineMatrixZeros()
+!     ----------------------------------------------------------------
+   endif
+!
+   if (isDMFTenabled()) then
+!     ----------------------------------------------------------------
+      call endLocalGF()
 !     ----------------------------------------------------------------
    endif
 !
@@ -1673,6 +1711,7 @@ contains
    use ScfDataModule, only : isKKR, isKKRCPA, isKKRCPASRO, isSSIrregularSolOn
    use ScfDataModule, only : NumSS_IntEs
    use ScfDataModule, only : CurrentScfIteration
+   use ScfDataModule, only : isDMFTenabled
 !
    use AtomModule, only : getLocalSpeciesContent
 !
@@ -1681,7 +1720,7 @@ contains
    use KreinModule, only : isLloydOn
 !
    use ContourModule, only : initContour, endContour, setupContour
-   use ContourModule, only : printContour
+   use ContourModule, only : setupMatsubaraPoles, printContour
 !
    use MSSolverModule, only : computeMSGreenFunction
 !
@@ -1731,8 +1770,11 @@ contains
 !
 !  ===================================================================
 !  Determine if using Z*Tau*Z - Z*J formula for the Green function
+!  If DMFT is enabled, we will need to calculate the Green function so
+!  that the irrgular solution is required.
 !  ===================================================================
    useIrregularSolution = isSSIrregularSolOn() .and. .not.(isFullPotential()) 
+   useIrregularSolution = useIrregularSolution .or. isDMFTenabled()
 !
    kBT = Temperature*Boltzmann
    info = 0
@@ -1765,9 +1807,16 @@ contains
 !     on a semi-circle contour or ends at (efermi,Eibottom) for uniform
 !     grids on arectangular contour.
 !     New feature: No extra last energy point is added!
-!     ----------------------------------------------------------------
-      call setupContour( ErBottom, efermi, EiBottom, EiTop )
-!     ----------------------------------------------------------------
+!     ================================================================
+      if (isDMFTenabled()) then
+!        -------------------------------------------------------------
+         call setupMatsubaraPoles(efermi)
+!        -------------------------------------------------------------
+      else
+!        -------------------------------------------------------------
+         call setupContour( ErBottom, efermi, EiBottom, EiTop )
+!        -------------------------------------------------------------
+      endif
       if (node_print_level >= 0) then
 !        -------------------------------------------------------------
          call printContour()
@@ -2234,6 +2283,8 @@ contains
 !  ===================================================================
    use Atom2ProcModule, only : getGlobalIndex
 !
+   use InputModule, only : getKeyValue
+!
    use SSSolverModule, only : initSSSolver, endSSSolver
    use SSSolverModule, only : solveSingleScattering, computePDOS,     &
                               computePhaseShift, getPhaseShift,       &
@@ -2274,7 +2325,7 @@ contains
 !
    real (kind=RealKind) :: Timing_SS = ZERO
    real (kind=RealKind), intent(in) :: er
-   real (kind=RealKind) :: sfac, evec(3), check_ws, check_mt, t0
+   real (kind=RealKind) :: sfac, evec(3), check_ws, check_mt, t0, ei
    real (kind=RealKind), pointer :: ps(:)
    real (kind=RealKind), pointer :: pdos_ws(:), pdos_mt(:)
    real (kind=RealKind) :: ms_dos_ws(n_spin_cant*n_spin_pola), ms_dos_mt(n_spin_cant*n_spin_pola)
@@ -2389,6 +2440,10 @@ contains
    enddo
 !  
    sfac= TWO/real(n_spin_pola,kind=RealKind)
+!
+   if (getKeyValue(1,'Imaginary energy shift',ei) /= 0) then
+      ei = 0.001d0
+   endif
 !  
    if ( (MyPEinEGroup == 0 .and. GlobalNumAtoms < 10) .or. node_print_level >= 0 ) then
       do id = 1, LocalNumAtoms
@@ -2464,7 +2519,7 @@ contains
 !
 !  ==================================================================
 !  Solve the multiple scattering problem for e = er, which is
-!  set to be (er,0.001) in KKR case.
+!  set to be (er,ei) in KKR case.
 !
 !  initialize Multiple scattering solver
 !  -------------------------------------------------------------------
@@ -2476,9 +2531,9 @@ contains
    ns_sqr = n_spin_cant*n_spin_cant
    do is = 1, n_spin_pola/n_spin_cant
       if (isKKR() .or. isKKRCPA() .or. isKKRCPASRO()) then
-         ec = adjustEnergy(is,cmplx(er,0.001d0,kind=CmplxKind))
+         ec = adjustEnergy(is,cmplx(er,ei,kind=CmplxKind))
       else
-         ec = adjustEnergy(is,cmplx(er,0.000d0,kind=CmplxKind))
+         ec = adjustEnergy(is,cmplx(er,ZERO,kind=CmplxKind))
       endif
 !     
 !     ===============================================================
@@ -3988,6 +4043,7 @@ contains
 !
    use ScfDataModule, only : isLloyd, getLloydMode, ContourType
    use ScfDataModule, only : CurrentScfIteration, Temperature
+   use ScfDataModule, only : isDMFTenabled
 !
    use PotentialTypeModule, only : isFullPotential
 !
@@ -4001,6 +4057,10 @@ contains
 !
    use CheckPointModule, only : isStopPoint, takeStopAction
 !
+   use LocalGFModule, only : computeLocalGF, getLocalGF, getNumOrbitals
+!
+   use WriteMatrixModule,  only : writeMatrix
+!
    implicit none
 !
    logical, intent(in) :: useIrregularSolution
@@ -4008,14 +4068,16 @@ contains
    logical :: REL
 !
    integer (kind=IntKind) :: ie, id, is, js, info(6), ia
-   integer (kind=IntKind) :: e_loc
+   integer (kind=IntKind) :: e_loc, js1, js2, num_orbs, kl
    integer (kind=IntKind) :: NumEsOnMyProc, NumRedunEs
    integer (kind=IntKind) :: point_id
 !
    real (kind=RealKind) :: time_ie, ssDOS, msDOS(2), ChargeInLowContour(LocalNumAtoms)
 !
+   complex (kind=CmplxKind) :: trace_gf
    complex (kind=CmplxKind), pointer :: EPoint(:)
    complex (kind=CmplxKind), pointer :: EWght(:)
+   complex (kind=CmplxKind), pointer :: local_gf(:,:)
 !  complex (kind=CmplxKind) :: test_function, test_result(LocalNumAtoms)
 !  complex (kind=CmplxKind) :: test_result_c1(LocalNumAtoms)
 !
@@ -4116,12 +4178,51 @@ contains
 !        ----------------------------------------------------------------
          call sumESVAL(is,IntegrValue,eGID)
       enddo ! Loop over spin index
-   else
+   else ! In the non-relativistic case ..................................
       do is = 1, n_spin_pola/n_spin_cant
 !        test_result = CZERO
          do e_loc = 1,NumEsOnMyProc
             ie = getEnergyIndex(e_loc)
             time_ie = getTime()
+!
+!           =============================================================
+!           If LDA+DMFT is enabled, calculate the local Green function
+!           =============================================================
+            if (isDMFTenabled()) then
+!              ----------------------------------------------------------
+               call computeLocalGF(spin=is,ie=e_loc,e=EPoint(ie))
+!              ----------------------------------------------------------
+               do id = 1, LocalNumAtoms
+                  num_orbs = getNumOrbitals(site=id)
+                  do ia = 1, IntegrValue(id)%NumSpecies
+                     do js2 = 1, n_spin_cant
+                        do js1 = 1, n_spin_cant
+!                          ==============================================
+!                          For the given lattice site, atomic species,
+!                          Matsubara energy, and spin parameters, the returning
+!                          local Green function is a 2d array:
+!                                  local_gf(1:kmax_kkr,1:kmax_kkr)
+!                          where kmax_kkr is the number of orbitals
+!                          ----------------------------------------------
+                           local_gf => getLocalGF(site=id,atom=ia,       &
+                                                  ie=e_loc,jsr=js2,jsl=js1)
+!                          ----------------------------------------------
+                           trace_gf = CZERO
+                           do kl = 1, num_orbs
+                              trace_gf = trace_gf + local_gf(kl,kl)
+                           enddo
+                           if (MyPE == 0) then
+!                             -------------------------------------------
+                              call writeMatrix('Local GF',local_gf,      &
+                                               num_orbs,num_orbs,TEN2m6)
+!                             -------------------------------------------
+                              write(6,'(a,2d16.8)')'Tr[Local G] =',trace_gf
+                           endif
+                        enddo
+                     enddo
+                  enddo
+               enddo
+            endif
 !
 !           =============================================================
 !           Solve the multiple scattering problem e = energy.
@@ -6761,6 +6862,7 @@ contains
    use ScfDataModule, only : NumEs, ContourType, eGridType, isReadEmesh, getEmeshFileName
    use ScfDataModule, only : isKKR, isSSIrregularSolOn
    use ScfDataModule, only : NumSS_IntEs
+   use ScfDataModule, only : isDMFTenabled
 !
    use AtomModule, only : getLocalSpeciesContent
    !
@@ -6769,7 +6871,7 @@ contains
    use KreinModule, only : isLloydOn
    !
    use ContourModule, only : initContour, endContour, setupContour
-   use ContourModule, only : printContour
+   use ContourModule, only : setupMatsubaraPoles, printContour
 !
 !   use MSSolverModule, only : computeMSGreenFunction
    use RelMSSolverModule, only : computeRelMST
@@ -6847,9 +6949,16 @@ contains
 !     on a semi-circle contour or ends at (efermi,Eibottom) for uniform
 !     grids on arectangular contour.
 !     New feature: No extra last energy point is added!
-!     ----------------------------------------------------------------
-      call setupContour( ErBottom, efermi, EiBottom, EiTop )
-!     ----------------------------------------------------------------
+!     ================================================================
+      if (isDMFTenabled()) then
+!        -------------------------------------------------------------
+         call setupMatsubaraPoles(efermi)
+!        -------------------------------------------------------------
+      else
+!        -------------------------------------------------------------
+         call setupContour( ErBottom, efermi, EiBottom, EiTop )
+!        -------------------------------------------------------------
+      endif
    endif
 
    if (node_print_level >= 0) then

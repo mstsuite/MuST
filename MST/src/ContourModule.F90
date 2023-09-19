@@ -2,26 +2,27 @@ module ContourModule
    use KindParamModule, only : IntKind, RealKind, CmplxKind
    use ErrorHandlerModule, only : ErrorHandler, WarningHandler
    use PublicParamDefinitionsModule, only : HalfCircle, RectBox, HorizLine, VertLine, &
-                                            ButterFly, MatsubaraPoles
+                                            ButterFly, MatsubaraApproximant
    use PublicParamDefinitionsModule, only : EqualInterval, GaussianPoints, &
-                                            LogInterval, NicholsonPoints
+                                            LogInterval, NicholsonPoints,  &
+                                            MatsubaraPoles
 !
-public :: initContour,      &
-          endContour,       &
-          setupContour,     &
-          setupOffsetE,     &
-          getNumEs,         &
-          getEPoint,        &
-          getEWeight,       &
-          getEPointOffset,  &
-          getEWeightOffset, &
-          getNumContours,   &
-          getContourKPoint, &
+public :: initContour,         &
+          endContour,          &
+          setupContour,        &
+          setupMatsubaraPoles, &
+          setupOffsetE,        &
+          getNumEs,            &
+          getEPoint,           &
+          getEWeight,          &
+          getEPointOffset,     &
+          getEWeightOffset,    &
+          getNumContours,      &
+          getContourKPoint,    &
           isHorizontalContour, &
-          isNotSearchingEf, &
-          isMatsubaraContour, &
-          printContour, &
-          eGridType_Lloyd_Ef_search
+          isNotSearchingEf,    &
+          isMatsubaraApproxContour, &
+          printContour
 !
    interface initContour
       module procedure initContour0, initContour1
@@ -64,6 +65,7 @@ private
    real (kind=RealKind) :: ErTop
    real (kind=RealKind) :: EiBottom
    real (kind=RealKind) :: EiTop
+   real (kind=RealKind) :: kbT
 ! 
 !  ========================
 !  Contour type parameters:
@@ -245,9 +247,10 @@ contains
 !  ===================================================================
    use MathParamModule, only : ZERO, CZERO, ONE, TEN2m6
    use MPPModule, only : MyPE
-   use ScfDataModule, only : OffsetE, NumExtraEs
+   use ScfDataModule, only : OffsetE, NumExtraEs, isDMFTenabled
 !   use ScfDataModule, only : isLloyd,getLloydMode
-   use MatsubaraModule, only : initMatsubara, getNumMatsubaraPoles
+   use MatsubaraApproxModule, only : initMatsubaraApprox,             &
+                                     getNumMatsubaraApproxPoles
 !
    implicit none
 !
@@ -276,29 +279,29 @@ contains
 !
    if (Temperature < TEN2m6) then
       ContourType = ctype
-   else
-      ContourType = MatsubaraPoles
+   else if (.not.isDMFTenabled()) then
+      ContourType = MatsubaraApproximant
    endif
 !
-   if (ContourType == MatsubaraPoles) then
+   if (ContourType == MatsubaraApproximant) then
 !     ================================================================
 !     If temperature is too low, e.g. less than 300.0 Kevin, while contour
-!     type is determined to be Matsubara poles, the XG Zhang's Gaussian
+!     type is determined to be Matsubara approximant poles, the XG Zhang's Gaussian
 !     points scheme is used so to avoid generating too many poles in
 !     using Nicholson's scheme.
 !     ================================================================
       if (Temperature > 299.0d0 .and. eg == NicholsonPoints) then
          eGridType = NicholsonPoints
 !        -------------------------------------------------------------
-         call initMatsubara(eGridType,Temperature,eWidth=1.5d0,iprint=iprint)
+         call initMatsubaraApprox(eGridType,Temperature,eWidth=1.5d0,iprint=iprint)
 !        -------------------------------------------------------------
       else
          eGridType = GaussianPoints
 !        -------------------------------------------------------------
-         call initMatsubara(eGridType,Temperature,NumPs=ne,iprint=iprint)
+         call initMatsubaraApprox(eGridType,Temperature,NumPs=ne,iprint=iprint)
 !        -------------------------------------------------------------
       endif
-      NumEs = getNumMatsubaraPoles()
+      NumEs = getNumMatsubaraApproxPoles()
    else if (eg == NicholsonPoints) then
       if (MyPE == 0) then
 !        -------------------------------------------------------------
@@ -368,7 +371,7 @@ contains
 !  ===================================================================
    use MathParamModule, only : ZERO, CONE, CZERO
    use ScfDataModule, only : NumExtraEs
-   use MatsuBaraModule, only : calMatsubaraPoles
+   use MatsuBaraApproxModule, only : calMatsubaraApproxPoles
    implicit none
 !
    real (kind=RealKind), intent(in) :: erb
@@ -418,10 +421,10 @@ contains
       return
    endif
 !
-   if (ContourType == MatsubaraPoles) then
+   if (ContourType == MatsubaraApproximant) then
 !     ----------------------------------------------------------------
-      call calMatsubaraPoles(ErBottom,ErTop,EnergyMesh,EnergyWght,    &
-                             core_top=etopcor)
+      call calMatsubaraApproxPoles(ErBottom,ErTop,EnergyMesh,EnergyWght, &
+                                   core_top=etopcor)
 !     ----------------------------------------------------------------
       if (.not.NoLastE) then
          EnergyMesh(NumEs) = cmplx(ErTop,EiBottom,CmplxKind)
@@ -452,6 +455,44 @@ contains
    endif
 !
    end subroutine setupContour
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine setupMatsubaraPoles(chempot,T)
+!  ===================================================================
+   use MathParamModule, only : ZERO, TEN2m6, CONE, CZERO, PI
+!
+   use PhysParamModule, only : Boltzmann
+!
+   implicit none
+!
+   real (kind=RealKind), intent(in) :: chempot
+   real (kind=RealKind), intent(in), optional :: T
+!
+   integer (kind=IntKind) :: ie
+!
+   real (kind=RealKind) :: kbT
+!
+   if (present(T)) then
+      Temperature = T
+   endif
+!
+   if (Temperature < TEN2m6) then
+      call ErrorHandler('setupMatsubaraPoles','Temperature < 10^{-6}',Temperature)
+   endif
+!
+   kbT=Temperature*Boltzmann
+!
+   NumContours = 1
+!
+   do ie = 1, NumEs
+      EnergyMesh(ie) = cmplx(chempot,PI*(2*ie-1)*kbT,CmplxKind)
+      EnergyWght(ie) = CONE
+   enddo
+!
+   end subroutine setupMatsubaraPoles
 !  ===================================================================
 !
 !  *******************************************************************
@@ -961,7 +1002,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine endContour()
 !  ===================================================================
-   use MatsubaraModule, only : endMatsubara
+   use MatsubaraApproxModule, only : endMatsubaraApprox
 !
    implicit none
 !
@@ -983,9 +1024,9 @@ contains
       Offset = -1
    endif
 !
-   if (ContourType == MatsubaraPoles) then
+   if (ContourType == MatsubaraApproximant) then
 !     ----------------------------------------------------------------
-      call endMatsubara()
+      call endMatsubaraApprox()
 !     ----------------------------------------------------------------
    endif
 !
@@ -1157,8 +1198,10 @@ contains
 !
    if (NumKGroups > 0) then
       call ErrorHandler('getEPoint','Invalid function argument(s)')
-   else if (NumContours < 1 .or. NumEs < 1) then
-      call ErrorHandler('getEPoint','NumContours or NumEs < 1')
+   else if (NumContours < 1) then
+      call ErrorHandler('getEPoint','NumContours < 1',NumContours)
+   else if (NumEs < 1) then
+      call ErrorHandler('getEPoint','NumEs < 1',NumEs)
    endif
    ep => EnergyMesh(1:NumEs)
 !
@@ -1182,7 +1225,9 @@ contains
    if (NumKGroups > 0) then
       call ErrorHandler('getEPoint','Invalid interface arguments')
    else if (NumContours < 1) then
-      call ErrorHandler('getEPoint','NumContours < 1', NumContours)
+      call ErrorHandler('getEPoint','NumContours < 1',NumContours)
+   else if (NumEs < 1) then
+      call ErrorHandler('getEPoint','NumEs < 1',NumEs)
    else
       if (ie>NumEs .or. ie<1) then
          call ErrorHandler('getEPoint','ie out of range',ie)
@@ -1413,18 +1458,18 @@ contains
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function isMatsubaraContour() result(y)
+   function isMatsubaraApproxContour() result(y)
 !  ===================================================================
    implicit none
 !
    logical :: y
 !
-   if ( ContourType == MatsubaraPoles ) then
+   if ( ContourType == MatsubaraApproximant ) then
       y = .true.
    else
       y = .false.
    endif
 !
-   end function isMatsubaraContour
+   end function isMatsubaraApproxContour
 !  ===================================================================
 end module ContourModule

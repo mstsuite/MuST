@@ -317,6 +317,11 @@
 !                     = A real positive number provided by user
    n = n + 1; Keys(n) = 'Negative charge density tolerance';     Values(n) = '0.00001'
 !        Note: this is a tolerence value for rho(r) < 0: if -tol < rho(r) < 0, we will set rho(r) = 0.
+   n = n + 1; Keys(n) = 'Imaginary energy shift';     Values(n) = '0.001'
+!        Note: this is a tolerence value for rho(r) < 0: if -tol < rho(r) < 0, we will set rho(r) = 0.
+   n = n + 1; Keys(n) = 'Perform DFT+DMFT Calculation';          Values(n) = '0'
+!                     = 0: No;
+!                     = 1: Yes.
 !  =============================================================================
 !  Additional input parameters can be added to this table using the 
 !  following format:
