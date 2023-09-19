@@ -125,11 +125,11 @@
    call insertColumn(' Iter',string_tmp)
 !  -------------------------------------------------------------------
    if (abs(TotalEnergy-E_offset) >= 1000.0) then
-      write(string_tmp,'(f10.4,''    '')')TotalEnergy-E_offset-zeropt_e
+      write(string_tmp,'(f10.4,''    '')')TotalEnergy-E_offset!-zeropt_e
    else if (abs(TotalEnergy-E_offset) >= 100.0) then
-      write(string_tmp,'(f10.5,''    '')')TotalEnergy-E_offset-zeropt_e
+      write(string_tmp,'(f10.5,''    '')')TotalEnergy-E_offset!-zeropt_e
    else
-      write(string_tmp,'(f10.6,''    '')')TotalEnergy-E_offset-zeropt_e
+      write(string_tmp,'(f10.6,''    '')')TotalEnergy-E_offset!-zeropt_e
    endif
    call insertColumn('  Energy',string_tmp)
 !  -------------------------------------------------------------------
