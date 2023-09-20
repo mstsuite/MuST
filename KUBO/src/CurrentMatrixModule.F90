@@ -202,8 +202,8 @@ contains
        Jtk2(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
        Jtk3(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3), &
        Jtk4(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3))
+     Jtk = CZERO; Jtk2 = CZERO; Jtk3 = CZERO; Jtk4 = CZERO
    endif
-   Jtk = CZERO; Jtk2 = CZERO; Jtk3 = CZERO; Jtk4 = CZERO
 
    allocate(iden(jsize, jsize))
 
@@ -294,14 +294,17 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine endCurrentMatrixModule()
+   subroutine endCurrentMatrixModule(mode)
 !  ===================================================================
 
+   integer (kind=IntKind), intent(in) :: mode
    integer (kind=IntKind) :: L_1, L_2
 
    deallocate(jspace, jspace2, jspace3, jspace4)
    deallocate(jtspace, jtspace2, jtspace3, jtspace4)
-   deallocate(Jtk, Jtk2, Jtk3, Jtk4)
+   if (mode == 3) then
+     deallocate(Jtk, Jtk2, Jtk3, Jtk4)
+   endif
 
    do L_1 = 1, kmax_cg
      do L_2 = 1, kmax_cg
@@ -723,7 +726,6 @@ contains
    phi => getRegSolution(spin=is,site=n,atom=ic)
 
    dphi => getRegSolutionDerivative(spin=is,site=n,atom=ic)
-
 
    phi_k1l = phi(1:iend,gK1,gL1)
 
@@ -1201,6 +1203,7 @@ contains
    call getRadialStepFunction(n, 1, iend, radial_grid, &
         lmax_sigma, sf_single)
 !  ----------------------------------------------------------------
+
 
    do ic = 1, num_species(n)
 !     -------------------------------------------------------------

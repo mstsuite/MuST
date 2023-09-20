@@ -3868,8 +3868,8 @@ contains
                                         species=ia)
 !                 ----------------------------------------------------
                   if ( node_print_level >= 0) then
-                     write(6,'(a,i4,2x,f12.8,2x,d15.8)')'Bound state id, e, and DOS = ',ib, &
-                                                        getBoundStateEnergy(id=id,ia=ia,is=is,ibs=ib),ssDOS
+                     write(6,'(a,i4,2x,f12.8,2x,d15.8)')'Bound state id, e, and DOS = ',&
+                       ib,getBoundStateEnergy(id=id,ia=ia,is=is,ibs=ib),ssDOS
                      write(6,'(a,i4,2x,d15.8)')'Bound state id, ssDOS = ',ib,ssDOS
                      write(6,'(a,i4,2x,d15.8)')'Bound state id, ssLastValue =',ib,          &
                                                real(ssLastValue(id)%dos(ns,ia),kind=RealKind)
@@ -6573,7 +6573,7 @@ contains
    integer (kind=IntKind) :: DOSpid
    integer (kind=IntKind) :: s, ie, id, iv, n, gid, kGID, MyPEinKGroup
    integer (kind=IntKind) :: nume_dos, it, ntypes, ia
-   integer (kind=IntKind), parameter :: fu = 250, maxatoms = 20
+   integer (kind=IntKind), parameter :: fu = 250, maxatoms = 200
 !
    real (kind=RealKind), allocatable, target :: aver_dos(:,:,:)
    real (kind=RealKind), pointer :: p_dos(:,:), p_tdos(:,:)

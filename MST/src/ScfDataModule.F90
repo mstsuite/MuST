@@ -96,6 +96,7 @@ public
    integer (kind=IntKind) :: RealAxisSS = 0
    integer (kind=IntKind) :: SingleSiteEContour = 0
    integer (kind=IntKind) :: KSpaceSolver = 0
+   integer (kind=IntKind) :: tauij_needed = 0
 !
    integer (kind=IntKind) :: i_vdif = 1
    integer (kind=IntKind) :: n_spin_cant = 0
@@ -340,6 +341,7 @@ contains
    rstatus = getKeyValue(tbl_id,'Contour Type (>= 0)',ContourType)
    rstatus = getKeyValue(tbl_id,'Energy Grid Type (>= 0)',eGridType)
    rstatus = getKeyValue(tbl_id,'No. Energy Grids',NumEs)
+   rstatus = getKeyValue(tbl_id,'Calculate off-center blocks (LSMS)',tauij_needed)
    rstatus = getKeyValue(tbl_id,'No. Extra Energy Points',NumExtraEs)
    rstatus = getKeyValue(tbl_id,'SS Real Axis Int. Points',NumSS_IntEs)
    if (rstatus /= 0) then
@@ -417,7 +419,6 @@ contains
       scf_method = LSMS ! first energy points are done with LSMS 
                         ! the switch to KKR is controled in the energy loop
    endif 
-!
 !  -------------------------------------------------------------------
    rstatus = getKeyValue(tbl_id,'Frozen-Core Calculation',n)
 !  -------------------------------------------------------------------

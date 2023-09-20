@@ -60,11 +60,11 @@ contains
 !  ==================================================================
 
 !  cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine initCPAConductivity(n, is, kmax, efermi, LocalNumAtoms)
+   subroutine initCPAConductivity(n, is, kmax, efermi, LocalNumAtoms, mode)
 !  ==================================================================
  
    use SSSolverModule, only : solveSingleScattering 
-   use CPAMediumModule, only : computeCPAMedium, getCPAMatrix, getSingleSiteTmat
+   use CPAMediumModule, only : computeCPAMedium, getCPAMatrix, populateBigTCPA, getSingleSiteMatrix, getSingleSiteTmat
    use AtomModule, only : getLocalNumSpecies, getLocalSpeciesContent
    use Atom2ProcModule, only : getGlobalIndex
    use SystemVolumeModule, only : getAtomicVPVolume
@@ -74,8 +74,9 @@ contains
    use GroupCommModule, only : getGroupID, getNumPEsInGroup, getMyPEinGroup
    use GroupCommModule, only : GlobalMaxInGroup, getGroupCommunicator
    use GroupCommModule, only : syncAllPEsInGroup
+   use CrystalMatrixModule, only : calCrystalMatrix, retrieveTauSRO
 
-   integer (kind=IntKind), intent(in) :: n, is, kmax, LocalNumAtoms
+   integer (kind=IntKind), intent(in) :: n, is, kmax, LocalNumAtoms, mode
    real (kind=RealKind), intent(in) :: efermi
 
    integer (kind=IntKind) :: ic, pot_type
@@ -108,7 +109,19 @@ contains
 !  -------------------------------------------------------------------------------
    call solveSingleScattering(spin=spin_pola,site=local_index,e=eval,vshift=CZERO)
 !  -------------------------------------------------------------------------------
-   call computeCPAMedium(eval)
+   if (mode == 4) then
+!    ----------------------------------------------------------------
+     call computeCPAMedium(eval, do_sro=.true.)
+!    ----------------------------------------------------------------------
+     call populateBigTCPA()
+!    ----------------------------------------------------------------
+     call calCrystalMatrix(eval, getSingleSiteMatrix ,use_tmat=.true.,tau_needed=.true., use_sro=.true.)
+!    ----------------------------------------------------------------
+     call retrieveTauSRO()
+!    ----------------------------------------------------------------
+   else
+     call computeCPAMedium(eval)
+   endif
 !  ------------------------------------------------------------------
    call calCurrentMatrix(local_index,spin_pola,eval,pot_type,3)
 !  ------------------------------------------------------------------
