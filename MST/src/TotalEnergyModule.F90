@@ -882,8 +882,10 @@ contains
       endif
    enddo
 
-   write(6,'(5x,a,f20.11)') "Zero Point Energy = ", ezpttot
-   write(6,'(5x,a,f20.11)') "Zero Point Pressure =", presszpt
+   if (maxval(Print_Level) >= 0) then
+      write(6,'(5x,a,f20.11)') "Zero Point Energy = ", ezpttot
+      write(6,'(5x,a,f20.11)') "Zero Point Pressure =", presszpt
+   endif
 !
    nullify(rho_tot, mom_tot, rho_tmp, v_tmp, prod)
    deallocate(ws_rho, ws_pot, ws_prod)
@@ -1362,8 +1364,10 @@ contains
       exit
       endif
    enddo
-   write(6,'(10x,''ezpt'',t30,''='',f22.11)') ezpttot
-   write(6,'(10x,''tpzpt'',t30,''='',f22.11)') presszpt
+   if (maxval(Print_Level) >= 0) then
+      write(6,'(10x,''ezpt'',t30,''='',f22.11)') ezpttot
+      write(6,'(10x,''tpzpt'',t30,''='',f22.11)') presszpt
+   endif
 !
    deallocate(LocalEnergy)
 !
