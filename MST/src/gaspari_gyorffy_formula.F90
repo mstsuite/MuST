@@ -67,8 +67,14 @@
         real (kind=RealKind) :: DebyeTemp
         real (kind=RealKind) :: species_content
         real (kind=RealKind) :: total_dos, dos_per_spin, total_dos_mt, dos_mt_per_spin, Ef
-        real (kind=RealKind) :: spdos, cpdos
+        real (kind=RealKind) :: spdos, cpdos, pps, cfac
         real (kind=RealKind) :: nr(0:4)  ! assuming lmax <= 4
+!
+        if (n_spin_pola == 1) then
+           cfac = HALF
+        else
+           cfac = ONE
+        endif
 !
         if (MyPE == 0 .and. iprint >= 0) then
            write(6,*), ' '
@@ -84,7 +90,7 @@
               do ia = 1, getLocalNumSpecies(id)
                  write(6,*), 'ia: ', ia
                  write(6,*), 'atomic number: ', getLocalAtomicNumber(id,ia)
-                 write(6,*), 'dos_ws: ', PartialDOS(id)%dos_ws(:,ia)
+                 write(6,*), 'dos_ws per spin: ', PartialDOS(id)%dos_ws(:,ia)*cfac
               enddo
            enddo
            write(6,*), 'Efermi: ', efermi
@@ -121,6 +127,7 @@
            bGID = getGroupID('Energy Mesh')
         endif
 !
+!       ==============================================================
 !       Calculate total dos
 !       ==============================================================
         total_dos = ZERO
@@ -154,13 +161,13 @@
               total_dos_mt = total_dos_mt + dos_mt(is)
            enddo
         endif
-        dos_per_spin = HALF*total_dos  ! states/Ryd/spin
-        dos_mt_per_spin = HALF*total_dos_mt  ! states/Ryd/spin
+        dos_per_spin = cfac*total_dos  ! states/Ryd/spin
+        dos_mt_per_spin = cfac*total_dos_mt  ! states/Ryd/spin
         if (MyPE == 0) then
-           write(6,'(1x,a,f12.5)'), 'Atomic DOS (states/Ryd/spin): ', dos_per_spin
-           write(6,'(1x,a,f12.5)'), 'Atomic DOS (states/eV/spin): ', dos_per_spin/Ryd2eV
-           write(6,'(1x,a,f12.5)'), 'Muffin-tin DOS (states/Ryd/spin): ', dos_mt_per_spin
-           write(6,'(1x,a,f12.5)'), 'Muffin-tin DOS (states/eV/spin): ', dos_mt_per_spin/Ryd2eV
+           write(6,'(1x,a,f12.5)'), 'WS-Volume DOS of Unit cell (states/Ryd/spin): ', dos_per_spin
+           write(6,'(1x,a,f12.5)'), 'WS-Volume DOS of Unit cell (states/eV/spin) : ', dos_per_spin/Ryd2eV
+           write(6,'(1x,a,f12.5)'), 'MT-Volume DOS of Unit cell (states/Ryd/spin): ', dos_mt_per_spin
+           write(6,'(1x,a,f12.5)'), 'MT-Volume DOS of Unit cell (states/eV/spin) : ', dos_mt_per_spin/Ryd2eV
         endif
 !
         Iconst = efermi/PI**2/dos_per_spin**2 ! Ryd^3
@@ -182,6 +189,10 @@
               ss_pdos_mt => PartialDOS(id)%ss_pdos_mt(:,:,ia)
               partial_dos_mt => PartialDOS(id)%partial_dos_mt(:,:,ia)
 !
+              if (getMyPEinGroup(bGID) == 0) then
+                 write(6,'(/,1x,a,a)')'For species: ',getLocalAtomName(id,ia)
+              endif
+!
               SumI = ZERO
               do is = 1, n_spin_pola
                  do l=0,lmax_kkr
@@ -194,13 +205,32 @@
                     enddo
 !                   nr(l) = partial_dos_mt(kl,is)/ss_pdos_mt(kl,is)
                     nr(l) = cpdos/spdos
+                    cpdos = cfac*cpdos
+                    spdos = cfac*spdos
+                    if (getMyPEinGroup(bGID) == 0) then
+                       kl = (l+1)**2-l
+                       if (phase_shift(kl,is) > PI*HALF) then
+                          pps = phase_shift(kl,is) - PI
+                       else if (phase_shift(kl,is) < -PI*HALF) then
+                          pps = phase_shift(kl,is) + PI
+                       else
+                          pps = phase_shift(kl,is)
+                       endif
+                       if (l == 0) then
+                          write(6,'(1x,3(a,f12.5))')'s-state: phase shift =',pps, &
+                                                    ', partial DOS =',cpdos, ', DOS ratio =',nr(l)
+                       else if (l == 1) then
+                          write(6,'(1x,3(a,f12.5))')'p-state: phase shift =',pps, &
+                                                    ', partial DOS =',cpdos, ', DOS ratio =',nr(l)
+                       else if (l == 2) then
+                          write(6,'(1x,3(a,f12.5))')'d-state: phase shift =',pps, &
+                                                    ', partial DOS =',cpdos, ', DOS ratio =',nr(l)
+                       else if (l == 3) then
+                          write(6,'(1x,3(a,f12.5))')'f-state: phase shift =',pps, &
+                                                    ', partial DOS =',cpdos, ', DOS ratio =',nr(l)
+                       endif
+                    endif
                  enddo
-                 if (MyPE == 0) then
-                    write(6,'(1x,2(a,f12.5))')'s-state: phase shift =',phase_shift(1,is), ', DOS ratio =',nr(0)
-                    write(6,'(1x,2(a,f12.5))')'p-state: phase shift =',phase_shift(3,is), ', DOS ratio =',nr(1)
-                    write(6,'(1x,2(a,f12.5))')'d-state: phase shift =',phase_shift(7,is), ', DOS ratio =',nr(2) 
-                    write(6,'(1x,2(a,f12.5))')'f-state: phase shift =',phase_shift(13,is),', DOS ratio =',nr(3)
-                 endif
                  do l=0,lmax_kkr-1 ! sum over l
                     klp1 = (l+2)**2-l-1
                     kl = (l+1)**2-l
@@ -215,7 +245,6 @@
               EPCden = AtomMass*Phonon_Freq2 ! Ryd/au^2
               EPC = EPC + EPCnum/EPCden ! unitless
               if (getMyPEinGroup(bGID) == 0) then
-                 write(6,'(/,1x,a,a)')'For species: ',getLocalAtomName(id,ia)
                  write(6,*), 'SumI: ', SumI
                  write(6,*), 'I (eV^2/A^2): ', I_Total*(Ryd2eV/Bohr2Angstrom)**2
                  write(6,*), 'I (Ryd^2/au^2): ', I_Total
@@ -225,12 +254,14 @@
                  write(6,*), 'M<Omega^2> (Ryd/au^2): ', EPCden
                  write(6,*), 'M<Omega^2> (eV/A^2): ', EPCden*Ryd2eV/Bohr2Angstrom**2
                  write(6,*), 'eta/(M<Omega^2>: ', EPCnum/EPCden
+                 write(6,*), 'lamda: ', EPC
               endif
            enddo  ! Loop over ia
         enddo  ! Loop over id
         call GlobalSumInGroup(aGID, EPC)
         if (MyPE == 0) then
-           write(6,*), 'lamda (EPC): ', EPC
+           write(6,'(/,a)')'For the system ...'
+           write(6,'(a,f12.5)')'lamda (EPC): ', EPC
         endif
 !
 !       Calculate mu ...

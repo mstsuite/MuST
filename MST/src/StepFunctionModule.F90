@@ -1267,6 +1267,7 @@ contains
    use InterpolationModule, only : getInterpolation, FitInterp
 !
    use IntegrationModule, only : calIntegration
+!
    implicit none
 !
    logical, intent(in), optional :: truncated
@@ -1377,6 +1378,11 @@ contains
             exit LOOP_irt
          endif
       enddo LOOP_irt
+   endif
+   if (mr+2 > nr) then
+!     ----------------------------------------------------------------
+      call ErrorHandler('getVolumeIntegration','mr+2 > nr',mr+2,nr)
+!     ----------------------------------------------------------------
    endif
 !
    v = CZERO
@@ -3805,20 +3811,25 @@ contains
 !
    if ( m == 0 ) then
       k_int = 1
-      rr => sqrt_r(0:nr+1)
+      rr => sqrt_r(0:nr+1)  ! Note: rr array starts from index 1
       fac = TWO
    else
       k_int = 0
-      rr => rr0(0:nr)
+      rr => rr0(0:nr)       ! Note: rr array starts from index 1
       fac = ONE
    endif
 !
-   if ( abs(rmax-r(mr) ) < TEN2m12 ) then
+   g = CZERO
+!
+   if ( abs(rmax-r(mr) ) < TEN2m12 ) then ! rmax is on grid point r(mr)
       if ( k==2 ) then
+         do ir = 1, mr
+            fr2(ir) = fr(ir)
+         enddo
 !        -------------------------------------------------------------
          call FitInterp( 4, rr(2:5), fr2(1:4), ZERO, fr2(0), dps )
 !        ------------------------------------------------------------
-         call calIntegration(mr+1,rr(1:mr+1),fr(0:mr),g(0:mr),k_int)
+         call calIntegration(mr+1,rr(1:mr+1),fr2(0:mr),g(0:mr),k_int)
 !        ------------------------------------------------------------
       else
          do ir = 1, mr
@@ -3831,15 +3842,21 @@ contains
 !        -------------------------------------------------------------
       endif
       g(0:mr)= fac*g(0:mr)
-   else
+   else ! in case rmax is not on grid point r(mr)
       rt = rr(mr+2)
       if ( m==0 ) then
+!        -------------------------------------------------------------
+         call FitInterp( 5, rr(mr-1:mr+3), fr(mr-2:mr+2), sqrt(rmax), fg, dps )
+!        -------------------------------------------------------------
          rr(mr+2) = sqrt(rmax)
       else
+!        -------------------------------------------------------------
+         call FitInterp( 5, rr(mr-1:mr+3), fr(mr-2:mr+2), rmax, fg, dps )
+!        -------------------------------------------------------------
          rr(mr+2) = rmax
       endif
 !     ----------------------------------------------------------------
-      fg = getInterpolation(nr,rr(1:nr+1),fr(1:nr),rr(mr+2),err)
+!     fg = getInterpolation(nr,rr(1:nr),fr(1:nr),rr(mr+2),err)
 !     ----------------------------------------------------------------
       if ( k==2 ) then
          do ir = 1, mr
@@ -3878,9 +3895,11 @@ contains
 !
    integer (kind=IntKind), intent(in) :: nr
    real (kind=RealKind), intent(in) :: r(nr)
+   real (kind=RealKind) :: h
 !
    integer (kind=IntKind) :: ir
 !
+   h = log(r(nr)/r(nr-1))
    if (max_nr>=nr+1) then
       sqrt_r(0) = ZERO
       rr0(0)    = ZERO
@@ -3888,6 +3907,8 @@ contains
          sqrt_r(ir) = sqrt(r(ir))
          rr0(ir)    = r(ir)
       enddo
+      rr0(nr+1) = rr0(nr)*exp(h)
+      sqrt_r(nr+1) = sqrt(rr0(nr+1))
    else
       if ( max_nr/=0 ) then
          deallocate( sqrt_r, fr2 )
@@ -3901,6 +3922,8 @@ contains
          sqrt_r(ir)=sqrt(r(ir))
          rr0(ir)    = r(ir)
       enddo
+      rr0(nr+1) = rr0(nr)*exp(h)
+      sqrt_r(nr+1) = sqrt(rr0(nr+1))
       max_nr = nr+1
    endif
 !
