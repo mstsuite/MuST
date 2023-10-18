@@ -138,6 +138,8 @@ Perform DFT+DMFT Calculation :: 1
      0. No (Default)
      1. Yes
 Temperature Parameter (K)  ::  1000.000
+# Default Local Orbital Labels :: s, p, d
+#    Note: The values are: s, p, d, and/or f, separated by ' ', ',', or ';'
 ================================================================================
 # Calculate Superconducting Tc   :: 1
 #      0. No (Default)
