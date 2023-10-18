@@ -322,6 +322,8 @@
    n = n + 1; Keys(n) = 'Perform DFT+DMFT Calculation';          Values(n) = '0'
 !                     = 0: No;
 !                     = 1: Yes.
+   n = n + 1; Keys(n) = 'Default Local Orbital Labels';          Values(n) = 'd'
+!        Note: The values are: s, p, d, and/or f, separated by ' ', ',', or ';'
 !  =============================================================================
 !  Additional input parameters can be added to this table using the 
 !  following format:

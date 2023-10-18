@@ -244,7 +244,6 @@ contains
    integer (kind=IntKind) :: lmax_max, jmax, green_size, green_ind
    integer (kind=IntKind), allocatable :: NumRs(:)
    integer (kind=IntKind), allocatable :: LocalNumSpecies(:)
-   integer (kind=IntKind), allocatable :: norb(:)
 !
    real (kind=RealKind), intent(in) :: posi_in(3,na)
    real (kind=RealKind), pointer :: p1(:)
@@ -522,15 +521,11 @@ contains
 !  Note: for now, we set the number of local orbitals to be kmax_kkr
 !  ===================================================================
    if (isDMFTenabled()) then
-      allocate(norb(LocalNumAtoms))
-      do id = 1, LocalNumAtoms
-         norb(id) = (lmax_kkr_in(id)+1)**2
-      enddo
 !     ----------------------------------------------------------------
-      call initLocalGF(LocalNumAtoms,lmax_kkr_max,getNumEsOnMyProc(),norb,&
+      call initLocalGF(LocalNumAtoms,lmax_kkr_max,getNumEsOnMyProc(), &
                        n_spin_pola,n_spin_cant,RelativisticFlag)
 !     ----------------------------------------------------------------
-      deallocate(norb)
+!
 !     ================================================================
 !     Once the DMFT solver is fully implemented, the following line will
 !     be commented out.
