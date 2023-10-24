@@ -87,6 +87,7 @@ private
    real (kind=RealKind) :: Rotation(3,3,49)
    real (kind=RealKind) :: kfac = ZERO
    real (kind=RealKind), target :: BZ_latt(3,3)
+   real (kind=RealKind), parameter :: diff_tol = 0.0001d0
 !
 contains
 !
@@ -752,6 +753,7 @@ contains
 !  if( ikpsym.eq.-2 ) then     ! This change is made on July 23, 2016
    if( ikpsym < 0 ) then       ! by Yang Wang
       NumRotations = 1         ! full zone
+      nrot = 1
    endif
 !  ===================================================================
 !  / '  Generation of special points',
@@ -952,7 +954,7 @@ contains
 !           ==========================================================
 !           if vr.ne.0, then xa cannot be a multiple of a lattice vector
 !           ==========================================================
-            if (tr .gt. 0.001d0) then
+            if (tr .gt. diff_tol) then
                cycle LOOP_n
             endif
          enddo
@@ -1601,7 +1603,7 @@ contains
                      da = abs(vr(i) - vt(i)) + eps
                      dif = dif + mod(da,1.d0)
                   enddo
-                  if (dif .gt. 0.001d0) then
+                  if (dif .gt. diff_tol) then
                      cycle LOOP_k4
                   endif
 !                 ====================================================

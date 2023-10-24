@@ -7976,7 +7976,7 @@ use MPPModule, only : MyPE, syncAllPEs
 !  
    fint = CZERO
    do ig = 1, ng 
-      if (rg(ig) < rm .or. rg(ig) > rc) then
+      if (rg(ig) < rm-TEN2m6 .or. rg(ig) > rc+TEN2m6) then
          write(6,'(a,3f12.5)')'rg,rm,rc = ',rg(ig),rm,rc
          call ErrorHandler('calIntSphHankelSq','rg is out of range')
       endif
