@@ -25,20 +25,24 @@
                                            PartialDOS,iprint)
 !  ===========================================================================
         use KindParamModule, only : IntKind, RealKind
-        use MathParamModule, only : ZERO, HALF, ONE, TWO, PI
+        use MathParamModule, only : ZERO, HALF, ONE, TWO, PI, TEN2m6
         use PhysParamModule, only : Boltzmann, Ryd2eV, Bohr2Angstrom,         &
-                                    LightSpeed, MassUnit2Ryd, Kelvin2Ryd
+                                    LightSpeed, MassUnit2Ryd, Kelvin2Ryd, MassUnit2eV
         use PublicTypeDefinitionsModule, only : PDOSStruct
         use IntegerFactorsModule, only : lofk, mofk
-        use InputModule, only : getKeyValue
-        use ChemElementModule, only : getDebyeTemperature, getAtomicMass
+        use InputModule, only : getKeyValue, getKeyLabelIndexValue
+        use ChemElementModule, only : getDebyeTemperature, getAtomicMass, MaxLenOfAtomName
+        use ChemElementModule, only : getName
         use MPPModule, only : MyPE
         use AtomModule, only : getLocalNumSpecies, getLocalAtomicNumber,      &
                                getLocalSpeciesContent, getLocalAtomName
         use GroupCommModule, only : GlobalSumInGroup, getGroupID, getMyPEinGroup
         use GroupCommModule, only : isGroupExisting
-        use SystemModule, only : getNumAtomTypes, getNumAtoms
+        use SystemModule, only : getNumAtomTypes, getNumAtoms, getAtomType, getAtomTypeName
+        use SystemModule, only : getAtomicNumber
         use ErrorHandlerModule, only : ErrorHandler
+        use Atom2ProcModule, only : getGlobalIndex
+!
         implicit none
 !
         integer (kind=IntKind), intent(in) :: LocalNumAtoms
@@ -46,6 +50,7 @@
         integer (kind=IntKind), intent(in) :: iprint
         integer (kind=IntKind) :: atomic_number, aGID, bGID
         integer (kind=IntKind) :: id, ia, is, l, m, kl, klp1, kmax_phi, lmax_kkr
+        integer (kind=IntKind) :: NumAtomTypes, NumAtoms, ig
 !
         real (kind=RealKind), intent(in) :: efermi
 !
@@ -58,7 +63,7 @@
         real (kind=RealKind), pointer :: partial_dos_mt(:,:)
 !
         real (kind=RealKind) :: I_Total,sinTerm,Inum,Iden
-        real (kind=RealKind) :: Phonon_Freq2
+        real (kind=RealKind), allocatable :: Phonon_Freq2(:)
         real (kind=RealKind) :: EPC, EPCnum,EPCden
         real (kind=RealKind) :: AtomMass
         real (kind=RealKind) :: Coulomb,Coulombnum,Coulombden,mu_star
@@ -67,8 +72,21 @@
         real (kind=RealKind) :: DebyeTemp
         real (kind=RealKind) :: species_content
         real (kind=RealKind) :: total_dos, dos_per_spin, total_dos_mt, dos_mt_per_spin, Ef
-        real (kind=RealKind) :: spdos, cpdos, pps, cfac
+        real (kind=RealKind) :: spdos, cpdos, pps, cfac, val_au, av_phonon_freq
         real (kind=RealKind) :: nr(0:4)  ! assuming lmax <= 4
+!
+        character (len=MaxLenOfAtomName), pointer :: AtomTypeName(:)
+        integer (kind=IntKind), pointer :: AtomType(:)
+        integer (kind=IntKind), allocatable :: ind_array(:)
+        real (kind=RealKind), allocatable :: val_array(:)
+!
+        NumAtoms = getNumAtoms()
+        NumAtomTypes = getNumAtomTypes()
+        AtomTypeName => getAtomTypeName()
+        AtomType => getAtomType()
+!
+        allocate(ind_array(NumAtoms), val_array(NumAtoms))
+        allocate(Phonon_Freq2(NumAtoms))
 !
         if (n_spin_pola == 1) then
            cfac = HALF
@@ -104,21 +122,85 @@
 !
 !       Determine the Debye Temperature and phonon frequency
 !       ==============================================================
-        if (getKeyValue(1,'Debye Temperature (K)',DebyeTemp, default_param=.false.) /= 0) then
-           if (getNumAtomTypes() == 1)  then
-              atomic_number = getLocalAtomicNumber(1,1)
-              DebyeTemp = getDebyeTemperature(atomic_number)
-           else
-              call ErrorHandler('Gaspari-Gyorffy-Formula',           &
-                               'Debye temperature is missing from input')
+        if (getKeyValue(1,'Average of phonon frequency (1/sec)',av_phonon_freq,default_param=.false.) == 0) then
+           DebyeTemp = av_phonon_freq/Boltzmann
+        else if (getKeyValue(1,'Average of phonon frequency (K)',av_phonon_freq,default_param=.false.) == 0) then
+           DebyeTemp = av_phonon_freq
+        else
+           if (getKeyValue(1,'Debye Temperature (K)',DebyeTemp, default_param=.false.) /= 0) then
+              if (NumAtomTypes == 1)  then
+                 atomic_number = getLocalAtomicNumber(1,1)
+                 DebyeTemp = getDebyeTemperature(atomic_number)
+              else
+                 call ErrorHandler('Gaspari-Gyorffy-Formula','Debye temperature is missing from input')
+              endif
            endif
         endif
-        Phonon_Freq2 = HALF*DebyeTemp**2
+!
+!       Determine the average phonon frequency squared
+!       ==============================================================
+        ind_array = 0; val_array = ZERO; Phonon_Freq2 = ZERO
+        if (getKeyLabelIndexValue(1,'Atomic mass times <omega^2> (eV/Anst^2)', &
+                                  NumAtomTypes,AtomTypeName,NumAtoms,AtomType,ind_array,val_array) == 0) then
+           do ig = 1, NumAtoms
+              val_au = val_array(ig)*Bohr2Angstrom**2/Ryd2eV ! This is M*<omega^2> in atomic units
+              atomic_number = getAtomicNumber(ig)
+              if (MyPE == 0) then
+                 write(6,*) getName(atomic_number), ': M*<omega^2> = ',val_array(ig),'(eV/Anst^2)'
+              endif
+              AtomMass=getAtomicMass(atomic_number)*MassUnit2Ryd/LightSpeed**2 ! Atomic Mass in Ryd.
+              Phonon_Freq2(ig) = val_au/AtomMass
+           enddo
+        else if (getKeyLabelIndexValue(1,'Atomic mass times <omega^2> (Ryd/BohrRad^2)', &
+                                  NumAtomTypes,AtomTypeName,NumAtoms,AtomType,ind_array,val_array) == 0) then
+           do ig = 1, NumAtoms
+              atomic_number = getAtomicNumber(ig)
+              if (MyPE == 0) then
+                 write(6,*) getName(atomic_number), ': M*<omega^2> = ',val_array(ig),'(Ryd/BohrRad^2)'
+              endif
+              AtomMass=getAtomicMass(atomic_number)*MassUnit2Ryd/LightSpeed**2 ! Atomic Mass in Ryd.
+              Phonon_Freq2(ig) = val_array(ig)/AtomMass
+           enddo
+        else
+           if (getKeyLabelIndexValue(1,'Average of phonon frequency squared (1/sec^2)', &
+                                     NumAtomTypes,AtomTypeName,NumAtoms,AtomType,ind_array,val_array) == 0) then
+              do ig = 1, NumAtoms
+                 atomic_number = getAtomicNumber(ig)
+                 if (MyPE == 0) then
+                    write(6,*) getName(atomic_number), ': <omega^2> = ',val_array(ig),'(1/sec^2)'
+                 endif
+                 Phonon_Freq2(ig) = val_array(ig)
+              enddo
+           else if (getKeyLabelIndexValue(1,'Average of phonon frequency squared (K^2)', &
+                                          NumAtomTypes,AtomTypeName,NumAtoms,AtomType,ind_array,val_array) == 0) then
+              do ig = 1, NumAtoms
+                 atomic_number = getAtomicNumber(ig)
+                 if (MyPE == 0) then
+                    write(6,*) getName(atomic_number), ': <omega^2> = ',val_array(ig),'(K^2)'
+                 endif
+                 Phonon_Freq2(ig) = val_array(ig)*Kelvin2Ryd**2
+              enddo
+           else
+              Phonon_Freq2 = HALF*(DebyeTemp*Kelvin2Ryd)**2
+           endif
+        endif
+        do ig = 1, NumAtoms
+           if (Phonon_Freq2(ig) < TEN2m6) then
+              call ErrorHandler('Gaspari-Gyorffy-Formula','Invalid value of <omega^2>',Phonon_Freq2(ig))
+           endif
+        enddo
+!
+        deallocate(ind_array, val_array)
+!
         if (MyPE == 0) then
            write(6,*), 'Debye Temp (K): ', DebyeTemp
-           write(6,*), 'Phonon Frequency (K): ', sqrt(Phonon_Freq2)
+           do ig = 1, NumAtoms  ! Loop atomic sites
+              atomic_number = getAtomicNumber(ig)
+              write(6,'(1x,a,a,d15.8,a)')getName(atomic_number),': Average of Phonon Frequency Square =', &
+                                         Phonon_Freq2(ig),' (Ryd^2)'
+!             write(6,'(40x,a,d15.8,a)')'=',Phonon_Freq2(ig)/Kelvin2Ryd**2,' (K^2)'
+           enddo
         endif
-        Phonon_Freq2 = Phonon_Freq2*Kelvin2Ryd*Kelvin2Ryd
 !
         aGID = getGroupID("Unit Cell")
         if (isGroupExisting('E-K Plane')) then
@@ -132,7 +214,7 @@
 !       ==============================================================
         total_dos = ZERO
         total_dos_mt = ZERO
-        if (getNumAtoms() > 1) then
+        if (NumAtoms > 1) then
            do id = 1, LocalNumAtoms  ! Loop atomic sites
               do ia = 1, getLocalNumSpecies(id)  ! Loop over atomic species
                  dos_ws => PartialDOS(id)%dos_ws(:,ia)
@@ -164,10 +246,10 @@
         dos_per_spin = cfac*total_dos  ! states/Ryd/spin
         dos_mt_per_spin = cfac*total_dos_mt  ! states/Ryd/spin
         if (MyPE == 0) then
-           write(6,'(1x,a,f12.5)'), 'WS-Volume DOS of Unit cell (states/Ryd/spin): ', dos_per_spin
-           write(6,'(1x,a,f12.5)'), 'WS-Volume DOS of Unit cell (states/eV/spin) : ', dos_per_spin/Ryd2eV
-           write(6,'(1x,a,f12.5)'), 'MT-Volume DOS of Unit cell (states/Ryd/spin): ', dos_mt_per_spin
-           write(6,'(1x,a,f12.5)'), 'MT-Volume DOS of Unit cell (states/eV/spin) : ', dos_mt_per_spin/Ryd2eV
+           write(6,'(/,1x,a,f10.5,a)')'WS-Volume DOS of Unit cell =', dos_per_spin,' (states/Ryd/spin))'
+           write(6,'(  1x,a,f10.5,a)')'                           =', dos_per_spin/Ryd2eV,' (states/eV/spin)'
+           write(6,'(  1x,a,f10.5,a)')'MT-Volume DOS of Unit cell =', dos_mt_per_spin,' (states/Ryd/spin))'
+           write(6,'(  1x,a,f10.5,a)')'                           =', dos_mt_per_spin/Ryd2eV,' (states/eV/spin)'
         endif
 !
         Iconst = efermi/PI**2/dos_per_spin**2 ! Ryd^3
@@ -179,6 +261,7 @@
         do id = 1, LocalNumAtoms  ! Loop atomic sites
            kmax_phi = PartialDOS(id)%kmax_phi
            lmax_kkr = lofk(kmax_phi)
+           ig = getGlobalIndex(id)
            do ia = 1, getLocalNumSpecies(id)  ! Loop over atomic species
                                               ! at each atomic site. The
                                               ! number of species is usually 1,
@@ -242,7 +325,7 @@
 !
               AtomMass=getAtomicMass(atomic_number)*MassUnit2Ryd/LightSpeed**2
               EPCnum = dos_per_spin*I_Total  ! Ryd/au^2
-              EPCden = AtomMass*Phonon_Freq2 ! Ryd/au^2
+              EPCden = AtomMass*Phonon_Freq2(ig) ! Ryd/au^2
               EPC = EPC + EPCnum/EPCden ! unitless
               if (getMyPEinGroup(bGID) == 0) then
                  write(6,*), 'SumI: ', SumI
@@ -260,8 +343,8 @@
         enddo  ! Loop over id
         call GlobalSumInGroup(aGID, EPC)
         if (MyPE == 0) then
-           write(6,'(/,a)')'For the system ...'
-           write(6,'(a,f12.5)')'lamda (EPC): ', EPC
+           write(6,'(/,1x,a)')'For the system ...'
+           write(6,'(1x,a,f12.5)')'lamda (EPC): ', EPC
         endif
 !
 !       Calculate mu ...
@@ -305,6 +388,8 @@
            write(6,'(1x,a,f14.6)')'Superconducting Transition Temp (K): ',SuperTemp
            write(6,'(1x,a,/)')'***************************************************'
         endif
+!
+        deallocate(Phonon_Freq2)
 !
 !       ==============================================================
 !       Using the partial phase shift and DOS data published in PRB 15, 4221

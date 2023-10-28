@@ -3560,16 +3560,19 @@ endif
    integer (kind=IntKind) :: i, j, status
 !
    status = getKeyIndexValue(id,key,k_index,value,nv)
-   do i = 1, nl
-      if (getKeyLabelValue(id,key,lab(i),s) == 0) then
-         do j = 1, nv
-            if (lind(j) == i .and. k_index(j) == 0) then
-               k_index(j) = j
-               value(j) = s
-            endif
-         enddo
-      endif
-   enddo
+   if (status /= 0) then
+      do i = 1, nl
+         if (getKeyLabelValue(id,key,lab(i),s) == 0) then
+            status = 0
+            do j = 1, nv
+               if (lind(j) == i .and. k_index(j) == 0) then
+                  k_index(j) = j
+                  value(j) = s
+               endif
+            enddo
+         endif
+      enddo
+   endif
 !
    end function getKeyLabelIndexValue_str
 !  ===================================================================
@@ -3589,16 +3592,19 @@ endif
    integer (kind=IntKind) :: i, j, status, v
 !
    status = getKeyIndexValue(id,key,k_index,value,nv)
-   do i = 1, nl
-      if (getKeyLabelValue(id,key,lab(i),v) == 0) then
-         do j = 1, nv
-            if (lind(j) == i .and. k_index(j) == 0) then
-               k_index(j) = j
-               value(j) = v
-            endif
-         enddo
-      endif
-   enddo
+   if (status /= 0) then
+      do i = 1, nl
+         if (getKeyLabelValue(id,key,lab(i),v) == 0) then
+            status = 0
+            do j = 1, nv
+               if (lind(j) == i .and. k_index(j) == 0) then
+                  k_index(j) = j
+                  value(j) = v
+               endif
+            enddo
+         endif
+      enddo
+   endif
 !
    end function getKeyLabelIndexValue_int
 !  ===================================================================
@@ -3619,16 +3625,19 @@ endif
    real (kind=RealKind) :: v
 !
    status = getKeyIndexValue(id,key,k_index,value,nv)
-   do i = 1, nl
-      if (getKeyLabelValue(id,key,lab(i),v) == 0) then
-         do j = 1, nv
-            if (lind(j) == i .and. k_index(j) == 0) then
-               k_index(j) = j
-               value(j) = v
-            endif
-         enddo
-      endif
-   enddo
+   if (status /= 0) then
+      do i = 1, nl
+         if (getKeyLabelValue(id,key,lab(i),v) == 0) then
+            status = 0
+            do j = 1, nv
+               if (lind(j) == i .and. k_index(j) == 0) then
+                  k_index(j) = j
+                  value(j) = v
+               endif
+            enddo
+         endif
+      enddo
+   endif
 !
    end function getKeyLabelIndexValue_real
 !  ===================================================================
