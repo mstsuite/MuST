@@ -110,15 +110,17 @@ ifndef XLC_I
 endif
 
 ifndef NotUse_LIBXC
-ifneq "$(NotUse_LIBXC)" "0"
-ifndef LIBXC_PATH
-   ADDITIONAL_TARGETS = libxc
-   LIBXC_PATH = $(EXTERN_LIB_PATH)/libxc/LibXC/$(SUFFIX)
+   ifneq "$(NotUse_LIBXC)" "0"
+      ifndef LIBXC_PATH
+         ADDITIONAL_TARGETS = libxc
+         LIBXC_PATH = $(EXTERN_LIB_PATH)/libxc/LibXC/$(SUFFIX)
+      endif
+      ifeq (,$(findstring -DLIBXC,$(FPPFLAGS)))
 # ADD_LIBS  += -L$(LIBXC_PATH)/lib -lxcf90 -lxc
-   ADD_LIBS  += $(LIBXC_PATH)/lib/libxcf90.a $(LIBXC_PATH)/lib/libxc.a
-   FPPFLAGS += -DLIBXC5 -I$(LIBXC_PATH)/include
-endif
-endif
+         ADD_LIBS  += $(LIBXC_PATH)/lib/libxcf90.a $(LIBXC_PATH)/lib/libxc.a
+         FPPFLAGS += -DLIBXC5 -I$(LIBXC_PATH)/include
+      endif
+   endif
 endif
 
 ifndef Use_FFTW
