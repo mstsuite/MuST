@@ -71,6 +71,7 @@ contains
    use AtomModule, only : getLocalNumSpecies
 !
    use OrbitalBasisModule, only : initOrbitalBasis
+   use OrbitalBasisModule, only : computeOrbitalBasis
 !
    use InputModule, only : getKeyValue
 ! 
@@ -84,11 +85,13 @@ contains
    integer (kind=IntKind), intent(in) :: na, lmax
    integer (kind=IntKind), intent(in) :: ne
    integer (kind=IntKind), intent(in) :: pola, cant, rel
-   integer (kind=IntKind) :: nsize, nr, id, n, i, rstatus
+   integer (kind=IntKind) :: nsize, nr, id, n, i, rstatus, is, ia
    integer (kind=IntKind), allocatable :: num_orbs(:), num_ls(:), orb_l(:,:)
 !
    character (len=20) :: local_orbitals, s
    character (len=1) :: orb
+!
+   real (kind=RealKind) :: e_orb
 !
    if (isFullPotential()) then
       call ErrorHandler('initLocalGF',                                &
@@ -164,6 +167,14 @@ contains
       call QuickSort(n,orb_l(1:n,id))
 !     ----------------------------------------------------------------
    enddo
+!
+   if (BasisType == 0) then
+!     ----------------------------------------------------------------
+      rstatus = getKeyValue(1,'Default Local Orbital Energy',e_orb)
+!     ----------------------------------------------------------------
+!     rstatus = getKeyIndexValue(1,'Local Orbital Energy',e_orb)
+!     ----------------------------------------------------------------
+   endif
 !  ===================================================================
 !
 !  -------------------------------------------------------------------
@@ -180,6 +191,31 @@ contains
       allocate(local_gf(id)%energy(ne), local_gf(id)%gf(nsize))
       local_gf(id)%energy = CZERO; local_gf(id)%gf = CZERO
       MaxNumOrbitals = max(MaxNumOrbitals, num_orbs(id))
+   enddo
+!
+   do is = 1, n_spin_pola
+      do id = 1, NumLocalAtoms
+!        =============================================================
+!        Note: For the orbital basis type = 0, the single site solver has been
+!              called inside subroutine computeOrbitalBasis.
+!        =============================================================
+         if (BasisType == 0) then
+!           ==========================================================
+!           The orbital is calculated at enery = e_orb, read from the input
+!           ==========================================================
+            do ia = 1, local_gf(id)%NumSpecies
+!              -------------------------------------------------------
+               call computeOrbitalBasis(spin=is,site=id,atom=ia,e0=e_orb)
+!              -------------------------------------------------------
+            enddo
+         else
+            do ia = 1, local_gf(id)%NumSpecies
+!              -------------------------------------------------------
+               call computeOrbitalBasis(spin=is,site=id,atom=ia)
+!              -------------------------------------------------------
+            enddo
+         endif
+      enddo
    enddo
 !
    nr = getMaxNumRmesh()
@@ -256,7 +292,7 @@ contains
 !
    use CPAMediumModule, only : getImpurityMatrix
 !
-   use OrbitalBasisModule, only : computeOrbitalBasis, getOrbitalBasis
+   use OrbitalBasisModule, only : getOrbitalBasis
    use OrbitalBasisModule, only : getLFlag
 !
    implicit none
@@ -284,7 +320,24 @@ contains
    complex (kind=CmplxKind), pointer :: XiHLr(:,:,:,:)
    complex (kind=CmplxKind) :: Amat, Bmat, Dmat, LambdaRc, PhiRc
    complex (kind=CmplxKind) :: cfac, bfac, bfac_bar
-complex (kind=CmplxKind) :: xf(1100), sf(1100), pf(1100)
+!
+   interface adjustEnergy
+      function adjustEnergy_r(is,e) result(energy)
+         use KindParamModule, only : IntKind, RealKind, CmplxKind
+         implicit none
+         integer (kind=IntKind), intent(in) :: is
+         real (kind=RealKind), intent(in) :: e
+         real (kind=RealKind) :: energy
+      end function adjustEnergy_r
+!
+      function adjustEnergy_c(is,e) result(energy)
+         use KindParamModule, only : IntKind, RealKind, CmplxKind
+         implicit none
+         integer (kind=IntKind), intent(in) :: is 
+         complex (kind=CmplxKind), intent(in) :: e 
+         complex (kind=CmplxKind) :: energy 
+      end function adjustEnergy_c 
+   end interface adjustEnergy
 !
    interface
       subroutine computeCmplxProdExpan(n,lf,f,act,lg,g,lh,h)
@@ -307,23 +360,20 @@ complex (kind=CmplxKind) :: xf(1100), sf(1100), pf(1100)
 !
    do site = 1, NumLocalAtoms
       local_gf(site)%energy(ie) = e
-!     ================================================================
-!     Note: For the orbital basis type = 0, the single site solver has been
-!           called inside subroutine computeOrbitalBasis.
-!     ================================================================
-      if (BasisType == 0) then
-         do atom = 1, local_gf(site)%NumSpecies
+      do js = 1, n_spin_cant
+         ns = max(js,spin)
+         if (isFullPotential()) then
 !           ----------------------------------------------------------
-            call computeOrbitalBasis(spin=spin,site=site,atom=atom,e=e)
+            call solveSingleScattering(spin=ns,site=site,e=adjustEnergy(spin,e), &
+                                       vshift=CZERO)
 !           ----------------------------------------------------------
-         enddo
-      else
-         do atom = 1, local_gf(site)%NumSpecies
+         else
+!           ---------------------------------------------------------- 
+            call solveSingleScattering(spin=ns,site=site,e=adjustEnergy(spin,e), &
+                                       vshift=CZERO,isSphSolver=.true.,useIrrSol='H')
 !           ----------------------------------------------------------
-            call computeOrbitalBasis(spin=spin,site=site,atom=atom)
-!           ----------------------------------------------------------
-         enddo
-      endif
+         endif
+      enddo
    enddo
 !  -------------------------------------------------------------------
    call computeMSTMatrix(spin,e)
@@ -362,14 +412,15 @@ complex (kind=CmplxKind) :: xf(1100), sf(1100), pf(1100)
             PhiLr => getRegSolution(spin=js,site=site,atom=atom)
             HLr => getIrrSolution(spin=js,site=site,atom=atom)
             do iorb = 1, norbs
-               bf => getOrbitalBasis(spin=js,site=site,atom=atom,orb=iorb,rpow=rpow,star=.false.,bfac=bfac)
+!              bf => getOrbitalBasis(spin=js,site=site,atom=atom,orb=iorb,rpow=rpow,star=.false.,bfac=bfac)
+               bf => getOrbitalBasis(spin=js,site=site,atom=atom,orb=iorb,rpow=rpow,bfac=bfac)
                i_Lflag => getLFlag(js,site,atom,iorb)
                if (rpow < 0 .or. rpow > 1) then
                   call ErrorHandler('computeLocalGF','rpow < 0 or rpow > 1',rpow)
                endif
                if (isFullPotential()) then  ! The following code for the full-potential case needs some work ...
 !                 ==========================! ******************************************************************
-                  bf_bar => getOrbitalBasis(spin=js,site=site,atom=atom,orb=iorb,rpow=rpow,star=.true.,bfac=bfac_bar)
+!                 bf_bar => getOrbitalBasis(spin=js,site=site,atom=atom,orb=iorb,rpow=rpow,star=.true.,bfac=bfac_bar)
 !!!               do kl = 1, kmax_kkr
 !                    -------------------------------------------------
 !!!                  call computeCmplxProdExpan(site,kmax_kkr,bf_bar,'c',kmax_kkr,PhiLr(:,:,kl),kmax_gf,prod_fp)

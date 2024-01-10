@@ -896,10 +896,10 @@ contains
 !     potential outside the muffin-tin sphere is 0, we set the core
 !     radius to the muffin-tin radius and ignore the input parameter
 !     ================================================================
-      if (getPotentialTypeParam() == ASA .or. getPotentialTypeParam() == MuffinTin .or. &
-          getPotentialTypeParam() == MuffinTinASA) then
-         AtomProperty(n)%Rcore=AtomProperty(n)%Rmt
-      else
+!!!   if (getPotentialTypeParam() == ASA .or. getPotentialTypeParam() == MuffinTin .or. &
+!!!       getPotentialTypeParam() == MuffinTinASA) then
+!!!      AtomProperty(n)%Rcore=AtomProperty(n)%Rmt
+!!!   else
          if ( isInteger( rcr_input(ind_rcr_input(ig)) ) ) then
             read(rcr_input(ind_rcr_input(ig)),*)ri
             if (ri == -1) then
@@ -930,13 +930,16 @@ contains
          else if ( isRealNumber( rcr_input(ind_rcr_input(ig)) ) ) then
 !           Using the specified value as the core radius
             read(rcr_input(ind_rcr_input(ig)),*)AtomProperty(n)%Rcore
+         else if (getPotentialTypeParam() == ASA .or. getPotentialTypeParam() == MuffinTin .or. &
+            getPotentialTypeParam() == MuffinTinASA) then
+            AtomProperty(n)%Rcore=AtomProperty(n)%Rmt
          else
 !           ----------------------------------------------------------
             call ErrorHandler('initAtom','Invalid core radius parameter', &
                               rcr_input(ind_rcr_input(ig)) )
 !           ----------------------------------------------------------
          endif
-      endif
+!!!   endif
 !     ================================================================
 !
       if ( pseudo_r(ind_pseudo_r(ig)) > ZERO ) then

@@ -336,6 +336,12 @@
 !                     = 1: Yes.
    n = n + 1; Keys(n) = 'Default Local Orbital Labels';          Values(n) = 'd'
 !        Note: The values are: s, p, d, and/or f, separated by ' ', ',', or ';'
+   n = n + 1; Keys(n) = 'Default Local s-Orbital Energy';        Values(n) = '0.2'
+   n = n + 1; Keys(n) = 'Default Local p-Orbital Energy';        Values(n) = '0.3'
+   n = n + 1; Keys(n) = 'Default Local d-Orbital Energy';        Values(n) = '0.5'
+   n = n + 1; Keys(n) = 'Default Local f-Orbital Energy';        Values(n) = '0.4'
+   n = n + 1; Keys(n) = 'Default Local Orbital Energy';          Values(n) = '0.5'
+!        Note: The orbital energy value is real and is in Rydberg unit
 !  =============================================================================
 !  Additional input parameters can be added to this table using the 
 !  following format:

@@ -227,6 +227,9 @@ contains
 !
    use CheckPointModule, only : insertStopPoint
 !
+   use SSSolverModule, only : isInitialized
+   use SSSolverModule, only : initSSSolver, endSSSolver
+!
    implicit none
 !
    character (len=*), intent(in) :: istop
@@ -249,6 +252,7 @@ contains
    real (kind=RealKind), pointer :: p1(:)
 !
    logical, intent(in), optional :: isGGA
+   logical :: sss_init
 !
    type (GridStruct), pointer :: Grid
 !
@@ -521,10 +525,27 @@ contains
 !  Note: for now, we set the number of local orbitals to be kmax_kkr
 !  ===================================================================
    if (isDMFTenabled()) then
+      if (.not.isInitialized()) then
+!        -------------------------------------------------------------
+         call initSSSolver(LocalNumAtoms, getLocalNumSpecies, getLocalAtomicNumber, &
+                           lmax_kkr, lmax_phi, lmax_pot, lmax_step, lmax_green, &
+                           n_spin_pola, n_spin_cant, RelativisticFlag,   &
+                           stop_routine, print_level)
+!        ----------------------------------------------------------
+         sss_init = .true.
+      else
+         sss_init = .false.
+      endif
 !     ----------------------------------------------------------------
       call initLocalGF(LocalNumAtoms,lmax_kkr_max,getNumEsOnMyProc(), &
                        n_spin_pola,n_spin_cant,RelativisticFlag)
 !     ----------------------------------------------------------------
+!
+      if (sss_init) then
+!        -------------------------------------------------------------
+         call endSSSolver()
+!        -------------------------------------------------------------
+      endif
 !
 !     ================================================================
 !     Once the DMFT solver is fully implemented, the following line will

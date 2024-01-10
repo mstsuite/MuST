@@ -861,6 +861,9 @@ program mst2
    do i = 1,LocalNumAtoms
       rmt   = getMuffinTinRadius(i)
       rinsc = getInscrSphRadius(i)
+      if (node_print_level >= 0 .and. .not.isStandardOutToScreen()) then
+         write(6,'(a,2f20.13)')'rmt, rinsc = ',rmt,rinsc
+      endif
       if (rmt < ONE) then
          if (abs(rmt) < TEN2m6) then
 !           ==========================================================
@@ -878,10 +881,11 @@ program mst2
 !        -------------------------------------------------------------
          call setMuffinTinRadius(i,rmt)
 !        -------------------------------------------------------------
-         if (.not.isFullPotential()) then
+!        if (.not.isFullPotential()) then
 !           ==========================================================
 !           For Muffin-tin, ASA, or Muffin-tin-ASA calculations, since
 !           potential outside rmt is 0, core radius is set to rmt
+         if (getAtomCoreRad(i) < TEN2m6) then
 !           ----------------------------------------------------------
             call setAtomCoreRad(i,rmt)
 !           ----------------------------------------------------------
