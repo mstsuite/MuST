@@ -73,6 +73,7 @@ public
                                                      ! belongs
       integer (kind=IntKind),pointer:: NAsOnShell(:) ! Number Atoms on each shell
       real (kind=RealKind), pointer :: ShellRad(:)   ! radii of shells
+      real (kind=RealKind) :: CenterPosition(3)      ! Center atom position
 
    end type NeighborStruct
 !

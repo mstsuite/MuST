@@ -89,6 +89,8 @@ subroutine setupLizNeighbor(print_level)
       rcut = TEN2m6
       LizAtoms_max = LizLmax%nmax
 !
+      neighb%CenterPosition = posl
+!
 !     ================================================================
 !     determine the number of shifts of the unit cell along brav(:,1),
 !     brav(:,2), and brav(:,3) directions.

@@ -1379,11 +1379,11 @@ contains
          endif
       enddo LOOP_irt
    endif
-   if (mr+2 > nr) then
+!! if (mr+2 > nr) then
 !     ----------------------------------------------------------------
-      call ErrorHandler('getVolumeIntegration','mr+2 > nr',mr+2,nr)
+!!    call ErrorHandler('getVolumeIntegration','mr+2 > nr',mr+2,nr)
 !     ----------------------------------------------------------------
-   endif
+!! endif
 !
    v = CZERO
 !

@@ -23,7 +23,8 @@ public :: initNeighbor,            &
           getRecvTable,            &
           getNumAtomsOnShell,      &
           printNeighbor,           &
-          printCommunicationTable
+          printCommunicationTable, &
+          isNeighbor     ! Determine if two sites are neighboring to each other
 !
 !  ===================================================================
 !  Define NeighborStruct data type. It contains cluster/LIZ information
@@ -225,6 +226,7 @@ contains
       deallocate( Neighbor(id)%IndexMN )
       deallocate( Neighbor(id)%Rmunu )
    endif
+   Neighbor(id)%CenterPosition = nb%CenterPosition
    Neighbor(id)%NumAtoms = n
    allocate( Neighbor(id)%Z(n) )
    allocate( Neighbor(id)%Lmax(n) )
@@ -307,6 +309,7 @@ contains
       deallocate( NeighborEIZ(id)%ShellIndex, NeighborEIZ(id)%ShellRad )
       deallocate( NeighborEIZ(id)%NAsOnShell )
    endif
+   NeighborEIZ(id)%CenterPosition = nb%CenterPosition
    NeighborEIZ(id)%NumAtoms = n
    allocate( NeighborEIZ(id)%Z(n) )
    allocate( NeighborEIZ(id)%Lmax(n) )
@@ -1034,5 +1037,41 @@ contains
    write(6,'(  2x,a)')'=============================================='
 !
    end subroutine printCommunicationTable
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isNeighbor(local_id,global_id,nshells) result(y)
+!  ===================================================================
+!  Given the local atom, specified by its local index "local_id", determine
+!  if an atom, specified its global index "global_id", is the neighbor
+!  of the local atom. A neighbor is optionally defined by shell.
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: local_id, global_id
+   integer (kind=IntKind), intent(in), optional :: nshells
+   integer (kind=IntKind) :: i, ns
+!
+   logical :: y
+!
+   if (present(nshells)) then
+      ns = nshells
+   else
+      ns = 1 ! By default, a neighbor is defined by the 1st neighboring shell
+   endif
+!
+   y = .false.
+   LOOP_i: do i = 1, Neighbor(local_id)%NumAtoms
+      if (Neighbor(local_id)%ShellIndex(i) <= ns) then
+         if (Neighbor(local_id)%GlobalIndex(i) == global_id) then
+            y = .true.
+            exit LOOP_i
+         endif
+      endif
+   enddo LOOP_i
+!
+   end function isNeighbor
 !  ===================================================================
 end module NeighborModule
