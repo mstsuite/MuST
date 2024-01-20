@@ -371,9 +371,22 @@ contains
 !  -------------------------------------------------------------------
    rstatus = getKeyValue(tbl_id,'LDA Improvement Scheme',LdaCorrectionType)
 !  -------------------------------------------------------------------
-   if (NumKMeshs > 0) then
+   if (NumKMeshs < 1 .or. NumKMeshs > 2) then
+      call ErrorHandler('initScfData','Invalid number of kmeshs',NumKMeshs)
+   else
       allocate(Kdiv(3,NumKMeshs))
       rstatus = getKeyValue(tbl_id,'Kx, Ky, Kz Division (> 0)',3,Kdiv,NumKMeshs)
+      if (NumKMeshs == 2) then
+!        =============================================================
+!        Make sure that the number of k-points in the first mesh is less
+!        than the number of k-points in the second mesh
+!        =============================================================
+         if (Kdiv(1,1)*Kdiv(2,1)*Kdiv(3,1) > Kdiv(1,2)*Kdiv(2,2)*Kdiv(3,2)) then
+            n = Kdiv(1,2); Kdiv(1,2) = Kdiv(1,1); Kdiv(1,1) = n
+            n = Kdiv(2,2); Kdiv(2,2) = Kdiv(2,1); Kdiv(2,1) = n
+            n = Kdiv(3,2); Kdiv(3,2) = Kdiv(3,1); Kdiv(3,1) = n
+         endif
+      endif
    endif
 !
 !  if (abs(ErTop) < TEN2m8) then

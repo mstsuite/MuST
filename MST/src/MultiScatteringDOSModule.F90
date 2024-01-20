@@ -315,6 +315,12 @@ contains
                      real(dosmt_pola(1:n_spin_cant)/(cmul*sfac),RealKind)
                write(6,'(  ''                       Im{-Int [Z*Tau*Z-Z*J]/pi on VP} ='',f18.12)')  &
                      real(dosws_pola(1:n_spin_cant)/(cmul*sfac),RealKind)
+               do ks = 1, n_spin_pola
+                  if (real(dosws_pola(ks)/(cmul*sfac),RealKind) < ZERO) then
+                     write(6,'(/,a,i3,a,2f13.8,a,f13.8,/)')'WARNING!!! :::: For is = ',ks,', e = ',e, &
+                                        ', -ImG(e)/PI < 0:',real(dosws_pola(ks)/(cmul*sfac),RealKind)
+                  endif
+               enddo
             else
                write(6,'(  ''                       Int [Z*Tau*Z] on MT         ='',2f18.12)')     &
                      dosmt_pola(1:n_spin_cant)*PI/(SQRTm1*cmul*sfac)

@@ -125,7 +125,7 @@ program mst2
    use ProcMappingModule, only : initProcMapping, endProcMapping,            &
                                  createParallelization, getNumEsOnMyProc,    &
                                  getNumKsOnMyProc, getNumRedundantEsOnMyProc,&
-                                 getNumRedundantKsOnMyProc
+                                 getNumRedundantKsOnMyProc, distributeX
 !
    use SystemVolumeModule, only : initSystemVolume, endSystemVolume,         &
                                   printSystemVolume, updateSystemVolume,     &
@@ -682,6 +682,17 @@ program mst2
 !  -------------------------------------------------------------------
 #endif
 #endif
+   if (isKKR() .or. isScreenKKR_LSMS() .or. isKKRCPA() .or. isKKRCPASRO()) then
+      if (NumKMeshs > 1) then
+!        =============================================================
+!        Distributed the denser k-mesh
+!        -------------------------------------------------------------
+         call distributeX('Denser K-Mesh in the IBZ',getGroupID('K-Mesh'), &
+                          getNumKs(2))
+!        -------------------------------------------------------------
+      endif
+   endif
+!
 !  ===================================================================
 !  Note: only the 1st cluster in the group performs writing potential data
 !  ===================================================================

@@ -19,13 +19,20 @@ public :: initProcMapping,  &
           getNumEsOnMyProc, &
           getEnergyIndex,   &
           getNumRedundantEsOnMyProc, &
-          getProcWithEnergyIndex, &
+          getProcWithEnergyIndex, &     ! returns proc ID in a MPI group
           isKPointOnMyProc, &
           getNumKsOnMyProc, &
           getKPointIndex,   &
           getNumRedundantKsOnMyProc, &
-          getProcWithKPointIndex, &
-          isAtomOnMyProc
+          getProcWithKPointIndex, &     ! returns proc ID in a MPI group
+          isAtomOnMyProc,         &
+          distributeX,               &
+          getNumXsOnMyProc,          &
+          getXIndex,                 &
+          getXCommID,                &
+          getNumRedundantXsOnMyProc, &
+          getProcWithXIndex,         &  ! returns proc ID in a MPI group
+          isXindexOnMyProc
 !
    interface initProcMapping
       module procedure initProcMapping_0, initProcMapping_1
@@ -46,11 +53,12 @@ private
    integer (kind=IntKind) :: MyBoxIndex4K = 0
    integer (kind=IntKind) :: MyIndexInBox = 0
 !
-   integer (kind=IntKind), allocatable :: EsOnMyProc(:)
-   integer (kind=IntKind), allocatable :: KsOnMyProc(:)
-   integer (kind=IntKind), allocatable :: AsOnMyProc(:)
-   integer (kind=IntKind), allocatable :: E2Proc(:)
-   integer (kind=IntKind), allocatable :: K2Proc(:)
+   integer (kind=IntKind), allocatable, target :: EsOnMyProc(:)
+   integer (kind=IntKind), allocatable, target :: KsOnMyProc(:)
+   integer (kind=IntKind), allocatable, target :: AsOnMyProc(:)
+   integer (kind=IntKind), allocatable, target :: E2Proc(:)
+   integer (kind=IntKind), allocatable, target :: K2Proc(:)
+   integer (kind=IntKind), allocatable, target :: A2Proc(:)
 !
    integer (kind=IntKind) :: print_level
 !
@@ -63,6 +71,25 @@ private
    logical :: isFullPotential = .false.
    logical :: Created = .false.
    logical :: Initialized = .false.
+!
+!  ===================================================================
+!  MappingStruct defines a mapping information table which is a linked
+!  list of each physical parameter X (atom, energy, k-points, etc) with
+!  N points to processor mapping 
+!  ===================================================================
+   type MappingStruct
+      character (len=80) :: ParamKey
+      integer (kind=IntKind) :: CommGroupID
+      integer (kind=IntKind) :: NumParams                  ! = N, for which X(i) has N points with i = 1, 2, ...,N
+      integer (kind=IntKind) :: NumParamsOnMyProc          ! = number of i's mapped on my processor
+      integer (kind=IntKind) :: NumRedundantParamsOnMyProc ! = number of redundant i's on my processor
+      integer (kind=IntKind), pointer :: ParamOnMyProc(:)  ! = index i for a given local index q = 1, 2, ..., NumParamsOnMyProc
+      integer (kind=IntKind), pointer :: ParamToProc(:)    ! = processor ID for a given i index
+      type (MappingStruct), pointer :: next
+   end type MappingStruct
+!
+   integer (kind=IntKind) :: NumMappingItems
+   type (MappingStruct), pointer :: MappingTable
 !
 contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -105,6 +132,7 @@ contains
    call checkResources()
 !  -------------------------------------------------------------------
 !
+   NumMappingItems = 0
    stop_routine = istop
    print_level = iprint
 !
@@ -156,6 +184,7 @@ contains
    call checkResources()
 !  -------------------------------------------------------------------
 !
+   NumMappingItems = 0
    stop_routine = istop
    print_level = iprint
 !
@@ -171,9 +200,21 @@ contains
 !  ===================================================================
    implicit none
 !
+   integer (kind=IntKind) :: i
+!
+   type (MappingStruct), pointer :: p_item
+!
+   do i = 1, NumMappingItems
+      p_item => MappingTable%next
+      deallocate(MappingTable)
+      MappingTable => p_item
+   enddo 
+   nullify(p_item)
+   nullify(MappingTable)
+!
    if (Created) then
       deallocate(EsOnMyProc, KsOnMyProc, AsOnMyProc)
-      deallocate(E2Proc, K2Proc)
+      deallocate(E2Proc, K2Proc, A2Proc)
       Created = .false.
    endif
 !
@@ -185,6 +226,7 @@ contains
    NumAtomsPerProc = 0
    NumKsPerBox = 0
    NumRedundantKsPerBox = 0
+   NumMappingItems = 0
    isFullPotential = .false.
    Initialized = .false.
 !
@@ -528,14 +570,16 @@ contains
                                createGroupFromGrid, createBoxGroupFromGrid, &
                                getGroupID, getNumPEsInGroup, getMyPEinGroup,&
                                getGroupLabel, getNumGroups,                 &
-                               getNumClustersOfGroup, getMyClusterIndex
+                               getNumClustersOfGroup, getMyClusterIndex,    &
+                               GlobalSumInGroup
 !
    implicit none
 !
    logical, intent(in), optional :: isAtomDistributed
    logical :: atom_distributed = .true.
 !
-   integer (kind=IntKind) :: NumPEs, MyPE, NProc_E
+   integer (kind=IntKind) :: NumPEs, MyPE, NProc_E, MyPEinGroup
+   integer (kind=IntKind) :: aGID, eGID, kGID
    integer (kind=IntKind) :: proc_dim(3), box(3), step(3)
    integer (kind=IntKind) :: i, j, d, n, m, grid_id, ie, ik
    integer (kind=IntKind) :: ra, rk, re
@@ -543,6 +587,8 @@ contains
    integer (kind=IntKind) :: na, nk, ne, nsum, np
    integer (kind=IntKind) :: na_sav, nk_sav, ne_sav, nsum_sav, NumAtoms_tmp
    integer (kind=IntKind), pointer :: factors(:,:)
+!
+   type (MappingStruct), pointer :: p_item
 !
    character (len=21), parameter :: sname = 'createParallelization'
 !
@@ -864,41 +910,44 @@ contains
       enddo
    endif
 !
-   i = getGroupID('Unit Cell')
-   MyIndexInBox = getMyPEinGroup(i) + 1
+   aGID = getGroupID('Unit Cell')
+   MyIndexInBox = getMyPEinGroup(aGID) + 1
 !
    if (nk > 1) then
-      i = getGroupID('K-Mesh')
+      kGID = getGroupID('K-Mesh')
       if (print_level >= 1 .and. MyPE < min(NumPEs,8)) then
          write(6,'(3(a,i5))')'For group K-Mesh, MyPE = ',MyPE,        &
-                  ', number of members = ',getNumPEsInGroup(i),       &
-                  ', my index in group: ',getMyPEinGroup(i)
+                  ', number of members = ',getNumPEsInGroup(kGID),    &
+                  ', my index in group: ',getMyPEinGroup(kGID)
       endif
-      MyBoxIndex4K = getMyPEinGroup(i) + 1
+      MyBoxIndex4K = getMyPEinGroup(kGID) + 1
    else
       MyBoxIndex4K = 1
+      kGID = 0
    endif
 !
    if (ne > 1) then
-      i = getGroupID('Energy Mesh')
-      NProc_E  = getNumPEsInGroup(i)
+      eGID = getGroupID('Energy Mesh')
+      NProc_E  = getNumPEsInGroup(eGID)
       if (print_level >= 1 .and. MyPE < min(NumPEs,8)) then
          write(6,'(3(a,i5))')'For group Energy Mesh, MyPE = ',MyPE,   &
-                  ', number of members = ',getNumPEsInGroup(i),       &
-                  ', my index in group: ',getMyPEinGroup(i)
+                  ', number of members = ',getNumPEsInGroup(eGID),    &
+                  ', my index in group: ',getMyPEinGroup(eGID)
       endif
-      MyBoxIndex4E = getMyPEinGroup(i) + 1
+      MyBoxIndex4E = getMyPEinGroup(eGID) + 1
    else
       NProc_E  = 1
       MyBoxIndex4E = 1
+      eGID = 0
    endif
 !
    if (Created) then
-      deallocate(EsOnMyProc, KsOnMyProc, AsOnMyProc, E2Proc, K2Proc)
+      deallocate(EsOnMyProc, KsOnMyProc, AsOnMyProc, E2Proc, K2Proc, A2Proc)
    endif
    allocate(EsOnMyProc(1:NumEsPerBox), KsOnMyProc(1:NumKsPerBox))
    allocate(AsOnMyProc(1:NumAtomsPerProc))
    allocate(E2Proc(1:NumEs), K2Proc(1:NumKs))
+   allocate(A2Proc(1:NumAtoms))
    Created = .true.
 !
 !  ==================================================================
@@ -907,6 +956,15 @@ contains
    do i = 1, NumAtomsPerProc
       AsOnMyProc(i) = (MyIndexInBox-1)*NumAtomsPerProc + i
    enddo
+   MyPEinGroup = getMyPEinGroup(aGID)
+   A2Proc = 0
+   do i = 1, NumAtomsPerProc
+      j = AsOnMyProc(i)
+      A2Proc(j) = MyPEinGroup
+   enddo
+!  ------------------------------------------------------------------
+   call GlobalSumInGroup(aGID,A2Proc,NumAtoms)
+!  ------------------------------------------------------------------
 !
 !  ==================================================================
 !  mapping energy mesh on processors
@@ -987,6 +1045,34 @@ contains
       endif
    endif
 !
+!  ===================================================================
+!  Add each parameter-to-process mapping rule in the mapping table
+!  -------------------------------------------------------------------
+   call appendItem(item_name='Atoms in the Unit Cell',                &
+                   comm_id = aGID,                                    &
+                   num_elements=NumAtoms,                             &
+                   num_local_elements=NumAtomsPerProc,                &
+                   num_local_redundants=0,                            &
+                   element_index=AsOnMyProc,                          &
+                   index2proc=A2Proc)
+!  -------------------------------------------------------------------
+   call appendItem(item_name='E-Mesh along the Energy Contour',       &
+                   comm_id = eGID,                                    &
+                   num_elements=NumEs,                                &
+                   num_local_elements=NumEsPerBox,                    &
+                   num_local_redundants=NumRedundantEsPerBox,         &
+                   element_index=EsOnMyProc,                          &
+                   index2proc=E2Proc)
+!  -------------------------------------------------------------------
+   call appendItem(item_name='Normal K-Mesh in the IBZ',              &
+                   comm_id = kGID,                                    &
+                   num_elements=NumKs,                                &
+                   num_local_elements=NumKsPerBox,                    &
+                   num_local_redundants=NumRedundantKsPerBox,         &
+                   element_index=KsOnMyProc,                          &
+                   index2proc=K2Proc)
+!  -------------------------------------------------------------------
+!
    call syncAllPEs()
 !
    if (print_level >= 0 .and. MyPE == 0) then
@@ -1044,5 +1130,336 @@ contains
    proc_dim(1) = n1s; proc_dim(2) = n2s; proc_dim(3) = n3s
 !
    end subroutine setupProcDim
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine distributeX(XName,CommGroupID,NumXs)
+!  ===================================================================
+   use MPPModule, only : MyPE, NumPEs, GlobalSUm
+!
+   use GroupCommModule, only : getNumPEsInGroup, getMyPEinGroup,      &
+                               GlobalSumInGroup
+!
+   implicit none
+!
+   character (len=*), intent(in) :: XName
+!
+   integer (kind=IntKind), intent(in) :: CommGroupID
+   integer (kind=IntKind), intent(in) :: NumXs
+   integer (kind=IntKind) :: nproc, iproc, NumRedundants, nblock, nx_loc
+   integer (kind=IntKind) :: i, id, m
+   integer (kind=IntKind), allocatable :: xid(:), xid2proc(:)
+!
+   if (CommGroupID > 0) then
+      nproc = getNumPEsInGroup(CommGroupID)
+      iproc = getMyPEinGroup(CommGroupID)
+   else
+      nproc = NumPEs
+      iproc = MyPE
+   endif
+   NumRedundants = mod(NumXs,nproc)
+   nblock = (NumXs-NumRedundants)/nproc
+   nx_loc = nblock + NumRedundants
+!
+   allocate(xid(nx_loc), xid2proc(NumXs))
+   xid2proc = 0
+!
+   m = iproc*nblock
+   do i = 1, nblock
+      id = m + i
+      xid(i) = id
+      xid2proc(id) = iproc
+   enddo
+   m = nproc*nblock
+   do i = 1, NumRedundants
+      id = m + i
+      xid(nblock+i) = id
+      xid2proc(id) = -1
+   enddo
+   if (CommGroupID > 0) then
+!     ---------------------------------------------------------------
+      call GlobalSumInGroup(CommGroupID,xid2proc,NumXs)
+!     ---------------------------------------------------------------
+   else
+!     ---------------------------------------------------------------
+      call GlobalSum(xid2proc,NumXs)
+!     ---------------------------------------------------------------
+   endif
+!
+!  -------------------------------------------------------------------
+   call appendItem(item_name=XName,                                   &
+                   comm_id=CommGroupID,                               &
+                   num_elements=NumXs,                                &
+                   num_local_elements=nx_loc,                         &
+                   num_local_redundants=NumRedundants,                &
+                   element_index=xid,                                 &
+                   index2proc=xid2proc)
+!  -------------------------------------------------------------------
+!
+   deallocate(xid, xid2proc)
+!
+   end subroutine distributeX
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getNumXsOnMyProc(X_name) result(n)
+!  ===================================================================
+   implicit none
+!
+   character (len=*), intent(in) :: X_name
+!
+   type (MappingStruct), pointer :: p_item
+!
+   integer (kind=IntKind) :: n
+!
+   p_item => getMappingItem(X_name)
+!
+   n = p_item%NumParamsOnMyProc
+!
+   end function getNumXsOnMyProc
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getXIndex(X_name,n_loc) result(i)
+!  ===================================================================
+   implicit none
+!
+   character (len=*), intent(in) :: X_name
+!
+   type (MappingStruct), pointer :: p_item
+!
+   integer (kind=IntKind), intent(in) :: n_loc
+   integer (kind=IntKind) :: i
+!
+   p_item => getMappingItem(X_name)
+!
+   if (n_loc < 1 .or. n_loc > p_item%NumParamsOnMyProc) then
+      call ErrorHandler('getXIndex','The local index is out of range',n_loc)
+   endif
+!
+   i = p_item%ParamOnMyProc(n_loc)
+!
+   end function getXIndex
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getXCommID(X_name) result(i)
+!  ===================================================================
+   implicit none
+!
+   character (len=*), intent(in) :: X_name
+!
+   type (MappingStruct), pointer :: p_item
+!
+   integer (kind=IntKind) :: i
+!
+   p_item => getMappingItem(X_name)
+!
+   i = p_item%CommGroupID
+!
+   end function getXCommID
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getNumRedundantXsOnMyProc(X_name) result(n)
+!  ===================================================================
+   implicit none
+!
+   character (len=*), intent(in) :: X_name
+!
+   type (MappingStruct), pointer :: p_item
+!
+   integer (kind=IntKind) :: n
+!
+   p_item => getMappingItem(X_name)
+!
+   n = p_item%NumRedundantParamsOnMyProc
+!
+   end function getNumRedundantXsOnMyProc
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isXindexOnMyProc(X_name,i) result(y)
+!  ===================================================================
+   implicit none
+!
+   character (len=*), intent(in) :: X_name
+!
+   integer (kind=IntKind), intent(in) :: i
+   integer (kind=IntKind) :: j
+!
+   type (MappingStruct), pointer :: p_item
+!
+   logical :: y
+!
+   p_item => getMappingItem(X_name)
+!
+   if (i < 1 .or. i > p_item%NumParams) then
+      call ErrorHandler('isXindexOnMyProc','The index is out of range',i)
+   endif
+!
+   y = .false.
+   LOOP_j: do j = 1, p_item%NumParamsOnMyProc
+      if (i == p_item%ParamOnMyProc(j)) then
+         y = .true.
+         exit LOOP_j
+      endif
+   enddo LOOP_j
+!
+   end function isXindexOnMyProc
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getProcWithXIndex(X_name,i) result (n)
+!  ===================================================================
+   implicit none
+!
+   character (len=*), intent(in) :: X_name
+!
+   integer (kind=IntKind), intent(in) :: i
+   integer (kind=IntKind) :: n
+!
+   type (MappingStruct), pointer :: p_item
+!
+   p_item => getMappingItem(X_name)
+!
+   if (i < 1 .or. i > p_item%NumParams) then
+      call ErrorHandler('getProcWithXIndex','The index is out of range',i)
+   endif
+!
+!  ===================================================================
+!  returns the proc ID in the MPI group, identified by X_name
+!  ===================================================================
+   n = p_item%ParamToProc(i) ! If index i is mapped on all processors, n = -1
+!
+   end function getProcWithXIndex
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine createMappingItem(p_item)
+!  ===================================================================
+   implicit none
+!
+   type (MappingStruct), pointer, intent(out) :: p_item
+!
+   integer (kind=IntKind) :: i
+!
+   if (NumMappingItems == 0) then
+      allocate(MappingTable)
+      p_item => MappingTable
+   else
+      p_item => MappingTable
+      do i = 2, NumMappingItems
+         p_item => p_item%next
+      enddo
+      allocate(p_item%next)
+      p_item => p_item%next
+   endif
+   p_item%ParamKey = ' '
+   p_item%CommGroupID = 0
+   p_item%NumParams = 0
+   p_item%NumParamsOnMyProc = 0
+   p_item%NumRedundantParamsOnMyProc = 0
+   nullify(p_item%ParamOnMyProc)
+   nullify(p_item%ParamToProc)
+   nullify(p_item%next)
+   NumMappingItems = NumMappingItems + 1
+!
+   end subroutine createMappingItem
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getMappingItem(item_name) result(p)
+!  ===================================================================
+   implicit none
+!
+   character (len=*), intent(in) :: item_name
+!
+   type (MappingStruct), pointer :: p
+!
+   integer (kind=IntKind) :: i
+!
+   logical :: found = .false.
+!
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         implicit none
+         logical :: t
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+      end function nocaseCompare
+   end interface
+!
+   found = .false.
+   p => MappingTable
+   LOOP_i: do i = 1, NumMappingItems
+      if (nocaseCompare(p%ParamKey,item_name)) then
+         found = .true.
+         exit LOOP_i
+      endif
+      p => p%next
+   enddo LOOP_i
+!
+   if (.not.found) then
+      call ErrorHandler('getMappingItem','The item is not in the mapping table',item_name)
+   endif
+!
+   end function getMappingItem
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine appendItem(item_name,comm_id,num_elements,num_local_elements, &
+                         num_local_redundants,element_index,index2proc)
+!  ===================================================================
+   implicit none
+!
+   character (len=*), intent(in) :: item_name
+!
+   integer (kind=IntKind), intent(in) :: num_elements
+   integer (kind=IntKind), intent(in) :: comm_id
+   integer (kind=IntKind), intent(in) :: num_local_elements
+   integer (kind=IntKind), intent(in) :: num_local_redundants
+   integer (kind=IntKind), intent(in) :: element_index(:)
+   integer (kind=IntKind), intent(in) :: index2proc(:)
+!
+   type (MappingStruct), pointer :: p_item
+!
+!  -------------------------------------------------------------------
+   call createMappingItem(p_item)
+!  -------------------------------------------------------------------
+!
+   p_item%ParamKey = item_name
+   p_item%CommGroupID = comm_id
+   p_item%NumParams = num_elements
+   p_item%NumParamsOnMyProc = num_local_elements
+   p_item%NumRedundantParamsOnMyProc = num_local_redundants
+!
+   allocate(p_item%ParamOnMyProc(num_local_elements))
+   p_item%ParamOnMyProc = element_index
+!
+   allocate(p_item%ParamToProc(num_elements))
+   p_item%ParamToProc = index2proc
+!
+   end subroutine appendItem
 !  ===================================================================
 end module ProcMappingModule
