@@ -58,9 +58,9 @@ if (error != cudaSuccess) fprintf(stderr,"\nError4: %s\n",cudaGetErrorString(err
 initialized = true;
 }
 
-cudaEvent_t start, stop;
-cudaEventCreate(&start);
-cudaEventCreate(&stop);
+//cudaEvent_t start, stop;
+//cudaEventCreate(&start);
+//cudaEventCreate(&stop);
 cusolverDnHandle_t cusolverHandle;
 cusolverStatus_t cusolverStatus;
 cusolverDnCreate(&cusolverHandle);
@@ -70,19 +70,19 @@ cusolverDnZgetrf_bufferSize(cusolverHandle, *m, *m, aDev, *m, &Lwork);
 error=cudaMalloc((void**)&workArray, Lwork*sizeof(cuDoubleComplex));
 if (error != cudaSuccess) fprintf(stderr,"\nError5: %s\n",cudaGetErrorString(error));
 
-cudaEventRecord(start); 
+//cudaEventRecord(start); 
 error = cudaMemcpy(aDev, a, sizeof(cuDoubleComplex)* *m * *m, cudaMemcpyHostToDevice);
 if (error != cudaSuccess) fprintf(stderr,"\nError6: %s\n",cudaGetErrorString(error));
-cudaEventRecord(stop);
-cudaEventSynchronize(stop);
-cudaEventElapsedTime(&time_copyin, start, stop);
+//cudaEventRecord(stop);
+//cudaEventSynchronize(stop);
+//cudaEventElapsedTime(&time_copyin, start, stop);
 
 error = cudaMemcpy(tau00Dev, tau00, sizeof(cuDoubleComplex)* *m * *m, cudaMemcpyHostToDevice);
 if (error != cudaSuccess) fprintf(stderr,"\nError7: %s\n",cudaGetErrorString(error));
 
 
 
-cudaEventRecord(start);
+//cudaEventRecord(start);
 cusolverStatus = cusolverDnZgetrf(cusolverHandle, *m, *m, aDev, *m, workArray, pivotArray, infoArray);
 //if (cusolverStatus == CUSOLVER_STATUS_SUCCESS)
 //  printf("cuSOLVER ZGETRF SUCCESSFUL! \n");
@@ -94,16 +94,16 @@ cusolverStatus = cusolverDnZgetrs(cusolverHandle,CUBLAS_OP_N,*m,*m,aDev,*m, pivo
 //  printf("cuSOLVER ZGETRS SUCCESSFUL! \n");
 //else
 //  printf("cuSOLVER ZGETRS UNSUCCESSFUL! \n");
-cudaEventRecord(stop);
-cudaEventSynchronize(stop);
-cudaEventElapsedTime(&time_compute, start, stop);     
+//cudaEventRecord(stop);
+//cudaEventSynchronize(stop);
+//cudaEventElapsedTime(&time_compute, start, stop);     
 
 //printf("4\n");
 //cudaMemcpy(a, tau00Dev, *m * *m *sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);//copy the whole inverse back to a
 //printf("In cuda:tau00(10)(5) %f\t%f\n",creal(tau00[4][9]),cimag(tau00[4][9]));
 //printf("In cuda:tau00(1)(1) %f\t%f\n",creal(tau00[0][0]),cimag(tau00[0][0]));
 
-cudaEventRecord(start);
+//cudaEventRecord(start);
 for (int i=0;i<*block_size;i++)
 {
 	for (int j=0;j<*block_size;j++)
@@ -111,9 +111,9 @@ for (int i=0;i<*block_size;i++)
 		cudaMemcpy(&b[i+*block_size * j], &tau00Dev[i+*m * j], sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
 	}
 }
-cudaEventRecord(stop);
-cudaEventSynchronize(stop);
-cudaEventElapsedTime(&time_copyout, start, stop);
+//cudaEventRecord(stop);
+//cudaEventSynchronize(stop);
+//cudaEventElapsedTime(&time_copyout, start, stop);
 
 //Print the time (in ms) for GPU data transfer and GPU compute
 //printf("Time for copyin: %f\tfor copyout: %f\tfor compute inverse: %f\n",time_copyin*0.001,time_copyout*0.001,time_compute*0.001);
@@ -121,7 +121,10 @@ cudaEventElapsedTime(&time_copyout, start, stop);
 //clean up
 cusolverDnDestroy(cusolverHandle);
 cudaFree(workArray);
+//printf("5\n");
 
 // LFu: clean up tau00
 free(tau00);
+//printf("6\n");
+
 }
