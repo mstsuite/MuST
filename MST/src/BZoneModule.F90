@@ -1845,7 +1845,7 @@ contains
    integer (kind=IntKind) :: iqp1, iqp2, iqp3
    integer (kind=IntKind) :: i1, i2, i3
    integer (kind=IntKind) :: kcount, nplane
-   integer (kind=IntKind) :: i, j, k, iop, iremov, n, ibsign
+   integer (kind=IntKind) :: i, j, k, iop, iremov, n, ibsign, kop
    integer (kind=IntKind), parameter ::  nrsdir=100
 !
    real (kind=RealKind), intent(in) :: wvk0(3)
@@ -1925,11 +1925,12 @@ contains
 !                 ----------------------------------------------------
 !                 apply all the bravais lattice operations to wvk
                   LOOP_iop: do iop = 1,ncbrav
+                     wva = ZERO
+                     kop = ibrav(iop)
                      do i=1,3
-                        wva(i) = ZERO
                         do j = 1,3
-!                          wva(i) = wva(i) + r(ibrav(iop),i,j)*wvk(j)
-                           wva(i) = wva(i) + r(i,j,ibrav(iop))*wvk(j)
+!                          wva(i) = wva(i) + r(kop,i,j)*wvk(j)
+                           wva(i) = wva(i) + r(i,j,kop)*wvk(j)
                         enddo
                      enddo
 !                 ====================================================
@@ -1985,10 +1986,11 @@ contains
 !           ----------------------------------------------------------
 !           apply all the bravais lattice operations to wvk
             LOOP_iop_mpp: do iop = 1,ncbrav
+               wva = ZERO
+               kop = ibrav(iop)
                do i=1,3
-                  wva(i) = ZERO
                   do j = 1,3
-                     wva(i) = wva(i) + r(i,j,ibrav(iop))*wvk(j)
+                     wva(i) = wva(i) + r(i,j,kop)*wvk(j)
                   enddo
                enddo
 !              =======================================================
