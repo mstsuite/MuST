@@ -25,7 +25,7 @@ This repository is actively developed and maintained - please check for regular 
 ## User Guide
 All the relevant information and instructions are provided in the <a href="https://must.readthedocs.io/en/latest/index.html#">documentation</a>
 
-For using MuST without compilations, please check out the Docker image <a href="https://hub.docker.com/r/liangstein/must">here</a>
+Please check out the <a href="https://www.dropbox.com/scl/fi/tdpcmd8fb7d0ckksppjml/MuST_container.tar.xz?rlkey=m6swwtdy93it9ywagzaux8gw5&dl=0">Singularity image</a> for simplicity.
 
 ## Available Scientific Packages
 <ul>
