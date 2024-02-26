@@ -79,6 +79,7 @@ $(ODIR)/rdin_old_infoevec.o  \
 $(ODIR)/rdin_old_infotable.o \
 $(ODIR)/readInputInOtherFormat.o  \
 $(ODIR)/readPositionData.o  \
+$(ODIR)/readPOSCAR.o  \
 $(ODIR)/readOldInfoTable.o  \
 $(ODIR)/readMomentDirectionData.o  \
 $(ODIR)/convertGijToRel.o \

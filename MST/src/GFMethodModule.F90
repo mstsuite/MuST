@@ -1759,7 +1759,7 @@ contains
    integer (kind=IntKind), parameter :: MaxIterations = 20
 !
    real (kind=RealKind), intent(inout) :: efermi
-   real (kind=RealKind) :: efermi_old, dosmt, dosws, kBT, rfac, sfac
+   real (kind=RealKind) :: efermi_old, dosmt, dosws, kBT, rfac, sfac, ei
    real (kind=RealKind) :: Lloyd_factor(n_spin_pola), ssDOS, msDOS(2)
    real (kind=RealKind) :: int_dos(n_spin_cant*n_spin_pola,LocalNumAtoms)
    real (kind=RealKind) :: last_dos(n_spin_cant*n_spin_pola,LocalNumAtoms)
@@ -2078,13 +2078,15 @@ contains
    LOOP_LastE: do while (BadFermiEnergy > 0 .and. BadFermiEnergy <= MaxIterations)
 !     ===============================================================
 !     Solve the multiple scattering problem for e = eLast, which is
-!     set to be (efermi,0.001) in KKR case.
+!     set to be (efermi,ei) in KKR case.
 !     ===============================================================
       if (isKKR() .or. isKKRCPA() .or. isKKRCPASRO() .or. efermi < ZERO) then
-         eLast = cmplx(efermi,0.001d0,kind=CmplxKind)
+!        ei = max(0.001,EiBottom)
+         ei = EiBottom
       else
-         eLast = cmplx(efermi,0.000d0,kind=CmplxKind)
+         ei = ZERO
       endif
+      eLast = cmplx(efermi,ei,kind=CmplxKind)
 !
 !     ===============================================================
 !     Calculate the DOS of the multiple scattering term for e = eLast,

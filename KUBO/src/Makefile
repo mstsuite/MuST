@@ -17,6 +17,7 @@ $(MST_ODIR)/CheckPointModule.o
 
 BasicRoutines = \
 $(MST_ODIR)/readPositionData.o \
+$(MST_ODIR)/readPOSCAR.o \
 $(MST_ODIR)/readMomentDirectionData.o \
 $(MST_ODIR)/readInputInOtherFormat.o \
 $(MST_ODIR)/readOldInfoTable.o \

@@ -1091,12 +1091,15 @@ contains
             rho_tot => getSphChargeDensity('TotalNew',na,ia,der_rho_tot)
             if (n_spin_pola == 1) then
 !              -------------------------------------------------------
-               call calSphExchangeCorrelation(jmt,rho_tot,der_rho_den=der_rho_tot)
+               call calSphExchangeCorrelation(jmt,rho_tot,der_rho_den=der_rho_tot) !tmp uncomment
+!tmp comment   call calSphExchangeCorrelation(jmt,rho_tot,r_mesh=rr,der_rho_den=der_rho_tot)
 !              -------------------------------------------------------
             else
                mom_tot => getSphMomentDensity('TotalNew',na,ia,der_mom_tot)
 !              -------------------------------------------------------
-               call calSphExchangeCorrelation(jmt,rho_tot,der_rho_tot,mom_tot,der_mom_tot)
+               call calSphExchangeCorrelation(jmt,rho_tot,der_rho_tot,mom_tot,der_mom_tot) !tmp uncomment
+!tmp comment   call calSphExchangeCorrelation(jmt,rho_tot,r_mesh=rr,der_rho_den=der_rho_tot, &
+!tmp comment                                  mag_den=mom_tot,der_mag_den=der_mom_tot)
 !              -------------------------------------------------------
             endif
          else

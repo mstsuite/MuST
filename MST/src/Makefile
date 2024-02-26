@@ -17,6 +17,7 @@ CheckPointModule.o
 
 BasicRoutines = \
 readPositionData.o \
+readPOSCAR.o \
 readMomentDirectionData.o \
 readInputInOtherFormat.o \
 readOldInfoTable.o \

@@ -325,6 +325,7 @@ program mst2
    real (kind=RealKind) :: Efermi, volume, cfac
    real (kind=RealKind) :: v0, val, evb
    real (kind=RealKind) :: t0, t1, t2, t3, t_inp, t_outp
+   real (kind=RealKind) :: t_mpi_init, t_mpi_group, t_read_input
 !
    real (kind=RealKind), pointer :: mom_table(:)
 !
@@ -416,6 +417,7 @@ program mst2
 !  -------------------------------------------------------------------
    call initMPP()
 !  -------------------------------------------------------------------
+   t_mpi_init = getTime() - t0
    MyPE = getMyPE()
    NumPEs = getNumPEs()
 !  -------------------------------------------------------------------
@@ -444,7 +446,7 @@ program mst2
 !     ----------------------------------------------------------------
    endif
 !
-!
+   t1 = getTime()
 !  -------------------------------------------------------------------
    call initGroupComm()
 !  -------------------------------------------------------------------
@@ -456,6 +458,8 @@ program mst2
 !  -------------------------------------------------------------------
    call initDataServiceCenter()
 !  -------------------------------------------------------------------
+   t3 = getTime()
+   t_mpi_group = t3 - t1
 !
 !  ===================================================================
 !  call readInput to obtain input data................................
@@ -469,7 +473,6 @@ program mst2
    inquire(unit=5,name=FileName,exist=StandardInputExist)
 !  write(6,*) "main:: Input file open: ",trim(FileName)
 !  *******************************************************************
-   t3 = getTime()
 !  if (FileNamed) then
    if (StandardInputExist) then
 !     ----------------------------------------------------------------
@@ -516,7 +519,9 @@ program mst2
    else
       info_id = def_id
    endif
-   t_inp = t_inp + (getTime() - t3)
+   t1 = getTime()
+   t_read_input = t1 - t3
+   t_inp = t_inp + t_read_input
 !  *******************************************************************
 !
 !  ===================================================================
@@ -807,10 +812,18 @@ program mst2
 !    -----------------------------------------------------------------
      write(6,'(12x,a,i5)')'Number of atoms on each processor:              ', &
                           LocalNumAtoms
-     write(6,'(12x,a,i5)')'Number of k-points on each processor:           ', &
-                          getNumKsOnMyProc()
-     write(6,'(12x,a,i5)')'Number of redundant k-points on each processor: ', &
-                          getNumRedundantKsOnMyProc()
+     if ( isLSMS() ) then ! In this case, the k-point parallelization is used to
+                          ! paralleize the single site solution for different (l,m).
+        write(6,'(12x,a,i5)')'Number of L-values on each processor:           ', &
+                             getNumKsOnMyProc()
+        write(6,'(12x,a,i5)')'Number of redundant L-values on each processor: ', &
+                             getNumRedundantKsOnMyProc()
+     else
+        write(6,'(12x,a,i5)')'Number of k-points on each processor:           ', &
+                             getNumKsOnMyProc()
+        write(6,'(12x,a,i5)')'Number of redundant k-points on each processor: ', &
+                             getNumRedundantKsOnMyProc()
+     endif
      write(6,'(12x,a,i5)')'Number of energies on each processor:           ', &
                           getNumEsOnMyProc()
      write(6,'(12x,a,i5)')'Number of redundant energies on each processor: ', &
@@ -949,11 +962,26 @@ program mst2
 !  -------------------------------------------------------------------
    call initNeighbor(LocalNumAtoms,atom_print_level)
 !  -------------------------------------------------------------------
+   t3 = getTime()
+#ifdef TIMING
+   if (node_print_level >= 0) then
+      write(6,'(/,a,f10.5,/)')'Time:: calling MPI_init: ',t_mpi_init
+      write(6,'(/,a,f10.5,/)')'Time:: initializing MPI groups and data storing modules : ',t_mpi_group
+      write(6,'(/,a,f10.5,/)')'Time:: reading input parameters (t1) : ',t_read_input
+      write(6,'(/,a,f10.5,/)')'Time:: between after t1 and before calling setupLizNeighbor : ',t3-t1
+      write(6,'(/,a,f10.5,/)')'Time:: from start to before calling setupLizNeighbor: ',t3-t0
+   endif
+#endif
 !   if ( isScreenKKR_LSMS() ) then
 !      call setupLizNeighbor(atom_print_level,isScreenKKR_LSMS())
 !   else
       call setupLizNeighbor(atom_print_level)
 !   endif
+#ifdef TIMING
+   if (node_print_level >= 0) then
+      write(6,'(/,a,f10.5,/)')'Time:: calling setupLizNeighbor: ',getTime()-t3
+   endif
+#endif
 !  -------------------------------------------------------------------
    if ( (isKKR() .or. isKKRCPA() .or. isKKRCPASRO()) &
           .and. node_print_level >= 0) then
@@ -1231,10 +1259,16 @@ program mst2
       ngt(i) = ngaussq
    enddo
 !
+   t1 = getTime()
 !  -------------------------------------------------------------------
 !  call initStepFunction(LocalNumAtoms,lmax_step,istop,node_print_level)
    call initStepFunction(LocalNumAtoms,lmax_max,lmax_step,ngr,ngt,istop,node_print_level)
 !  -------------------------------------------------------------------
+#ifdef TIMING
+   if (node_print_level >= 0) then
+      write(6,'(/,a,f10.5,/)')'Time:: initStepFunction: ',getTime()-t1
+   endif
+#endif
    do i=1,LocalNumAtoms
       lmax_tmp(i) = 2*max(lmax_rho(i), lmax_pot(i))
    enddo
@@ -1434,6 +1468,11 @@ program mst2
 !           ----------------------------------------------------------
          endif
       endif
+#ifdef TIMING
+      if (node_print_level >= 0) then
+         write(6,'(/,a,f10.5,/)')'Time:: read potential and core states data: ',getTime()-t3
+      endif
+#endif
    endif
 !  -------------------------------------------------------------------
    call syncAllPEs()
@@ -1456,6 +1495,7 @@ program mst2
 !
 !  *******************************************************************
 !
+   t1 = getTime()
 !  -------------------------------------------------------------------
    call initSpinRotation(LocalNumAtoms)
 !  -------------------------------------------------------------------
@@ -1543,6 +1583,11 @@ program mst2
 !  ===================================================================
    call initForce(LocalNumAtoms,istop,node_print_level)
 !  ===================================================================
+#ifdef TIMING
+   if (node_print_level >= 0) then
+      write(6,'(/,a,f10.5,/)')'Time:: initialize misc modules: ',getTime()-t1
+   endif
+#endif
 !
 !  ===================================================================
 !  Start SCF iterations.

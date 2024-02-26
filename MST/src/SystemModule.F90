@@ -219,7 +219,7 @@ contains
    character (len=80) :: svalue
    character (len=80), allocatable :: value(:)
 !
-   logical :: theSame
+   logical :: theSame, isPOSCAR
 !
    integer (kind=IntKind), intent(in) :: tbl_id
    integer (kind=IntKind) :: i, info_id, ig, j, k, kg, kn, reset_lmax, pot_type
@@ -255,6 +255,15 @@ contains
          integer (kind=IntKind), intent(in), optional :: NumAtomsIn
          integer (kind=IntKind), intent(out), optional :: NumAtomsOut
       end subroutine readPositionData
+   end interface
+!
+   interface
+      subroutine readPOSCAR(fname,NumAtomsIn,NumAtomsOut)
+         use KindParamModule, only : IntKind
+         character (len=*), intent(in) :: fname
+         integer (kind=IntKind), intent(in), optional :: NumAtomsIn
+         integer (kind=IntKind), intent(out), optional :: NumAtomsOut
+      end subroutine readPOSCAR
    end interface
 !
    interface
@@ -300,10 +309,14 @@ contains
    endif
 !  -------------------------------------------------------------------
 !
+   isPOSCAR = .false.
    if ( isKeyExisting(tbl_id,'Atomic Position File Name') ) then
 !     ----------------------------------------------------------------
       rstatus = getKeyValue(tbl_id,'Atomic Position File Name',fposi_in)
 !     ----------------------------------------------------------------
+      if (nocaseCompare(fposi_in,'POSCAR')) then
+         isPOSCAR = .true.
+      endif
    else if ( getKeyValue(info_id,'Atomic Position File Name',fposi_in) /= 0) then
       fposi_in = 'position.dat'
    else
@@ -315,13 +328,17 @@ contains
 !
    fposi_out = trim(fposi_in)//'_out'
 !
-   if ( len_trim(fposi_in) > 0 .and. .not.nocaseCompare(fposi_in,'None') ) then
-      t0 = getTime()
+   t0 = getTime()
+   if (isPOSCAR) then
+!     ----------------------------------------------------------------
+      call readPOSCAR(trim(file_path),NumAtomsIn=NumAtoms)
+!     ----------------------------------------------------------------
+   else if ( len_trim(fposi_in) > 0 .and. .not.nocaseCompare(fposi_in,'None') ) then
 !     ----------------------------------------------------------------
       call readPositionData(trim(file_path)//trim(fposi_in),NumAtomsIn=NumAtoms)
 !     ----------------------------------------------------------------
-      t_inp = t_inp + (getTime() - t0)
    endif
+   t_inp = t_inp + (getTime() - t0)
 !
    if ( nspin > 2 ) then
       if ( isKeyExisting(tbl_id,'Moment Direction File Name') ) then
