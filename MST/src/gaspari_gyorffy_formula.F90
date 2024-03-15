@@ -24,8 +24,8 @@
         subroutine gaspari_gyorffy_formula(LocalNumAtoms,n_spin_pola,efermi,  &
                                            PartialDOS,iprint)
 !  ===========================================================================
-        use KindParamModule, only : IntKind, RealKind
-        use MathParamModule, only : ZERO, HALF, ONE, TWO, PI, TEN2m6
+        use KindParamModule, only : IntKind, RealKind, CmplxKind
+        use MathParamModule, only : ZERO, HALF, ONE, TWO, PI, TEN2m6, CONE, SQRTm1
         use PhysParamModule, only : Boltzmann, Ryd2eV, Bohr2Angstrom,         &
                                     LightSpeed, MassUnit2Ryd, Kelvin2Ryd, MassUnit2eV
         use PublicTypeDefinitionsModule, only : PDOSStruct
@@ -42,6 +42,7 @@
         use SystemModule, only : getAtomicNumber
         use ErrorHandlerModule, only : ErrorHandler
         use Atom2ProcModule, only : getGlobalIndex
+        use ScfDataModule, only : isKKRCPA
 !
         implicit none
 !
@@ -50,6 +51,7 @@
         integer (kind=IntKind), intent(in) :: iprint
         integer (kind=IntKind) :: atomic_number, aGID, bGID
         integer (kind=IntKind) :: id, ia, is, l, m, kl, klp1, kmax_phi, lmax_kkr
+        integer (kind=IntKind) :: kmax_kkr, kmax_kkr_max
         integer (kind=IntKind) :: NumAtomTypes, NumAtoms, ig
 !
         real (kind=RealKind), intent(in) :: efermi
@@ -79,6 +81,10 @@
         integer (kind=IntKind), pointer :: AtomType(:)
         integer (kind=IntKind), allocatable :: ind_array(:)
         real (kind=RealKind), allocatable :: val_array(:)
+!
+        complex (kind=CmplxKind) :: kappa
+        complex (kind=CmplxKind), pointer :: t_mat(:,:)
+        complex (kind=CmplxKind), allocatable :: phase_shift_aver(:,:)
 !
         NumAtoms = getNumAtoms()
         NumAtomTypes = getNumAtomTypes()
@@ -259,10 +265,27 @@
 !
 !       Calculate Lamda (or EPC) ...........
 !       ==============================================================
+        kmax_kkr_max = 0
+        do id = 1, LocalNumAtoms
+           kmax_kkr_max = max(kmax_kkr_max,PartialDOS(id)%kmax_kkr)
+        enddo
+        if (isKKRCPA()) then
+           allocate(phase_shift_aver(kmax_kkr_max,n_spin_pola))
+        endif
+        kappa = sqrt(efermi)
         nr = ZERO
         EPC = ZERO
         do id = 1, LocalNumAtoms  ! Loop atomic sites
+           if (isKKRCPA()) then
+              do is = 1, n_spin_pola
+                 t_mat => PartialDOS(id)%t_aver(:,:,is)
+                 do kl = 1, PartialDOS(id)%kmax_kkr
+                     phase_shift_aver(kl,is) = atan(kappa*t_mat(kl,kl)/(-CONE+SQRTm1*kappa*t_mat(kl,kl)))
+                 enddo
+              enddo
+           endif
            kmax_phi = PartialDOS(id)%kmax_phi
+           kmax_kkr = PartialDOS(id)%kmax_kkr
            lmax_kkr = lofk(kmax_phi)
            ig = getGlobalIndex(id)
            do ia = 1, getLocalNumSpecies(id)  ! Loop over atomic species
@@ -441,6 +464,10 @@
         endif
 !
         deallocate(Phonon_Freq2)
+!
+        if (isKKRCPA()) then
+           deallocate(phase_shift_aver)
+        endif
 !
 !       ==============================================================
 !       Using the partial phase shift and DOS data published in PRB 15, 4221

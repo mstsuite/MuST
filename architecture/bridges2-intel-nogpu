@@ -23,7 +23,7 @@ LIBXC_PATH  = /opt/packages/LIBXC/libxc-6.1.0/intel
 FFTW_PATH   =
 P3DFFT_PATH =
 LUA_PATH    =
-LIBS       += -mkl=cluster -lifcore
+LIBS       += -qmkl=cluster -lifcore
 
 #=====================================================================
 # Compiler tools
@@ -48,6 +48,7 @@ FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK
 CFLAGS      = -O3 -march=core-avx2
 CXXFLAGS    = -O3 -std=c++14
 FFLAGS      = -O3 -march=core-avx2
+# FFLAGS      = -I. -O3 -CB -CU -traceback -ftrapuv -fpe0 -ftz -fp-stack-check
 OPT_OPENMP  = -qopenmp
 
 LD_FLAGS    =

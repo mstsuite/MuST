@@ -1931,7 +1931,7 @@ contains
 !
    integer (kind=IntKind), parameter :: funit=91
 !
-   integer (kind=IntKind) :: is, ig, js, n, ia, nef
+   integer (kind=IntKind) :: is, ig, js, n, ia, nef, status
    integer (kind=IntKind) :: j_inter, irp, iex
    integer (kind=IntKind) :: ns,j,jmt,nrrho,nrcor,jmax
    integer (kind=IntKind) :: numc,jz,jc,ios,lmax,jend,jl,nr,ir,jm,jlr
@@ -2000,9 +2000,15 @@ contains
    nef = 0
    do ia = 1, NumSpecies(id)
       filename = getInPotFileName(id,ia)
+      if (len_trim(filename) == 0) then
+         call ErrorHandler('readFormattedData','Empty potential file name')
+      endif
 !     ----------------------------------------------------------------
-      open(unit=funit,file=filename,form='formatted',access=acc)
+      open(unit=funit,file=filename,form='formatted',access=acc,iostat=status)
 !     ----------------------------------------------------------------
+      if (status /= 0) then
+         call ErrorHandler('readFormattedData','Invalid potential file',trim(filename))
+      endif
 !
       read(funit,'(a)') ThisP%header
       read(funit,'(i5,3x,d20.13)') ns,vdif(1)

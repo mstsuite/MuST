@@ -723,6 +723,11 @@ contains
    enddo
 !
    if (potinform(0) == 0) then
+      do n = 1, LocalNumAtoms
+         do ia = 1, AtomProperty(n)%NumSpecies
+            AtomProperty(n)%potinfile(ia) = ' '
+         enddo
+      enddo
       call initString(potinname(0))
       nt = getNumTokens()
       if (nt >= 1) then
