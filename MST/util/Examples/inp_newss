@@ -1,0 +1,18 @@
+Hafnium Single Site Potential
+Hf_ss.out                Outfput file name. If blank, data will show on screen
+    1                    Print level
+    1                    Crystal type (1=fcc,2=bcc)
+    3                    Lmax
+   8.00000               Lattice constant
+    1                    Number of spins
+    1                    Exchange-correlation functional type (1=vb-hedin,2=vosko)
+    1                    Number of components
+  72.00000   0.00000     Z(at.num),  Mom
+   1.00000               Concentrations
+   0.00000   0.00000     MT radius, WS radius
+Hf_a.pot                 Atomic potential file  (input)
+Hf_ss.pot                Single site potential file (output, in KKR-format)
+Hf_ss.k                  The keep file
+   10 -0.4000  0.5000    E-grid parameters: ndiv(=#div/0.1Ryd), bott, eimag
+   0.70000   0.70000     Ef estimate
+   50   0.10000          Number of SCF iterations, Mixing parameter

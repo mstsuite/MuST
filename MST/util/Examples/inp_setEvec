@@ -1,0 +1,26 @@
+  Number of Atoms   :: 2048
+# radius is in the unit of Angstrom
+# a negative number will all atoms to be outside the transition region
+  Transition Radius :: -1.0
+  Inside Mixing Param  :: 0.000
+# Choose random setting -> 0: no; 1: yes
+  Inside Random Setting :: 1
+  Outside Random Setting ::  1
+# Choose seed for random function. This is negative number
+# Random Function Seed :: -5
+  Outside Mixing Param :: 0.100
+  Shift Center X    :: 0.0
+  Shift Center Y    :: 0.0
+  Shift Center Z    :: 0.0
+# position data is not shifted
+  Position Data     :: CrFeCoNi_FCC.dat
+# Input Evec Data   :: Evec_in.dat
+  Output Evec Data  :: Evec_CrFeCoNi.dat
+# boundary, corner, and direction data are set up relative to the shift center
+# Boundary Data  :: surfaces.dat
+# Corner Data    :: corners.dat
+# Direction Data :: directions.dat
+  Minimum Theta (in the units of PI) :: 0.0
+  Maximum Theta (in the units of PI) :: 1.0
+  Minimum Phi (in the units of PI) :: 0.0
+  Maximum Phi (in the units of PI) :: 2.0

@@ -736,7 +736,10 @@ contains
             call readToken(j,fname,flen)
             path_fname = trim(inputpath)//fname
             funit = 300+j
-            open(unit=funit,file=path_fname,status='old',form='formatted')
+            open(unit=funit,file=path_fname,status='old',form='formatted',iostat=rstatus)
+            if (rstatus /= 0) then
+               call ErrorHandler('initAtomModule','Invalid potential file',trim(path_fname))
+            endif
             read(funit,'(a)')dummy
             read(funit,'(a)')dummy
             read(funit,'(a)')dummy
@@ -776,7 +779,10 @@ contains
                   call readToken(j,fname,flen)
                   path_fname = trim(inputpath)//fname
                   funit = 300+j
-                  open(unit=funit,file=path_fname,status='old',form='formatted')
+                  open(unit=funit,file=path_fname,status='old',form='formatted',iostat=rstatus)
+                  if (rstatus /= 0) then
+                     call ErrorHandler('initAtomModule','Invalid potential file',trim(path_fname))
+                  endif
                   read(funit,'(a)')dummy
                   read(funit,'(a)')dummy
                   read(funit,'(a)')dummy
