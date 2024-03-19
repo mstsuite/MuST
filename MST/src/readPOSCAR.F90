@@ -283,13 +283,13 @@
    call createDataStorage('Position Scaling Factor',RealType)
    call createDataStorage('Bravais Vector',9,RealType)
    call createDataStorage('Atomic Number',num_atoms,IntegerType)
-   call createDataStorage('Atomic Name',MaxLenOfAtomName*num_atoms,CharacterType)
+   call createDataStorage('Atomic Alt Name',MaxLenOfAtomName*num_atoms,CharacterType)
    call createDataStorage('Atomic Position',3*num_atoms,RealType)
 !  -------------------------------------------------------------------
    pa => getDataStorage('Position Scaling Factor',RealMark); pa = ONE
    BravaisLatticeVec => getDataStorage('Bravais Vector',3,3,RealMark)
    AtomicNumber => getDataStorage('Atomic Number',num_atoms,IntegerMark)
-   AtomNameCharacter => getDataStorage('Atomic Name',MaxLenOfAtomName*num_atoms,CharacterMark)
+   AtomNameCharacter => getDataStorage('Atomic Alt Name',MaxLenOfAtomName*num_atoms,CharacterMark)
    AtomPosition => getDataStorage('Atomic Position',3,num_atoms,RealMark)
 !  -------------------------------------------------------------------
 !

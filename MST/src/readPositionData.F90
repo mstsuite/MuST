@@ -44,7 +44,9 @@
    character (len=MaxLenOfAtomName) :: atom
    character (len=30) :: column1, column2, column3, column6
    character (len=1) :: dummy
-   character (len=1), pointer :: AtomNameCharacter(:)
+   character (len=1), pointer :: AltNameChar(:)
+   character (len=1), pointer :: p_AltNameChar(:,:,:)
+   character (len=MaxLenOfAtomName), allocatable :: AlloyElementAltName(:,:)
 !
    logical :: ElementName, isDirect, ScaleBravais, isAlloy
 !
@@ -74,6 +76,7 @@
       integer (kind=IntKind) :: GlobalIndex
       integer (kind=IntKind) :: element(MaxComponents)  
       real (kind=RealKind) :: content(MaxComponents)
+      character (len=MaxLenOfAtomName) :: alt_name(MaxComponents)
       type (AlloyStruct), pointer :: next
    end type AlloyStruct
 !
@@ -231,13 +234,13 @@
    call createDataStorage('Position Scaling Factor',RealType)
    call createDataStorage('Bravais Vector',9,RealType)
    call createDataStorage('Atomic Number',num_sites,IntegerType)
-   call createDataStorage('Atomic Name',MaxLenOfAtomName*num_sites,CharacterType)
+   call createDataStorage('Atomic Alt Name',MaxLenOfAtomName*num_sites,CharacterType)
    call createDataStorage('Atomic Position',3*num_sites,RealType)
 !  -------------------------------------------------------------------
    a0 => getDataStorage('Position Scaling Factor',RealMark)
    BravaisLatticeVec => getDataStorage('Bravais Vector',3,3,RealMark)
    AtomicNumber => getDataStorage('Atomic Number',num_sites,IntegerMark)
-   AtomNameCharacter => getDataStorage('Atomic Name',MaxLenOfAtomName*num_sites,CharacterMark)
+   AltNameChar => getDataStorage('Atomic Alt Name',MaxLenOfAtomName*num_sites,CharacterMark)
    AtomPosition => getDataStorage('Atomic Position',3,num_sites,RealMark)
    p_AtomPosition => getDataStorage('Atomic Position',3*num_sites,RealMark)
 !  -------------------------------------------------------------------
@@ -430,8 +433,8 @@
 !                 k = getTokenPosition(2,text)
 !                 atom = trim_string(text(j:k-1))
                   atom = text(j:j+k-1)
-!                 AtomNameCharacter((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName) = atom(1:MaxLenOfAtomName)
-!                 call copyString2CharArray(atom,AtomNameCharacter((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName), &
+!                 AltNameChar((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName) = atom(1:MaxLenOfAtomName)
+!                 call copyString2CharArray(atom,AltNameChar((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName), &
 !                                           MaxLenOfAtomName)
                   AtomicNumber(n) = getZtot(atom(1:MaxLenOfAtomName))
                   k = getTokenPosition(2,text)
@@ -442,8 +445,8 @@
                      atom = 'CPA'
                   else
                      atom = getName(AtomicNumber(n))
-!                    AtomNameCharacter((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName) = atom(1:MaxLenOfAtomName)
-!                    call copyString2CharArray(atom,AtomNameCharacter((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName), &
+!                    AltNameChar((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName) = atom(1:MaxLenOfAtomName)
+!                    call copyString2CharArray(atom,AltNameChar((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName), &
 !                                              MaxLenOfAtomName)
                   endif
                endif
@@ -456,8 +459,8 @@
 !                 k = getTokenPosition(3,text)
 !                 atom = trim_string(text(j:k-1))
                   atom = text(j:j+k-1)
-!                 AtomNameCharacter((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName) = atom(1:MaxLenOfAtomName)
-!                 call copyString2CharArray(atom,AtomNameCharacter((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName), &
+!                 AltNameChar((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName) = atom(1:MaxLenOfAtomName)
+!                 call copyString2CharArray(atom,AltNameChar((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName), &
 !                                           MaxLenOfAtomName)
                   AtomicNumber(n) = getZtot(atom(1:MaxLenOfAtomName))
                   k = getTokenPosition(3,text)
@@ -468,8 +471,8 @@
                      atom = 'CPA'
                   else
                      atom = getName(AtomicNumber(n))
-!                    AtomNameCharacter((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName) = atom(1:MaxLenOfAtomName)
-!                    call copyString2CharArray(atom,AtomNameCharacter((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName), &
+!                    AltNameChar((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName) = atom(1:MaxLenOfAtomName)
+!                    call copyString2CharArray(atom,AltNameChar((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName), &
 !                                              MaxLenOfAtomName)
                   endif
                endif
@@ -482,8 +485,8 @@
 !                 k = getTokenPosition(2,text)
 !                 atom = trim_string(text(j:k-1))
                   atom = text(j:j+k-1)
-!                 AtomNameCharacter((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName) = atom(1:MaxLenOfAtomName)
-!                 call copyString2CharArray(atom,AtomNameCharacter((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName), &
+!                 AltNameChar((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName) = atom(1:MaxLenOfAtomName)
+!                 call copyString2CharArray(atom,AltNameChar((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName), &
 !                                           MaxLenOfAtomName)
                   AtomicNumber(n) = getZtot(atom(1:MaxLenOfAtomName))
                   k = getTokenPosition(3,text)
@@ -494,8 +497,8 @@
                      atom = 'CPA'
                   else
                      atom = getName(AtomicNumber(n))
-!                    AtomNameCharacter((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName) = atom(1:MaxLenOfAtomName)
-!                    call copyString2CharArray(atom,AtomNameCharacter((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName), &
+!                    AltNameChar((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName) = atom(1:MaxLenOfAtomName)
+!                    call copyString2CharArray(atom,AltNameChar((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName), &
 !                                              MaxLenOfAtomName)
                   endif
                endif
@@ -504,7 +507,7 @@
                endif
             endif
 !           ----------------------------------------------------------
-            call copyString2CharArray(atom,AtomNameCharacter((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName), &
+            call copyString2CharArray(atom,AltNameChar((n-1)*MaxLenOfAtomName+1:n*MaxLenOfAtomName), &
                                       MaxLenOfAtomName)
 !           ----------------------------------------------------------
             if (isAlloy) then
@@ -532,14 +535,17 @@
                      read(text(k:),*) component,p_curr%content(i)
                      if (isInteger(component)) then
                         read(component,*) p_curr%element(i)
+                        p_curr%alt_name(i) = getName(p_curr%element(i))
                      else
                         p_curr%element(i) = getZtot(component)
+                        p_curr%alt_name(i) = component
                      endif
                   enddo
                else
                   p_curr%NumComponents = 1
                   p_curr%content(1) = ONE
                   p_curr%element(1) = AtomicNumber(n)
+                  p_curr%alt_name(1) = atom
                endif
                if (p_curr%NumComponents > MaxComponents) then
 !                  ---------------------------------------------------
@@ -595,7 +601,7 @@
 !
 !  -------------------------------------------------------------------
    call bcastMessage(BravaisLatticeVec,3,3,IOPE)
-   call bcastMessage(AtomNameCharacter,MaxLenOfAtomName*num_sites,IOPE)
+   call bcastMessage(AltNameChar,MaxLenOfAtomName*num_sites,IOPE)
    call bcastMessage(AtomicNumber,num_sites,IOPE)
    call bcastMessage(p_AtomPosition,3*num_sites,IOPE)
    call bcastMessage(NumAlloySubLatts,IOPE)
@@ -604,6 +610,7 @@
    if (NumAlloySubLatts > 0) then
       allocate( AlloyElement(MaxComponents+2,NumAlloySubLatts) )
       allocate( ElementContent(MaxComponents,NumAlloySubLatts) )
+      allocate( AlloyElementAltName(MaxComponents,NumAlloySubLatts) )
 !
       if (MyPE == IOPE) then
          do i = 1, NumAlloySubLatts
@@ -612,6 +619,7 @@
             do j = 1, p_header%NumComponents
                AlloyElement(j+2,i) = p_header%element(j)
                ElementContent(j,i) = p_header%content(j)
+               AlloyElementAltName(j,i) = p_header%alt_name(j)
             enddo
             p_curr => p_header%next
             nullify( p_header%next )
@@ -623,6 +631,7 @@
 !     ----------------------------------------------------------------
       call bcastMessage(AlloyElement,MaxComponents+2,NumAlloySubLatts,IOPE)
       call bcastMessage(ElementContent,MaxComponents,NumAlloySubLatts,IOPE)
+      call bcastMessage(AlloyElementAltName,MaxComponents,NumAlloySubLatts,IOPE)
 !     ----------------------------------------------------------------
       call createDataStorage('Alloy Sublattice Index',NumAlloySubLatts,IntegerType)
       call createDataStorage('Number of Components on Sublattice',NumAlloySubLatts,IntegerType)
@@ -630,11 +639,14 @@
       call setDataStorageLDA('Alloy Element',MaxComponents)
       call createDataStorage('Alloy Content',MaxComponents*NumAlloySubLatts,RealType)
       call setDataStorageLDA('Alloy Content',MaxComponents)
+      call createDataStorage('Alloy Element Alt Name',MaxLenOfAtomName*MaxComponents*NumAlloySubLatts,CharacterType)
 !     ----------------------------------------------------------------
       p_AlloySublattIndex => getDataStorage('Alloy Sublattice Index',NumAlloySubLatts,IntegerMark)
       p_NumComponents => getDataStorage('Number of Components on Sublattice',NumAlloySubLatts,IntegerMark)
       p_AlloyElement => getDataStorage('Alloy Element',MaxComponents,NumAlloySubLatts,IntegerMark)
       p_AlloyContent => getDataStorage('Alloy Content',MaxComponents,NumAlloySubLatts,RealMark)
+      p_AltNameChar => getDataStorage('Alloy Element Alt Name',MaxLenOfAtomName,MaxComponents,NumAlloySubLatts, &
+                                      CharacterMark)
 !     ----------------------------------------------------------------
       do i = 1, NumAlloySubLatts
          p_AlloySublattIndex(i) = AlloyElement(1,i)
@@ -642,13 +654,15 @@
          do j = 1, AlloyElement(2,i)
             p_AlloyElement(j,i) = AlloyElement(j+2,i)
             p_AlloyContent(j,i) = ElementContent(j,i)
+            call copyString2CharArray(AlloyElementAltName(j,i),p_AltNameChar(1:MaxLenOfAtomName,j,i), &
+                                      MaxLenOfAtomName)
          enddo
       enddo
 !
-      deallocate( AlloyElement, ElementContent )
-      nullify( p_AlloySublattIndex, p_NumComponents, p_AlloyElement, p_AlloyContent )
+      deallocate( AlloyElement, ElementContent, AlloyElementAltName )
+      nullify( p_AlloySublattIndex, p_NumComponents, p_AlloyElement, p_AltNameChar, p_AlloyContent )
    endif
 !
-   nullify( a0, BravaisLatticeVec, AtomNameCharacter, AtomicNumber, AtomPosition )
+   nullify( a0, BravaisLatticeVec, AltNameChar, AtomicNumber, AtomPosition )
 !
    end subroutine readPositionData

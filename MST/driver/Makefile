@@ -152,7 +152,8 @@ TEST_CASES = $(ODIR)/testStrConst \
              $(ODIR)/testPolyFermi \
              $(ODIR)/testBandStructure \
              $(ODIR)/testExchCorr \
-             $(ODIR)/testAdaptiveIntegration
+             $(ODIR)/testAdaptiveIntegration \
+             $(ODIR)/testTokens
 
 TEST_CASES_O = $(ODIR)/testStrConst.o \
                $(ODIR)/tst_SurfElements.o \
@@ -363,3 +364,6 @@ $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/testExchCorr: testExchCorr.o $(SRC_OBJS)
 	$(LD) -o $(ODIR)/testExchCorr testExchCorr.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
+
+$(ODIR)/testTokens: testTokens.o $(ODIR)/getNumTokens.o $(ODIR)/getToken.o
+	$(LD) -o $(ODIR)/testTokens testTokens.o $(ODIR)/getNumTokens.o $(ODIR)/getToken.o

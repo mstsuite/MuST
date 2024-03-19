@@ -792,7 +792,7 @@ contains
    subroutine printChargeDistribution(iter,fu,cant)
 !  ===================================================================
    use Atom2ProcModule, only : getAtom2ProcInGroup
-   use SystemModule, only : getAtomicNumber, getAtomName, getNumAlloyElements
+   use SystemModule, only : getAtomicNumber, getAtomAltName, getNumAlloyElements
    use SystemModule, only : getMomentDirection
    implicit none
 !
@@ -847,7 +847,7 @@ contains
       do ig = 1, GlobalNumAtoms
          do ia = 1, getNumAlloyElements(ig)
             lig = global_table_line(ig) + ia
-            write(fu,'(2x,a3,2x,i7,4(2x,f9.5))')getAtomName(ig,ia),ig, &
+            write(fu,'(2x,a3,2x,i7,4(2x,f9.5))')getAtomAltName(ig,ia),ig, &
                   OnSiteElectronTable(lig),MTSphereElectronTable(lig), &
                   VPCellElectronTable(lig),                            &
                   OnSiteElectronTable(lig)-getAtomicNumber(ig,ia)
@@ -862,7 +862,7 @@ contains
       do ig = 1, GlobalNumAtoms
          do ia = 1, getNumAlloyElements(ig)
             lig = global_table_line(ig) + ia
-            write(fu,'(2x,a3,2x,i7,6(2x,f9.5))')getAtomName(ig,ia),ig, &
+            write(fu,'(2x,a3,2x,i7,6(2x,f9.5))')getAtomAltName(ig,ia),ig, &
                   OnSiteElectronTable(lig),MTSphereElectronTable(lig), &
                   VPCellElectronTable(lig),                            &
                   OnSiteElectronTable(lig)-getAtomicNumber(ig,ia),     &
@@ -880,7 +880,7 @@ contains
       do ig = 1, GlobalNumAtoms
          do ia = 1, getNumAlloyElements(ig)
             lig = global_table_line(ig) + ia
-            write(fu,'(2x,a3,2x,i7,9(2x,f9.5))')getAtomName(ig,ia),ig, &
+            write(fu,'(2x,a3,2x,i7,9(2x,f9.5))')getAtomAltName(ig,ia),ig, &
                   OnSiteElectronTable(lig),MTSphereElectronTable(lig), &
                   VPCellElectronTable(lig),                            &
                   OnSiteElectronTable(lig)-getAtomicNumber(ig,ia),     &

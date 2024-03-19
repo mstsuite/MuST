@@ -544,7 +544,7 @@ contains
    use ChemElementModule, only : getCoreStateKappa
 !
    use AtomModule, only : getInPotFileName, getInPotFileForm,         &
-                          getLocalAtomNickName
+                          getLocalAtomName
 !
    implicit none
 !
@@ -552,7 +552,7 @@ contains
    character (len=10) :: acc
 !
    integer (kind=IntKind) :: id, ia, ic, is
-   integer (kind=IntKind) :: ndeep, nz
+   integer (kind=IntKind) :: ndeep, nz, status
    integer (kind=IntKind), parameter :: funit=92
 !
    real (kind=RealKind) :: fac1
@@ -560,7 +560,7 @@ contains
    do id = 1, LocalNumAtoms
 !06/11/23 MaxNumc = 0
       do ia = 1, Core(id)%NumSpecies
-         an = getLocalAtomNickName(id,ia)
+         an = getLocalAtomName(id,ia)
 !06/11/23MaxNumc = max(MaxNumc,getNumCoreStates(an))
       enddo
       Core(id)%MaxNumc = MaxNumc
@@ -584,7 +584,12 @@ contains
          if (getInPotFileForm(id) == 'FORMATTED') then
 !           ----------------------------------------------------------
             open(unit=funit,file=getInPotFileName(id,ia),form='FORMATTED',  &
-                 access=acc)
+                 access=acc,iostat=status)
+!           ----------------------------------------------------------
+            if (status /= 0) then
+               call ErrorHandler('readCoreStates','Invalid file',     &
+                                 getInPotFileName(id,ia))
+            endif
 !           ----------------------------------------------------------
             call readFormattedData(funit,id,ia)
 !           ----------------------------------------------------------
@@ -598,7 +603,7 @@ contains
       enddo
 !
       do ia = 1, Core(id)%NumSpecies
-         an = getLocalAtomNickName(id,ia)
+         an = getLocalAtomName(id,ia)
          Core(id)%ztotss(ia)=getZtot(an)
          Core(id)%zsemss(ia)=getZsem(an)
          Core(id)%zcorss(ia)=getZcor(an)
@@ -624,7 +629,7 @@ contains
       enddo
 !
 !     do ia = 1, Core(id)%NumSpecies
-!        an = getLocalAtomNickName(id,ia)
+!        an = getLocalAtomName(id,ia)
 !        do ic=1, Core(id)%numc(ia)
 !           Core(id)%nc(ic,ia)=getCoreStateN(an,ic)
 !           Core(id)%lc(ic,ia)=getCoreStateL(an,ic)
@@ -651,7 +656,7 @@ contains
 !
    use MPPModule, only : MyPE
 !
-   use AtomModule, only : getLocalAtomNickName
+   use AtomModule, only : getLocalAtomName
 !
    implicit none
 !
@@ -688,7 +693,7 @@ contains
    end interface
 !
    ThisC=>Core(id)
-   an = getLocalAtomNickName(id,ia)
+   an = getLocalAtomName(id,ia)
 !
    read(funit,'(a)') dummy
    read(funit,*) ns
@@ -831,7 +836,7 @@ contains
                                        RealMark, ComplexMark, &
                                        IntegerMark, IntegerType
 !
-   use AtomModule, only : getLocalAtomNickName
+   use AtomModule, only : getLocalAtomName
 !
    use ChemElementModule, only : MaxLenOfAtomName
    use ChemElementModule, only : getNumCoreStates
@@ -852,7 +857,7 @@ contains
    real (kind=RealKind), pointer :: ec0(:,:,:)
 !
    if ( isDataStorageExisting('OldEstimatedCoreEnergy') ) then
-      an = getLocalAtomNickName(id,ia)
+      an = getLocalAtomName(id,ia)
       numc = getNumCoreStates(an)
       if (numc > 0) then
          data_sz = Core(id)%MaxNumc*n_spin_pola*Core(id)%NumSpecies
@@ -1636,7 +1641,6 @@ contains
 !
    use AtomModule, only : getLocalSpeciesContent, getLocalNumSpecies
    use AtomModule, only : getLocalAtomicNumber
-   use AtomModule, only : getLocalAtomNickName
 !
    use SystemVolumeModule, only : getSystemVolume, getAtomicMTVolume
 !
@@ -2530,7 +2534,7 @@ endif
    use ChemElementModule, only : getZtot, getZcor, getZsem
    use ChemElementModule, only : getNumCoreStates
 !
-   use AtomModule, only : getLocalAtomNickName
+   use AtomModule, only : getLocalAtomName
 !
    implicit   none
 !
@@ -2804,7 +2808,7 @@ endif
 !
    Core(id)%numc_below(ia) = num_cores
    if (num_cores < Core(id)%numc(ia)) then
-      an = getLocalAtomNickName(id,ia)
+      an = getLocalAtomName(id,ia)
       if (ndeep >= ndeepz) then
          Core(id)%zsemss(ia)=n_spin_pola*(num_electrons-ndeepz)
 !        -------------------------------------------------------------

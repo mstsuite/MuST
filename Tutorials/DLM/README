@@ -1,0 +1,17 @@
+This directory contains examples for running disordered local moment (DLM) calculations for magnetic structures.
+To run DLM calculations, one needs to take the following setups in preparing the input data:
+1. In the position data, the sublattice with DLM structure needs to look like:
+   "  CPA    x   y   z   species_1  content_of_species_1   species_2   content_of_species_2 ...,..."
+   where species_1 is a character string to identify the species with moment state 1, while the 1st 1 or 2 characters of species_1 need to identify the chemical element, e.g., 
+   species_1 = Mn1, Fe_1, etc.
+
+2. Create starting potentials for species_1, species_2, etc. Notice that the 2nd line of each potential file may look like
+   "   2   -0.6046396135934D-04"
+   Append "species_1     spin_flip_flag", "species_2   spin_flip_flag   ", respectively, to the 2nd line of each potential file, so that the 2nd line becomes
+   "   2   -0.6046396135934D-04i        species_1        spin_flip_flag" 
+   where spin_flip_flag = 0 or 1. For spin_flip_flag=1, the potential data for the spin-up iand spin-down channels in the file will be flipped when read in; 
+   otherwise (spin_flip_flag=0) the potential data for the spin-up iand spin-down channels will not be flipped.
+   Note that this change to the starting potential will allow the MuST code to identify the potential for the chemical species with alternative names, i.e., species_1, 
+   species_2, etc.
+
+3. In the input parameter file, set the Method of SCF calculation to 3, i.e., KKR-CPA.

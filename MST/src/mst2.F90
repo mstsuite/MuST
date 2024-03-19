@@ -148,7 +148,7 @@ program mst2
    use AtomModule, only : getRadialGridData, getMuffinTinRadius, setMuffinTinRadius
    use AtomModule, only : getLocalAtomName, getLocalAtomicNumber
    use AtomModule, only : getLocalNumSpecies, getLocalSpeciesContent
-   use AtomModule, only : getLocalAtomNickName, printAtomMomentInfo
+   use AtomModule, only : printAtomMomentInfo
 !   use AtomModule, only : setAtomVolMT, setAtomVolVP
 !   use AtomModule, only : setAtomVolWS, setAtomVolINSC
    use AtomModule, only : getLocalAtomPosition, getLocalEvec

@@ -18,12 +18,14 @@ public :: initSystem,             &
           getAlloyTableSize,      &
           getNumAlloyElements,    &
           getAlloyElementName,    &
+          getAlloyElementAltName, &
           getAlloyElementContent, &
           getAlloySpeciesIndex,   &
           setBravaisLattice,      &
           getBravaisLattice,      &
           setSystemTable,         &
           getAtomName,            &
+          getAtomAltName,         &
           getAtomicNumber,        &
           getAtomPosition,        &
           setAtomPosition,        &
@@ -92,6 +94,10 @@ public :: initSystem,             &
       module procedure getAtomName_one, getAtomName_all
    end interface getAtomName
 !
+   interface getAtomAltName
+      module procedure getAtomAltName_one, getAtomAltName_all
+   end interface getAtomAltName
+!
    interface getAtomTypeName
       module procedure getAtomTypeName_one, getAtomTypeName_all
    end interface getAtomTypeName
@@ -134,11 +140,13 @@ private
    character (len=50) :: file_path
    character (len=1), pointer :: AtomNameCharacter(:)
    character (len=MaxLenOfAtomName), target, allocatable :: AtomName(:)
+   character (len=MaxLenOfAtomName), target, allocatable :: AtomAltName(:)
    character (len=MaxLenOfAtomName), target, allocatable :: AtomTypeName(:)
 !
    integer (kind=IntKind) :: table_size
    integer (kind=IntKind), allocatable :: table_line(:)
    character (len=MaxLenOfAtomName), allocatable :: AlloyElementName(:)
+   character (len=MaxLenOfAtomName), allocatable :: AlloyElementAltName(:)
    integer (kind=IntKind), allocatable :: AlloyElementAN(:)
    integer (kind=IntKind), allocatable :: NumAlloyElements(:)
    real (kind=RealKind), allocatable :: AlloyElementContent(:)
@@ -218,6 +226,7 @@ contains
    character (len=50) :: info_table
    character (len=80) :: svalue
    character (len=80), allocatable :: value(:)
+   character (len=1), pointer :: p_AltNameChar(:,:,:)
 !
    logical :: theSame, isPOSCAR
 !
@@ -372,15 +381,16 @@ contains
       AdditionalElectrons = ZERO
    endif
 !
-   allocate( AtomName(NumAtoms) )
+   allocate( AtomName(NumAtoms), AtomAltName(NumAtoms) )
    if (isDataStorageExisting('Atomic Number')) then
       AtomicNum => getDataStorage('Atomic Number',NumAtoms,IntegerMark)
-      AtomNameCharacter => getDataStorage('Atomic Name',MaxLenOfAtomName*NumAtoms,CharacterMark)
+      AtomNameCharacter => getDataStorage('Atomic Alt Name',MaxLenOfAtomName*NumAtoms,CharacterMark)
       do i=1,NumAtoms
-!        AtomName(i)=AtomNameCharacter((i-1)*MaxLenOfAtomName+1:i*MaxLenOfAtomName)
+         AtomName(i) = getName(AtomicNum(i))
+!        AtomAltName(i)=AtomNameCharacter((i-1)*MaxLenOfAtomName+1:i*MaxLenOfAtomName)
 !        -------------------------------------------------------------
          call copyCharArray2String(AtomNameCharacter((i-1)*MaxLenOfAtomName+1:i*MaxLenOfAtomName), &
-                                   AtomName(i),MaxLenOfAtomName)
+                                   AtomAltName(i),MaxLenOfAtomName)
 !        -------------------------------------------------------------
       enddo
    else
@@ -389,13 +399,14 @@ contains
 !     ----------------------------------------------------------------
       AtomicNum => getDataStorage('Atomic Number',NumAtoms,IntegerMark)
 !     ----------------------------------------------------------------
-      rstatus = getKeyValue(info_id,'Atom Name',AtomName,NumAtoms)
+      rstatus = getKeyValue(info_id,'Atom Name',AtomAltName,NumAtoms)
 !     ----------------------------------------------------------------
       do i=1,NumAtoms
          if (len_trim(AtomName(i)) < 1) then
             call ErrorHandler('initSystem','Atom name is not found')
          endif
-         AtomicNum(i)=getZtot(AtomName(i))
+         AtomicNum(i)=getZtot(AtomAltName(i))
+         AtomName(i)=getName(AtomicNum(i))
       enddo
    endif
 !
@@ -425,17 +436,17 @@ contains
 !
    allocate(AtomTypeName(NumAtoms),AtomType(NumAtoms))
    NumAtomTypes = 1
-   AtomTypeName(1) = AtomName(1)
+   AtomTypeName(1) = AtomAltName(1)
    AtomType(1) = NumAtomTypes
    LOOP_i: do i=2,NumAtoms
       do ig=1,NumAtomTypes
-         if (nocaseCompare(AtomName(i),AtomTypeName(ig)) .and. .not.nocaseCompare(AtomName(i),'CPA')) then
+         if (nocaseCompare(AtomAltName(i),AtomTypeName(ig)) .and. .not.nocaseCompare(AtomAltName(i),'CPA')) then
             AtomType(i) = ig
             cycle LOOP_i
          endif
       enddo
       NumAtomTypes = NumAtomTypes + 1
-      AtomTypeName(NumAtomTypes) = AtomName(i)
+      AtomTypeName(NumAtomTypes) = AtomAltName(i)
       AtomType(i) = NumAtomTypes
    enddo LOOP_i
    allocate(NumAtomsOfType(NumAtomTypes))
@@ -536,6 +547,8 @@ contains
       MaxComponents = getDataStorageLDA('Alloy Element')
       p_AlloyElement => getDataStorage('Alloy Element',MaxComponents,NumAlloySubLatts,IntegerMark)
       p_AlloyContent => getDataStorage('Alloy Content',MaxComponents,NumAlloySubLatts,RealMark)
+      p_AltNameChar => getDataStorage('Alloy Element Alt Name',MaxLenOfAtomName,MaxComponents,NumAlloySubLatts, &
+                                      CharacterMark)
       do i = 1, NumAlloySubLatts
          ig = p_AlloySublattIndex(i)
          NumAlloyElements(ig) = p_NumComponents(i)
@@ -554,6 +567,7 @@ contains
       table_size = table_size + NumAlloyElements(ig)
    enddo
    allocate(AlloyElementName(table_size))
+   allocate(AlloyElementAltName(table_size))
    allocate(AlloyElementAN(table_size))
    allocate(AlloyElementContent(table_size))
    if (isAlloy) then
@@ -564,6 +578,10 @@ contains
             AlloyElementName(lig) = getName(p_AlloyElement(j,i))
             AlloyElementAN(lig) = p_AlloyElement(j,i)
             AlloyElementContent(lig) = p_AlloyContent(j,i)
+!           ----------------------------------------------------------
+            call copyCharArray2String(p_AltNameChar(1:MaxLenOfAtomName,j,i), &
+                                      AlloyElementAltName(lig),MaxLenOfAtomName)
+!           ----------------------------------------------------------
          enddo
 !        =============================================================
 !        For the sublattice with CPA medium, if its radical plane ratio
@@ -579,9 +597,11 @@ contains
          endif
 !        =============================================================
       enddo
+      nullify(p_AltNameChar)
    else
       do ig = 1, NumAtoms
          AlloyElementName(ig) = AtomName(ig)
+         AlloyElementAltName(ig) = AtomAltName(ig)
          AlloyElementAN(ig) = AtomicNum(ig)
          AlloyElementContent(ig) = ONE
       enddo
@@ -872,7 +892,7 @@ contains
    implicit none
 !
    nullify( AtomicNum )
-   deallocate( AtomName, AtomTypeName, AtomType, NumAtomsOfType )
+   deallocate( AtomName, AtomAltName, AtomTypeName, AtomType, NumAtomsOfType )
    deallocate( NumAlloyElements, SiteLIZ )
    nullify( AtomPosition )
    nullify( Evec, emix )
@@ -880,7 +900,7 @@ contains
    nullify( Force, EnPres )
 !
    deallocate(table_line)
-   deallocate(AlloyElementName, AlloyElementAN, AlloyElementContent)
+   deallocate(AlloyElementName, AlloyElementAltName, AlloyElementAN, AlloyElementContent)
    isAlloy = .false.
 !
    deallocate(LmaxKKR, LmaxRho, LmaxPot)
@@ -1143,6 +1163,28 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getAlloyElementAltName(ig,ia) result(a)
+!  ===================================================================
+   implicit none
+   integer (kind=IntKind), intent(in) :: ia,ig
+   integer (kind=IntKind) :: lig
+!
+   character (len=MaxLenOfAtomName) :: a
+!
+   if (ig < 1 .or. ig > NumAtoms) then
+      call ErrorHandler('getAlloyElementAltName','Invalid global atom index',ig)
+   else if (ia < 1 .or. ia > NumAlloyElements(ig)) then
+      call ErrorHandler('getAlloyElementAltName','Invalid alloy element index',ia)
+   endif
+   lig = table_line(ig) + ia
+   a = AlloyElementAltName(lig)
+!
+   end function getAlloyElementAltName
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getAlloyElementContent(ig,ia) result(c)
 !  ===================================================================
    implicit none
@@ -1294,6 +1336,47 @@ contains
    nm => AtomName
 !
    end function getAtomName_all
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getAtomAltName_one(ig,ia) result (nm)
+!  ===================================================================
+   implicit none
+   integer (kind=IntKind), intent(in) :: ig
+   integer (kind=IntKind), intent(in), optional :: ia
+   integer (kind=IntKind) :: lig
+   character (len=MaxLenOfAtomName) :: nm
+!
+   if (ig<1 .or. ig>NumAtoms) then
+      call ErrorHandler('getAtomAltName','Invalid atom/site index',ig)
+   endif
+   if (present(ia)) then
+      if (ia < 1 .or. ia > NumAlloyElements(ig)) then
+         call ErrorHandler('getAtomAltName','Invalid alloy element index at site',ia,ig)
+      else
+         lig = table_line(ig) + ia
+         nm = AlloyElementAltName(lig)
+      endif
+   else
+      nm = AtomAltName(ig)
+   endif
+!
+   end function getAtomAltName_one
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getAtomAltName_all() result (nm)
+!  ===================================================================
+   implicit none
+   character (len=MaxLenOfAtomName), pointer :: nm(:)
+!
+   nm => AtomAltName
+!
+   end function getAtomAltName_all
 !  ===================================================================
 !
 !  *******************************************************************

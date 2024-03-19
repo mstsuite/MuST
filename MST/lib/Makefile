@@ -69,6 +69,8 @@ isNumber.o \
 isRealNumber.o \
 isInteger.o \
 getTokenPosition.o \
+getNumTokens.o \
+getToken.o \
 trim_string.o \
 cylag.o \
 zaxpby.o \
