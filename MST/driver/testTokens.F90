@@ -1,22 +1,27 @@
 program testTokens
+   use kindParamModule, only : IntKind
+!
    implicit none
 !
    character (len=80) :: text
 !
-   integer :: status, i, n
+   integer (kind=IntKind) :: status, i, n
 !
    interface 
       function getNumTokens(s) result (n)
+         use kindParamModule, only : IntKind
          character (len=*), intent(in) :: s
+         integer (kind=IntKind) :: n
       end function getNumtokens
    end interface
 !
    interface 
       function getToken(k,s,n,e) result (t)
+         use kindParamModule, only : IntKind
          character (len=*), intent(in) :: s
          character (len=len(s)) :: t
-         integer, intent(in) :: k
-         integer, intent(out), optional :: n, e
+         integer (kind=IntKind), intent(in) :: k
+         integer (kind=IntKind), intent(out), optional :: n, e
       end function getToken
    end interface
 !

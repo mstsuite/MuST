@@ -1979,25 +1979,29 @@ contains
 !
    interface
       function getNumTokens(s) result (n)
+         use KindParamModule, only : IntKind
          character (len=*), intent(in) :: s
+         integer (kind=IntKind) :: n
       end function getNumtokens
    end interface
 !
    interface
       function getTokenPosition(k,s,n) result (p)
+         use KindParamModule, only : IntKind
          character (len=*), intent(in) :: s
-         integer, intent(in) :: k
-         integer, intent(out), optional :: n
-         integer :: p
+         integer (kind=IntKind), intent(in) :: k
+         integer (kind=IntKind), intent(out), optional :: n
+         integer (kind=IntKind) :: p
       end function getTokenPosition
    end interface
 !
    interface
       function getToken(k,s,n,e) result (t)
+         use KindParamModule, only : IntKind
          character (len=*), intent(in) :: s
          character (len=len(s)) :: t
-         integer, intent(in) :: k
-         integer, intent(out), optional :: n, e
+         integer (kind=IntKind), intent(in) :: k
+         integer (kind=IntKind), intent(out), optional :: n, e
       end function getToken
    end interface
 !

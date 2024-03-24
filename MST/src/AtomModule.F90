@@ -304,16 +304,19 @@ contains
 !
    interface
       function getNumTokens(s) result (n)
+         use KindParamModule, only : IntKind
          character (len=*), intent(in) :: s
+         integer (kind=IntKind) :: n
       end function getNumTokens
    end interface
 !
    interface
       function getToken(k,s,n,e) result (t)
+         use KindParamModule, only : IntKind
          character (len=*), intent(in) :: s
          character (len=len(s)) :: t
-         integer, intent(in) :: k
-         integer, intent(out), optional :: n, e
+         integer (kind=IntKind), intent(in) :: k
+         integer (kind=IntKind), intent(out), optional :: n, e
       end function getToken
    end interface
 !

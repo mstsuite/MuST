@@ -12,21 +12,23 @@
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getTokenPosition(k,s,token_len) result(p)
 !  ===================================================================
+   use KindParamModule, only : IntKind
+!
    implicit none
 !
    character (len=*), intent(in) :: s
 !
-   integer, intent(in) :: k
-   integer :: p, m
-   integer, intent(out), optional :: token_len
+   integer (kind=IntKind), intent(in) :: k
+   integer (kind=IntKind) :: p, m
+   integer (kind=IntKind), intent(out), optional :: token_len
 !
-   integer, parameter :: NumSeps = 4
+   integer (kind=IntKind), parameter :: NumSeps = 4
 !
    character (len=1), parameter :: sep(1:NumSeps) = (/' ', ',', ';',achar(9)/)
 !
    logical :: isSep, wasSep
 !
-   integer :: i, j, n, NumTokens
+   integer (kind=IntKind) :: i, j, n, NumTokens
 !
    n = len_trim(s)
 !

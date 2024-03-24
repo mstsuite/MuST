@@ -10,17 +10,19 @@
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getNumTokens(s) result(NumTokens)
 !  ===================================================================
+   use KindParamModule, only : IntKind
+!
    implicit none
 !
    character (len=*), intent(in) :: s
 !
-   integer, parameter :: NumSeps = 4
+   integer (kind=IntKind), parameter :: NumSeps = 4
 !
    character (len=1), parameter :: sep(1:NumSeps) = (/' ', ',', ';',achar(9)/)
 !
    logical :: isSep, wasSep
 !
-   integer :: i, j, n, NumTokens
+   integer (kind=IntKind) :: i, j, n, NumTokens
 !
    n = len_trim(s)
 !

@@ -366,4 +366,4 @@ $(ODIR)/testExchCorr: testExchCorr.o $(SRC_OBJS)
 	$(LD) -o $(ODIR)/testExchCorr testExchCorr.o $(BASE_ROUTINES) $(SRC_OBJS) $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/testTokens: testTokens.o $(ODIR)/getNumTokens.o $(ODIR)/getToken.o
-	$(LD) -o $(ODIR)/testTokens testTokens.o $(ODIR)/getNumTokens.o $(ODIR)/getToken.o
+	$(LD) -o $(ODIR)/testTokens testTokens.o $(ODIR)/getNumTokens.o $(ODIR)/getToken.o $(MSTLIB)
