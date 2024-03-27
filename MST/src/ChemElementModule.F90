@@ -1887,8 +1887,12 @@ contains
       call ErrorHandler('getZtot','Invalid Atom Name',AtomName)
    else if (a(1:1) < 'A' .or. a(1:1) > 'z') then
       call ErrorHandler('getZtot','Invalid Atom Name',AtomName)
-   else if (k == 2 .and. (a(2:2) < 'A' .or. a(2:2) > 'z')) then
-      call ErrorHandler('getZtot','Invalid Atom Name',AtomName)
+   else if (k >= 2) then
+      if (a(2:2) < 'A' .or. a(2:2) > 'z') then
+!     call ErrorHandler('getZtot','Invalid Atom Name',AtomName)
+         k = 1
+         a(2:2) = ' '
+      endif
    endif
 !
 !  if(a(1:1) < 'A' .and. a(1:1) /= '_') then
