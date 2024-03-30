@@ -112,7 +112,8 @@ private
 !
    integer (kind=IntKind) :: RECORD_LENGTH
 !
-   real (kind=RealKind) :: efermi, efermi_min, efermi_max
+   real (kind=RealKind) :: efermi
+!  real (kind=RealKind) :: efermi, efermi_min, efermi_max
    real (kind=RealKind), allocatable :: efermi_in(:,:)
    real (kind=RealKind), target :: vdif(1)
    real (kind=RealKind) :: v0(2)
@@ -1714,7 +1715,7 @@ contains
 !
    use ChemElementModule, only : getZtot
 !
-   use SystemModule, only : getNumAlloyElements
+   use SystemModule, only : getNumAlloyElements, getAlloyElementContent
 !
    use Atom2ProcModule, only : getGlobalIndex
 !
@@ -1735,12 +1736,12 @@ contains
    integer (kind=IntKind) :: id, ia, is, vunit, str_len, iend, ir
    integer (kind=IntKind) :: n, ig
 !
-   real (kind=RealKind) :: pot_shift
+   real (kind=RealKind) :: pot_shift, efermi_sum
 !
    file_form = adjustl(getInPotFileForm())
 !
-   efermi_min=1.0d+10 ! efermi_min and efermi_max will be updated inside
-   efermi_max=ZERO    ! readFormattedData or readUnformattedData
+!  efermi_min=1.0d+10 ! efermi_min and efermi_max will be updated inside
+!  efermi_max=ZERO    ! readFormattedData or readUnformattedData
 !
    if (trim(file_form) == 'FORMATTED') then
 !     if (getInPotFileForm(id) == 'FORMATTED') then
@@ -1813,10 +1814,21 @@ contains
 !  call GlobalSumInGroup(GroupID,efermi)
 !  -------------------------------------------------------------------
 !  efermi = efermi/real(NumPEsInGroup,kind=RealKind)
-   call GlobalMinInGroup(GroupID,efermi_min)
-   call GlobalMaxInGroup(GroupID,efermi_max)
-   efermi = HALF*(efermi_min+efermi_max)
+!  call GlobalMinInGroup(GroupID,efermi_min)
+!  call GlobalMaxInGroup(GroupID,efermi_max)
+!  efermi = HALF*(efermi_min+efermi_max)
 !  -------------------------------------------------------------------
+   efermi_sum = ZERO
+   do id =1, LocalNumAtoms
+      ig = getGlobalIndex(id)
+      do ia = 1, NumSpecies(id)
+         efermi_sum = efermi_sum + getAlloyElementContent(ig,ia)*efermi_in(ia,id)
+      enddo
+   enddo
+!  -------------------------------------------------------------------
+   call GlobalSumInGroup(GroupID,efermi_sum)
+!  -------------------------------------------------------------------
+   efermi = efermi_sum/real(GlobalNumAtoms,kind=RealKind)
 !
 !  ===================================================================
 !  The starting potential may come with different fermi energy.
@@ -2382,8 +2394,8 @@ contains
 !        the parallelization. I now change to taking the mid of min/max values.
 !     efermi = efermi + efermi_in(ia,id); nef = nef + 1
 !     ===============================================================
-      efermi_min = min(efermi_min,efermi_in(ia,id))
-      efermi_max = max(efermi_max,efermi_in(ia,id))
+!     efermi_min = min(efermi_min,efermi_in(ia,id))
+!     efermi_max = max(efermi_max,efermi_in(ia,id))
 !     ===============================================================
 !
       close(unit=funit)
@@ -2554,8 +2566,8 @@ contains
 !        the parallelization. I now change to taking the maximum value.
 !     efermi = efermi + efermi_in(ia,id); nef = nef + 1
 !     ===============================================================
-      efermi_min = min(efermi_min, efermi_in(ia,id))
-      efermi_max = max(efermi_max, efermi_in(ia,id))
+!     efermi_min = min(efermi_min, efermi_in(ia,id))
+!     efermi_max = max(efermi_max, efermi_in(ia,id))
 !
       do is = 1, n_spin_pola
          do i = 1, numc(ia)

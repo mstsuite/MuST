@@ -1,7 +1,7 @@
 subroutine printMomentVsCoreSplit(iter,funit)
    use KindParamModule, only : IntKind, RealKind
 !
-   use SystemModule, only : getAtomName, getNumAtoms
+   use SystemModule, only : getAtomAltName, getNumAtoms
 !
    use CoreStatesModule, only : getCoreSplitTable, &
                                 getCoreNumStatesTable, getCoreDescriptionTable
@@ -56,6 +56,7 @@ subroutine printMomentVsCoreSplit(iter,funit)
 !
    ig = maxloc(CoreNumStatesTable,1)
    nc = CoreNumStatesTable(ig)
+!
    write(fu,'(35(''=''),$)')
    ic=1
    do while (ic <= nc) 
@@ -66,6 +67,7 @@ subroutine printMomentVsCoreSplit(iter,funit)
          ic = ic + 2
       endif
    enddo
+!
    write(fu,'(/,a,$)')' Atom   Index      Mvp        Mmt'
    ic = 1
    do while (ic <= nc) 
@@ -78,8 +80,20 @@ subroutine printMomentVsCoreSplit(iter,funit)
    enddo
    write(fu,'(a)')''
 !
+   write(fu,'(35(''-''),$)')
+   ic=1
+   do while (ic <= nc) 
+      write(fu,'(11(''-''),$)')
+      if (CoreDescriptionTable(ic,ig)(2:2)=='s') then
+         ic = ic + 1
+      else
+         ic = ic + 2
+      endif
+   enddo
+   write(fu,'(a)')''
+!
    do ig = 1, GlobalNumAtoms
-      write(fu,'(2x,a3,2x,i6,2(2x,f9.5),$)')getAtomName(ig), ig, Mvp_Table(ig),Mmt_Table(ig)
+      write(fu,'(2x,a3,2x,i6,2(2x,f9.5),$)')getAtomAltName(ig), ig, Mvp_Table(ig),Mmt_Table(ig)
       nc = CoreNumStatesTable(ig)
       ic = 1
       do while (ic <= nc)

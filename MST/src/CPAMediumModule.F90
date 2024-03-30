@@ -52,6 +52,7 @@ private
 !
    type (CPAMediumStruct), allocatable :: CPAMedium(:)
 !
+   logical :: isATA = .false.
    logical :: isRelativistic = .false.
    logical, allocatable :: isCPAMedium(:)
 !
@@ -139,6 +140,12 @@ contains
       isRelativistic = .true.
    else
       isRelativistic = .false.
+   endif
+!
+   if (cpa_max_iter < 1) then
+      isATA = .true.
+   else
+      isATA = .false.
    endif
 !
    MaxIterations = cpa_max_iter
@@ -248,6 +255,12 @@ contains
    print_instruction = maxval(iprint)
    InitialMixingType = cpa_mix_type
    mixing_type = mod(InitialMixingType,4)
+!
+   if (print_instruction >= 0 .and. isATA) then
+      write(6,'(/,1x,a)')'*************************************************************'
+      write(6,'(1x,a)')  'Note: ATA medium, instead of CPA medium, is to be calculated!'
+      write(6,'(1x,a,/)')'*************************************************************'
+   endif
 !
 !  -------------------------------------------------------------------
    if(present(is_sro)) then
@@ -360,7 +373,7 @@ contains
    use SSSolverModule, only : getScatteringMatrix
 !
    use CrystalMatrixModule, only : calCrystalMatrix, retrieveTauSRO
-!  use CrystalMatrixModule, only : getCPAMediumTau => getTau
+   use CrystalMatrixModule, only : getCPAMediumTau => getTau
 !
    use AccelerateCPAModule, only : initializeAcceleration, accelerateCPA
    use AccelerateCPAModule, only : setAccelerationParam, getAccelerationType
@@ -401,6 +414,7 @@ contains
 !
    complex (kind=CmplxKind) :: kappa
    complex (kind=CmplxKind), pointer :: tm1(:,:), tm2(:,:), tm0(:,:)
+   complex (kind=CmplxKind), pointer :: tau_a(:,:)
    complex (kind=CmplxKind), allocatable :: t_proj(:,:)
 !
    if(present(do_sro)) then
@@ -445,6 +459,40 @@ contains
 !     ----------------------------------------------------------------
    enddo
 !
+   do id = 1, LocalNumSites
+      if (isCPAMedium(id)) then ! This is a random alloy sublattice site
+         site_config(id) = 0 ! Set the site to be the CPA medium site
+      else
+!        site_config(id) = id   ! Modified on 2/23/2020
+         site_config(id) = 1    ! This is the species index of the atom on the site
+      endif                     ! For crystal, this value = 1.
+   enddo
+!
+   if (isATA) then
+!     ----------------------------------------------------------------
+      call setupHostMedium(e,getSingleSiteTmat,configuration=site_config) 
+!     ----------------------------------------------------------------
+      do n = 1, LocalNumSites
+       ! if (isCPAMedium(n)) then
+       !    dsize = CPAMedium(n)%dsize
+       !    nsize = dsize*nSpinCant
+       !    id = CPAMedium(n)%local_index
+       !    do ia = 1, CPAMedium(n)%num_species
+       !       tau_a => CPAMedium(n)%CPAMatrix(ia)%tau_a(:,:,1) ! We assume non-spin-canted case
+!      !       =======================================================
+!      !       Substitute one CPA medium site by a real atom. The returning
+!      !       mat_a is the tau_a matrix by setting compute_X=.false.
+!      !       -------------------------------------------------------
+       !       call substituteTcByTa(id,ia,spin=1,mat_a=tau_a)
+!      !       -------------------------------------------------------
+       !    enddo
+       !    CPAMedium(n)%tau_c => getCPAMediumTau(id)
+       ! endif
+         call computeImpurityMatrix(energy=e, site=n, kau_method=0)
+      enddo
+      return
+   endif
+!
 !  ===================================================================
 !  Note that:
 !       CPAMedium(n)%Tcpa(:,:,:) is an alias of Tcpa(:)
@@ -469,15 +517,6 @@ contains
 !     ----------------------------------------------------------------
       alpha = CPA_slow_alpha
    endif
-!
-   do id = 1, LocalNumSites
-      if (isCPAMedium(id)) then ! This is a random alloy sublattice site
-         site_config(id) = 0 ! Set the site to be the CPA medium site
-      else
-!        site_config(id) = id   ! Modified on 2/23/2020
-         site_config(id) = 1    ! This is the species index of the atom on the site
-      endif                     ! For crystal, this value = 1.
-   enddo
 !
    nt = 0; nt_all = 0
    switch = 0

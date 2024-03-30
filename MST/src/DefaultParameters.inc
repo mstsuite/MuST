@@ -239,6 +239,7 @@
    n = n + 1; Keys(n) = 'Frozen-Core File Name';                 Values(n) = ' '
 !             Note: This file will be read if a file name is given
    n = n + 1; Keys(n) = 'Maximum Effective Medium Iterations';   Values(n) = '40'           
+!             Note: If this value is set to be 0, an ATA (instead of CPA) calculation will be performed.
    n = n + 1; Keys(n) = 'Effective Medium Mixing Scheme';        Values(n) = '2'
 !                     = 0: Simple mixing; = 1: Anderson mixing; = 2: Broyden mixing; = 3: Anderson Mixing by Messina group
    n = n + 1; Keys(n) = 'Effective Medium Mixing Parameters';    Values(n) = '0.1000  0.01'
