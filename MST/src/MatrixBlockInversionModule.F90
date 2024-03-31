@@ -94,9 +94,9 @@ contains
    do i = 1,NumMatrixes
       MaxMatrixSize(i) = maxval(k_blocks(:,i))
    enddo
-   print *,'Calling initialize_matinv_accel...........................'
+!   print *,'Calling initialize_matinv_accel...........................'
 !  -------------------------------------------------------------------
-   call initialize_matinv_accel(NumMatrixes,NumKBlocks,MaxMatrixSize)
+!   call initialize_matinv_accel(NumMatrixes,NumKBlocks,MaxMatrixSize)
 !  -------------------------------------------------------------------
 #endif
 !
@@ -229,8 +229,8 @@ contains
    endif
 !
 #ifdef ACCEL
-   print *,'Calling finalize_matinv_accel...........................'
-   call finalize_matinv_accel()
+!   print *,'Calling finalize_matinv_accel...........................'
+!   call finalize_matinv_accel()
 #endif
 !
    Initialized = .false.

@@ -390,6 +390,7 @@ contains
    real (kind=RealKind) :: rhov_term_e, rhov_term_pv, exc_term, exc_term_mt
    real (kind=RealKind) :: vc0(3), evec(3)
    real (kind=RealKind) :: ke, es
+   real (kind=RealKind) :: ezpttot, presszpt
 !
    real (kind=RealKind), pointer :: r_mesh(:)
    real (kind=RealKind), pointer :: rho_sph(:)
@@ -495,6 +496,8 @@ contains
       onsite_term  = ZERO
       rhov_term_e  = ZERO
       rhov_term_pv = ZERO
+      ezpttot = ZERO
+      presszpt = ZERO
       do ia = 1, getLocalNumSpecies(na)
          omega_vp = getVolume(na)
          Zi = getLocalAtomicNumber(na,ia)
@@ -837,20 +840,23 @@ contains
          endif
       enddo  ! Loop over species
 !
+      ezpttot = ezpttot + ezpt(na)
+      presszpt = presszpt + tpzpt(na)
+
       if (formula == 0) then
-         SiteEnPres(1,na) = SiteEnPres(1,na) + ezpt(na) + exc_term + onsite_term + kine_term + rhov_term_e
-!        SiteEnPres(1,na) = SiteEnPres(1,na) +            exc_term + onsite_term + kine_term + rhov_term_e
+         SiteEnPres(1,na) = SiteEnPres(1,na) + exc_term + onsite_term + kine_term + rhov_term_e
+!        SiteEnPres(1,na) = SiteEnPres(1,na) + ezpt(na) + exc_term + onsite_term + kine_term + rhov_term_e
       else if (formula == 1) then
-         SiteEnPres(1,na) = SiteEnPres(1,na) + ezpt(na) + exc_term + onsite_term + esum_term + rhov_term_e
-!        SiteEnPres(1,na) = SiteEnPres(1,na) +            exc_term + onsite_term + esum_term + rhov_term_e
+         SiteEnPres(1,na) = SiteEnPres(1,na) + exc_term + onsite_term + esum_term + rhov_term_e
+!        SiteEnPres(1,na) = SiteEnPres(1,na) + ezpt(na) + exc_term + onsite_term + esum_term + rhov_term_e
       else if (formula == 2) then
-         SiteEnPres(1,na) = SiteEnPres(1,na) + ezpt(na) + onsite_term + exc_term + esum_term + rhov_term_e
-!        SiteEnPres(1,na) = SiteEnPres(1,na) +            onsite_term + exc_term + esum_term + rhov_term_e
+         SiteEnPres(1,na) = SiteEnPres(1,na) + onsite_term + exc_term + esum_term + rhov_term_e
+!        SiteEnPres(1,na) = SiteEnPres(1,na) + ezpt(na) + onsite_term + exc_term + esum_term + rhov_term_e
       else
          call ErrorHandler('computeFullTotalEnergy','Undefined formula',formula)
       endif
-      SiteEnPres(2,na) = SiteEnPres(2,na) + tpzpt(na) + 2.0d0*kine_term + rhov_term_pv + onsite_term
-!     SiteEnPres(2,na) = SiteEnPres(2,na) +             2.0d0*kine_term + rhov_term_pv + onsite_term
+      SiteEnPres(2,na) = SiteEnPres(2,na) + 2.0d0*kine_term + rhov_term_pv + onsite_term
+!     SiteEnPres(2,na) = SiteEnPres(2,na) + tpzpt(na) + 2.0d0*kine_term + rhov_term_pv + onsite_term
 !
       if (Print_Level(na) >= 0) then
          write(6,'(/,a,i5)')'Local Site Index =',na
@@ -875,6 +881,11 @@ contains
          write(6,'(  a,f18.8)') 'Rho*V term in 3PV       = ', rhov_term_pv
       endif
    enddo
+
+   if (maxval(Print_Level) >= 0) then
+      write(6,'(5x,a,f20.11)') "Zero Point Energy = ", ezpttot
+      write(6,'(5x,a,f20.11)') "Zero Point Pressure =", presszpt
+   endif
 !
    nullify(rho_tot, mom_tot, rho_tmp, v_tmp, prod)
    deallocate(ws_rho, ws_pot, ws_prod)
@@ -1028,6 +1039,7 @@ contains
    real (kind=RealKind) :: fac
    real (kind=RealKind) :: etot_is, press_is
    real (kind=RealKind) :: etot, press, ecorr, echarge
+   real (kind=RealKind) :: ezpttot, presszpt
    real (kind=RealKind) :: u0i(LocalNumAtoms)
    real (kind=RealKind) :: spec_i, spec_j, dq_a, dq_b
 !
@@ -1052,7 +1064,9 @@ contains
 #endif
    SiteEnPres = ZERO
    etot=ZERO
+   ezpttot=ZERO
    press=ZERO
+   presszpt = ZERO
    do na = 1,LocalNumAtoms
       if (Print_Level(na) >= 0) then
          write(6,'(/,80(''-''))')
@@ -1077,12 +1091,15 @@ contains
             rho_tot => getSphChargeDensity('TotalNew',na,ia,der_rho_tot)
             if (n_spin_pola == 1) then
 !              -------------------------------------------------------
-               call calSphExchangeCorrelation(jmt,rho_tot,der_rho_den=der_rho_tot)
+               call calSphExchangeCorrelation(jmt,rho_tot,der_rho_den=der_rho_tot) !tmp uncomment
+!tmp comment   call calSphExchangeCorrelation(jmt,rho_tot,r_mesh=rr,der_rho_den=der_rho_tot)
 !              -------------------------------------------------------
             else
                mom_tot => getSphMomentDensity('TotalNew',na,ia,der_mom_tot)
 !              -------------------------------------------------------
-               call calSphExchangeCorrelation(jmt,rho_tot,der_rho_tot,mom_tot,der_mom_tot)
+               call calSphExchangeCorrelation(jmt,rho_tot,der_rho_tot,mom_tot,der_mom_tot) !tmp uncomment
+!tmp comment   call calSphExchangeCorrelation(jmt,rho_tot,r_mesh=rr,der_rho_den=der_rho_tot, &
+!tmp comment                                  mag_den=mom_tot,der_mag_den=der_mom_tot)
 !              -------------------------------------------------------
             endif
          else
@@ -1147,11 +1164,13 @@ contains
 !
 !     ================================================================
 !     Add zero point energy term
+!     Modification : Don't add zero-point energy to the total energy
+!                    Print it out separately 
 !     ================================================================
-      etot = etot + ezpt(na)
-      press = press + tpzpt(na)
-      SiteEnPres(1,na) = SiteEnPres(1,na) + ezpt(na)
-      SiteEnPres(2,na) = SiteEnPres(2,na) + tpzpt(na)
+      ezpttot = ezpttot + ezpt(na)
+      presszpt = presszpt + tpzpt(na)
+      SiteEnPres(1,na) = SiteEnPres(1,na) !+ ezpt(na)
+      SiteEnPres(2,na) = SiteEnPres(2,na) !+ tpzpt(na)
 !
 !     ================================================================
 !      Check if energy correction (e.g. LDA+U) is needed
@@ -1344,10 +1363,14 @@ contains
       write(6,'(10x,''emadp'',t30,''='',f22.11)') emadp
       write(6,'(10x,''u0'',t30,''='',f22.11)') u0
       write(6,'(/,a)')'Note:'
-      write(6,'(a,/)')'Total Energy = Kinetic E + (Coulomb E + u0) + (Exch E + emad) + ezpt'
+      write(6,'(a,/)')'Total Energy = Kinetic E + (Coulomb E + u0) + (Exch E + emad)'
       exit
       endif
    enddo
+   if (maxval(Print_Level) >= 0) then
+      write(6,'(10x,''ezpt'',t30,''='',f22.11)') ezpttot
+      write(6,'(10x,''tpzpt'',t30,''='',f22.11)') presszpt
+   endif
 !
    deallocate(LocalEnergy)
 !

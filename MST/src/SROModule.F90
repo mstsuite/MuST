@@ -595,6 +595,8 @@ contains
    subroutine assembleTauFromBlocks (n)
 !  ==================================================================
    
+   use WriteMatrixModule, only : writeMatrix
+   
    integer(kind=IntKind), intent(in) :: n
 !
    integer(kind=IntKind) :: in, jn, i, j,index, nsize, dsize, is
@@ -616,7 +618,16 @@ contains
          enddo
        enddo
      enddo
-   enddo 
+   enddo
+
+  ! call writeMatrix('TauIJ', SROMedium(n)%tau_cpa(1:dsize, 1:dsize, 1), dsize, dsize)
+  ! do jn = 2, nsize
+    ! print *, SROMedium(n)%Neighbor%Position(1:3, jn-1)
+       !SROMedium(n)%Neighbor%Position(2, jn-1),SROMedium(n)%Neighbor%Position(1, jn-1)
+    ! call writeMatrix('TauIJ', SROMedium(n)%tau_cpa((jn-1)*dsize+1:jn*dsize, 1:dsize, 1), dsize, dsize)
+  ! enddo
+ 
+   !call ErrorHandler('Got tau','SROModule')
 
    end subroutine assembleTauFromBlocks
 !  ==================================================================

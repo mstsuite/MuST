@@ -73,6 +73,7 @@ public
                                                      ! belongs
       integer (kind=IntKind),pointer:: NAsOnShell(:) ! Number Atoms on each shell
       real (kind=RealKind), pointer :: ShellRad(:)   ! radii of shells
+      real (kind=RealKind) :: CenterPosition(3)      ! Center atom position
 
    end type NeighborStruct
 !
@@ -194,13 +195,15 @@ public
    end type MatrixBandStruct
 !
    type PDOSStruct
-      integer (kind=IntKind) :: kmax_phi
+      integer (kind=IntKind) :: kmax_phi, kmax_kkr
       real (kind=RealKind), pointer :: dos_ws(:,:), dos_mt(:,:)
       real (kind=RealKind), pointer :: ss_dos_ws(:,:), ss_dos_mt(:,:)
       real (kind=RealKind), pointer :: phase_shift(:,:,:)
       real (kind=RealKind), pointer :: ss_pdos_ws(:,:,:), ss_pdos_mt(:,:,:)
       real (kind=RealKind), pointer :: ms_pdos_ws(:,:,:), ms_pdos_mt(:,:,:)
       real (kind=RealKind), pointer :: partial_dos_ws(:,:,:), partial_dos_mt(:,:,:)
+      complex (kind=CmplxKind), pointer :: t_mat(:,:,:,:)
+      complex (kind=CmplxKind), pointer :: t_aver(:,:,:)
    end type PDOSStruct
 !
 end module PublicTypeDefinitionsModule

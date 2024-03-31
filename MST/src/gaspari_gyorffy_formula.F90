@@ -73,6 +73,7 @@
         real (kind=RealKind) :: Coulomb,Coulombnum,Coulombden,mu_star
         real (kind=RealKind) :: SuperTemp,SuperTempExp
         real (kind=RealKind) :: SumI,Iconst,IconstUp,IconstDown,SumIUP,SumIDOWN
+!
         real (kind=RealKind) :: DebyeTemp, M_aver
         real (kind=RealKind) :: species_content
         real (kind=RealKind) :: total_dos, dos_per_spin, total_dos_mt, dos_mt_per_spin, Ef
@@ -271,14 +272,29 @@
         do id = 1, LocalNumAtoms
            kmax_kkr_max = max(kmax_kkr_max,PartialDOS(id)%kmax_kkr)
         enddo
+
+        if (isKKRCPA()) then
+           allocate(phase_shift_aver(kmax_kkr_max,n_spin_pola))
+        endif
+
         kappa = sqrt(efermi)
         nr = ZERO
         EPC = ZERO
         do id = 1, LocalNumAtoms  ! Loop atomic sites
+           if (isKKRCPA()) then
+              do is = 1, n_spin_pola
+                 t_mat => PartialDOS(id)%t_aver(:,:,is)
+                 do kl = 1, PartialDOS(id)%kmax_kkr
+                     phase_shift_aver(kl,is) = atan(kappa*t_mat(kl,kl)/(-CONE+SQRTm1*kappa*t_mat(kl,kl)))
+                 enddo
+              enddo
+           endif
            kmax_phi = PartialDOS(id)%kmax_phi
            kmax_kkr = PartialDOS(id)%kmax_kkr
            lmax_kkr = lofk(kmax_phi)
+
            ig = getGlobalIndex(id) 
+
            do ia = 1, getLocalNumSpecies(id)  ! Loop over atomic species
                                               ! at each atomic site. The
                                               ! number of species is usually 1,

@@ -1,0 +1,9 @@
+Title: Hafnium Atomic Potential
+Hf_a.out                Output file name. If blank, data will show on screen
+72.0                    Zed: atomic number
+0.0                     Magnetic moment
+1                       Number of spins
+1                       Exchange-correlation functional type (1=vb-hedin,2=vosko)
+25                      Number of SCF iterations
+0.1                     Mixing parameter
+Hf_a.pot                Atomic potential file (output)

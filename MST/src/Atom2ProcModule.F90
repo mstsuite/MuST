@@ -26,7 +26,7 @@ public :: initAtom2Proc,      &
    end interface ! getGlobalIndex
 !
 private
-   integer (kind=IntKind), parameter :: MaxAtomsPerProc = 256
+   integer (kind=IntKind), parameter :: MaxAtomsPerProc = 10000
    integer (kind=IntKind) :: GlobalNumAtoms
    integer (kind=IntKind) :: MyProcInGroup  ! >= 0, Group means 'Unit Cell' group
    integer (kind=IntKind) :: NumProcsInGroup

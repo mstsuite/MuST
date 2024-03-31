@@ -99,9 +99,9 @@ contains
       endif
    endif
 
-   if (mode == 1 .or. mode == 2) then
+   if (mode == 1) then
      call ErrorHandler('initConductivity', &
-            'Conductivity for KKR/LSMS not yet implemented')
+            'Conductivity for KKR not yet implemented')
    endif
 
    allocate( print_instruction(LocalNumAtoms) ) 
@@ -184,7 +184,7 @@ contains
      kmax_phi, iden)  
 
 !  ----------------------------------------------------
-   call endCurrentMatrixModule()
+   call endCurrentMatrixModule(mode)
 !  ----------------------------------------------------
 
    end subroutine endConductivity
@@ -232,8 +232,10 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine computeSROConductivity(is, dirnum)
+   subroutine computeLSMSConductivity(is, dirnum)
 !  ===================================================================   
+
+   use LSMSConductivityModule, only : calSigmaTildeLSMS
 
    integer (kind=IntKind), intent(in) :: is, dirnum
 
@@ -241,14 +243,10 @@ contains
    integer (kind=IntKind) :: dir, dir1
    complex (kind=CmplxKind) :: int_val(4)
 
-   
-
    do dir = 1, dirnum
      do dir1 = 1, dirnum
        do etype = 1, 4
-   !  
-   !     Under development! 
-   !     
+         int_val(etype) = calSigmaTildeLSMS(dir, dir1, etype)
        enddo
        sigmatilde(dir,dir1,is) = int_val(1)
        sigmatilde2(dir,dir1,is) = int_val(2)
@@ -266,7 +264,8 @@ contains
      enddo
    enddo
 
-   end subroutine computeSROConductivity
+
+   end subroutine computeLSMSConductivity
 !  ===================================================================
    
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -275,6 +274,8 @@ contains
 
    use KuboDataModule, only : useCubicSymmetryForSigma
    use CPAConductivityModule, only : initCPAConductivity, endCPAConductivity
+   use LSMSConductivityModule, only : initLSMSConductivity
+   use WriteMatrixModule, only : writeMatrix
 
    integer (kind=IntKind), intent(in) :: LocalNumAtoms, n_spin_pola
    integer (kind=IntKind) :: id, is, dirnum
@@ -287,28 +288,43 @@ contains
      dirnum = 3
    endif
 
-   do id = 1, LocalNumAtoms
+   if (mode == 2) then
+!    Do LSMS Conductivity
      do is = 1, n_spin_pola
-       if (mode == 3) then
-      !  --------------------------------------------------------------
-         call initCPAConductivity(id, is, kmax_kkr_max, efermi, LocalNumAtoms)
-      !  -------------------------------------------------------------- 
-         call computeCPAConductivity(is, dirnum)
-      !  --------------------------------------------------------------
-         call endCPAConductivity()
-      !  --------------------------------------------------------------
-       else if (mode == 4) then
-      !  --------------------------------------------------------------
-      !  Under development
-      !  --------------------------------------------------------------
-       endif
+       call initLSMSConductivity(is, kmax_kkr_max, efermi)
+       call computeLSMSConductivity(is, dirnum)
      enddo
-   enddo
+   else
+     do id = 1, LocalNumAtoms
+       do is = 1, n_spin_pola
+         if (mode == 3) then
+      !    --------------------------------------------------------------
+           call initCPAConductivity(id, is, kmax_kkr_max, efermi, LocalNumAtoms, mode)
+      !    -------------------------------------------------------------- 
+           call computeCPAConductivity(is, dirnum)
+      !    --------------------------------------------------------------
+           call endCPAConductivity()
+      !    --------------------------------------------------------------
+         else if (mode == 4) then
+      !    --------------------------------------------------------------
+      !    Under development
+           call initCPAConductivity(id, is, kmax_kkr_max, efermi, LocalNumAtoms, mode)
+      !    --------------------------------------------------------------
+         endif
+       enddo
+     enddo
+   endif
    
    if (useCubicSymmetryForSigma()) then
      sigma(2,2,:) = sigma(1,1,:)
      sigma(3,3,:) = sigma(1,1,:)
    endif
+
+   call writeMatrix('sigma', sigma, 3, 3, 1)
+   call writeMatrix('sigmatilde1', sigmatilde, 3, 3, 1)
+   call writeMatrix('sigmatilde2', sigmatilde2, 3, 3, 1)
+   call writeMatrix('sigmatilde3', sigmatilde3, 3, 3, 1)
+   call writeMatrix('sigmatilde4', sigmatilde4, 3, 3, 1)
 
    end subroutine calConductivity
 !  ===================================================================

@@ -16,7 +16,7 @@ public :: initAtom,    &
           getLocalConstrainField, &
           getLocalAtomicNumber, &
           getLocalAtomName,  &
-          getLocalAtomNickName,  &
+          getLocalAtomAltName,  &
           getLocalAtomPosition, &
           getLocalNumSpecies,  &
           getLocalSpeciesContent,  &
@@ -138,7 +138,7 @@ private
 !  -------------------------------------------------------------------
    type AtomPropertyStruct
       character (len=2), allocatable :: AtomName(:)
-      character (len=MaxLenOfAtomName), allocatable :: NickName(:)
+      character (len=MaxLenOfAtomName), allocatable :: AltName(:)
       character (len=MaxLenFileName), allocatable :: potinfile(:)
       character (len=11) :: potinform
       character (len=MaxLenFileName), allocatable :: potoutfile(:)
@@ -200,14 +200,14 @@ contains
    use ChemElementModule, only : getZtot, getImplicitMuffinTinRadius
    use ChemElementModule, only : getImplicitCoreRadius
    use ChemElementModule, only : MaxLenOfAtomName
-   use StringModule, only : initString, endString, getNumTokens, readToken
+   use StringModule, only : initString, endString, readToken
    use MPPModule, only : MyPE
    use PublicParamDefinitionsModule, only : ASA, MuffinTin, MuffinTinASA
    use Atom2ProcModule, only : getLocalNumAtoms, getGlobalIndex
    use InputModule, only : getKeyValue, getKeyLabelIndexValue
    use ScfDataModule, only : inputpath, isKKRCPA, isKKRCPASRO, getPotentialTypeParam
    use SystemModule, only : getNumAtoms, getNumAlloyElements, getAlloyElementContent
-   use SystemModule, only : getAlloyElementName
+   use SystemModule, only : getAlloyElementName, getAlloyElementAltName
    use SystemModule, only : getAtomPosition
    use SystemModule, only : getMomentDirection, getConstrainField
    use SystemModule, only : getMomentDirectionMixingParam
@@ -225,11 +225,14 @@ contains
    character (len=150), allocatable :: potinname(:)
    character (len=50), allocatable :: potoutname(:)
    character (len=MaxLenOfAtomName), pointer :: atname(:)
+   character (len=MaxLenOfAtomName) :: atom
+   character (len=80) :: text, twork
 !
    logical :: f_exist, pr
+   logical :: atom_with_alt_name
 !
    integer (kind=IntKind), intent(in) :: info_id, iprint
-   integer (kind=IntKind) :: i, j, ig, n, nt, GlobalNumAtoms, ri
+   integer (kind=IntKind) :: i, j, ig, n, nt, GlobalNumAtoms, ri, ns
    integer (kind=IntKind) :: anum, funit, flen, lmax_n, ia, rstatus, lmax_diff
    integer (kind=IntKind), allocatable :: potinform(:)
    integer (kind=IntKind), allocatable :: potoutform(:)
@@ -284,7 +287,7 @@ contains
    real (kind=RealKind), allocatable :: potScreen(:)
    real (kind=RealKind), allocatable :: cutoff_r_s(:)
    real (kind=RealKind), allocatable :: hin(:)
-   real (kind=RealKind) :: Za, Rav
+   real (kind=RealKind) :: Za, Rav, vdif
 !
    real (kind=RealKind), optional, intent(in) :: rinsc(:)
    real (kind=RealKind), optional, intent(in) :: rcirc(:)
@@ -300,10 +303,37 @@ contains
    end interface
 !
    interface
+      function getNumTokens(s) result (n)
+         use KindParamModule, only : IntKind
+         character (len=*), intent(in) :: s
+         integer (kind=IntKind) :: n
+      end function getNumTokens
+   end interface
+!
+   interface
+      function getToken(k,s,n,e) result (t)
+         use KindParamModule, only : IntKind
+         character (len=*), intent(in) :: s
+         character (len=len(s)) :: t
+         integer (kind=IntKind), intent(in) :: k
+         integer (kind=IntKind), intent(out), optional :: n, e
+      end function getToken
+   end interface
+!
+   interface
       function isInteger(s) result(t)
          character (len=*), intent(in) :: s
          logical :: t
       end function isInteger
+   end interface
+!
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         implicit none
+         logical :: t
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+      end function nocaseCompare
    end interface
 !
    if (.not.Initialized) then
@@ -555,9 +585,7 @@ contains
             lmax_shell(0) = trim(lmax_shell(0))//' '//s2
          enddo
       else 
-         call initString(lmax_shell(0))
-         num_shells(0) = getNumTokens()
-         call endString()
+         num_shells(0) = getNumTokens(lmax_shell(0))
       endif
       ind_lmax_shell = 0
 !     rstatus = getKeyIndexValue(info_id,'LIZ Shell Lmax',               &
@@ -716,24 +744,46 @@ contains
       endif
       allocate( AtomProperty(n)%potinfile(AtomProperty(n)%NumSpecies) )
       allocate( AtomProperty(n)%potoutfile(AtomProperty(n)%NumSpecies) )
-      allocate( AtomProperty(n)%NickName(AtomProperty(n)%NumSpecies) )
+      allocate( AtomProperty(n)%AltName(AtomProperty(n)%NumSpecies) )
       allocate( AtomProperty(n)%AtomName(AtomProperty(n)%NumSpecies) )
       allocate( AtomProperty(n)%AtomicNumber(AtomProperty(n)%NumSpecies) )
       allocate( AtomProperty(n)%AtomContent(AtomProperty(n)%NumSpecies) )
    enddo
 !
    if (potinform(0) == 0) then
+      do n = 1, LocalNumAtoms
+         do ia = 1, AtomProperty(n)%NumSpecies
+            AtomProperty(n)%potinfile(ia) = ' '
+         enddo
+      enddo
+      nt = getNumTokens(potinname(0))
+      if (nt < 1) then
+!        -------------------------------------------------------------
+         call ErrorHandler('initAtomModule','Invalid potential file name line: token number < 1',nt)
+!        -------------------------------------------------------------
+      endif
       call initString(potinname(0))
-      nt = getNumTokens()
       if (nt >= 1) then
          do j = 1, nt
 !           ==========================================================
             call readToken(j,fname,flen)
             path_fname = trim(inputpath)//fname
             funit = 300+j
-            open(unit=funit,file=path_fname,status='old',form='formatted')
+            open(unit=funit,file=path_fname,status='old',form='formatted',iostat=rstatus)
+            if (rstatus /= 0) then
+               call ErrorHandler('initAtomModule','Invalid potential file',trim(path_fname))
+            endif
             read(funit,'(a)')dummy
-            read(funit,'(a)')dummy
+            read(funit,'(a)')text
+            if (getNumTokens(text) > 2) then
+!              read(text,'(i5,3x,d20.13,a20)') ns,vdif,atom
+               twork = getToken(3,text)
+               read(twork,*)atom
+               atom_with_alt_name = .true.
+            else
+               atom = ' '
+               atom_with_alt_name = .false.
+            endif
             read(funit,'(a)')dummy
             read(funit,*)Za
             close(unit=funit)
@@ -743,8 +793,15 @@ contains
                ig = getGlobalIndex(n)
                if ( ind_potinname(ig) == 0 ) then
                   do ia = 1, AtomProperty(n)%NumSpecies
-                     if ( anum == getZtot(getAlloyElementName(ig,ia)) ) then
-                        AtomProperty(n)%potinfile(ia) = path_fname
+                     if (atom_with_alt_name) then
+                        if ( anum == getZtot(getAlloyElementName(ig,ia)) .and. &
+                             nocaseCompare(atom,getAlloyElementAltName(ig,ia))) then
+                           AtomProperty(n)%potinfile(ia) = path_fname
+                        endif
+                     else
+                        if ( anum == getZtot(getAlloyElementName(ig,ia)) ) then
+                           AtomProperty(n)%potinfile(ia) = path_fname
+                        endif
                      endif
                   enddo
                endif
@@ -756,8 +813,13 @@ contains
       do n = 1, LocalNumAtoms
          ig = getGlobalIndex(n)
          if ( ind_potinname(ig) > 0 ) then
+            nt = getNumTokens(potinname(ind_potinname(ig)))
+            if (nt < 1) then
+!              -------------------------------------------------------
+               call ErrorHandler('initAtomModule','Invalid potential file name line: token number < 1',nt)
+!              -------------------------------------------------------
+            endif
             call initString(potinname(ind_potinname(ig)))
-            nt = getNumTokens()
             if (nt < AtomProperty(n)%NumSpecies) then
 !              -------------------------------------------------------
                call ErrorHandler('initAtom','The potential files are not completely provided', &
@@ -771,31 +833,52 @@ contains
                   call readToken(j,fname,flen)
                   path_fname = trim(inputpath)//fname
                   funit = 300+j
-                  open(unit=funit,file=path_fname,status='old',form='formatted')
+                  open(unit=funit,file=path_fname,status='old',form='formatted',iostat=rstatus)
+                  if (rstatus /= 0) then
+                     call ErrorHandler('initAtomModule','Invalid potential file',trim(path_fname))
+                  endif
                   read(funit,'(a)')dummy
-                  read(funit,'(a)')dummy
+                  read(funit,'(a)')text
+                  if (getNumTokens(text) > 2) then
+!                    read(text,'(i5,3x,d20.13,a20)') ns,vdif,atom
+                     twork = getToken(3,text)
+                     read(twork,*)atom
+                     atom_with_alt_name = .true.
+                  else
+                     atom = ' '
+                     atom_with_alt_name = .false.
+                  endif
                   read(funit,'(a)')dummy
                   read(funit,*)Za
                   close(unit=funit)
 !                 ====================================================
                   anum = int(Za)
                   do ia = 1, AtomProperty(n)%NumSpecies
-                     if ( anum == getZtot(getAlloyElementName(ig,ia)) ) then
-                        AtomProperty(n)%potinfile(ia) = path_fname
+                     if (atom_with_alt_name) then
+                        if ( anum == getZtot(getAlloyElementName(ig,ia)) .and. &
+                             nocaseCompare(atom,getAlloyElementAltName(ig,ia))) then
+                           AtomProperty(n)%potinfile(ia) = path_fname
+                        endif
+                     else
+                        if ( anum == getZtot(getAlloyElementName(ig,ia)) ) then
+                           AtomProperty(n)%potinfile(ia) = path_fname
+                        endif
                      endif
                   enddo
                enddo
             endif
             call endString()
-         else
-            do ia = 1, AtomProperty(n)%NumSpecies
-               if (len(AtomProperty(n)%potinfile(ia)) <= 1) then
-!                  ---------------------------------------------------
-                   call ErrorHandler('initAtom','The potential files are not completely provided')
-!                  ---------------------------------------------------
-               endif
-            enddo
          endif
+      enddo
+!     Check .................
+      do n = 1, LocalNumAtoms
+         do ia = 1, AtomProperty(n)%NumSpecies
+            if (len_trim(AtomProperty(n)%potinfile(ia)) <= 1) then
+!               ------------------------------------------------------
+                call ErrorHandler('initAtom','The potential files are not completely provided')
+!               ------------------------------------------------------
+            endif
+         enddo
       enddo
    else
       do n = 1, LocalNumAtoms
@@ -812,8 +895,8 @@ contains
       ig = getGlobalIndex(n)
       do ia = 1, AtomProperty(n)%NumSpecies
          AtomProperty(n)%potoutfile(ia)=trim(inputpath)//adjustl(potoutname(ind_potoutname(ig)))
-         AtomProperty(n)%NickName(ia)=getAlloyElementName(ig,ia)
-         AtomProperty(n)%AtomName(ia)=AtomProperty(n)%NickName(ia)
+         AtomProperty(n)%AltName(ia)=getAlloyElementAltName(ig,ia)
+         AtomProperty(n)%AtomName(ia)=getAlloyElementName(ig,ia)
          AtomProperty(n)%AtomicNumber(ia)=getZtot(AtomProperty(n)%AtomName(ia))
          AtomProperty(n)%AtomContent(ia)=getAlloyElementContent(ig,ia)
       enddo
@@ -896,10 +979,10 @@ contains
 !     potential outside the muffin-tin sphere is 0, we set the core
 !     radius to the muffin-tin radius and ignore the input parameter
 !     ================================================================
-      if (getPotentialTypeParam() == ASA .or. getPotentialTypeParam() == MuffinTin .or. &
-          getPotentialTypeParam() == MuffinTinASA) then
-         AtomProperty(n)%Rcore=AtomProperty(n)%Rmt
-      else
+!!!   if (getPotentialTypeParam() == ASA .or. getPotentialTypeParam() == MuffinTin .or. &
+!!!       getPotentialTypeParam() == MuffinTinASA) then
+!!!      AtomProperty(n)%Rcore=AtomProperty(n)%Rmt
+!!!   else
          if ( isInteger( rcr_input(ind_rcr_input(ig)) ) ) then
             read(rcr_input(ind_rcr_input(ig)),*)ri
             if (ri == -1) then
@@ -930,13 +1013,16 @@ contains
          else if ( isRealNumber( rcr_input(ind_rcr_input(ig)) ) ) then
 !           Using the specified value as the core radius
             read(rcr_input(ind_rcr_input(ig)),*)AtomProperty(n)%Rcore
+         else if (getPotentialTypeParam() == ASA .or. getPotentialTypeParam() == MuffinTin .or. &
+            getPotentialTypeParam() == MuffinTinASA) then
+            AtomProperty(n)%Rcore=AtomProperty(n)%Rmt
          else
 !           ----------------------------------------------------------
             call ErrorHandler('initAtom','Invalid core radius parameter', &
                               rcr_input(ind_rcr_input(ig)) )
 !           ----------------------------------------------------------
          endif
-      endif
+!!!   endif
 !     ================================================================
 !
       if ( pseudo_r(ind_pseudo_r(ig)) > ZERO ) then
@@ -1332,7 +1418,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getLocalAtomNickName(id,ia) result(name)
+   function getLocalAtomAltName(id,ia) result(name)
 !  ===================================================================
    implicit none
    integer (kind=IntKind), intent(in) :: id
@@ -1341,12 +1427,12 @@ contains
    character (len=MaxLenOfAtomName) :: name
 !
    if (present(ia)) then
-      name=AtomProperty(id)%NickName(ia)
+      name=AtomProperty(id)%AltName(ia)
    else
-      name=AtomProperty(id)%NickName(1)
+      name=AtomProperty(id)%AltName(1)
    endif
 !
-   end function getLocalAtomNickName
+   end function getLocalAtomAltName
 !  ===================================================================
 !
 !  *******************************************************************
@@ -2116,15 +2202,16 @@ contains
    do i=1,LocalNumAtoms
       write(6,'(80(''=''))')
       do ia = 1, AtomProperty(i)%NumSpecies
-         write(6,'(''Atom Name       : '',a)')AtomProperty(i)%AtomName(ia)
-         write(6,'(''Input  Potential: '',a50)') AtomProperty(i)%potinfile(ia)
-         write(6,'(''Output Potential: '',a50)') AtomProperty(i)%potoutfile(ia)
+         write(6,'(''Atom Name        : '',a)')AtomProperty(i)%AtomName(ia)
+         write(6,'(''Alternative Name : '',a)')AtomProperty(i)%AltName(ia)
+         write(6,'(''Input  Potential : '',a50)') AtomProperty(i)%potinfile(ia)
+         write(6,'(''Output Potential : '',a50)') AtomProperty(i)%potoutfile(ia)
       enddo
-      write(6,'(''Global Index    : '',i6)')AtomProperty(i)%GlobalIndex
-      write(6,'(''Atom Position   : '',3f10.5)')AtomProperty(i)%Position(1:3)
-      write(6,'(''Local Moment    : '',f10.5)')LocalMoment(i)%moment
-      write(6,'(''Local evec_old  : '',3f10.5)')LocalMoment(i)%evec_old(1:3)
-      write(6,'(''Constrain Fld   : '',3f10.5)')LocalMoment(i)%b_con(1:3)
+      write(6,'(''Global Index     : '',i6)')AtomProperty(i)%GlobalIndex
+      write(6,'(''Atom Position    : '',3f10.5)')AtomProperty(i)%Position(1:3)
+      write(6,'(''Local Moment     : '',f10.5)')LocalMoment(i)%moment
+      write(6,'(''Local evec_old   : '',3f10.5)')LocalMoment(i)%evec_old(1:3)
+      write(6,'(''Constrain Fld    : '',3f10.5)')LocalMoment(i)%b_con(1:3)
       write(6,'(''Potential Mixing Parameter: '',f8.5)')MixParam(i)%alpha_pot
       write(6,'(''Density   Mixing Parameter: '',f8.5)')MixParam(i)%alpha_rho
       write(6,'(''Charge    Mixing Parameter: '',f8.5)')MixParam(i)%alpha_chg

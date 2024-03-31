@@ -305,6 +305,25 @@ contains
 !
    complex (kind=CmplxKind), intent(inout) :: matrix(ndim)
 !
+   interface
+      subroutine giterat(niter,mdim,pmix,x,n,t,u,m,k,p,ppq,pq,w0,tp,tolerance)
+         use KindParamModule, only : IntKind, RealKind
+         implicit none
+         integer (kind=IntKind) :: niter,mdim,n,m,k
+         real (kind=RealKind) :: x(:),t(:),pmix,u,p,ppq,pq,w0,tp,tolerance
+      end subroutine giterat
+   end interface
+!
+   interface
+      subroutine giterbr(pmix,w0,mdim,x,nx,m,nm,nml,fm,fml,delta,bkni,tp)
+         use KindParamModule, only : IntKind, RealKind
+         implicit none
+         integer (kind=IntKind) :: nx,mdim,m
+         real (kind=RealKind) :: x(nx),pmix,w0,nm(nx),nml(nx),fm(nx),fml(nx),&
+       &                         delta(nx,mdim,2),bkni(mdim,mdim),tp
+      end subroutine giterbr
+   end interface
+!
    n=2*ndim
    cpaiter_x(1:ndim)   = real(matrix(1:ndim))
    cpaiter_x(1+ndim:n) = aimag(matrix(1:ndim))

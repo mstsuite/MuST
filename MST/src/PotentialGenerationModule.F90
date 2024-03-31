@@ -2885,7 +2885,7 @@ contains
                                         getGlobalOnSiteElectronTableOld, &
                                         getGlobalTableLine, getNeighborChargeTable
 !
-   use SystemModule, only : getAtomicNumber, getAtomName, getAtomEnergy
+   use SystemModule, only : getAtomicNumber, getAtomAltName, getAtomEnergy
    use SystemModule, only : getNumAlloyElements
    use SystemModule, only : getNumAtomTypes, getAtomType, getNumAtomsOfType, &
                             getAtomTypeName
@@ -2960,23 +2960,23 @@ contains
       if (max_shells == 1) then
          write(fu,'(107(''=''))')
          write(fu,'(2a)')' Atom   Index      Q          Qmt        dQ        Vmad',   &
-                         '        Local Energy     dQ(1nn)    LocalEnergy-ZptE'
+                         '        Local Energy     dQ(1nn)    LocalEnergy+ZptE'
 !        write(fu,'(107(''-''))')
       else
          write(fu,'(119(''=''))')
          write(fu,'(2a)')' Atom   Index      Q          Qmt        dQ        Vmad',   &
-                         '        Local Energy     dQ(1nn)     dQ(2nn)    LocalEnergy-ZptE'
+                         '        Local Energy     dQ(1nn)     dQ(2nn)    LocalEnergy+ZptE'
 !        write(fu,'(119(''-''))')
       endif
    else if (na == 1) then
       write(fu,'(95(''=''))')
       write(fu,'(2a)')' Atom   Index      Q          Qmt        dQ        Vmad',      &
-                      '        Local Energy    LocalEnergy-ZptE'
+                      '        Local Energy    LocalEnergy+ZptE'
 !     write(fu,'(95(''-''))')
    else
       write(fu,'(100(''=''))')
       write(fu,'(2a)')' Atom  Site  Species    Q          Qmt        dQ        Vmad', &
-                      '        Local Energy    LocalEnergy-ZptE'
+                      '        Local Energy    LocalEnergy+ZptE'
 !     write(fu,'(100(''-''))')
    endif
    global_table_line => getGlobalTableLine()
@@ -2987,48 +2987,48 @@ contains
       if (max_shells == 1) then
          do ig = 1, GlobalNumAtoms
             write(fu,'(2x,a3,2x,i6,4(2x,f9.5),6x,f12.5,2x,f10.5,6x,f12.5)')            &
-                                                 getAtomName(ig), ig,                  &
+                                                 getAtomAltName(ig), ig,               &
                                                  Q_Table(ig),Qmt_Table(ig),            &
                                                  Q_Table(ig)-getAtomicNumber(ig),      &
                                                  MadelungShiftTable(ig),atom_en(1,ig), &
                                                  NeighborChargeTable(1,ig),            &
-                                                 atom_en(1,ig)-atom_en(3,ig)
+                                                 atom_en(1,ig)+atom_en(3,ig)
          enddo
          write(fu,'(107(''=''))')
       else
          do ig = 1, GlobalNumAtoms
             write(fu,'(2x,a3,2x,i6,4(2x,f9.5),6x,f12.5,2(2x,f10.5),6x,f12.5)')         &
-                                                 getAtomName(ig), ig,                  &
+                                                 getAtomAltName(ig), ig,               &
                                                  Q_Table(ig),Qmt_Table(ig),            &
                                                  Q_Table(ig)-getAtomicNumber(ig),      &
                                                  MadelungShiftTable(ig),atom_en(1,ig), &
                                                  NeighborChargeTable(1,ig),            &
                                                  NeighborChargeTable(2,ig),            &
-                                                 atom_en(1,ig)-atom_en(3,ig)
+                                                 atom_en(1,ig)+atom_en(3,ig)
          enddo
          write(fu,'(119(''=''))')
       endif
    else if (na == 1) then
       do ig = 1, GlobalNumAtoms
          write(fu,'(2x,a3,2x,i6,4(2x,f9.5),6x,f12.5,6x,f12.5)')                        &
-                                                 getAtomName(ig), ig,                  &
+                                                 getAtomAltName(ig), ig,               &
                                                  Q_Table(ig),Qmt_Table(ig),            &
                                                  Q_Table(ig)-getAtomicNumber(ig),      &
                                                  MadelungShiftTable(ig),atom_en(1,ig), &
-                                                 atom_en(1,ig)-atom_en(3,ig)
+                                                 atom_en(1,ig)+atom_en(3,ig)
       enddo
       write(fu,'(95(''=''))')
    else
       do ig = 1, GlobalNumAtoms
          do ia = 1, getNumAlloyElements(ig)
-!           write(fu,'(2x,a3,2x,i6,4(2x,f20.16))')getAtomName(ig,ia), ig, ia,     &
+!           write(fu,'(2x,a3,2x,i6,4(2x,f20.16))')getAtomAltName(ig,ia), ig, ia,       &
             lig = global_table_line(ig) + ia
             write(fu,'(2x,a3,2x,i6,2x,i2,4(2x,f9.5),6x,f12.5,6x,f12.5)')               &
-                                                 getAtomName(ig,ia), ig, ia,           &
+                                                 getAtomAltName(ig,ia), ig, ia,        &
                                                  Q_Table(lig),Qmt_Table(lig),          &
                                                  Q_Table(lig)-getAtomicNumber(ig,ia),  &
                                                  MadelungShiftTable(lig),atom_en(1,ig),&
-                                                 atom_en(1,ig)-atom_en(3,ig)
+                                                 atom_en(1,ig)+atom_en(3,ig)
          enddo
       enddo
       write(fu,'(100(''=''))')

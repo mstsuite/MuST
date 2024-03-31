@@ -16,6 +16,9 @@ public :: initCPAMedium,            &
 !
 private
    integer (kind=IntKind) :: MaxIterations = 50
+!  integer (kind=IntKind), parameter :: niter_switch = 20
+   integer (kind=IntKind), parameter :: niter_switch = 25
+   integer (kind=IntKind), parameter :: MaxSchemeSwitch = 10
    integer (kind=IntKind) :: iteration = 0
 !
    integer (kind=IntKind) :: GlobalNumSites, LocalNumSites
@@ -49,6 +52,7 @@ private
 !
    type (CPAMediumStruct), allocatable :: CPAMedium(:)
 !
+   logical :: isATA = .false.
    logical :: isRelativistic = .false.
    logical, allocatable :: isCPAMedium(:)
 !
@@ -136,6 +140,12 @@ contains
       isRelativistic = .true.
    else
       isRelativistic = .false.
+   endif
+!
+   if (cpa_max_iter < 1) then
+      isATA = .true.
+   else
+      isATA = .false.
    endif
 !
    MaxIterations = cpa_max_iter
@@ -245,6 +255,12 @@ contains
    print_instruction = maxval(iprint)
    InitialMixingType = cpa_mix_type
    mixing_type = mod(InitialMixingType,4)
+!
+   if (print_instruction >= 0 .and. isATA) then
+      write(6,'(/,1x,a)')'*************************************************************'
+      write(6,'(1x,a)')  'Note: ATA medium, instead of CPA medium, is to be calculated!'
+      write(6,'(1x,a,/)')'*************************************************************'
+   endif
 !
 !  -------------------------------------------------------------------
    if(present(is_sro)) then
@@ -357,7 +373,7 @@ contains
    use SSSolverModule, only : getScatteringMatrix
 !
    use CrystalMatrixModule, only : calCrystalMatrix, retrieveTauSRO
-!  use CrystalMatrixModule, only : getCPAMediumTau => getTau
+   use CrystalMatrixModule, only : getCPAMediumTau => getTau
 !
    use AccelerateCPAModule, only : initializeAcceleration, accelerateCPA
    use AccelerateCPAModule, only : setAccelerationParam, getAccelerationType
@@ -378,10 +394,11 @@ contains
    logical :: used_Anderson, used_Broyden, used_AndersonOld
 !
    integer (kind=IntKind) :: ia, id, nsize, n, dsize, mixing_type
-   integer (kind=IntKind) :: ns, is, js, switch, nt
+   integer (kind=IntKind) :: ns, is, js, switch, nt, nt_all
    integer (kind=IntKind) :: site_config(LocalNumSites)
 !
    logical :: use_sro
+   logical :: CPA_converged
 !  ===================================================================
 !  CPA iteration acceleration parameters...
 !  These parameters are taken from the mkkrcpa code
@@ -397,6 +414,7 @@ contains
 !
    complex (kind=CmplxKind) :: kappa
    complex (kind=CmplxKind), pointer :: tm1(:,:), tm2(:,:), tm0(:,:)
+   complex (kind=CmplxKind), pointer :: tau_a(:,:)
    complex (kind=CmplxKind), allocatable :: t_proj(:,:)
 !
    if(present(do_sro)) then
@@ -441,6 +459,40 @@ contains
 !     ----------------------------------------------------------------
    enddo
 !
+   do id = 1, LocalNumSites
+      if (isCPAMedium(id)) then ! This is a random alloy sublattice site
+         site_config(id) = 0 ! Set the site to be the CPA medium site
+      else
+!        site_config(id) = id   ! Modified on 2/23/2020
+         site_config(id) = 1    ! This is the species index of the atom on the site
+      endif                     ! For crystal, this value = 1.
+   enddo
+!
+   if (isATA) then
+!     ----------------------------------------------------------------
+      call setupHostMedium(e,getSingleSiteTmat,configuration=site_config) 
+!     ----------------------------------------------------------------
+      do n = 1, LocalNumSites
+       ! if (isCPAMedium(n)) then
+       !    dsize = CPAMedium(n)%dsize
+       !    nsize = dsize*nSpinCant
+       !    id = CPAMedium(n)%local_index
+       !    do ia = 1, CPAMedium(n)%num_species
+       !       tau_a => CPAMedium(n)%CPAMatrix(ia)%tau_a(:,:,1) ! We assume non-spin-canted case
+!      !       =======================================================
+!      !       Substitute one CPA medium site by a real atom. The returning
+!      !       mat_a is the tau_a matrix by setting compute_X=.false.
+!      !       -------------------------------------------------------
+       !       call substituteTcByTa(id,ia,spin=1,mat_a=tau_a)
+!      !       -------------------------------------------------------
+       !    enddo
+       !    CPAMedium(n)%tau_c => getCPAMediumTau(id)
+       ! endif
+         call computeImpurityMatrix(energy=e, site=n, kau_method=0)
+      enddo
+      return
+   endif
+!
 !  ===================================================================
 !  Note that:
 !       CPAMedium(n)%Tcpa(:,:,:) is an alias of Tcpa(:)
@@ -452,22 +504,21 @@ contains
 !     ----------------------------------------------------------------
       call setAccelerationParam(acc_mix=CPA_alpha,acc_type=mixing_type)
 !     ----------------------------------------------------------------
+      alpha = CPA_alpha
+!! else if (aimag(e) < 0.002) then
+!!    mixing_type = 0
+!     ----------------------------------------------------------------
+!!    call setAccelerationParam(acc_mix=CPA_alpha,acc_type=mixing_type)
+!     ----------------------------------------------------------------
+!!    alpha = CPA_slow_alpha
    else
 !     ----------------------------------------------------------------
       call setAccelerationParam(acc_mix=CPA_slow_alpha,acc_type=mixing_type)
 !     ----------------------------------------------------------------
+      alpha = CPA_slow_alpha
    endif
 !
-   do id = 1, LocalNumSites
-      if (isCPAMedium(id)) then ! This is a random alloy sublattice site
-         site_config(id) = 0 ! Set the site to be the CPA medium site
-      else
-!        site_config(id) = id   ! Modified on 2/23/2020
-         site_config(id) = 1    ! This is the species index of the atom on the site
-      endif                     ! For crystal, this value = 1.
-   enddo
-!
-   nt = 0
+   nt = 0; nt_all = 0
    switch = 0
    iteration = 0 
    err_prev = 1.0d+10
@@ -495,9 +546,12 @@ contains
       used_AndersonOld = .true.
    endif
 !
-   alpha = CPA_slow_alpha
-   LOOP_iter: do while (nt <= 5*MaxIterations)
-      nt = nt + 1
+   CPA_converged = .false.
+   LOOP_iter: do while (nt <= MaxSchemeSwitch*niter_switch .or. nt_all < 5*MaxIterations)
+      nt_all = nt_all + 1
+      if (mixing_type /= SimpleMixing) then
+         nt = nt + 1
+      endif
       iteration = iteration + 1
 !     write(6,'(a,i5)')'At iteration: ',iteration
       max_err = ZERO
@@ -558,25 +612,28 @@ contains
 !           MyPE, CPAMedium(1)%global_index, nt, e, max_err
 !
       if (max_err < CPA_tolerance) then
+         CPA_converged = .true.
+         exit LOOP_iter
+      else if (switch > MaxSchemeSwitch) then
          exit LOOP_iter
 !     ================================================================
 !     Set 25 to be the maximum number of iterations for the fast mixing method.
 !     If the method does not converge, switch to a different method
 !     ================================================================
-      else if (mixing_type /= SimpleMixing .and. iteration > min(50,MaxIterations) &
+      else if (mixing_type /= SimpleMixing .and. iteration > min(niter_switch,MaxIterations) &
                .and. max_err > 0.6*err_prev) then
 !        -------------------------------------------------------------
-         call setAccelerationParam(acc_mix=alpha,acc_type=SimpleMixing)
+         call setAccelerationParam(acc_mix=CPA_alpha,acc_type=SimpleMixing)
 !        -------------------------------------------------------------
          if (print_instruction >= 0) then
-            write(6,'(a,f10.5)')'Switch to Simple Mixing Scheme with mixing param = ',alpha
+            write(6,'(a,f10.5)')'Switch to Simple Mixing Scheme with mixing param = ',CPA_alpha
          endif
          mixing_type = SimpleMixing
          iteration = 0
-         switch = switch + 1
+      else if (mixing_type == SimpleMixing .and. iteration > MaxIterations) then
          alpha = alpha*HALF
-      else if (mixing_type == SimpleMixing .and. iteration > MaxIterations .and. switch < 4) then
          if ((used_Broyden .and. InitialMixingType <= 3) .or.         &
+!            (.not.used_Broyden)) then
              (.not.used_Broyden .and. InitialMixingType > 3)) then
 !           ----------------------------------------------------------
             call setAccelerationParam(acc_mix=alpha,acc_type=BroydenMixing)
@@ -612,7 +669,11 @@ contains
       endif
       err_prev = max_err
    enddo LOOP_iter
-
+!
+   if (print_instruction >= 0 .and. .not.CPA_converged) then
+      write(6,'(/,a,2f13.8,/)')'WARNING!!! :::: CPA is NOT converged at energy = ',e
+   endif
+!
 !  ===================================================================
 !  Doing additional iterations for SRO, if that option is chosen
 !  ===================================================================

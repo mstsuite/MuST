@@ -639,6 +639,44 @@ program kubo
    do i = 1, 3
      do j = 1, 3
        do k = 1, n_spin_pola
+         final_sigma(i, j, k) = real(sigma(i, j, k))
+       enddo
+     enddo
+   enddo 
+   if (node_print_level >= 0) then
+     if (n_spin_pola == 1) then
+       write(6,'(5x,a)')'                                                        '
+       write(6,'(5x,a)')'********************************************************'
+       write(6,'(5x,a)')'--------------------------------------------------------'
+       write(6,'(5x,a)')'             CONDUCTIVITY TENSOR (a.u.)          '
+       write(6,'(5x,a)')'--------------------------------------------------------'
+       write(6,'(3x,f10.5,14x,f10.5,14x,f10.5)') final_sigma(1,1,1),final_sigma(1,2,1),final_sigma(1,3,1)
+       write(6,'(3x,f10.5,14x,f10.5,14x,f10.5)') final_sigma(2,1,1),final_sigma(2,2,1),final_sigma(2,3,1)
+       write(6,'(3x,f10.5,14x,f10.5,14x,f10.5)') final_sigma(3,1,1),final_sigma(3,2,1),final_sigma(3,3,1)
+       write(6,'(5x,a)')'********************************************************'
+     else if (n_spin_pola == 2) then
+       write(6,'(5x,a)')'                                                        '
+       write(6,'(5x,a)')'********************************************************'
+       write(6,'(5x,a)')'--------------------------------------------------------'
+       write(6,'(/,a,/)')'       CONDUCTIVITY TENSOR  (SPIN UP) (a.u.)            '
+       write(6,'(5x,a)')'--------------------------------------------------------'
+       write(6,'(3x,f10.5,15x,f10.5,14x,f10.5)') final_sigma(1,1,1),final_sigma(1,2,1),final_sigma(1,3,1)
+       write(6,'(3x,f10.5,15x,f10.5,14x,f10.5)') final_sigma(2,1,1),final_sigma(2,2,1),final_sigma(2,3,1)
+       write(6,'(3x,f10.5,15x,f10.5,14x,f10.5)') final_sigma(3,1,1),final_sigma(3,2,1),final_sigma(3,3,1)
+       write(6,'(5x,a)')'--------------------------------------------------------'
+       write(6,'(/,a,/)')'      CONDUCTIVITY TENSOR  (SPIN DOWN) (a.u.)          '
+       write(6,'(5x,a)')'--------------------------------------------------------'
+       write(6,'(3x,f10.5,14x,f10.5,14x,f10.5)') final_sigma(1,1,2),final_sigma(1,2,2),final_sigma(1,3,2)
+       write(6,'(3x,f10.5,14x,f10.5,14x,f10.5)') final_sigma(2,1,2),final_sigma(2,2,2),final_sigma(2,3,2)
+       write(6,'(3x,f10.5,14x,f10.5,14x,f10.5)') final_sigma(3,1,2),final_sigma(3,2,2),final_sigma(3,3,2)
+       write(6,'(5x,a)')'********************************************************'
+     endif
+   endif
+
+
+   do i = 1, 3
+     do j = 1, 3
+       do k = 1, n_spin_pola
          final_sigma(i, j, k) = (2.30384174*real(sigma(i, j, k)))/100.0
        enddo
      enddo

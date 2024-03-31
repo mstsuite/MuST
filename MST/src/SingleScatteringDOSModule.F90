@@ -11,6 +11,8 @@ module SingleScatteringDOSModule
 !
    use IntegerFactorsModule, only : lofk, lofj, mofj, m1m, mofk, jofk
 !
+   use MPPModule, only : MyPE
+!
 public :: setSScatteringDOSParam,       &
           getSScatteringPhaseShift,     &
           getSScatteringDOS,            & ! Returns results per spin
@@ -909,7 +911,6 @@ contains
 !  The function also returns aux, a data set that can be integrated
 !  on an energy grid
 !  ===================================================================
-   use MPPModule, only : MyPE
    use GroupCommModule, only : GlobalSumInGroup
    use PublicTypeDefinitionsModule, only : GridStruct
    use PotentialTypeModule, only : isASAPotential

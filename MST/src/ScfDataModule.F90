@@ -96,6 +96,7 @@ public
    integer (kind=IntKind) :: RealAxisSS = 0
    integer (kind=IntKind) :: SingleSiteEContour = 0
    integer (kind=IntKind) :: KSpaceSolver = 0
+   integer (kind=IntKind) :: tauij_needed = 0
 !
    integer (kind=IntKind) :: i_vdif = 1
    integer (kind=IntKind) :: n_spin_cant = 0
@@ -340,6 +341,7 @@ contains
    rstatus = getKeyValue(tbl_id,'Contour Type (>= 0)',ContourType)
    rstatus = getKeyValue(tbl_id,'Energy Grid Type (>= 0)',eGridType)
    rstatus = getKeyValue(tbl_id,'No. Energy Grids',NumEs)
+   rstatus = getKeyValue(tbl_id,'Calculate off-center blocks (LSMS)',tauij_needed)
    rstatus = getKeyValue(tbl_id,'No. Extra Energy Points',NumExtraEs)
    rstatus = getKeyValue(tbl_id,'SS Real Axis Int. Points',NumSS_IntEs)
    if (rstatus /= 0) then
@@ -369,9 +371,22 @@ contains
 !  -------------------------------------------------------------------
    rstatus = getKeyValue(tbl_id,'LDA Improvement Scheme',LdaCorrectionType)
 !  -------------------------------------------------------------------
-   if (NumKMeshs > 0) then
+   if (NumKMeshs < 1 .or. NumKMeshs > 2) then
+      call ErrorHandler('initScfData','Invalid number of kmeshs',NumKMeshs)
+   else
       allocate(Kdiv(3,NumKMeshs))
       rstatus = getKeyValue(tbl_id,'Kx, Ky, Kz Division (> 0)',3,Kdiv,NumKMeshs)
+      if (NumKMeshs == 2) then
+!        =============================================================
+!        Make sure that the number of k-points in the first mesh is less
+!        than the number of k-points in the second mesh
+!        =============================================================
+         if (Kdiv(1,1)*Kdiv(2,1)*Kdiv(3,1) > Kdiv(1,2)*Kdiv(2,2)*Kdiv(3,2)) then
+            n = Kdiv(1,2); Kdiv(1,2) = Kdiv(1,1); Kdiv(1,1) = n
+            n = Kdiv(2,2); Kdiv(2,2) = Kdiv(2,1); Kdiv(2,1) = n
+            n = Kdiv(3,2); Kdiv(3,2) = Kdiv(3,1); Kdiv(3,1) = n
+         endif
+      endif
    endif
 !
 !  if (abs(ErTop) < TEN2m8) then
@@ -417,7 +432,6 @@ contains
       scf_method = LSMS ! first energy points are done with LSMS 
                         ! the switch to KKR is controled in the energy loop
    endif 
-!
 !  -------------------------------------------------------------------
    rstatus = getKeyValue(tbl_id,'Frozen-Core Calculation',n)
 !  -------------------------------------------------------------------

@@ -1122,7 +1122,6 @@ contains
                         enddo
                      enddo
                   enddo
-!  write(6,'(a,3i5,2x,2d15.8,2x,2d15.8)')'MyPE,NumPEsInGroup,np,gf = ',MyPE,NumPEsInGroup,np,e,gf(mst(id)%iend-50,1)
                else if (method == 1) then
                   do kl1 = kmaxk,1,-1
                      do klp1 = kmaxp,1,-1

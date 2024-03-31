@@ -77,7 +77,7 @@ SRC_OBJS = $(ODIR)/PublicTypeDefinitionsModule.o \
            $(ODIR)/ProcMappingModule.o \
            $(ODIR)/PolyhedraModule.o $(ODIR)/Atom2ProcModule.o \
            $(ODIR)/PotentialTypeModule.o $(ODIR)/readInputInOtherFormat.o \
-           $(ODIR)/readPositionData.o $(ODIR)/ChemElementModule.o \
+           $(ODIR)/readPositionData.o $(ODIR)/readPOSCAR.o $(ODIR)/ChemElementModule.o \
            $(ODIR)/readOldInfoTable.o $(ODIR)/rdin_old_lsms.o \
            $(ODIR)/rdin_old_infoevec.o $(ODIR)/rdin_old_infotable.o \
            $(ODIR)/readMomentDirectionData.o $(ODIR)/lattice.o \

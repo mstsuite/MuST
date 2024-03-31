@@ -227,6 +227,9 @@ contains
 !
    use CheckPointModule, only : insertStopPoint
 !
+   use SSSolverModule, only : isInitialized
+   use SSSolverModule, only : initSSSolver, endSSSolver
+!
    implicit none
 !
    character (len=*), intent(in) :: istop
@@ -244,12 +247,12 @@ contains
    integer (kind=IntKind) :: lmax_max, jmax, green_size, green_ind
    integer (kind=IntKind), allocatable :: NumRs(:)
    integer (kind=IntKind), allocatable :: LocalNumSpecies(:)
-   integer (kind=IntKind), allocatable :: norb(:)
 !
    real (kind=RealKind), intent(in) :: posi_in(3,na)
    real (kind=RealKind), pointer :: p1(:)
 !
    logical, intent(in), optional :: isGGA
+   logical :: sss_init
 !
    type (GridStruct), pointer :: Grid
 !
@@ -522,15 +525,28 @@ contains
 !  Note: for now, we set the number of local orbitals to be kmax_kkr
 !  ===================================================================
    if (isDMFTenabled()) then
-      allocate(norb(LocalNumAtoms))
-      do id = 1, LocalNumAtoms
-         norb(id) = (lmax_kkr_in(id)+1)**2
-      enddo
+      if (.not.isInitialized()) then
+!        -------------------------------------------------------------
+         call initSSSolver(LocalNumAtoms, getLocalNumSpecies, getLocalAtomicNumber, &
+                           lmax_kkr, lmax_phi, lmax_pot, lmax_step, lmax_green, &
+                           n_spin_pola, n_spin_cant, RelativisticFlag,   &
+                           stop_routine, print_level)
+!        ----------------------------------------------------------
+         sss_init = .true.
+      else
+         sss_init = .false.
+      endif
 !     ----------------------------------------------------------------
-      call initLocalGF(LocalNumAtoms,lmax_kkr_max,getNumEsOnMyProc(),norb,&
+      call initLocalGF(LocalNumAtoms,lmax_kkr_max,getNumEsOnMyProc(), &
                        n_spin_pola,n_spin_cant,RelativisticFlag)
 !     ----------------------------------------------------------------
-      deallocate(norb)
+!
+      if (sss_init) then
+!        -------------------------------------------------------------
+         call endSSSolver()
+!        -------------------------------------------------------------
+      endif
+!
 !     ================================================================
 !     Once the DMFT solver is fully implemented, the following line will
 !     be commented out.
@@ -1743,7 +1759,7 @@ contains
    integer (kind=IntKind), parameter :: MaxIterations = 20
 !
    real (kind=RealKind), intent(inout) :: efermi
-   real (kind=RealKind) :: efermi_old, dosmt, dosws, kBT, rfac, sfac
+   real (kind=RealKind) :: efermi_old, dosmt, dosws, kBT, rfac, sfac, ei
    real (kind=RealKind) :: Lloyd_factor(n_spin_pola), ssDOS, msDOS(2)
    real (kind=RealKind) :: int_dos(n_spin_cant*n_spin_pola,LocalNumAtoms)
    real (kind=RealKind) :: last_dos(n_spin_cant*n_spin_pola,LocalNumAtoms)
@@ -2062,13 +2078,15 @@ contains
    LOOP_LastE: do while (BadFermiEnergy > 0 .and. BadFermiEnergy <= MaxIterations)
 !     ===============================================================
 !     Solve the multiple scattering problem for e = eLast, which is
-!     set to be (efermi,0.001) in KKR case.
+!     set to be (efermi,ei) in KKR case.
 !     ===============================================================
       if (isKKR() .or. isKKRCPA() .or. isKKRCPASRO() .or. efermi < ZERO) then
-         eLast = cmplx(efermi,0.001d0,kind=CmplxKind)
+!        ei = max(0.001,EiBottom)
+         ei = EiBottom
       else
-         eLast = cmplx(efermi,0.000d0,kind=CmplxKind)
+         ei = ZERO
       endif
+      eLast = cmplx(efermi,ei,kind=CmplxKind)
 !
 !     ===============================================================
 !     Calculate the DOS of the multiple scattering term for e = eLast,
@@ -2289,7 +2307,7 @@ contains
    use SSSolverModule, only : solveSingleScattering, computePDOS,     &
                               computePhaseShift, getPhaseShift,       &
                               getCellDOS, getMTSphereDOS,             &
-                              getCellPDOS, getMTSpherePDOS
+                              getCellPDOS, getMTSpherePDOS, getTMatrix
 !
    use MSSolverModule, only : initMSSolver, endMSSolver
    use MSSolverModule, only : computeMSPDOS, getMSCellDOS, getMSMTSphereDOS, &
@@ -2314,12 +2332,14 @@ contains
 !
    use PublicTypeDefinitionsModule, only : PDOSStruct
 !
+   use CPAMediumModule, only : getCPAMatrix
+!
    implicit none
 !
    character (len=10) :: fname
 !
-   integer (kind=IntKind) :: kmax_phi(LocalNumAtoms)
-   integer (kind=IntKind) :: ia, id, is, js, iend, kl, n, ns_sqr, ks, l, m, klc
+   integer (kind=IntKind), allocatable :: kmax_phi(:), kmax_kkr(:)
+   integer (kind=IntKind) :: ia, id, is, js, iend, kl, klp, n, ns_sqr, ks, l, m, klc
    integer (kind=IntKind) :: kmax_phi_max, iprint, num_species
    integer (kind=IntKind) :: NumCalls_SS = 0
 !
@@ -2334,6 +2354,7 @@ contains
 !
    complex (kind=CmplxKind), pointer :: green(:,:,:)
    complex (kind=CmplxKind), pointer :: pcv_x(:), pcv_y(:), pcv_z(:)
+   complex (kind=CmplxKind), pointer :: t_mat(:,:)
 !
    type (GridStruct), pointer :: Grid
 !
@@ -2416,15 +2437,18 @@ contains
 !     ----------------------------------------------------------------
    endif
 !
+   allocate(kmax_kkr(LocalNumAtoms), kmax_phi(LocalNumAtoms))
    kmax_phi_max = 1
    do id = 1, LocalNumAtoms
       kmax_phi(id) = (lmax_phi(id)+1)**2
+      kmax_kkr(id) = (lmax_kkr(id)+1)**2
       kmax_phi_max = max(kmax_phi(id),kmax_phi_max)
    enddo
 !  
    allocate( PartialDOS(LocalNumAtoms) )
    do id = 1, LocalNumAtoms
       PartialDOS(id)%kmax_phi = kmax_phi(id)
+      PartialDOS(id)%kmax_kkr = kmax_kkr(id)
       num_species = getLocalNumSpecies(id)
       allocate( PartialDOS(id)%dos_ws(n_spin_pola,num_species) )      
       allocate( PartialDOS(id)%dos_mt(n_spin_pola,num_species) )
@@ -2437,6 +2461,12 @@ contains
       allocate( PartialDOS(id)%ms_pdos_ws(kmax_phi_max,n_spin_cant*n_spin_pola,num_species) )
       allocate( PartialDOS(id)%partial_dos_mt(kmax_phi_max,n_spin_pola,num_species) )
       allocate( PartialDOS(id)%partial_dos_ws(kmax_phi_max,n_spin_pola,num_species) )
+      allocate( PartialDOS(id)%t_mat(kmax_kkr(id),kmax_kkr(id),n_spin_pola,num_species) )
+      if (isKKRCPA()) then
+         allocate( PartialDOS(id)%t_aver(kmax_kkr(id),kmax_kkr(id),n_spin_pola) )
+      else
+         nullify(PartialDOS(id)%t_aver)
+      endif
    enddo
 !  
    sfac= TWO/real(n_spin_pola,kind=RealKind)
@@ -2480,6 +2510,12 @@ contains
             do kl = 1, kmax_phi(id) 
                PartialDOS(id)%ss_pdos_ws(kl,is,ia) = sfac*pdos_ws(kl)
                PartialDOS(id)%ss_pdos_mt(kl,is,ia) = sfac*pdos_mt(kl)
+            enddo
+            t_mat => getTMatrix(spin=is,site=id,atom=ia)
+            do kl = 1, kmax_kkr(id)
+               do klp = 1, kmax_kkr(id)
+                  PartialDOS(id)%t_mat(klp,kl,is,ia) = t_mat(klp,kl)
+               enddo
             enddo
          enddo
 !        -------------------------------------------------------------
@@ -2543,6 +2579,14 @@ contains
       call computeMSPDOS(is,ec)
 !     ----------------------------------------------------------------
       do id = 1, LocalNumAtoms
+         if (isKKRCPA()) then
+            t_mat => getCPAMatrix('Tcpa',site=id)
+            do kl = 1, kmax_kkr(id)
+               do klp = 1, kmax_kkr(id)
+                  PartialDOS(id)%t_aver(klp,kl,is) = t_mat(klp,kl)
+               enddo
+            enddo
+         endif
          do ia = 1, getLocalNumSpecies(id)
             do js = 1, ns_sqr  ! Note: If n_spin_cant = 1, ks = 1
                ks = max(js,is)
@@ -2586,9 +2630,6 @@ contains
          enddo
       enddo
    enddo
-!  -------------------------------------------------------------------
-   call endMSSolver()
-!  -------------------------------------------------------------------
 !
    do is = 1, n_spin_pola
       ks = (2*n_spin_cant-1)*is - 2*(n_spin_cant-1)
@@ -2670,6 +2711,11 @@ contains
       deallocate( PartialDOS(id)%partial_dos_ws )
    enddo
    deallocate( PartialDOS )
+   deallocate(kmax_kkr, kmax_phi)
+!
+!  -------------------------------------------------------------------
+   call endMSSolver()
+!  -------------------------------------------------------------------
 !
    if (RelativisticFlag == 2) then
 !     ----------------------------------------------------------------
@@ -3868,8 +3914,8 @@ contains
                                         species=ia)
 !                 ----------------------------------------------------
                   if ( node_print_level >= 0) then
-                     write(6,'(a,i4,2x,f12.8,2x,d15.8)')'Bound state id, e, and DOS = ',ib, &
-                                                        getBoundStateEnergy(id=id,ia=ia,is=is,ibs=ib),ssDOS
+                     write(6,'(a,i4,2x,f12.8,2x,d15.8)')'Bound state id, e, and DOS = ',&
+                       ib,getBoundStateEnergy(id=id,ia=ia,is=is,ibs=ib),ssDOS
                      write(6,'(a,i4,2x,d15.8)')'Bound state id, ssDOS = ',ib,ssDOS
                      write(6,'(a,i4,2x,d15.8)')'Bound state id, ssLastValue =',ib,          &
                                                real(ssLastValue(id)%dos(ns,ia),kind=RealKind)
@@ -6573,7 +6619,7 @@ contains
    integer (kind=IntKind) :: DOSpid
    integer (kind=IntKind) :: s, ie, id, iv, n, gid, kGID, MyPEinKGroup
    integer (kind=IntKind) :: nume_dos, it, ntypes, ia
-   integer (kind=IntKind), parameter :: fu = 250, maxatoms = 20
+   integer (kind=IntKind), parameter :: fu = 250, maxatoms = 200
 !
    real (kind=RealKind), allocatable, target :: aver_dos(:,:,:)
    real (kind=RealKind), pointer :: p_dos(:,:), p_tdos(:,:)

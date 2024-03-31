@@ -1122,7 +1122,7 @@ use MPPModule, only : MyPE, syncAllPEs
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine initGlobalVariables(spin, site, e, vshift)
+   subroutine initGlobalVariables(spin, site, e, vshift, kp)
 !  ===================================================================
    use RadialGridModule, only : getGrid
    implicit none
@@ -1132,13 +1132,19 @@ use MPPModule, only : MyPE, syncAllPEs
 !
    complex (kind=CmplxKind), intent(in) :: e
    complex (kind=CmplxKind), intent(in) :: vshift
+   complex (kind=CmplxKind), intent(in), optional :: kp
 !
    spin_index = spin
    LocalIndex = site
 !
-   energy = e
-   kappa = sqrt(energy+energy*energy*c2inv)
-   PotShift = vshift
+   if (present(kp)) then
+     kappa = kp
+     energy = e
+   else
+     energy = e
+     kappa = sqrt(energy+energy*energy*c2inv)
+     PotShift = vshift
+   endif
 !
 !  -------------------------------------------------------------------
    Grid => getGrid(LocalIndex)
@@ -1294,7 +1300,7 @@ use MPPModule, only : MyPE, syncAllPEs
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine solveSingleScattering(spin, site, e, vshift,            &
                                     atom,                             &
-                                    isSphSolver, useIrrSol, isCheckWronsk)
+                                    isSphSolver, useIrrSol, isCheckWronsk, kp)
 !  ===================================================================
    use MPPModule, only : MyPE, syncAllPEs
    use MPPModule, only : nbsendMessage, nbrecvMessage
@@ -1355,6 +1361,7 @@ use MPPModule, only : MyPE, syncAllPEs
 !
    complex (kind=CmplxKind), intent(in) :: e
    complex (kind=CmplxKind), intent(in) :: vshift
+   complex (kind=CmplxKind), intent(in), optional :: kp
 !
    complex (kind=CmplxKind), pointer :: sin_mat(:,:)
    complex (kind=CmplxKind), pointer :: sin_mat_inv(:,:)
@@ -1433,7 +1440,7 @@ use MPPModule, only : MyPE, syncAllPEs
 !
    t_start = getTime()
 !  -------------------------------------------------------------------
-   call initGlobalVariables(spin, site, e, vshift)
+   call initGlobalVariables(spin, site, e, vshift, kp)
 !  -------------------------------------------------------------------
 !
    if(abs(kappa) < TEN2m6) then
@@ -7969,7 +7976,7 @@ use MPPModule, only : MyPE, syncAllPEs
 !  
    fint = CZERO
    do ig = 1, ng 
-      if (rg(ig) < rm .or. rg(ig) > rc) then
+      if (rg(ig) < rm-TEN2m6 .or. rg(ig) > rc+TEN2m6) then
          write(6,'(a,3f12.5)')'rg,rm,rc = ',rg(ig),rm,rc
          call ErrorHandler('calIntSphHankelSq','rg is out of range')
       endif

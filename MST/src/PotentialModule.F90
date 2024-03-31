@@ -112,7 +112,8 @@ private
 !
    integer (kind=IntKind) :: RECORD_LENGTH
 !
-   real (kind=RealKind) :: efermi, efermi_min, efermi_max
+   real (kind=RealKind) :: efermi
+!  real (kind=RealKind) :: efermi, efermi_min, efermi_max
    real (kind=RealKind), allocatable :: efermi_in(:,:)
    real (kind=RealKind), target :: vdif(1)
    real (kind=RealKind) :: v0(2)
@@ -135,7 +136,7 @@ contains
    use GroupCommModule, only : getGroupID, GlobalMaxInGroup, getNumPEsInGroup
    use GroupCommModule, only : GlobalSumInGroup, getMyClusterIndex
    use ChemElementModule, only : MaxLenOfAtomName, getNumCoreStates, MaxNumc
-   use SystemModule, only : getAtomName, getNumAtoms, getNumAlloyElements, &
+   use SystemModule, only : getNumAtoms, getNumAlloyElements,         &
                             getAlloyElementName
    use Atom2ProcModule, only : getGlobalIndex, getMaxLocalNumAtoms,  &
                                getLocalNumAtoms
@@ -1714,7 +1715,7 @@ contains
 !
    use ChemElementModule, only : getZtot
 !
-   use SystemModule, only : getNumAlloyElements
+   use SystemModule, only : getNumAlloyElements, getAlloyElementContent
 !
    use Atom2ProcModule, only : getGlobalIndex
 !
@@ -1735,12 +1736,12 @@ contains
    integer (kind=IntKind) :: id, ia, is, vunit, str_len, iend, ir
    integer (kind=IntKind) :: n, ig
 !
-   real (kind=RealKind) :: pot_shift
+   real (kind=RealKind) :: pot_shift, efermi_sum
 !
    file_form = adjustl(getInPotFileForm())
 !
-   efermi_min=1.0d+10 ! efermi_min and efermi_max will be updated inside
-   efermi_max=ZERO    ! readFormattedData or readUnformattedData
+!  efermi_min=1.0d+10 ! efermi_min and efermi_max will be updated inside
+!  efermi_max=ZERO    ! readFormattedData or readUnformattedData
 !
    if (trim(file_form) == 'FORMATTED') then
 !     if (getInPotFileForm(id) == 'FORMATTED') then
@@ -1813,10 +1814,21 @@ contains
 !  call GlobalSumInGroup(GroupID,efermi)
 !  -------------------------------------------------------------------
 !  efermi = efermi/real(NumPEsInGroup,kind=RealKind)
-   call GlobalMinInGroup(GroupID,efermi_min)
-   call GlobalMaxInGroup(GroupID,efermi_max)
-   efermi = HALF*(efermi_min+efermi_max)
+!  call GlobalMinInGroup(GroupID,efermi_min)
+!  call GlobalMaxInGroup(GroupID,efermi_max)
+!  efermi = HALF*(efermi_min+efermi_max)
 !  -------------------------------------------------------------------
+   efermi_sum = ZERO
+   do id =1, LocalNumAtoms
+      ig = getGlobalIndex(id)
+      do ia = 1, NumSpecies(id)
+         efermi_sum = efermi_sum + getAlloyElementContent(ig,ia)*efermi_in(ia,id)
+      enddo
+   enddo
+!  -------------------------------------------------------------------
+   call GlobalSumInGroup(GroupID,efermi_sum)
+!  -------------------------------------------------------------------
+   efermi = efermi_sum/real(GlobalNumAtoms,kind=RealKind)
 !
 !  ===================================================================
 !  The starting potential may come with different fermi energy.
@@ -1892,7 +1904,7 @@ contains
 !
    use MPPModule, only : MyPE
 !
-   use SystemModule, only : setLatticeConstant, getAtomName, getAlloyElementName
+   use SystemModule, only : setLatticeConstant, getAlloyElementName
 !
    use Atom2ProcModule, only : getGlobalIndex
 !
@@ -1922,17 +1934,19 @@ contains
    character (len=MaxLenFileName) :: filename
 !
    character (len=1) :: dummy
-   character (len=MaxLenOfAtomName) :: atname
+   character (len=MaxLenOfAtomName) :: atname, atom
    character (len=MaxLenFileName) :: inp
    character (len=17), parameter :: sname='readFormattedData'
    character (len=10), parameter :: acc = 'SEQUENTIAL'
+   character (len=80) :: text
+   character (len=80) :: text_work
 !
    integer (kind=IntKind), intent(in) :: id
 !
    integer (kind=IntKind), parameter :: funit=91
 !
-   integer (kind=IntKind) :: is, ig, js, n, ia, nef
-   integer (kind=IntKind) :: j_inter, irp, iex
+   integer (kind=IntKind) :: is, ig, js, n, ia, nef, status, k, ks
+   integer (kind=IntKind) :: j_inter, irp, iex, spin_flip
    integer (kind=IntKind) :: ns,j,jmt,nrrho,nrcor,jmax
    integer (kind=IntKind) :: numc,jz,jc,ios,lmax,jend,jl,nr,ir,jm,jlr
    integer (kind=IntKind) :: nc, lc, kc
@@ -1975,6 +1989,34 @@ contains
       end function ylag
    end interface
 !
+   interface
+      function getNumTokens(s) result (n)
+         use KindParamModule, only : IntKind
+         character (len=*), intent(in) :: s
+         integer (kind=IntKind) :: n
+      end function getNumtokens
+   end interface
+!
+   interface
+      function getTokenPosition(k,s,n) result (p)
+         use KindParamModule, only : IntKind
+         character (len=*), intent(in) :: s
+         integer (kind=IntKind), intent(in) :: k
+         integer (kind=IntKind), intent(out), optional :: n
+         integer (kind=IntKind) :: p
+      end function getTokenPosition
+   end interface
+!
+   interface
+      function getToken(k,s,n,e) result (t)
+         use KindParamModule, only : IntKind
+         character (len=*), intent(in) :: s
+         character (len=len(s)) :: t
+         integer (kind=IntKind), intent(in) :: k
+         integer (kind=IntKind), intent(out), optional :: n, e
+      end function getToken
+   end interface
+!
    ThisP=>Potential(id)
 !
 !06/11/23   if (SiteMaxNumc(id) >= 1) then
@@ -2000,18 +2042,49 @@ contains
    nef = 0
    do ia = 1, NumSpecies(id)
       filename = getInPotFileName(id,ia)
+      if (len_trim(filename) == 0) then
+         call ErrorHandler('readFormattedData','Empty potential file name')
+      endif
 !     ----------------------------------------------------------------
-      open(unit=funit,file=filename,form='formatted',access=acc)
+      open(unit=funit,file=filename,form='formatted',access=acc,iostat=status)
 !     ----------------------------------------------------------------
+      if (status /= 0) then
+         call ErrorHandler('readFormattedData','Invalid potential file',trim(filename))
+      endif
 !
       read(funit,'(a)') ThisP%header
-      read(funit,'(i5,3x,d20.13)') ns,vdif(1)
+!
+      read(funit,'(a)') text
+      n = getNumTokens(text)
+      if (n < 2) then
+         call ErrorHandler('readFormattedData','Invalid 2nd line in potential data',trim(text))
+      else if (n == 2) then
+         read(text,'(i5,3x,d20.13)') ns,vdif(1)
+         atom = ' '
+         spin_flip = 0
+      else if (n == 3) then
+!        read(text,'(i5,3x,d20.13,a20)') ns,vdif(1),atom
+         k = getTokenPosition(3,text) - 1
+         read(text(1:k),*) ns,vdif(1)
+         text_work = getToken(3,text)
+         read(text_work,*)atom
+         spin_flip = 0
+      else 
+!        read(text,'(i5,3x,d20.13,a20,i5)') ns,vdif(1),atom,spin_flip
+         k = getTokenPosition(3,text) - 1
+         read(text(1:k),*) ns,vdif(1)
+         text_work = getToken(3,text)
+         read(text_work,*)atom
+         text_work = getToken(4,text)
+         read(text_work,*)spin_flip
+      endif
+!
       if (ns /= n_spin_pola .and. MyPE == 0) then
          inquire(unit=funit,named=nmd,name=inp)
          write(6,'(''File Name: '',a)')trim(inp)
          call WarningHandler(sname,'Spin in file <> n_spin_pola',ns,n_spin_pola)
       endif
-      do is=1,ns
+      do is = 1, ns
          js = min(is,n_spin_pola)
          read(funit,'(a)')ThisP%jtitle(js,ia)
 !        read(funit,'(f5.0,17x,f12.5,f5.0,e20.13)')ztss,alat,zcss,efermi_in(ia,id)
@@ -2035,21 +2108,36 @@ contains
          endif
 !        =============================================================
 !        read in formatted one-electron LDA potential..............
+!        if spin_flip is enabled, the spin=1 data will be stored in
+!        the is=2 channel of vr, and spin=2 data will be stored in the
+!        is=1 channel of vr
 !        =============================================================
-         read(funit,'(4e20.13)') (vr(j,is),j=1,jmt)
-         read(funit,'(35x,e20.13)') vzero(is)
-!
-!        =============================================================
-         read(funit,'(i5,e20.13)') nrrho,xvalws(is)
-!        =============================================================
+         if (spin_flip == 1 .and. ns == 2) then
+            ks = 3 - is
+            read(funit,'(4e20.13)') (vr(j,ks),j=1,jmt)
+            read(funit,'(35x,e20.13)') vzero(ks)
+            read(funit,'(i5,e20.13)') nrrho,xvalws(ks)
+         else
+            read(funit,'(4e20.13)') (vr(j,is),j=1,jmt)
+            read(funit,'(35x,e20.13)') vzero(is)
+            read(funit,'(i5,e20.13)') nrrho,xvalws(is)
+         endif
 !
          if (is == 1) then
             allocate(rhoin(nrrho,max(ns,n_spin_pola)))
          endif
 !        =============================================================
 !        read in formatted total charge density....................
+!        if spin_flip is enabled, the spin=1 data will be stored in
+!        the is=2 channel of rhoin, and spin=2 data will be stored in the
+!        is=1 channel of rhoin
 !        =============================================================
-         read(funit,'(4e20.13)') (rhoin(j,is),j=1,nrrho)
+         if (spin_flip == 1 .and. ns == 2) then
+            ks = 3 - is
+            read(funit,'(4e20.13)') (rhoin(j,ks),j=1,nrrho)
+         else
+            read(funit,'(4e20.13)') (rhoin(j,is),j=1,nrrho)
+         endif
 !
 !        =============================================================
 !        read in formatted core state information..................
@@ -2306,8 +2394,8 @@ contains
 !        the parallelization. I now change to taking the mid of min/max values.
 !     efermi = efermi + efermi_in(ia,id); nef = nef + 1
 !     ===============================================================
-      efermi_min = min(efermi_min,efermi_in(ia,id))
-      efermi_max = max(efermi_max,efermi_in(ia,id))
+!     efermi_min = min(efermi_min,efermi_in(ia,id))
+!     efermi_max = max(efermi_max,efermi_in(ia,id))
 !     ===============================================================
 !
       close(unit=funit)
@@ -2325,8 +2413,7 @@ contains
    subroutine readUnformattedData(vunit,id)
 !  ===================================================================
    use PotentialTypeModule, only : isMuffinTinPotential, isFullPotential
-   use SystemModule, only : setLatticeConstant, getNumAtoms, getAtomName, &
-                            getAlloyElementName
+   use SystemModule, only : setLatticeConstant, getNumAtoms, getAlloyElementName
    use Atom2ProcModule, only : getGlobalIndex
    use RadialGridModule, only : getNumRmesh
    use ChemElementModule, only : MaxLenOfAtomName
@@ -2479,8 +2566,8 @@ contains
 !        the parallelization. I now change to taking the maximum value.
 !     efermi = efermi + efermi_in(ia,id); nef = nef + 1
 !     ===============================================================
-      efermi_min = min(efermi_min, efermi_in(ia,id))
-      efermi_max = max(efermi_max, efermi_in(ia,id))
+!     efermi_min = min(efermi_min, efermi_in(ia,id))
+!     efermi_max = max(efermi_max, efermi_in(ia,id))
 !
       do is = 1, n_spin_pola
          do i = 1, numc(ia)
@@ -2608,7 +2695,8 @@ contains
 !
    use Atom2ProcModule, only : getGlobalIndex
 !
-   use SystemModule, only : getAtomName, getAlloyElementName
+   use SystemModule, only : getAlloyElementName
+   use SystemModule, only : getAlloyElementAltName
 !
    use AtomModule, only : getLocalEvec
    use AtomModule, only : getOutPotFileName, getOutPotFileForm
@@ -2618,7 +2706,7 @@ contains
    implicit none
 !
    character (len=MaxLenFileName) :: filename
-   character (len=MaxLenOfAtomName) :: atname
+   character (len=MaxLenOfAtomName) :: atname, atname_alt
    character (len=7) :: stmp
    character (len=80) :: header , jtitle
    character (len=120) :: ofile
@@ -2627,7 +2715,7 @@ contains
    integer (kind=IntKind), intent(in) :: id
 !
    integer (kind=IntKind) :: ns,ir,ic,jl,n,ia
-   integer (kind=IntKind) :: nspin
+   integer (kind=IntKind) :: nspin, spin_flip
    integer (kind=IntKind) :: nr,nrcor,numc,present_atom,jmt,jws
    integer (kind=IntKind), allocatable :: nc(:,:), lc(:,:), kc(:,:)
    integer (kind=IntKind), pointer :: pc0(:,:,:)
@@ -2639,6 +2727,15 @@ contains
    real (kind=RealKind), allocatable :: ec(:,:), rhotot(:,:)
 !
    type (PotentialStruct), pointer :: ThisP
+!
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         implicit none
+         logical :: t
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+      end function nocaseCompare
+   end interface
 !
    ThisP=>Potential(id)
 !
@@ -2694,6 +2791,7 @@ contains
    do ia = 1, NumSpecies(id)
       filename = getOutPotFileName(id,ia)
       atname = getAlloyElementName(present_atom,ia)
+      atname_alt = getAlloyElementAltName(present_atom,ia)
       ztotss = getZtot(atname)
       zcorss = getZcor(atname)
       zsemss = getZsem(atname)
@@ -2733,7 +2831,12 @@ contains
       open(unit=ounit,file=trim(ofile),form='formatted',status='unknown')
 !
       write(ounit,'(a)') header
-      write(ounit,'(i5,2x,d20.13)') n_spin_pola,vdif(1)
+      if (nocaseCompare(atname,atname_alt)) then
+         write(ounit,'(i5,2x,d20.13)') n_spin_pola,vdif(1)
+      else
+         spin_flip = 0
+         write(ounit,'(i5,3x,d20.13,a20,i5)') n_spin_pola,vdif(1),atname_alt,spin_flip
+      endif
 !
       do ns = 1, n_spin_pola
          write(jtitle,'(a,i5,3x,a2,4(a,f3.0),a,f10.5)')               &
@@ -2793,8 +2896,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine writeUnformattedData(wunit,id)
 !  ===================================================================
-   use SystemModule, only : getLatticeConstant, getNumAtoms, getAtomName, &
-                            getAlloyElementName
+   use SystemModule, only : getLatticeConstant, getNumAtoms, getAlloyElementName
    use AtomModule, only: getLocalEvec
    use Atom2ProcModule, only : getGlobalIndex
    use RadialGridModule, only : getGrid, getNumRmesh

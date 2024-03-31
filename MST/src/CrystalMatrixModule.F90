@@ -296,7 +296,7 @@ contains
       lmaxj_array(j) = lmax_kkr(j)
    enddo
  
-   
+   energy = CZERO  ! This is to initialize the energy value to 0
 
 !  -------- SRO Additions
    if (present(is_sro)) then
@@ -950,14 +950,16 @@ contains
                            getWeightSum
    use IBZRotationModule, only : getNumIBZRotations
    use ProcMappingModule, only : isKPointOnMyProc, getNumKsOnMyProc,  &
-                                 getKPointIndex, getNumRedundantKsOnMyProc
+                                 getKPointIndex, getNumRedundantKsOnMyProc, &
+                                 getXIndex, getNumXsOnMyProc, getXCommID,   &
+                                 getNumRedundantXsOnMyProc
    use GroupCommModule, only : getGroupID, GlobalSumInGroup, getMyPEinGroup
    use StrConstModule, only : getStrConstMatrix
    use SROModule, only : obtainPosition
    use StrConstModule, only : checkFreeElectronPoles, getFreeElectronPoleFactor
    use WriteMatrixModule,  only : writeMatrix
    use Atom2ProcModule, only : getGlobalIndex
-   use ScfDataModule, only : isKKR
+   use ScfDataModule, only : isKKR, NumKMeshs
 !
    implicit none
 !
@@ -969,12 +971,13 @@ contains
    logical :: do_sro = .false.
 !
    character (len=20) :: sname = "calCrystalMatrix"
+   character (len=25) :: KMeshKey
 !
    integer (kind=IntKind), intent(in), optional :: configuration(:)
    integer (kind=IntKind) :: k_loc, k, row, col, MyPEinKGroup, method
    integer (kind=IntKind) :: NumKs, kGID, aGID, NumKsOnMyProc, NumRedunKs
    integer (kind=IntKind) :: site_config(LocalNumAtoms), itertmp
-   integer (kind=IntKind) :: ig, i, j, jn, in, index, num, temp
+   integer (kind=IntKind) :: ig, i, j, jn, in, index, num, temp, KMeshID
 !
    real (kind=RealKind), pointer :: kpts(:,:), weight(:)
    real (kind=RealKind) :: kfac, kaij
@@ -982,6 +985,9 @@ contains
    real (kind=RealKind) :: aij(3), bij(3)
    complex (kind=CmplxKind) :: fourier_factor
 !  real (kind=RealKind) :: fourier_factor
+!
+   real (kind=RealKind), parameter :: ek_switch = 0.003d0 ! switch to using denser k-mesh 
+                                                          ! if Im[e] < ek_switch
 !
    complex (kind=CmplxKind), intent(in) :: e
    complex (kind=CmplxKind) :: wfac, efac, fepf
@@ -997,7 +1003,6 @@ contains
       end function getSingleScatteringMatrix
    end interface
 !
-   energy = e
    if (isRelativistic) then !xianglin
       kappa = sqrt(2.d0*Me*e + e**2/LightSpeed**2)
    else
@@ -1045,7 +1050,6 @@ contains
    else
       do_sro = .false.
    endif
-
 !
    if (present(configuration)) then
       site_config(1:LocalNumAtoms) = configuration(1:LocalNumAtoms)
@@ -1071,16 +1075,37 @@ contains
       calculate_tau = .false.
    endif
 !
-   kGID = getGroupID('K-Mesh')
    aGID = getGroupID('Unit Cell')
-   NumKsOnMyProc = getNumKsOnMyProc()
-   NumRedunKs = getNumRedundantKsOnMyProc()
+   kGID = getGroupID('K-Mesh')
    MyPEinKGroup = getMyPEinGroup(kGID)
+!  ===================================================================
+!  NumKsOnMyProc = getNumKsOnMyProc()
+!  NumRedunKs = getNumRedundantKsOnMyProc()
+!  ===================================================================
+   if (aimag(e) < ek_switch .and. real(e) > ZERO .and. NumKMeshs > 1) then
+      KMeshKey = 'Denser K-Mesh in the IBZ'
+      KMeshID = 2
+   else
+      KMeshKey = 'Normal K-Mesh in the IBZ'
+      KMeshID = 1
+   endif
+!  kGID = getXCommID(KMeshKey)
+   NumKsOnMyProc = getNumXsOnMyProc(KMeshKey)
+   NumRedunKs = getNumRedundantXsOnMyProc(KMeshKey)
 !
-   NumKs = getNumKs()
-   kpts => getAllKPoints(kfac)
-   weight => getAllWeights()
-   weightSum = getWeightSum()
+   NumKs = getNumKs(KMeshID)
+   kpts => getAllKPoints(KMeshID,kfac)
+   weight => getAllWeights(KMeshID)
+   weightSum = getWeightSum(KMeshID)
+!
+   if (max_print_level >= 0 .and. abs(energy-e) > TEN2m6 .and. NumKMeshs > 1) then
+      if (KMeshID == 1) then
+         write(6,'(a,i5)')'Using the normal k-mesh with NumKs = ',NumKs
+      else
+         write(6,'(a,i5)')'Using the denser k-mesh with NumKs = ',NumKs
+      endif
+   endif
+   energy = e  ! Update energy with the current value of e
 !
 !  -------------------------------------------------------------------
 !  Outline of SRO implementation
@@ -1117,7 +1142,8 @@ contains
             !     ================================================================
             !     Normorlize BZ integration weights
             !     ================================================================
-                  k = getKPointIndex(k_loc)
+            !!!   k = getKPointIndex(k_loc)
+                  k = getXIndex(KMeshKey,k_loc)
                   kvec(1:3) = kpts(1:3,k)*kfac
             !     ================================================================
             !     Get positions for neighbor block (in, jn) i.e Rin and Rjn
@@ -1228,7 +1254,8 @@ contains
 !        ================================================================
 !        Normorlize BZ integration weights
 !        ================================================================
-         k = getKPointIndex(k_loc)
+!!!      k = getKPointIndex(k_loc)
+         k = getXIndex(KMeshKey,k_loc)
          kvec(1:3) = kpts(1:3,k)*kfac
 !        ================================================================
 !        get structure constant matrix for the k-point and energy
