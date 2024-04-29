@@ -175,7 +175,7 @@ private
          integer (kind=IntKind), intent(in), optional :: lmax, spin
 !
          interface
-            function getData( dname, id, ia, r, tol, jmax_in, n, grad ) result(v)
+            function getData( dname, id, ia, r, tol, jmax_in, n, grad, trunc ) result(v)
                use KindParamModule, only : IntKind, RealKind
                implicit none
                character (len=*), intent(in) :: dname
@@ -184,6 +184,7 @@ private
                real (kind=RealKind), intent(out), optional :: grad(3)
                integer (kind=IntKind), intent(in), optional :: jmax_in, n
                real (kind=RealKind) :: v
+               logical, optional, intent(in) :: trunc
             end function getData
          end interface
 !
@@ -2234,11 +2235,13 @@ contains
          if (gga_functional) then
             if (n_spin_pola == 1) then
 !              ------------------------------------------------------
-               call calSphExchangeCorrelation(jmt,rho0_p,der_rho_den=der_rho0_p)
+               call calSphExchangeCorrelation(jmt,rho0_p,r_mesh=r_mesh,der_rho_den=der_rho0_p)
 !              ------------------------------------------------------
             else
 !              ------------------------------------------------------
-               call calSphExchangeCorrelation(jmt,rho0_p,der_rho0_p,mom0_p,der_mom0_p)
+               call calSphExchangeCorrelation(jmt,rho0_p,r_mesh=r_mesh,&
+                                              der_rho_den=der_rho0_p,  &
+                                              mag_den=mom0_p,der_mag_den=der_mom0_p)
 !              ------------------------------------------------------
             endif
          else
@@ -4113,6 +4116,7 @@ contains
          if (gga_functional) then
 !           ----------------------------------------------------------
             call calSphExchangeCorrelation(jend,rho_tmp_r(1:),        &
+                                           r_mesh=r_mesh,             &
                                            der_rho_den=der_rho_tmp,   &
                                            mag_den=mom_tmp_r(1:),     &
                                            der_mag_den=der_mom_tmp)
@@ -4127,6 +4131,7 @@ contains
          if (gga_functional) then
 !           ----------------------------------------------------------
             call calSphExchangeCorrelation(jend,rho_tmp_r(1:),        &
+                                           r_mesh=r_mesh,             &
                                            der_rho_den=der_rho_tmp)
 !           ----------------------------------------------------------
          else
@@ -4873,7 +4878,7 @@ contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getPotentialAtPoint( potType, id, ia, posi, tol,          &
-                                 jmax_in, spin, grad ) result(pot)
+                                 jmax_in, spin, grad, truncated ) result(pot)
 !  ===================================================================
    use SphericalHarmonicsModule, only : calYlm
 !
@@ -4896,6 +4901,8 @@ contains
    real (kind=RealKind), intent(in) :: posi(3), tol
    real (kind=RealKind), intent(out), optional :: grad(3) ! So far it is not used
 !
+   logical, optional, intent(in) :: truncated
+!
    integer (kind=IntKind) :: iend, irp, ir, l, kl, jl, ns, jmt, jmax
 !
    real (kind=RealKind) :: r, pot, err
@@ -4903,6 +4910,8 @@ contains
 !
    complex (kind=CmplxKind) :: pot_in
    complex (kind=CmplxKind), pointer :: pot_l(:,:)
+!
+   logical :: takeTruncation = .true.
 !
    interface
       subroutine hunt(n,xx,x,jlo)
@@ -4936,9 +4945,15 @@ contains
       jmax = Potential(id)%jmax
    endif
 !
+   if (present(truncated)) then
+      takeTruncation = truncated
+   else
+      takeTruncation = .true.
+   endif
+!
    pot = ZERO
 !
-   if ( isExternalPoint(id,posi(1),posi(2),posi(3),tol_in=tol) ) then
+   if ( isExternalPoint(id,posi(1),posi(2),posi(3),tol_in=tol) .and. takeTruncation) then
       return
    endif
 !

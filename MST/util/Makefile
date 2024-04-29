@@ -112,10 +112,10 @@ $(ODIR)/chgaver: chgaver.o
 $(SRC_OBJS) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/newss: newss.o
-	$(FC) -o $(ODIR)/newss $(ODIR)/newss.o $(ODIR)/ChemElementModule.o $(MSTLIB) $(ADDLIBS)
+	$(LD) -o $(ODIR)/newss $(ODIR)/newss.o $(ODIR)/ChemElementModule.o $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/newa: newa.o
-	$(FC) -o $(ODIR)/newa $(ODIR)/newa.o $(MSTLIB) $(ADDLIBS)
+	$(LD) -o $(ODIR)/newa $(ODIR)/newa.o $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/slice: slice.o
 	$(LD) -o $(ODIR)/slice $(ODIR)/slice.o \
@@ -139,7 +139,7 @@ $(ODIR)/measureVoronoi: measureVoronoi.o $(ODIR)/readInputs.o $(ODIR)/PolyhedraM
 $(SRC_OBJS) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/readInputs.o: ../driver/readInputs.F90
-	$(FC) $(FFLAGS) $<
+	$(LD) $(FFLAGS) $<
 
 $(ODIR)/cart2direct: cart2direct.o $(MSTLIB)
 	$(LD) -o $(ODIR)/cart2direct $(ODIR)/cart2direct.o $(MSTLIB) $(ADDLIBS)

@@ -2,6 +2,6 @@
 ! this routine is automatically generated at compilation time
 ! DO NOT EDIT 
 ! 
-   write(myunit,'("# ",t5,a,t30,": ",a)') "username",trim("root")
-   write(myunit,'("# ",t5,a,t30,": ",a)') "system name",trim("vishnus-mbp.wifi.local.cmu.edu")
-   write(myunit,'("# ",t5,a,t30,": ",a)') "code compiled",trim("Sunday, September 26 2021 10:55:51")
+   write(myunit,'("# ",t5,a,t30,": ",a)') "username",trim("ywg")
+   write(myunit,'("# ",t5,a,t30,": ",a)') "system name",trim("a001.ib.bridges2.psc.edu")
+   write(myunit,'("# ",t5,a,t30,": ",a)') "code compiled",trim("Monday, April 29 2024 18:43:51")

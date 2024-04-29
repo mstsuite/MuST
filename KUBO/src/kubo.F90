@@ -10,7 +10,7 @@ program kubo
    use ErrorHandlerModule, only : setErrorOutput, ErrorHandler, WarningHandler
 !
    use MPPModule, only : initMPP, endMPP, syncAllPEs, GlobalMax
-   use MPPModule, only : getMyPE, getNumPEs, getMaxWaits, setMaxWaits
+   use MPPModule, only : getMyPE, getNumPEs, getMaxWaits, setMaxWaits, syncAllPEs
 !
    use GroupCommModule, only : initGroupComm, endGroupComm, getGroupID, getMyPEinGroup
 !
@@ -47,6 +47,7 @@ program kubo
    use ScfDataModule, only : Temperature
    use ScfDataModule, only : istop, NumKMeshs, kGenScheme, Kdiv, Symmetrize
    use ScfDataModule, only : isKKRCPA, isKKRCPASRO, getSingleSiteSolverType
+   use ScfDataModule, only : tauij_needed
 
    use LatticeModule, only : initLattice, endLattice, getLatticeType
 
@@ -292,10 +293,16 @@ program kubo
 !  -------------------------------------------------------------------
    call initLattice(bravais)
 !  -------------------------------------------------------------------
-   call initBZone(NumKMeshs,kGenScheme,Kdiv,Symmetrize,bravais, &
-                        GlobalNumAtoms,AtomPosition,AtomicNumber,istop,-MyPE)
-!  -------------------------------------------------------------------
-   nk = getNumKs()
+   if (isLSMS()) then
+      nk = 1
+      tauij_needed = 1
+   else
+!     ----------------------------------------------------------------
+      call initBZone(NumKMeshs,kGenScheme,Kdiv,Symmetrize,bravais, &
+                     GlobalNumAtoms,AtomPosition,AtomicNumber,istop,-MyPE)
+!     ----------------------------------------------------------------
+      nk = getNumKs()
+   endif
    na = getNumAtoms()
 !  -------------------------------------------------------------------
    call initProcMapping(na, ne, nk, isFullPotential(), istop, 0)
@@ -621,27 +628,29 @@ program kubo
      write(6,'(/,a,f12.8)')' Fermi energy read from the potential:',Efermi
    endif
    call initSSSolver(LocalNumAtoms, getLocalNumSpecies, getLocalAtomicNumber, &
-                     lmax_kkr, lmax_phi, lmax_pot, lmax_step, lmax_green, &
-                     n_spin_pola, n_spin_cant, 0,   &
+                     lmax_kkr, lmax_phi, lmax_pot, lmax_step, lmax_green,     &
+                     n_spin_pola, n_spin_cant, 0,                             &
                      istop, atom_print_level, derivative=.true.)
 
    call initMSSolver(LocalNumAtoms, GlobalIndex,                        &
-                     lmax_kkr, lmax_phi, lmax_green, AtomPosition,            &
-                        n_spin_pola, n_spin_cant, 0,      &
-                        istop, atom_print_level, derivative=.true.)
+                     lmax_kkr, lmax_phi, lmax_green, LocalAtomPosi,     &
+                     n_spin_pola, n_spin_cant, 0,                       &
+                     istop, atom_print_level, derivative=.true.)
 
    vc = includeVertexCorrections()
    call initConductivity(LocalNumAtoms, lmax_kkr, lmax_phi, lmax_green, &
-           n_spin_pola, n_spin_cant, 0, istop, atom_print_level, vc)
+                         n_spin_pola, n_spin_cant, 0, istop, atom_print_level, vc)
 
    call calConductivity(Efermi, LocalNumAtoms, n_spin_pola)
+
+   call syncAllPEs()
   
-   do i = 1, 3
-     do j = 1, 3
-       do k = 1, n_spin_pola
-         final_sigma(i, j, k) = real(sigma(i, j, k))
-       enddo
-     enddo
+   do k = 1, n_spin_pola
+      do j = 1, 3
+         do i = 1, 3
+            final_sigma(i, j, k) = real(sigma(i, j, k), kind=RealKind)
+         enddo
+      enddo
    enddo 
    if (node_print_level >= 0) then
      if (n_spin_pola == 1) then
@@ -674,12 +683,12 @@ program kubo
    endif
 
 
-   do i = 1, 3
-     do j = 1, 3
-       do k = 1, n_spin_pola
-         final_sigma(i, j, k) = (2.30384174*real(sigma(i, j, k)))/100.0
-       enddo
-     enddo
+   do k = 1, n_spin_pola
+      do j = 1, 3
+         do i = 1, 3
+            final_sigma(i, j, k) = (2.30384174d0*real(sigma(i, j, k),kind=RealKind))/100.0d0
+         enddo
+      enddo
    enddo  
    
    do k = 1, n_spin_pola
@@ -748,7 +757,6 @@ program kubo
    deallocate( lmax_step, lmax_tmp , final_sigma)
 !
    call endConductivity()
-   call endInput()
    call endMadelung()
    call endPotential()
    call endStepFunction()
@@ -768,15 +776,17 @@ program kubo
    if (isKKRCPA() .or. isKKRCPASRO()) then
       call endMediumHost()
    endif
+   call endKuboData()
    call endSystem()
+   call endInput()
    call endDataServiceCenter()
    call endGroupComm()
    call endMPP()
    call endScfData
-   call endKuboData()
-   call endBZone()
-   call endIBZRotation()
-
+   if (.not.isLSMS()) then
+     call endBZone()
+     call endIBZRotation()
+   endif
 !  ==================================================================
    call date_and_time(exec_date,exec_time)
    if (node_print_level >= 0) then

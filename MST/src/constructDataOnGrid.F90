@@ -54,7 +54,7 @@
    real (kind=RealKind), allocatable :: den_local(:), den_remote(:,:)
 !
    interface
-      function getDataAtPoint( dname, id, ia, r, tol, jmax_in, n, grad ) result(v)
+      function getDataAtPoint( dname, id, ia, r, tol, jmax_in, n, grad, trunc ) result(v)
          use KindParamModule, only : IntKind, RealKind
          implicit none
          character (len=*), intent(in) :: dname
@@ -63,6 +63,7 @@
          integer (kind=IntKind), intent(in), optional :: jmax_in, n
          real (kind=RealKind), intent(out), optional :: grad(3)
          real (kind=RealKind) :: v
+         logical, optional, intent(in) :: trunc
       end function getDataAtPoint
    end interface
 !

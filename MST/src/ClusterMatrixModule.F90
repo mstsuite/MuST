@@ -55,6 +55,7 @@ private
 !
    complex (kind=CmplxKind), allocatable, target :: jinv_g(:)
    complex (kind=CmplxKind), allocatable, target :: sine_g(:)
+   complex (kind=CmplxKind), allocatable, target :: oh_g(:)
    complex (kind=CmplxKind), allocatable, target :: BlockMatrix(:)
    complex (kind=CmplxKind), allocatable, target :: BigMatrix(:)
    complex (kind=CmplxKind), allocatable, target :: BigMatrixInv(:,:)
@@ -294,15 +295,18 @@ contains
    allocate( sine_g(isize_max*isize_max) )
    allocate( store_sine(isize_max*isize_max) )
    allocate( BigMatrix(dsize_max*dsize_max) )
+!
+   jinv_g = CZERO; sine_g = CZERO
+!
 !  Allocate matrices for tauij calculation (i,j != 0)
    if (istauij_needed) then
+      allocate( oh_g(isize_max*isize_max) )
+      oh_g = CZERO
 !    allocate (BigMatrixInv(dsize_max, dsize_max))
 !    allocate (ClusterMatrix(LocalNumAtoms*kmax_max,LocalNumAtoms*kmax_max))
 !    allocate (ClusterKau(LocalNumAtoms*kmax_max,LocalNumAtoms*kmax_max))
 !    allocate (ClusterTau(LocalNumAtoms*kmax_max,LocalNumAtoms*kmax_max))
    endif
-     
-   jinv_g = CZERO; sine_g = CZERO
 !
 !  -------------------------------------------------------------------
    call initMatrixBlockInv( Minv_alg, LocalNumAtoms, NumEs, nblck,    &
@@ -356,6 +360,11 @@ contains
    deallocate( ipvt, jinv_g, sine_g, store_sine )
    deallocate( BlockMatrix, BigMatrix )
    deallocate( Tau00 )
+!
+   if (istauij_needed) then
+      deallocate(oh_g)
+      istauij_needed = .false.
+   endif
 !
    call endMatrixBlockInv()
    nullify( Neighbor )
@@ -444,7 +453,6 @@ contains
    end subroutine allocateExchSSSmat
 !  ===================================================================
 !
-!
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -487,13 +495,14 @@ contains
 !
    implicit none
 !
-   integer (kind=IntKind) :: comm
+   integer (kind=IntKind) :: comm, nfac
    integer (kind=IntKind) :: max_tsize, kmax_max_ns, kkr_ns, kli, klj
    integer (kind=IntKind) :: i, j, k, n, nl, nr, np, ns, nm, kmax, NumFills
    integer (kind=IntKind) :: proc, gid, t0size, t0size_ns, kkri_ns
 !
    complex (kind=CmplxKind), pointer :: sm1(:,:), sm2(:,:), gmat(:,:)
    complex (kind=CmplxKind), pointer :: jm1(:,:), jm2(:,:), p1(:)
+   complex (kind=CmplxKind), pointer :: om1(:,:), om2(:,:)
 #ifdef OpenMPI
    complex (kind=CmplxKind), pointer :: p_trecv(:,:)
 #endif
@@ -517,9 +526,16 @@ contains
    max_tsize = kmax_max*kmax_max*n_spin_cant*n_spin_cant
    kmax_max_ns = kmax_max*n_spin_cant
 !
+   if (istauij_needed) then
+      nfac = 3
+   else
+      nfac = 2
+   endif
+!
    if (.not. ExchSSSmatAllocated) then
 !     ----------------------------------------------------------------
-      call allocateExchSSSmat(2*max_tsize) ! Allocate space for exchanging Jinv and Sine Matrices
+      call allocateExchSSSmat(nfac*max_tsize) ! Allocate space for exchanging Jinv and Sine Matrices
+                                              ! as well as the space for OmegaHat matrix if tauij is needed
 !     ----------------------------------------------------------------
    endif
 !
@@ -553,6 +569,14 @@ contains
 !        -------------------------------------------------------------
          call rotateLtoG(i, kmax_kkr(i), kmax_kkr(i), sm1, sm2, gmat)
 !        -------------------------------------------------------------
+         if (istauij_needed) then
+            om1 => getSingleScatteringMatrix('OmegaHat-Matrix',spin=1,site=i)
+            om2 => getSingleScatteringMatrix('OmegaHat-Matrix',spin=2,site=i)
+            gmat => aliasArray2_c(oh_g,kkri_ns,kkri_ns)
+!           ----------------------------------------------------------
+            call rotateLtoG(i, kmax_kkr(i), kmax_kkr(i), om1, om2, gmat)
+!           ----------------------------------------------------------
+         endif
       else
          jm1 => getSingleScatteringMatrix('JostInv-Matrix',spin=1,site=i)
          sm1 => getSingleScatteringMatrix('Sine-Matrix',spin=1,site=i)
@@ -560,6 +584,10 @@ contains
          call zcopy( t0size, jm1, 1, jinv_g, 1 )
          call zcopy( t0size, sm1, 1, sine_g, 1 )
 !        -------------------------------------------------------------
+         if (istauij_needed) then
+            om1 => getSingleScatteringMatrix('OmegaHat-Matrix',spin=1,site=i)
+            call zcopy( t0size, om1, 1, oh_g, 1 )
+         endif
       endif
 !
 !     ================================================================
@@ -570,6 +598,11 @@ contains
       call zcopy(max_tsize,jinv_g,1,local_jsmtx(2,i),1)
       call zcopy(max_tsize,sine_g,1,local_jsmtx(2+max_tsize,i),1)
 !     ----------------------------------------------------------------
+      if (istauij_needed) then
+!        -------------------------------------------------------------
+         call zcopy(max_tsize,oh_g,1,local_jsmtx(2+2*max_tsize,i),1)
+!        -------------------------------------------------------------
+      endif
    enddo
 !
    nullify(sm1,sm2,jm1,jm2,gmat)
@@ -582,9 +615,9 @@ contains
    call setMaxWaits(nm)
    do k = 1, nm
       if (k <= NumReceives) then
-         p_trecv => jsmtx_buf(1:2*max_tsize+1,1:LocalNumAtoms,k)
+         p_trecv => jsmtx_buf(1:nfac*max_tsize+1,1:LocalNumAtoms,k)
 !        -------------------------------------------------------------
-         recv_msgid(k)=nbrecvMessage(p_trecv,2*max_tsize+1,LocalNumAtoms,1010,AnyPE)
+         recv_msgid(k)=nbrecvMessage(p_trecv,nfac*max_tsize+1,LocalNumAtoms,1010,AnyPE)
 !        ------------------------------------------------------------
       endif
    enddo
@@ -593,14 +626,14 @@ contains
       if (k < NumSends+1) then
          proc = TargetProc(k)
 !        -------------------------------------------------------------
-         send_msgid(k) = nbsendMessage(local_jsmtx,2*max_tsize+1,LocalNumAtoms,1010,proc)
+         send_msgid(k) = nbsendMessage(local_jsmtx,nfac*max_tsize+1,LocalNumAtoms,1010,proc)
 !        -------------------------------------------------------------
       endif
    enddo
 !
    do k = 1, nm
       if (nr < NumReceives) then
-         p_trecv => jsmtx_buf(1:2*max_tsize+1,1:LocalNumAtoms,nr+1)
+         p_trecv => jsmtx_buf(1:nfac*max_tsize+1,1:LocalNumAtoms,nr+1)
 !        -------------------------------------------------------------
          call waitMessage(recv_msgid(k))
 !        -------------------------------------------------------------
@@ -612,9 +645,9 @@ contains
             LOOP_j: do j = 1, NumNonLocalNeighbors
                if (gid == NonLocalNeighbors(j)) then
 !                 ----------------------------------------------------
-                  call zcopy(2*max_tsize,jsmtx_buf(2,i,nr),1,remote_jsmtx(1,j),1)
+                  call zcopy(nfac*max_tsize,jsmtx_buf(2,i,nr),1,remote_jsmtx(1,j),1)
 !                 ----------------------------------------------------
-!                 remote_jsmtx(1:2*max_tsize,j) = jsmtx_buf(2:2*max_tsize+1,i,nr)
+!                 remote_jsmtx(1:nfac*max_tsize,j) = jsmtx_buf(2:nfac*max_tsize+1,i,nr)
                   remote_kmax(j) = kmax
                   NumFills = NumFills + 1
                   exit LOOP_j
@@ -643,13 +676,13 @@ contains
       if (ns < NumSends) then
          ns = ns + 1
          proc = TargetProc(ns)
-         send_msgid(ns) = nbsendMessage(local_jsmtx,2*max_tsize+1,LocalNumAtoms,1010,proc)
+         send_msgid(ns) = nbsendMessage(local_jsmtx,nfac*max_tsize+1,LocalNumAtoms,1010,proc)
       endif
 !
       if (nr < NumReceives) then
          if (isThereMessage(1010,AnyPE)) then
 !           ----------------------------------------------------------
-            call recvMessage(jsmtx_buf,2*max_tsize+1,LocalNumAtoms,1010,getSource())
+            call recvMessage(jsmtx_buf,nfac*max_tsize+1,LocalNumAtoms,1010,getSource())
 !           ----------------------------------------------------------
             nr = nr + 1
 !
@@ -659,9 +692,9 @@ contains
                LOOP_j: do j = 1, NumNonLocalNeighbors
                   if (gid == NonLocalNeighbors(j)) then
 !                    -------------------------------------------------
-                     call zcopy(2*max_tsize,jsmtx_buf(2,i),1,remote_jsmtx(1,j),1)
+                     call zcopy(nfac*max_tsize,jsmtx_buf(2,i),1,remote_jsmtx(1,j),1)
 !                    -------------------------------------------------
-!                    remote_jsmtx(1:2*max_tsize,j) = jsmtx_buf(2:2*max_tsize+1,i)
+!                    remote_jsmtx(1:nfac*max_tsize,j) = jsmtx_buf(2:nfac*max_tsize+1,i)
                      remote_kmax(j) = kmax
                      NumFills = NumFills + 1
                      exit LOOP_j
@@ -901,7 +934,7 @@ use MPPModule, only : MyPE, syncAllPEs
    complex (kind=CmplxKind), pointer :: p_sinej(:)
    complex (kind=CmplxKind), pointer :: pBigMatrix(:,:)
    complex (kind=CmplxKind), pointer :: pBlockMatrix(:,:)
-   complex (kind=CmplxKind), pointer :: OmegaHat(:,:), OmegaHatj(:,:)
+   complex (kind=CmplxKind), pointer :: OmegaHat(:,:), OmegaHatj(:,:), p_oh(:)
    complex (kind=CmplxKind), pointer :: wau_g(:,:)
    complex (kind=CmplxKind), pointer :: wau_l(:,:,:)
    complex (kind=CmplxKind), pointer :: jig(:), ubmat(:,:)
@@ -1164,11 +1197,11 @@ use MPPModule, only : MyPE, syncAllPEs
            enddo
            Neighbor => getNeighbor(my_atom)
            do j = 1, Neighbor%NumAtoms+1
-             do jl = 1, kmax_kkr(my_atom)
-               do kl = 1, kmax_kkr(my_atom)
-                 Tau00(my_atom)%neigh1j(j)%wau_l(jl,kl) = BigMatrixInv(jl, (j-1)*kkrsz_ns + kl)
-                 Tau00(my_atom)%neighj1(j)%wau_l(jl,kl) = BigMatrixInv((j-1)*kkrsz_ns + jl, kl)
-               enddo
+              do kl = 1, kmax_kkr(my_atom)
+                 do jl = 1, kmax_kkr(my_atom)
+                    Tau00(my_atom)%neigh1j(j)%wau_l(jl,kl) = BigMatrixInv(jl, (j-1)*kkrsz_ns + kl)
+                    Tau00(my_atom)%neighj1(j)%wau_l(jl,kl) = BigMatrixInv((j-1)*kkrsz_ns + jl, kl)
+                 enddo
              enddo
           !  call zcopy(kkrsz_ns*kkrsz_ns, &
           !      pBigMatrix((j-1)*kkrsz_ns+1:j*kkrsz_ns,(j-1)*kkrsz_ns+1:j*kkrsz_ns), &
@@ -1267,16 +1300,22 @@ use MPPModule, only : MyPE, syncAllPEs
                           kmax_kkr(my_atom), OmegaHat, kmax_kkr(my_atom), &
                           CZERO, Tau00(my_atom)%kau_l(1,1,ns), kmax_kkr(my_atom))
 !              -------------------------------------------------------
-               if (istauij_needed) then
+               if (istauij_needed) then ! Needs to be re-examined if the remote atom has a different kkr size
                  do j = 1, Neighbor%NumAtoms+1
                    if (j == 1) then
-                     lid_j = my_atom
-                   else
+!                    --------------------------------------------------------
+                     OmegaHatj => getSingleScatteringMatrix('OmegaHat-Matrix',spin=js,site=my_atom)
+!                    --------------------------------------------------------
+                   else if (Neighbor%ProcIndex(j-1) == MyPEinGroup) then
                      lid_j = Neighbor%LocalIndex(j-1)
+!                    --------------------------------------------------------
+                     OmegaHatj => getSingleScatteringMatrix('OmegaHat-Matrix',spin=js,site=lid_j)
+!                    --------------------------------------------------------
+                   else
+                     jid = mapping_jsmtx(j-1,my_atom)
+                     p_oh => remote_jsmtx(2*tsize+1:3*tsize,jid)
+                     OmegaHatj => aliasArray2_c(p_oh,kmax_kkr(my_atom),kmax_kkr(my_atom))
                    endif
-!                  ----------------------------------------------------------
-                   OmegaHatj => getSingleScatteringMatrix('OmegaHat-Matrix',spin=js,site=lid_j)
-!                  ----------------------------------------------------------
                    call zgemm('n', 'n', kmax_kkr(my_atom), kmax_kkr(my_atom), &
                     kmax_kkr(my_atom), kappa, Tau00(my_atom)%neigh1j(j)%wau_l, &
                     kmax_kkr(my_atom), OmegaHatj, kmax_kkr(my_atom), &
@@ -1333,7 +1372,7 @@ use MPPModule, only : MyPE, syncAllPEs
       endif
    endif
 
-   if (istauij_needed) then
+   if (istauij_needed) then ! Needs to be re-examined in the spin-canted case
      do my_atom = 1, LocalNumAtoms
        Neighbor => getNeighbor(my_atom)
        smi => getSingleScatteringMatrix('Sine-Matrix',spin=1,site=my_atom)
@@ -1341,9 +1380,13 @@ use MPPModule, only : MyPE, syncAllPEs
        do j = 1, Neighbor%NumAtoms+1
          if (j == 1) then
            smj => getSingleScatteringMatrix('Sine-Matrix',spin=1,site=my_atom)
-         else
+         else if (Neighbor%ProcIndex(j-1) == MyPEinGroup) then
            lid_j = Neighbor%LocalIndex(j-1)
            smj => getSingleScatteringMatrix('Sine-Matrix',spin=1,site=lid_j)
+         else
+            jid = mapping_jsmtx(j-1,my_atom)
+            p_sinej => remote_jsmtx(tsize+1:2*tsize,jid)
+            smj => aliasArray2_c(p_sinej,kmax_kkr(my_atom),kmax_kkr(my_atom))
          endif
          wsStoreA = CZERO
          call computeUAUts(smi,kmax_kkr(my_atom),kmax_kkr(my_atom), &

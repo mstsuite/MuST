@@ -246,7 +246,7 @@ contains
    do dir = 1, dirnum
      do dir1 = 1, dirnum
        do etype = 1, 4
-         int_val(etype) = calSigmaTildeLSMS(dir, dir1, etype)
+         int_val(etype) = calSigmaTildeLSMS(is, dir, dir1, etype)
        enddo
        sigmatilde(dir,dir1,is) = int_val(1)
        sigmatilde2(dir,dir1,is) = int_val(2)
@@ -264,7 +264,6 @@ contains
      enddo
    enddo
 
-
    end subroutine computeLSMSConductivity
 !  ===================================================================
    
@@ -274,11 +273,11 @@ contains
 
    use KuboDataModule, only : useCubicSymmetryForSigma
    use CPAConductivityModule, only : initCPAConductivity, endCPAConductivity
-   use LSMSConductivityModule, only : initLSMSConductivity
+   use LSMSConductivityModule, only : initLSMSConductivity, endLSMSConductivity
    use WriteMatrixModule, only : writeMatrix
 
    integer (kind=IntKind), intent(in) :: LocalNumAtoms, n_spin_pola
-   integer (kind=IntKind) :: id, is, dirnum
+   integer (kind=IntKind) :: id, is, dirnum, iprint
    real (kind=RealKind), intent(in) :: efermi
 
 
@@ -288,12 +287,15 @@ contains
      dirnum = 3
    endif
 
+   iprint = maxval(print_instruction)
+
    if (mode == 2) then
 !    Do LSMS Conductivity
+     call initLSMSConductivity(dirnum, n_spin_pola, kmax_kkr_max, efermi, iprint)
      do is = 1, n_spin_pola
-       call initLSMSConductivity(is, kmax_kkr_max, efermi)
        call computeLSMSConductivity(is, dirnum)
      enddo
+     call endLSMSConductivity()
    else
      do id = 1, LocalNumAtoms
        do is = 1, n_spin_pola

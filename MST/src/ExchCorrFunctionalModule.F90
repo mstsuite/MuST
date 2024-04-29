@@ -44,7 +44,7 @@ public :: initExchCorrFunctional,         &
    end interface
 !
    interface calExchangeCorrelation
-      module procedure calExchangeCorrelation_s, calExchangeCorrelation_v
+      module procedure calExchangeCorrelation_lda, calExchangeCorrelation_gga
    end interface
 !
 private 
@@ -612,7 +612,7 @@ contains
    real (kind=RealKind) :: V
 !
    if (.not.Initialized) then
-      call ErrorHandler('getExchCorrPot_s',                         &
+      call ErrorHandler('getExchCorrPot_s',                           &
                         'ExchCorrFunctional is not initialized')
    else if ( is < 1 .or. is > n_spin_pola ) then
       call ErrorHandler("getExchCorrPot_s","Wrong spin index",is)
@@ -635,7 +635,7 @@ contains
    real (kind=RealKind), pointer :: pV(:)
 !
    if (.not.Initialized) then
-      call ErrorHandler('getExchCorrPot_v',                         &
+      call ErrorHandler('getExchCorrPot_v',                           &
                         'ExchCorrFunctional is not initialized')
    else if ( is < 1 .or. is > n_spin_pola ) then
       call ErrorHandler("getExchCorrPot_v","Invalid spin index",is)
@@ -654,6 +654,11 @@ contains
    subroutine calSphExchangeCorrelation_s(rho_den,der_rho_den,        &
                                           mag_den,der_mag_den)
 !  ===================================================================
+!  Note: This routine is called when calculating the exchange-correlation
+!        potential and energy density for the constant interstilial 
+!        charge density. Therefore, in this case, the contribution from
+!        the GGA term to the exchange-correlation potential is zero.
+!  *******************************************************************
 #ifdef LIBXC5
    use, intrinsic :: iso_c_binding
 #endif
@@ -691,18 +696,19 @@ contains
       Eexc_s = ZERO
    else if (LegacyFunctionalID == 0 .or. LegacyFunctionalID == 1) then
       if (n_spin_pola == 1) then
-!        ------------------------------------------------------------
+!        -------------------------------------------------------------
          call calExchCorr_s( rho_den )
-!        ------------------------------------------------------------
+!        -------------------------------------------------------------
       else
          do is = 1, n_spin_pola
-!           ---------------------------------------------------------
+!           ----------------------------------------------------------
             call calExchCorr_s( rho_den, mag_den, is )
-!           ---------------------------------------------------------
+!           ----------------------------------------------------------
          enddo
       endif
 #if defined LIBXC || defined LIBXC5
    else 
+      rho = ZERO
       if (n_spin_pola == 1) then
          rho(1) = rho_den
       else
@@ -718,9 +724,12 @@ contains
             xc_func_p => xc_func_2
          endif 
          if (FunctionalType == LDA) then
-!           ---------------------------------------------------------
+!           ==========================================================
+!           exc = epsilon_xc
+!           vxc = epsion_xc + rho*d(epsilon_xc)/d(rho)
+!           ----------------------------------------------------------
             call xc_f90_lda_exc_vxc(xc_func_p, np, rho(1), exc(1), vxc(1))
-!           ---------------------------------------------------------
+!           ----------------------------------------------------------
          else if (FunctionalType == GGA) then
             sigma = ZERO
             if (n_spin_pola == 1 .and. present(der_rho_den)) then
@@ -731,13 +740,17 @@ contains
                sigma(2) = HALF*(der_rho_den+der_mag_den)*HALF*(der_rho_den-der_mag_den)
                sigma(3) = HALF*(der_rho_den-der_mag_den)*HALF*(der_rho_den-der_mag_den)
             else
-!              ------------------------------------------------------
+!              -------------------------------------------------------
                call ErrorHandler('calSphExchangeCorrelation_s','Density derivative is required')
-!              ------------------------------------------------------
+!              -------------------------------------------------------
             endif
-!           ---------------------------------------------------------
+!           ==========================================================
+!           exc = epsilon_xc
+!           vxc = epsion_xc + rho*d(epsilon_xc)/d(rho)
+!           vsig = rho*d(epsilon_xc)/d(sigma)
+!           ----------------------------------------------------------
             call xc_f90_gga_exc_vxc(xc_func_p, np, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
-!           ---------------------------------------------------------
+!           ----------------------------------------------------------
          else
             call ErrorHandler('calSphExchangeCorrelation_s',          &
                  'Evauation of the functionals other LDA and GGA has not been implemented yet.')
@@ -751,7 +764,7 @@ contains
       Eexc_s = energy_units_conv*Eexc_s
 #else
    else
-      call ErrorHandler( "calExchangeCorrelation_ssp",                &
+      call ErrorHandler( "calSphExchangeCorrelation_s",               &
                          "The LDA functional is not implemented.",LegacyFunctionalID )
 #endif
    endif
@@ -762,8 +775,8 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calSphExchangeCorrelation_v(n_Rpts,rho_den,der_rho_den, &
-                                          mag_den,der_mag_den)
+   subroutine calSphExchangeCorrelation_v(n_Rpts,rho_den,r_mesh,      &
+                                          der_rho_den, mag_den,der_mag_den)
 !  ===================================================================
 #ifdef LIBXC5
    use, intrinsic :: iso_c_binding
@@ -774,6 +787,7 @@ contains
    integer (kind=IntKind) :: is, i, n, js
 !
    real (kind=RealKind), intent(in) :: rho_den(n_Rpts)
+   real (kind=RealKind), intent(in), optional :: r_mesh(n_Rpts)
    real (kind=RealKind), intent(in), optional :: der_rho_den(n_Rpts)
    real (kind=RealKind), intent(in), optional :: mag_den(n_Rpts)
    real (kind=RealKind), intent(in), optional :: der_mag_den(n_Rpts)
@@ -781,11 +795,15 @@ contains
 #ifdef LIBXC5
    real (kind=RealKind), allocatable :: vxc(:), exc(:), rho(:)
    real (kind=RealKind), allocatable :: sigma(:), vsig(:)
+   real (kind=RealKind), allocatable :: gga_term(:,:), der_gga_term(:)
+   real (kind=RealKind), allocatable :: der_rho_sp(:,:), sqrt_r(:)
    TYPE(xc_f90_func_t), pointer :: xc_func_p
    integer (kind=c_size_t) :: np
 #elif defined LIBXC
    real (kind=RealKind), allocatable :: vxc(:), exc(:), rho(:)
    real (kind=RealKind), allocatable :: sigma(:), vsig(:)
+   real (kind=RealKind), allocatable :: gga_term(:,:), der_gga_term(:)
+   real (kind=RealKind), allocatable :: der_rho_sp(:,:), sqrt_r(:)
    TYPE(xc_f90_pointer_t), pointer :: xc_func_p
    integer (kind=IntKind) :: np
 #endif
@@ -794,7 +812,7 @@ contains
       call ErrorHandler('calSphExchangeCorrelation_v',                &
                         'ExchCorrFunctional is not initialized')
    else if (n_spin_pola == 2 .and. .not.present(mag_den)) then
-      call ErrorHandler('calSphExchangeCorrelation_vsp',              &
+      call ErrorHandler('calSphExchangeCorrelation_v',                &
                         'magnetic moment density is required')
    endif
 !
@@ -819,14 +837,14 @@ contains
       Eexc_v = ZERO
    else if (LegacyFunctionalID == 0 .or. LegacyFunctionalID == 1) then
       if (n_spin_pola == 1) then
-!        ------------------------------------------------------------
+!        -------------------------------------------------------------
          call calExchCorr_v( n_Rpts, rho_den )
-!        ------------------------------------------------------------
+!        -------------------------------------------------------------
       else
          do is = 1, n_spin_pola
-!           ---------------------------------------------------------
+!           ----------------------------------------------------------
             call calExchCorr_v( n_Rpts, rho_den, mag_den, is )
-!           ---------------------------------------------------------
+!           ----------------------------------------------------------
          enddo
       endif
 #if defined LIBXC || defined LIBXC5
@@ -838,6 +856,13 @@ contains
             allocate(sigma(n_Rpts), vsig(n_Rpts))
          else
             allocate(sigma(3*n_Rpts), vsig(3*n_Rpts))
+         endif
+         if (present(r_mesh)) then
+            allocate(gga_term(n_Rpts,n_spin_pola), der_gga_term(n_Rpts))
+            allocate(der_rho_sp(n_Rpts,n_spin_pola), sqrt_r(n_Rpts))
+            do i = 1, n_Rpts
+               sqrt_r(i) = sqrt(r_mesh(i))
+            enddo
          endif
       endif
       if (n_spin_pola == 1) then
@@ -857,9 +882,12 @@ contains
          endif 
          if (FunctionalType == LDA) then
             np = n_Rpts
-!           ---------------------------------------------------------
+!           ==========================================================
+!           exc = epsilon_xc
+!           vxc = epsion_xc + rho*d(epsilon_xc)/d(rho)
+!           ----------------------------------------------------------
             call xc_f90_lda_exc_vxc(xc_func_p, np, rho(1), exc(1), vxc(1))
-!           ---------------------------------------------------------
+!           ----------------------------------------------------------
          else if (FunctionalType == GGA) then
             if (n_spin_pola == 1 .and. present(der_rho_den)) then
                do i = 1, n_Rpts
@@ -873,16 +901,35 @@ contains
                   sigma(3*i  ) = HALF*(der_rho_den(i)-der_mag_den(i))*HALF*(der_rho_den(i)-der_mag_den(i))
                enddo
             else
-!              ------------------------------------------------------
+!              -------------------------------------------------------
                call ErrorHandler('calSphExchangeCorrelation_v','Density derivative is required')
-!              ------------------------------------------------------
+!              -------------------------------------------------------
             endif
+            if (present(r_mesh)) then
+               if (n_spin_pola == 1) then
+                  do i = 1, n_Rpts
+                     der_rho_sp(i,1) = der_rho_den(i)
+                  enddo
+               else
+                  do i = 1, n_Rpts
+                     der_rho_sp(i,1) = HALF*(der_rho_den(i)+der_mag_den(i))
+                  enddo
+                  do i = 1, n_Rpts
+                     der_rho_sp(i,2) = HALF*(der_rho_den(i)-der_mag_den(i))
+                  enddo
+               endif
+            endif
+!
             np = n_Rpts
-!           ---------------------------------------------------------
+!           ==========================================================
+!           exc = epsilon_xc
+!           vxc = epsion_xc + rho*d(epsilon_xc)/d(rho)
+!           vsig = rho*d(epsilon_xc)/d(sigma)
+!           ----------------------------------------------------------
             call xc_f90_gga_exc_vxc(xc_func_p, np, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
-!           ---------------------------------------------------------
+!           ----------------------------------------------------------
          else
-            call ErrorHandler('calSphExchangeCorrelation_s',         &
+            call ErrorHandler('calSphExchangeCorrelation_v',          &
                  'Evauation of the functionals other LDA and GGA has not been implemented yet.')
          endif
          do is = 1, n_spin_pola
@@ -891,6 +938,30 @@ contains
                Vexc_v(i,is) = Vexc_v(i,is) + vxc(n_spin_pola*i-js)
             enddo
          enddo
+         if (FunctionalType == GGA .and. present(r_mesh)) then
+!           gga_term = div[(rho*d(epsilon_xc)/d(sigma))*grad(rho)]
+            if (n_spin_pola == 1) then
+               do i = 1, n_Rpts
+                  gga_term(i,1) = TWO*vsig(i)*der_rho_sp(i,1)
+               enddo
+            else
+               do i = 1, n_Rpts
+                  gga_term(i,1) = TWO*vsig(3*i-2)*der_rho_sp(i,1) + vsig(3*i-1)*der_rho_sp(i,2)
+               enddo
+               do i = 1, n_Rpts
+                  gga_term(i,2) = TWO*vsig(3*i)*der_rho_sp(i,2)   + vsig(3*i-1)*der_rho_sp(i,1)
+               enddo
+            endif
+            do is = 1, n_spin_pola
+!              ------------------------------------------------------
+               call newder(gga_term(1,is),der_gga_term(1),sqrt_r(1),n_Rpts)
+!              ------------------------------------------------------
+               do i = 1, n_Rpts
+                  Vexc_v(i,is) = Vexc_v(i,is) - TWO*gga_term(i,is)/r_mesh(i) &
+                                              - HALF*der_gga_term(i)/sqrt_r(i)
+               enddo
+            enddo
+         endif
          do i = 1, n_Rpts
             Eexc_v(i) = Eexc_v(i) + exc(i)
           enddo
@@ -900,6 +971,9 @@ contains
       deallocate( rho, vxc, exc )
       if (FunctionalType == GGA) then
          deallocate(sigma,vsig)
+         if (present(r_mesh)) then
+            deallocate(gga_term,der_gga_term,der_rho_sp,sqrt_r)
+         endif
       endif
 #else
    else
@@ -915,38 +989,37 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calExchangeCorrelation_s(rho_den,grad_rho_den,          &
-                                       mag_den,grad_mag_den)
+   subroutine calExchangeCorrelation_lda(rho_den,mag_den)
 !  ===================================================================
 #ifdef LIBXC5
    use, intrinsic :: iso_c_binding
 #endif
    implicit none
 !
-   integer (kind=IntKind) :: is, n 
+   integer (kind=IntKind) :: is, n
 !
    real (kind=RealKind), intent(in) :: rho_den
-   real (kind=RealKind), intent(in), optional :: grad_rho_den(3)
    real (kind=RealKind), intent(in), optional :: mag_den
-   real (kind=RealKind), intent(in), optional :: grad_mag_den(3)
 !
 #ifdef LIBXC5
    real (kind=RealKind) :: rho(2), exc(1), vxc(2)
-   real (kind=RealKind) :: sigma(3), vsig(3)
    TYPE(xc_f90_func_t), pointer :: xc_func_p
    integer (kind=c_size_t) :: np
 #elif defined LIBXC
    real (kind=RealKind) :: rho(2), exc(1), vxc(2)
-   real (kind=RealKind) :: sigma(3), vsig(3)
    TYPE(xc_f90_pointer_t), pointer :: xc_func_p
    integer (kind=IntKind) :: np
 #endif
 !
    if (.not.Initialized) then
-      call ErrorHandler('calExchangeCorrelation_s',                  &
+      call ErrorHandler('calExchangeCorrelation_lda',                 &
                         'ExchCorrFunctional is not initialized')
+   else if (FunctionalType /= LDA) then
+!     ----------------------------------------------------------------
+      call ErrorHandler('calExchangeCorrelation_lda','The functional type is not LDA')
+!     ----------------------------------------------------------------
    else if (n_spin_pola == 2 .and. .not.present(mag_den)) then
-      call ErrorHandler('calExchangeCorrelation_s',                  &
+      call ErrorHandler('calExchangeCorrelation_lda',                 &
                         'magnetic moment density is required')
    endif
 !
@@ -955,18 +1028,19 @@ contains
       Eexc_s = ZERO
    else if (LegacyFunctionalID == 0 .or. LegacyFunctionalID == 1) then
       if (n_spin_pola == 1) then
-!        ------------------------------------------------------------
+!        -------------------------------------------------------------
          call calExchCorr_s( rho_den )
-!        ------------------------------------------------------------
+!        -------------------------------------------------------------
       else
          do is = 1, n_spin_pola
-!           ---------------------------------------------------------
+!           ----------------------------------------------------------
             call calExchCorr_s( rho_den, mag_den, is )
-!           ---------------------------------------------------------
+!           ----------------------------------------------------------
          enddo
       endif
 #if defined LIBXC || defined LIBXC5
    else 
+      rho = ZERO
       if (n_spin_pola == 1) then
          rho(1) = rho_den
       else
@@ -981,36 +1055,9 @@ contains
          else
             xc_func_p => xc_func_2
          endif 
-         if (FunctionalType == LDA) then
-!           ---------------------------------------------------------
-            call xc_f90_lda_exc_vxc(xc_func_p, np, rho(1), exc(1), vxc(1))
-!           ---------------------------------------------------------
-         else if (FunctionalType == GGA) then
-            if (n_spin_pola == 1 .and. present(grad_rho_den)) then
-               sigma(1) = grad_rho_den(1)**2+grad_rho_den(2)**2+grad_rho_den(3)**2
-            else if (n_spin_pola == 2 .and.                           &
-                     present(grad_rho_den) .and.  present(grad_mag_den)) then
-               sigma(1) = HALF*(grad_rho_den(1)+grad_mag_den(1))*HALF*(grad_rho_den(1)+grad_mag_den(1)) + &
-                          HALF*(grad_rho_den(2)+grad_mag_den(2))*HALF*(grad_rho_den(2)+grad_mag_den(2)) + &
-                          HALF*(grad_rho_den(3)+grad_mag_den(3))*HALF*(grad_rho_den(3)+grad_mag_den(3))
-               sigma(2) = HALF*(grad_rho_den(1)+grad_mag_den(1))*HALF*(grad_rho_den(1)-grad_mag_den(1)) + &
-                          HALF*(grad_rho_den(2)+grad_mag_den(2))*HALF*(grad_rho_den(2)-grad_mag_den(2)) + &
-                          HALF*(grad_rho_den(3)+grad_mag_den(3))*HALF*(grad_rho_den(3)-grad_mag_den(3))
-               sigma(3) = HALF*(grad_rho_den(1)-grad_mag_den(1))*HALF*(grad_rho_den(1)-grad_mag_den(1)) + &
-                          HALF*(grad_rho_den(2)-grad_mag_den(2))*HALF*(grad_rho_den(2)-grad_mag_den(2)) + &
-                          HALF*(grad_rho_den(3)-grad_mag_den(3))*HALF*(grad_rho_den(3)-grad_mag_den(3))
-            else
-!              ------------------------------------------------------
-               call ErrorHandler('calExchangeCorrelation_s','Density gradient is required')
-!              ------------------------------------------------------
-            endif
-!           ---------------------------------------------------------
-            call xc_f90_gga_exc_vxc(xc_func_p, np, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
-!           ---------------------------------------------------------
-         else
-            call ErrorHandler('calExchangeCorrelation_s',            &
-                 'Evauation of the functionals other LDA and GGA has not been implemented yet.')
-         endif
+!        -------------------------------------------------------------
+         call xc_f90_lda_exc_vxc(xc_func_p, np, rho(1), exc(1), vxc(1))
+!        -------------------------------------------------------------
          do is = 1, n_spin_pola
             Vexc_s(is) = Vexc_s(is) + vxc(is)
          enddo
@@ -1020,167 +1067,167 @@ contains
       Eexc_s = energy_units_conv*Eexc_s
 #else
    else
-      call ErrorHandler( "calExchangeCorrelation_s",                 &
-                         "The LDA functional is not implemented.",   &
+!     ----------------------------------------------------------------
+      call ErrorHandler( "calExchangeCorrelation_lda",                &
+                         "The LDA functional is not implemented.",    &
                          LegacyFunctionalID )
+!     ----------------------------------------------------------------
 #endif
    endif
 !
-   end subroutine calExchangeCorrelation_s
+   end subroutine calExchangeCorrelation_lda
 !  ===================================================================
 !
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calExchangeCorrelation_v( n_Rpts, rho_den, grad_rho_den,&
-                                        mag_den, grad_mag_den )
+   subroutine calExchangeCorrelation_gga(rho_den,grad_rho_den,        &
+                                         mag_den,grad_mag_den)
 !  ===================================================================
+!  Note: This routine takes, as input, a set of densities, gradient of
+!        the density, and optionaly the moment densities and their gradient
+!        (in the spin polarized case) on 3D grid points defined by cart,
+!        in Cartisian coordinates:
+!           x = cart(i,1)
+!           y = cart(i,2)
+!           z = cart(i,3)
+!        with i = -nq, nq+1, ...,0, 1, ..., nq. 
+!        The purpose of this routine is to calculate the exchange-
+!        correlation potential and energy density in GGA at grid point 
+!        (x0, y0, z0), where
+!           x0 = cart(0,1), y0 = cart(0,2), z0 = cart(0,3)
+!  *******************************************************************
 #ifdef LIBXC5
    use, intrinsic :: iso_c_binding
 #endif
    implicit none
 !
-   integer (kind=IntKind), intent(in) :: n_Rpts
-   integer (kind=IntKind) :: is, i, n, js
+   integer (kind=IntKind) :: is, n, j, jd, k
 !
-   real (kind=RealKind), intent(in) :: rho_den(n_Rpts)
-   real (kind=RealKind), intent(in), optional :: grad_rho_den(3,n_Rpts)
-   real (kind=RealKind), intent(in), optional :: mag_den(n_Rpts)
-   real (kind=RealKind), intent(in), optional :: grad_mag_den(3,n_Rpts)
+   real (kind=RealKind), intent(in) :: rho_den
+   real (kind=RealKind), intent(in) :: grad_rho_den(3)
+   real (kind=RealKind), intent(in), optional :: mag_den
+   real (kind=RealKind), intent(in), optional :: grad_mag_den(3)
 !
 #ifdef LIBXC5
-   real (kind=RealKind), allocatable :: vxc(:), exc(:), rho(:)
-   real (kind=RealKind), allocatable :: sigma(:), vsig(:)
+   real (kind=RealKind) :: rho(2), exc(1), vxc(2)
+   real (kind=RealKind) :: sigma(3), vsig(3)
+   real (kind=RealKind), allocatable :: gga_term(:,:), der_gga_term(:), xyz(:)
+   real (kind=RealKind) :: der_rho_sp(2)
    TYPE(xc_f90_func_t), pointer :: xc_func_p
    integer (kind=c_size_t) :: np
 #elif defined LIBXC
-   real (kind=RealKind), allocatable :: vxc(:), exc(:), rho(:)
-   real (kind=RealKind), allocatable :: sigma(:), vsig(:)
+   real (kind=RealKind) :: rho(2), exc(1), vxc(2)
+   real (kind=RealKind) :: sigma(3), vsig(3)
+   real (kind=RealKind), allocatable :: gga_term(:,:), der_gga_term(:), xyz(:)
+   real (kind=RealKind) :: der_rho_sp(2)
    TYPE(xc_f90_pointer_t), pointer :: xc_func_p
    integer (kind=IntKind) :: np
 #endif
 !
    if (.not.Initialized) then
-      call ErrorHandler('calExchangeCorrelation_v',                   &
+      call ErrorHandler('calExchangeCorrelation_gga',                 &
                         'ExchCorrFunctional is not initialized')
+   else if (FunctionalType /= GGA) then
+!     ----------------------------------------------------------------
+      call ErrorHandler('calExchangeCorrelation_gga','The functional type is not GGA')
+!     ----------------------------------------------------------------
    else if (n_spin_pola == 2 .and. .not.present(mag_den)) then
-      call ErrorHandler('calExchangeCorrelation_v',                   &
+      call ErrorHandler('calExchangeCorrelation_gga',                 &
                         'magnetic moment density is required')
    endif
 !
-   if ( allocated(Eexc_v) .and. nE < n_Rpts ) then
-      deallocate( Eexc_v )
-   endif
-   if ( .not.allocated(Eexc_v) ) then
-      allocate( Eexc_v(n_Rpts) )
-      nE = n_Rpts
-   endif
-!
-   if ( allocated(Vexc_v) .and. nV < n_Rpts ) then
-      deallocate( Vexc_v )
-   endif
-   if ( .not.allocated(Vexc_v) ) then
-      allocate( Vexc_v(n_Rpts,n_spin_pola) )
-      nV = n_Rpts
-   endif
-!
    if (LegacyFunctionalID == -1) then
-      Eexc_v = ZERO
-      Vexc_v = ZERO
+      Vexc_s = ZERO
+      Eexc_s = ZERO
    else if (LegacyFunctionalID == 0 .or. LegacyFunctionalID == 1) then
-      if (n_spin_pola == 1) then
-!        ------------------------------------------------------------
-         call calExchCorr_v( n_Rpts, rho_den )
-!        ------------------------------------------------------------
-      else
-         do is = 1, n_spin_pola
-!           ---------------------------------------------------------
-            call calExchCorr_v( n_Rpts, rho_den, mag_den, is )
-!           ---------------------------------------------------------
-         enddo
-      endif
+!     ----------------------------------------------------------------
+      call ErrorHandler('calExchangeCorrelation_gga','Incompatible functional ID',LegacyFunctionalID)
+!     ----------------------------------------------------------------
 #if defined LIBXC || defined LIBXC5
    else 
-      allocate( rho(n_Rpts*n_spin_pola) )
-      allocate( vxc(n_Rpts*n_spin_pola), exc(n_Rpts) )
-      if (n_spin_pola == 1) then
-         rho = rho_den
-      else
-         do i = 1, n_Rpts
-            rho(2*i-1) = HALF*(rho_den(i)+mag_den(i))
-            rho(2*i)   = HALF*(rho_den(i)-mag_den(i))
-         enddo
-      endif
-      Vexc_v = ZERO; Eexc_v = ZERO
+   !? allocate(gga_term(2*nq+1,n_spin_pola),der_gga_term(2*nq+1),xyz(2*nq+1))
+      Vexc_s = ZERO; Eexc_s = ZERO
+      np = 1
       do n = 1, NumFunctionals
          if (n == 1) then
             xc_func_p => xc_func_1
          else
             xc_func_p => xc_func_2
          endif 
-         if (FunctionalType == LDA) then
-            np = n_Rpts
-!           ---------------------------------------------------------
-            call xc_f90_lda_exc_vxc(xc_func_p, np, rho(1), exc(1), vxc(1))
-!           ---------------------------------------------------------
-         else if (FunctionalType == GGA) then
-            if (n_spin_pola == 1 .and. present(grad_rho_den)) then
-               allocate(sigma(n_Rpts), vsig(n_Rpts))
-               do i = 1, n_Rpts
-                  sigma(i) = grad_rho_den(1,i)**2+grad_rho_den(2,i)**2+grad_rho_den(3,i)**2
-               enddo
-            else if (n_spin_pola == 2 .and.                           &
-                     present(grad_rho_den) .and.  present(grad_mag_den)) then
-               allocate(sigma(3*n_Rpts), vsig(3*n_Rpts))
-               do i = 1, n_Rpts
-                  sigma(3*i-2) = HALF*(grad_rho_den(1,i)+grad_mag_den(1,i))*HALF*(grad_rho_den(1,i)+grad_mag_den(1,i)) + &
-                                 HALF*(grad_rho_den(2,i)+grad_mag_den(2,i))*HALF*(grad_rho_den(2,i)+grad_mag_den(2,i)) + &
-                                 HALF*(grad_rho_den(3,i)+grad_mag_den(3,i))*HALF*(grad_rho_den(3,i)+grad_mag_den(3,i))
-                  sigma(3*i-1) = HALF*(grad_rho_den(1,i)+grad_mag_den(1,i))*HALF*(grad_rho_den(1,i)-grad_mag_den(1,i)) + &
-                                 HALF*(grad_rho_den(2,i)+grad_mag_den(2,i))*HALF*(grad_rho_den(2,i)-grad_mag_den(2,i)) + &
-                                 HALF*(grad_rho_den(3,i)+grad_mag_den(3,i))*HALF*(grad_rho_den(3,i)-grad_mag_den(3,i))
-                  sigma(3*i)   = HALF*(grad_rho_den(1,i)-grad_mag_den(1,i))*HALF*(grad_rho_den(1,i)-grad_mag_den(1,i)) + &
-                                 HALF*(grad_rho_den(2,i)-grad_mag_den(2,i))*HALF*(grad_rho_den(2,i)-grad_mag_den(2,i)) + &
-                                 HALF*(grad_rho_den(3,i)-grad_mag_den(3,i))*HALF*(grad_rho_den(3,i)-grad_mag_den(3,i))
-               enddo
-            else
-!              ------------------------------------------------------
-               call ErrorHandler('calExchangeCorrelation_v','Density gradient is required')
-!              ------------------------------------------------------
-            endif
-            np = n_Rpts
-!           ---------------------------------------------------------
-            call xc_f90_gga_exc_vxc(xc_func_p, np, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
-!           ---------------------------------------------------------
-            deallocate(sigma,vsig)
+         rho = ZERO
+         if (n_spin_pola == 1) then
+            rho(1) = rho_den
          else
-!           ---------------------------------------------------------
-            call ErrorHandler('calExchangeCorrelation_v',            &
-                 'Evauation of the functionals other LDA and GGA has not been implemented yet.')
-!           ---------------------------------------------------------
+            rho(1) = HALF*(rho_den+mag_den)
+            rho(2) = HALF*(rho_den-mag_den)
          endif
+         sigma = ZERO
+         if (n_spin_pola == 1) then
+            sigma(1) = grad_rho_den(1)**2+grad_rho_den(2)**2+grad_rho_den(3)**2
+         else
+            sigma(1) = HALF*(grad_rho_den(1)+grad_mag_den(1))*HALF*(grad_rho_den(1)+grad_mag_den(1)) + &
+                       HALF*(grad_rho_den(2)+grad_mag_den(2))*HALF*(grad_rho_den(2)+grad_mag_den(2)) + &
+                       HALF*(grad_rho_den(3)+grad_mag_den(3))*HALF*(grad_rho_den(3)+grad_mag_den(3))
+            sigma(2) = HALF*(grad_rho_den(1)+grad_mag_den(1))*HALF*(grad_rho_den(1)-grad_mag_den(1)) + &
+                       HALF*(grad_rho_den(2)+grad_mag_den(2))*HALF*(grad_rho_den(2)-grad_mag_den(2)) + &
+                       HALF*(grad_rho_den(3)+grad_mag_den(3))*HALF*(grad_rho_den(3)-grad_mag_den(3))
+            sigma(3) = HALF*(grad_rho_den(1)-grad_mag_den(1))*HALF*(grad_rho_den(1)-grad_mag_den(1)) + &
+                       HALF*(grad_rho_den(2)-grad_mag_den(2))*HALF*(grad_rho_den(2)-grad_mag_den(2)) + &
+                       HALF*(grad_rho_den(3)-grad_mag_den(3))*HALF*(grad_rho_den(3)-grad_mag_den(3))
+         endif
+!        -------------------------------------------------------------
+         call xc_f90_gga_exc_vxc(xc_func_p, np, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
+!        -------------------------------------------------------------
+    !?   if (k == 1 .and. j == 0) then
          do is = 1, n_spin_pola
-            js = n_spin_pola - is
-            do i = 1, n_Rpts
-               Vexc_v(i,is) = Vexc_v(i,is) + vxc(n_spin_pola*i-js)
-            enddo
+            Vexc_s(is) = Vexc_s(is) + vxc(is)
          enddo
-         do i = 1, n_Rpts
-            Eexc_v(i) = Eexc_v(i) + exc(i)
-         enddo
+         Eexc_s = Eexc_s + exc(1)
+    !?   endif
+!              =======================================================
+!        Determine the following GGA term in the exchange-correlation potential
+!             div[(rho*d(epsilon_xc)/d(sigma))*grad(rho)]
+!        In the following lines of the code, 
+!             der_rho_sp = d[rho(is)]/d{x, y, or z}, for is = 1 or 2
+!
+!             gga_term = 2*rho*d(epsilon_xc)/d(sigma(is,is)))*d[rho(is)]/d{x, y, or z}
+!                        + rho*d(epsilon_xc)/d(sigma(is,isb)))*d[rho(isb)]/d{x, y, or z}
+!        where isb = 3-is.
+!              =======================================================
+   !?    if (n_spin_pola == 1) then
+   !?       der_rho_sp(1) = grad_rho_den(k)
+   !?    else
+   !?       der_rho_sp(1) = HALF*(grad_rho_den(k)+grad_mag_den(k))
+   !?       der_rho_sp(2) = HALF*(grad_rho_den(k)-grad_mag_den(k))
+   !?    endif
+   !?    if (n_spin_pola == 1) then
+   !?       gga_term(jd,1) = TWO*vsig(1)*der_rho_sp(1)
+   !?    else
+   !?       gga_term(jd,1) = TWO*vsig(1)*der_rho_sp(1) + vsig(2)*der_rho_sp(2)
+   !?       gga_term(jd,2) = TWO*vsig(3)*der_rho_sp(2) + vsig(2)*der_rho_sp(1)
+   !?    endif
+   !?    xyz(jd) = cart(j,k)
+   !?
+   !?    do is = 1, n_spin_pola
+!  !?          ------------------------------------------------------
+   !?       call newder(gga_term(1,is),der_gga_term,xyz,2*nq+1)
+!  !?          ------------------------------------------------------
+   !?       Vexc_s(is) = Vexc_s(is) - der_gga_term(nq+1)
+   !?    enddo
       enddo
-      Vexc_v = energy_units_conv*Vexc_v
-      Eexc_v = energy_units_conv*Eexc_v
-      deallocate( rho, vxc, exc )
+      Vexc_s = energy_units_conv*Vexc_s
+      Eexc_s = energy_units_conv*Eexc_s
+   !? deallocate(gga_term,der_gga_term,xyz)
 #else
    else
-      call ErrorHandler( "calExchangeCorrelation_v",                  &
-                         "The LDA functional is not implemented.",    &
+      call ErrorHandler( "calExchangeCorrelation_gga",                &
+                         "The GGA functional is not implemented.",    &
                          LegacyFunctionalID )
 #endif
    endif
 !
-   end subroutine calExchangeCorrelation_v
+   end subroutine calExchangeCorrelation_gga
 !  ===================================================================
 !
 !  *******************************************************************

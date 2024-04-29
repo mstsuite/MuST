@@ -22,7 +22,8 @@ public :: initCurrentMatrixModule, &
           calJtildeCPA, &
           cal1DCurrentMatrix, &
           getJMatrix1D, &
-          getJMatrix
+          getJMatrix,   &
+          getJMatrixSize
 !
 
 private
@@ -30,6 +31,7 @@ private
    integer (kind=IntKind) :: n_spin_pola
    integer (kind=IntKind) :: n_spin_cant
    integer (kind=IntKind) :: master_size
+   integer (kind=IntKind) :: jmatrix_size, jmatrix_rank
 
    integer (kind=IntKind), allocatable :: print_instruction(:)
    integer (kind=IntKind), allocatable :: lmax_kkr(:)
@@ -204,6 +206,9 @@ contains
        Jtk4(jsize*jsize, LocalNumAtoms, NumSpecies, n_spin_pola, 3))
      Jtk = CZERO; Jtk2 = CZERO; Jtk3 = CZERO; Jtk4 = CZERO
    endif
+
+   jmatrix_rank = jsize
+   jmatrix_size = jsize*jsize
 
    allocate(iden(jsize, jsize))
 
@@ -1186,7 +1191,7 @@ contains
 
    integer (kind=IntKind) :: iend, ic, dir
    real (kind=RealKind) :: rmt
-   real(kind=RealKind), pointer :: radial_grid(:)
+   real (kind=RealKind), pointer :: radial_grid(:)
    complex(kind=CmplxKind), allocatable :: sf_term(:,:,:), &
                                sf_single(:,:), sfqsum(:)
 
@@ -1285,5 +1290,19 @@ contains
    endif
 
    end function getJMatrix
+!  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getJMatrixSize(m) result(n)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(out) :: m
+   integer (kind=IntKind) :: n
+!
+   n = jmatrix_size
+   m = jmatrix_rank
+!
+   end function getJMatrixSize
 !  ===================================================================
 end module CurrentMatrixModule

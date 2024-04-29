@@ -52,7 +52,7 @@
          integer (kind=IntKind), intent(in), optional :: lmax, spin
 !
          interface
-            function getData( dname, id, ia, r, tol, jmax_in, n, grad ) result(v)
+            function getData( dname, id, ia, r, tol, jmax_in, n, grad, trunc ) result(v)
                use KindParamModule, only : IntKind, RealKind
                implicit none
                character (len=*), intent(in) :: dname
@@ -61,6 +61,7 @@
                real (kind=RealKind), intent(out), optional :: grad(3)
                integer (kind=IntKind), intent(in), optional :: jmax_in, n
                real (kind=RealKind) :: v
+               logical, optional, intent(in) :: trunc
             end function getData
          end interface
       end subroutine constructDataOnGrid

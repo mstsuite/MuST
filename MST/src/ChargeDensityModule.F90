@@ -1199,7 +1199,7 @@ contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getChargeDensityAtPoint(densityType, id, ia, posi, tol_in, &
-                                    jmax_in, n_mult, grad) result(rho)
+                                    jmax_in, n_mult, grad, truncated) result(rho)
 !  ===================================================================
    use MathParamModule, only : ZERO, TWO, TEN2m8
 !
@@ -1241,6 +1241,8 @@ contains
 !
    type (ChargeDensityStruct), pointer :: p_CDL
 !
+   logical, optional, intent(in) :: truncated
+   logical :: takeTruncation = .true.
    logical :: takeGradient = .false.
 !
    interface
@@ -1282,6 +1284,22 @@ contains
       takeGradient = .true.
    else
       takeGradient = .false.
+   endif
+!
+   if (present(truncated)) then
+      takeTruncation = truncated
+   else
+      takeTruncation = .false.
+   endif
+!
+   VP_point = getPointLocationFlag(id, posi(1), posi(2), posi(3), tol=tol_in)
+!
+   if ( VP_point < 0 .and. takeTruncation) then
+      rho = ZERO
+      if (takeGradient) then
+         grad = ZERO
+      endif
+      return
    endif
 !
    t0 = getTime()
@@ -1338,7 +1356,6 @@ contains
       if ( n_mult < 1 ) then 
          call ErrorHandler("getChargeDensityAtPoint",'Invalid n_mult',n_mult)
       endif
-      VP_point = getPointLocationFlag(id, posi(1), posi(2), posi(3), tol=tol_in)
 !     ================================================================
 !     Consistency check
 !     ================================================================
@@ -1356,7 +1373,7 @@ contains
 !        -------------------------------------------------------------
       endif
       if ( nocaseCompare(densityType,"Pseudo") ) then
-         if ( VP_point == 1 .or. VP_point == 0 ) then
+         if ( VP_point == 1 .or. VP_point == 0 .or. .not.takeTruncation) then
             do jl = 1,p_CDL%jmax
                den_l(1:n_inter,jl) = p_CDL%rhoL_Pseudo(irp:irp+n_inter-1,jl,ia)
             enddo
@@ -1365,7 +1382,7 @@ contains
             return
          endif
       else if ( nocaseCompare(densityType,"ValPs") ) then
-         if ( VP_point >= 0 ) then
+         if ( VP_point >= 0 .or. .not.takeTruncation) then
             do jl = 1,p_CDL%jmax
                den_l(1:n_inter,jl) = p_CDL%rhoL_ValPseudo(irp:irp+n_inter-1,jl,ia)
             enddo
@@ -1378,7 +1395,7 @@ contains
             den_l(1:n_inter,jl) = p_CDL%rhoL_Tilda(irp:irp+n_inter-1,jl,ia)
          enddo
       else if ( nocaseCompare(densityType,"Valence") ) then
-         if ( VP_point >= 0 ) then
+         if ( VP_point >= 0 .or. .not.takeTruncation) then
             do jl = 1,p_CDL%jmax
                den_l(1:n_inter,jl) = p_CDL%rhoL_Valence(irp:irp+n_inter-1,jl,ia)
             enddo
@@ -1387,7 +1404,7 @@ contains
             return
          endif
       else if ( nocaseCompare(densityType,"TotalNew") ) then
-         if ( VP_point == 1 .or. VP_point == 0 ) then
+         if ( VP_point == 1 .or. VP_point == 0 .or. .not.takeTruncation) then
             do jl = 1,p_CDL%jmax
                den_l(1:n_inter,jl) = p_CDL%rhoL_Total(irp:irp+n_inter-1,jl,ia)
             enddo
@@ -1412,8 +1429,9 @@ contains
                endif
             enddo
          endif
-         if (VP_point == 0) then ! For points on the cell bounday, since den_l contains
-                                 ! the core density, it needs to be corrected
+         if (VP_point == 0 .and. takeTruncation) then ! For points on the cell bounday, 
+                                                      ! since den_l contains the core
+                                                      ! density, it needs to be corrected
             fact = real(n_mult-1,kind=RealKind)/Y0
             do is = 1,n_spin_pola
                do ir = 1, n_inter
@@ -1433,7 +1451,7 @@ contains
             enddo
          endif
          if ( takeGradient ) then
-            if ( VP_point == 1 .or. VP_point == 0 ) then
+            if ( VP_point == 1 .or. VP_point == 0 .or. .not.takeTruncation) then
                do jl = 1,p_CDL%jmax
                   der_den_l(1:n_inter,jl) = p_CDL%der_rhoL_Total(irp:irp+n_inter-1,jl,ia)
                enddo
@@ -1456,8 +1474,9 @@ contains
                   endif
                enddo
             endif
-            if (VP_point == 0) then ! For points on the cell bounday, since den_l contains
-                                    ! the core density, it needs to be corrected
+            if (VP_point == 0 .and. takeTruncation) then ! For points on the cell bounday, 
+                                                         ! since den_l contains the core
+                                                         ! density, it needs to be corrected
                fact = real(n_mult-1,kind=RealKind)/Y0
                do is = 1,n_spin_pola
                   do ir = 1, n_inter
@@ -1478,7 +1497,7 @@ contains
             endif
          endif
       else if ( nocaseCompare(densityType,"TotalOld") ) then
-         if ( VP_point == 1 .or. VP_point == 0 ) then
+         if ( VP_point == 1 .or. VP_point == 0 .or. .not.takeTruncation) then
             do jl = 1,p_CDL%jmax
                den_l(1:n_inter,jl) = p_CDL%rhoL_TotalOld(irp:irp+n_inter-1,jl,ia)
             enddo
@@ -1504,8 +1523,9 @@ contains
                endif
             enddo
          endif
-         if (VP_point == 0) then ! For points on the cell bounday, since den_l contains
-                                 ! the core density, it needs to be corrected
+         if (VP_point == 0 .and. takeTruncation) then ! For points on the cell bounday,
+                                                      ! since den_l contains the core
+                                                      ! density, it needs to be corrected
             fact = real(n_mult-1,kind=RealKind)/Y0
             do is = 1,n_spin_pola
                do ir = 1, n_inter
@@ -1786,7 +1806,7 @@ contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function getMomentDensityAtPoint(momentType, id, ia, posi, tol_in, &
-                                    jmax_in, n_mult, grad) result(mom)
+                                    jmax_in, n_mult, grad, truncated) result(mom)
 !  ===================================================================
    use MathParamModule, only : ZERO, TWO
 !
@@ -1821,6 +1841,8 @@ contains
 !
    type (ChargeDensityStruct), pointer :: p_CDL
 !
+   logical, optional, intent(in) :: truncated
+   logical :: takeTruncation = .true.
    logical :: takeGradient = .false.
 !
    interface
@@ -1860,6 +1882,22 @@ contains
       takeGradient = .true.
    else
       takeGradient = .false.
+   endif
+!
+   if (present(truncated)) then
+      takeTruncation = truncated
+   else
+      takeTruncation = .false.
+   endif
+!
+   VP_point = getPointLocationFlag(id, posi(1), posi(2), posi(3), tol=tol_in)
+!
+   if ( VP_point < 0 .and. takeTruncation) then
+      mom = ZERO
+      if (takeGradient) then
+         grad = ZERO
+      endif
+      return
    endif
 !
    nr = p_CDL%NumRPts
@@ -1906,7 +1944,6 @@ contains
       if ( n_mult < 1 ) then
          call ErrorHandler("getMomentDensityAtPoint",'Invalid n_mult',n_mult)
       endif
-      VP_point = getPointLocationFlag(id, posi(1), posi(2), posi(3), tol=tol_in)
 !     ================================================================
 !     Consistency check
 !     ================================================================
@@ -1924,7 +1961,7 @@ contains
 !        -------------------------------------------------------------
       endif
       if ( nocaseCompare(momentType,"TotalNew") ) then
-         if ( VP_point == 1 .or. VP_point == 0) then
+         if ( VP_point == 1 .or. VP_point == 0 .or. .not.takeTruncation) then
             do jl = 1,jmax
                mom_l(1:n_inter,jl) = p_CDL%momL_Total(irp:irp+n_inter-1,jl,ia)
             enddo
@@ -1933,8 +1970,9 @@ contains
                   der_mom_l(1:n_inter,jl) = p_CDL%der_momL_Total(irp:irp+n_inter-1,jl,ia)
                enddo
             endif
-            if (VP_point == 0) then ! For points on the cell bounday, since mom_l contains
-                                    ! the core density, it needs to be corrected
+            if (VP_point == 0 .and. takeTruncation) then ! For points on the cell bounday,
+                                                         ! since mom_l contains the core
+                                                         ! density, it needs to be corrected
                fact = real(n_mult-1,kind=RealKind)/Y0
                do is = 1,n_spin_pola
                   isig = 3-2*is
