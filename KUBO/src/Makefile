@@ -28,7 +28,8 @@ $(MST_ODIR)/getValueAtPosi.o \
 $(MST_ODIR)/lattice.o \
 $(MST_ODIR)/averageAcrossProcesses.o \
 $(MST_ODIR)/setupSemiCircleContour.o \
-$(MST_ODIR)/getFermiDiracFunc.o
+$(MST_ODIR)/getFermiDiracFunc.o \
+$(MST_ODIR)/AngularIntegrationModule.o
 
 AppModules = \
 $(MST_ODIR)/InputModule.o \

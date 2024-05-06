@@ -114,7 +114,7 @@ program kubo
    use SSSolverModule, only : initSSSolver, endSSSolver
    use MSSolverModule, only : initMSSolver, endMSSolver
    use ConductivityModule, only : initConductivity, calConductivity, endConductivity
-   use ConductivityModule, only : sigma, sigmatilde, sigmatilde2, sigmatilde3, sigmatilde4
+   use ConductivityModule, only : sigma
 
    use WriteMatrixModule, only : writeMatrix
    use MatrixInverseModule, only : MtxInv_LU
@@ -283,10 +283,10 @@ program kubo
    AtomPosition => getAtomPosition()
    AtomicNumber => getAtomicNumber()
 !
-   call initContour( ContourType, eGridType, NumEs, Temperature,   &
-                        istop, -1, .true.)
-   ne = getNumEs()
-   call endContour()
+!  call initContour( ContourType, eGridType, NumEs, Temperature,   &
+!                       istop, -1, .true.)
+!  ne = getNumEs()
+!  call endContour()
 
 !  ===================================================================
 !  Initialize the the lattice system
@@ -294,7 +294,7 @@ program kubo
    call initLattice(bravais)
 !  -------------------------------------------------------------------
    if (isLSMS()) then
-      nk = 1
+      nk = 1  ! We set nk=1 to disable the parallalization over k-points
       tauij_needed = 1
    else
 !     ----------------------------------------------------------------
@@ -303,6 +303,7 @@ program kubo
 !     ----------------------------------------------------------------
       nk = getNumKs()
    endif
+   ne = 1  ! We set ne=1 to disable the parallalization over energy
    na = getNumAtoms()
 !  -------------------------------------------------------------------
    call initProcMapping(na, ne, nk, isFullPotential(), istop, 0)
@@ -640,7 +641,6 @@ program kubo
    vc = includeVertexCorrections()
    call initConductivity(LocalNumAtoms, lmax_kkr, lmax_phi, lmax_green, &
                          n_spin_pola, n_spin_cant, 0, istop, atom_print_level, vc)
-
    call calConductivity(Efermi, LocalNumAtoms, n_spin_pola)
 
    call syncAllPEs()
@@ -734,10 +734,6 @@ program kubo
      write(6,'(a)')'******************************************************************************'
      write(6,'(a)')'                                       '
      call writeMatrix('sigma', sigma, 3, 3, n_spin_pola)
-     call writeMatrix('sigma-tilde1', sigmatilde, 3, 3, n_spin_pola)
-     call writeMatrix('sigma-tilde2', sigmatilde2, 3, 3, n_spin_pola)
-     call writeMatrix('sigma-tilde3', sigmatilde3, 3, 3, n_spin_pola)
-     call writeMatrix('sigma-tilde4', sigmatilde4, 3, 3, n_spin_pola)
    endif
 
    if (node_print_level >= 0) then

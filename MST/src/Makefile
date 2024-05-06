@@ -28,7 +28,8 @@ getValueAtPosi.o \
 lattice.o \
 averageAcrossProcesses.o \
 setupSemiCircleContour.o \
-getFermiDiracFunc.o
+getFermiDiracFunc.o \
+AngularIntegrationModule.o
 
 AppModules = \
 InputModule.o \

@@ -5,17 +5,14 @@ module ConductivityModule
    use PublicTypeDefinitionsModule, only : NeighborStruct
    use NeighborModule, only : getNeighbor, sortNeighbors
 
-public :: initConductivity,        &
-          endConductivity,   &
+public :: initConductivity,       &
+          endConductivity,        &
           computeSROConductivity, &
           computeCPAConductivity, &
           calConductivity
 !
 !  Conductivity data stored here
 !  --------------------------------------------------------------------
-   complex (kind=CmplxKind), allocatable, public :: sigmatilde(:,:,:), sigmatilde2(:,:,:), &
-                                          sigmatilde3(:,:,:), sigmatilde4(:,:,:)
-
    complex (kind=CmplxKind), allocatable, public :: sigma(:,:,:)
 !  ---------------------------------------------------------------------
 
@@ -36,13 +33,14 @@ private
    integer (kind=IntKind), allocatable :: num_species(:)
    integer (kind=IntKind) :: lmax_phi_max, kmax_kkr_max, lmax_green_max, &
                              lmax_sigma, lmax_sigma_2, lmax_cg
-   integer (kind=IntKind) :: kmax_phi_max, kmax_green_max, iend_max, &
+   integer (kind=IntKind) :: kmax_phi_max, kmax_green_max,               &
                              kmax_sigma, kmax_sigma_2, kmax_max, kmax_cg
    integer (kind=IntKind) :: NumSpecies
-
-   complex (kind=CmplxKind), allocatable :: iden(:,:)
-
-   integer (kind=IntKind) :: NumPEsInGroup, MyPEinGroup, kGID
+!
+   integer (kind=IntKind) :: NumPEsInEGroup, MyPEinEGroup, eGID
+!
+   complex (kind=CmplxKind), allocatable :: sigmatilde(:,:,:)
+!
    logical :: Initialized = .false.
 ! 
 contains
@@ -51,8 +49,9 @@ contains
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine initConductivity(num_atoms, lmaxkkr, lmaxphi, lmaxgreen,  &
-                              pola, cant, rel, istop, iprint, vc)
+                               pola, cant, rel, istop, iprint, vc)
 !  ===================================================================
+   use GroupCommModule, only : getGroupID, getNumPEsInGroup, getMyPEinGroup
    use RadialGridModule, only : getNumRmesh, getMaxNumRmesh
    use AtomModule, only : getLocalNumSpecies
    use PolyhedraModule, only : getNumPolyhedra
@@ -60,7 +59,9 @@ contains
    use ScfDataModule, only : isKKR, isLSMS, isKKRCPA, isKKRCPASRO, isSROSCF
    use CurrentMatrixModule, only : initCurrentMatrixModule
    use SROModule, only : getNeighSize
-
+!
+   implicit none
+!
    integer (kind=IntKind), intent(in) :: num_atoms
    integer (kind=IntKind), intent(in) :: lmaxkkr(num_atoms)
    integer (kind=IntKind), intent(in) :: lmaxphi(num_atoms)
@@ -83,7 +84,14 @@ contains
    n_spin_pola = pola
    n_spin_cant = cant
    NumPolyhedra = getNumPolyhedra()
- 
+!
+   eGID = getGroupID('Energy Mesh')
+   NumPEsInEGroup = getNumPEsInGroup(eGID)
+   MyPEinEGroup = getMyPEinGroup(eGID)
+   if (maxval(iprint) >= 0) then
+      write(6,'(/,a,i4)')'Number of processes for the energy parallelization: ',NumPEsInEGroup
+   endif
+! 
    if (isKKR()) then
       mode = 1
    else if (isLSMS()) then
@@ -101,7 +109,7 @@ contains
 
    if (mode == 1) then
      call ErrorHandler('initConductivity', &
-            'Conductivity for KKR not yet implemented')
+                       'Conductivity for KKR not yet implemented')
    endif
 
    allocate( print_instruction(LocalNumAtoms) ) 
@@ -136,8 +144,6 @@ contains
       NumSpecies = max(NumSpecies, num_species(i))
    enddo
    
-   iend_max = getMaxNumRmesh()
-
 !  -------------------------------------------------------------------
 !  Initialize the arrays which store conductivity data
 !  -------------------------------------------------------------------
@@ -147,22 +153,14 @@ contains
          jofk(kmax_cg), m1m(-lmax_cg:lmax_cg))
    allocate(lofj((lmax_cg+1)*(lmax_cg+2)/2), mofj((lmax_cg+1)*(lmax_cg+2)/2))
 
-   allocate(iden(jsize, jsize))
-   allocate(sigmatilde(3, 3, n_spin_pola), sigmatilde2(3, 3, n_spin_pola), sigmatilde3(3, 3, n_spin_pola),  &
-    sigmatilde4(3, 3, n_spin_pola), sigma(3, 3, n_spin_pola))
+   allocate(sigmatilde(3, 3, 4), sigma(3, 3, n_spin_pola))
 
-   iden = CZERO
-   sigmatilde = CZERO; sigmatilde2 = CZERO
-   sigmatilde3 = CZERO; sigmatilde4 = CZERO
+   sigmatilde = CZERO
    sigma = CZERO
-
-   do i = 1, jsize
-      iden(i, i) = CONE
-   enddo
 
 !  -------------------------------------------------------------------
    call initCurrentMatrixModule(num_atoms, lmaxkkr, lmaxphi, &
-           lmaxgreen, pola, cant, rel, istop, iprint, mode, vc)
+                                lmaxgreen, pola, cant, rel, istop, iprint, mode, vc)
 !  -------------------------------------------------------------------
 
    Initialized = .true.
@@ -176,12 +174,9 @@ contains
 
    use CurrentMatrixModule, only : endCurrentMatrixModule
 
-   deallocate(sigmatilde, sigmatilde2, sigmatilde3, sigmatilde4)
-   deallocate(sigma)
-
+   deallocate(sigmatilde, sigma)
    
-   deallocate(print_instruction, lmax_kkr, lmax_phi, kmax_kkr, &
-     kmax_phi, iden)  
+   deallocate(print_instruction, lmax_kkr, lmax_phi, kmax_kkr, kmax_phi)  
 
 !  ----------------------------------------------------
    call endCurrentMatrixModule(mode)
@@ -193,38 +188,47 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine computeCPAConductivity(is, dirnum)
 !  ===================================================================
- 
+   use GroupCommModule, only : GlobalSumInGroup 
    use CPAConductivityModule, only : calVertexCorrectionMatrixCPA, &
-      calSigmaTilde1VC, calSigmaTilde0
-
+                                     calSigmaTilde1VC, calSigmaTilde0
+!
+   implicit none
+!
    integer (kind=IntKind), intent(in) :: is, dirnum
 
    integer (kind=IntKind) :: etype
-   integer (kind=IntKind) :: dir, dir1
-   complex (kind=CmplxKind) :: int_val(4)
+   integer (kind=IntKind) :: dir, dir1, nfac
+   complex (kind=CmplxKind) :: int_val
 
    call calVertexCorrectionMatrixCPA()
 
-   do dir = 1, dirnum
-     do dir1 = 1, dirnum
-       int_val = CZERO
-       do etype = 1, 4
-         int_val(etype) = calSigmaTilde1VC(dir, dir1, etype) + & 
-                          calSigmaTilde0(dir, dir1, etype)
-       enddo
-       sigmatilde(dir,dir1,is) = int_val(1)
-       sigmatilde2(dir,dir1,is) = int_val(2)
-       sigmatilde3(dir,dir1,is) = int_val(3)
-       sigmatilde4(dir,dir1,is) = int_val(4)
-       if (n_spin_pola == 1) then
-         sigmatilde(dir,dir1,is) = 2*sigmatilde(dir,dir1,is)
-         sigmatilde2(dir,dir1,is) = 2*sigmatilde2(dir,dir1,is)
-         sigmatilde3(dir,dir1,is) = 2*sigmatilde3(dir,dir1,is) 
-         sigmatilde4(dir,dir1,is) = 2*sigmatilde4(dir,dir1,is)
-       endif
-       sigma(dir,dir1,is) = 0.25*(sigmatilde(dir,dir1,is) - &
-       sigmatilde2(dir,dir1,is) - sigmatilde3(dir,dir1,is) + &
-       sigmatilde4(dir,dir1,is))
+   if (n_spin_pola == 1) then
+      nfac = 2
+   else
+      nfac = 1
+   endif
+!
+   sigmatilde = CZERO
+   do etype = MyPEinEGroup+1, 4, NumPEsInEGroup
+      do dir1 = 1, dirnum
+         do dir = 1, dirnum
+            int_val = calSigmaTilde1VC(dir, dir1, etype) +            &
+                      calSigmaTilde0(dir, dir1, etype)
+            sigmatilde(dir,dir1,etype) = nfac*int_val
+         enddo
+      enddo
+   enddo
+   if ( NumPEsInEGroup > 1 ) then
+!     ----------------------------------------------------------------
+      call GlobalSumInGroup(eGID, sigmatilde, 3, 3, 4)
+!     ----------------------------------------------------------------
+   endif
+   do dir1 = 1, dirnum
+      do dir = 1, dirnum
+         sigma(dir,dir1,is) = 0.25d0*(sigmatilde(dir,dir1,1) -        &
+                                      sigmatilde(dir,dir1,2) -        &
+                                      sigmatilde(dir,dir1,3) +        &
+                                      sigmatilde(dir,dir1,4))
      enddo
    enddo
 
@@ -234,33 +238,47 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine computeLSMSConductivity(is, dirnum)
 !  ===================================================================   
-
+   use TimerModule, only : getTime
+   use GroupCommModule, only : GlobalSumInGroup 
    use LSMSConductivityModule, only : calSigmaTildeLSMS
-
+!
+   implicit none
+!
    integer (kind=IntKind), intent(in) :: is, dirnum
 
    integer (kind=IntKind) :: etype
-   integer (kind=IntKind) :: dir, dir1
-   complex (kind=CmplxKind) :: int_val(4)
+   integer (kind=IntKind) :: dir, dir1, nfac
+   real (kind=RealKind) :: t0
+   complex (kind=CmplxKind) :: int_val
 
+   if (n_spin_pola == 1) then
+      nfac = 2
+   else
+      nfac = 1
+   endif
+
+   sigmatilde = CZERO
+   do etype = MyPEinEGroup+1, 4, NumPEsInEGroup
+      do dir = 1, dirnum
+         do dir1 = 1, dirnum
+            int_val = calSigmaTildeLSMS(is, dir, dir1, etype)
+            sigmatilde(dir,dir1,etype) = nfac*int_val
+         enddo
+      enddo
+   enddo
+   if ( NumPEsInEGroup > 1 ) then
+      t0 = getTime()
+!     ----------------------------------------------------------------
+      call GlobalSumInGroup(eGID, sigmatilde, 3, 3, 4)
+!     ----------------------------------------------------------------
+      print *,'Globalsum timing = ',getTime()-t0
+   endif
    do dir = 1, dirnum
-     do dir1 = 1, dirnum
-       do etype = 1, 4
-         int_val(etype) = calSigmaTildeLSMS(is, dir, dir1, etype)
-       enddo
-       sigmatilde(dir,dir1,is) = int_val(1)
-       sigmatilde2(dir,dir1,is) = int_val(2)
-       sigmatilde3(dir,dir1,is) = int_val(3)
-       sigmatilde4(dir,dir1,is) = int_val(4)
-       if (n_spin_pola == 1) then
-         sigmatilde(dir,dir1,is) = 2*sigmatilde(dir,dir1,is)
-         sigmatilde2(dir,dir1,is) = 2*sigmatilde2(dir,dir1,is)
-         sigmatilde3(dir,dir1,is) = 2*sigmatilde3(dir,dir1,is)
-         sigmatilde4(dir,dir1,is) = 2*sigmatilde4(dir,dir1,is)
-       endif
-       sigma(dir,dir1,is) = 0.25*(sigmatilde(dir,dir1,is) - & 
-       sigmatilde2(dir,dir1,is) - sigmatilde3(dir,dir1,is) + & 
-       sigmatilde4(dir,dir1,is))
+      do dir1 = 1, dirnum
+         sigma(dir,dir1,is) = 0.25d0*(sigmatilde(dir,dir1,1) -        &
+                                      sigmatilde(dir,dir1,2) -        &
+                                      sigmatilde(dir,dir1,3) +        &
+                                      sigmatilde(dir,dir1,4))
      enddo
    enddo
 
@@ -270,63 +288,82 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine calConductivity(efermi, LocalNumAtoms, n_spin_pola)
 !  ===================================================================
-
+   use TimerModule, only : getTime
    use KuboDataModule, only : useCubicSymmetryForSigma
    use CPAConductivityModule, only : initCPAConductivity, endCPAConductivity
    use LSMSConductivityModule, only : initLSMSConductivity, endLSMSConductivity
    use WriteMatrixModule, only : writeMatrix
-
+!
+   implicit none
+!
    integer (kind=IntKind), intent(in) :: LocalNumAtoms, n_spin_pola
    integer (kind=IntKind) :: id, is, dirnum, iprint
    real (kind=RealKind), intent(in) :: efermi
+   real (kind=RealKind) :: t0
 
 
    if (useCubicSymmetryForSigma()) then
-     dirnum = 1
+      dirnum = 1
    else
-     dirnum = 3
+      dirnum = 3
    endif
 
    iprint = maxval(print_instruction)
 
    if (mode == 2) then
-!    Do LSMS Conductivity
-     call initLSMSConductivity(dirnum, n_spin_pola, kmax_kkr_max, efermi, iprint)
-     do is = 1, n_spin_pola
-       call computeLSMSConductivity(is, dirnum)
-     enddo
-     call endLSMSConductivity()
-   else
-     do id = 1, LocalNumAtoms
-       do is = 1, n_spin_pola
-         if (mode == 3) then
-      !    --------------------------------------------------------------
-           call initCPAConductivity(id, is, kmax_kkr_max, efermi, LocalNumAtoms, mode)
-      !    -------------------------------------------------------------- 
-           call computeCPAConductivity(is, dirnum)
-      !    --------------------------------------------------------------
-           call endCPAConductivity()
-      !    --------------------------------------------------------------
-         else if (mode == 4) then
-      !    --------------------------------------------------------------
-      !    Under development
-           call initCPAConductivity(id, is, kmax_kkr_max, efermi, LocalNumAtoms, mode)
-      !    --------------------------------------------------------------
+!     Do LSMS Conductivity
+!     t0 = getTime()
+!     ----------------------------------------------------------------
+      call initLSMSConductivity(dirnum, n_spin_pola, kmax_kkr_max, efermi, iprint)
+!     ----------------------------------------------------------------
+!     print *,'Calling initLSMSConductivity, timing = ',getTime() - t0
+      do is = 1, n_spin_pola
+!        -------------------------------------------------------------
+         call computeLSMSConductivity(is, dirnum)
+!        -------------------------------------------------------------
+         if (iprint >= 0) then
+            call writeMatrix('sigmatilde1', sigmatilde(:,:,1), 3, 3)
+            call writeMatrix('sigmatilde2', sigmatilde(:,:,2), 3, 3)
+            call writeMatrix('sigmatilde3', sigmatilde(:,:,3), 3, 3)
+            call writeMatrix('sigmatilde4', sigmatilde(:,:,4), 3, 3)
          endif
-       enddo
-     enddo
+      enddo
+      call endLSMSConductivity()
+   else
+      do id = 1, LocalNumAtoms
+         do is = 1, n_spin_pola
+            if (mode == 3) then
+      !        ----------------------------------------------------------
+               call initCPAConductivity(id, is, kmax_kkr_max, efermi, LocalNumAtoms, mode)
+      !        ---------------------------------------------------------- 
+               call computeCPAConductivity(is, dirnum)
+      !        ----------------------------------------------------------
+               call endCPAConductivity()
+      !        ----------------------------------------------------------
+            else if (mode == 4) then
+      !        ----------------------------------------------------------
+      !        Under development
+               call initCPAConductivity(id, is, kmax_kkr_max, efermi, LocalNumAtoms, mode)
+      !        ----------------------------------------------------------
+            endif
+            if (iprint >= 0) then
+               call writeMatrix('sigmatilde1', sigmatilde(:,:,1), 3, 3)
+               call writeMatrix('sigmatilde2', sigmatilde(:,:,2), 3, 3)
+               call writeMatrix('sigmatilde3', sigmatilde(:,:,3), 3, 3)
+               call writeMatrix('sigmatilde4', sigmatilde(:,:,4), 3, 3)
+            endif
+         enddo
+      enddo
    endif
    
    if (useCubicSymmetryForSigma()) then
-     sigma(2,2,:) = sigma(1,1,:)
-     sigma(3,3,:) = sigma(1,1,:)
+      sigma(2,2,:) = sigma(1,1,:)
+      sigma(3,3,:) = sigma(1,1,:)
    endif
 
-   call writeMatrix('sigma', sigma, 3, 3, 1)
-   call writeMatrix('sigmatilde1', sigmatilde, 3, 3, 1)
-   call writeMatrix('sigmatilde2', sigmatilde2, 3, 3, 1)
-   call writeMatrix('sigmatilde3', sigmatilde3, 3, 3, 1)
-   call writeMatrix('sigmatilde4', sigmatilde4, 3, 3, 1)
+   if (iprint >= 0) then
+      call writeMatrix('sigma', sigma, 3, 3, n_spin_pola)
+   endif
 
    end subroutine calConductivity
 !  ===================================================================

@@ -43,7 +43,6 @@ private
       integer (kind=IntKind) :: jmt
       integer (kind=IntKind) :: jend
       integer (kind=IntKind) :: n_Rpts
-!11920integer (kind=IntKind) :: ifit_XC
       integer (kind=IntKind) :: NumFlagJl
       real (kind=RealKind) :: Madelung_Shift
       real (kind=RealKind), allocatable :: VIntraR0(:)
@@ -108,6 +107,7 @@ private
    integer (kind=IntKind), allocatable :: GlobalIndex(:)
    integer (kind=IntKind), allocatable :: Print_Level(:)
    integer (kind=IntKind), allocatable :: indrl_fit(:,:)
+   integer (kind=IntKind), allocatable :: ip02ip(:), it02it(:)
 !
    real (kind=RealKind), allocatable :: alpha_mad(:)
    real (kind=RealKind), allocatable :: MadelungShiftTable(:)
@@ -124,9 +124,9 @@ private
    real (kind=RealKind), allocatable, target :: V1_r(:), V2_r(:)
    real (kind=RealKind), allocatable, target :: E1_r(:), E2_r(:)
    real (kind=RealKind), allocatable, target :: V1_i(:), V2_i(:)
+   real (kind=RealKind), allocatable :: sint(:), cost(:), sinp(:), cosp(:)
+   real (kind=RealKind), allocatable :: facp(:), upos(:,:)
 !
-   complex (kind=CmplxKind), allocatable :: pXC_r(:,:),pXC_rphi(:,:)
-   complex (kind=CmplxKind), allocatable :: eXC_r(:,:),eXC_rphi(:,:)
    complex (kind=CmplxKind), allocatable, target :: rho_tmp_c(:), mom_tmp_c(:)
    complex (kind=CmplxKind), allocatable, target :: V1_c(:), V2_c(:)
    complex (kind=CmplxKind), allocatable, target :: E1_c(:), E2_c(:)
@@ -137,19 +137,6 @@ private
    real (kind=RealKind), parameter :: pot_tol = TEN2m8
 !
    real (kind=RealKind), allocatable :: vmt1(:)
-!
-   type AngularIntegrationData
-      integer (kind=IntKind) :: kmax
-      integer (kind=IntKind) :: n_theta
-      integer (kind=IntKind) :: n_phi
-      integer (kind=IntKind) :: ngl
-      real (kind=RealKind), pointer:: radial_data(:)
-      real (kind=RealKind), pointer :: theta(:), phi(:)
-      real (kind=RealKind), pointer :: wght_the(:), wght_phi(:)
-      complex (kind=CmplxKind), pointer :: ylm_ngl(:,:)
-   end type AngularIntegrationData
-!
-   type (AngularIntegrationData) :: AngularData
 !
    integer (kind=IntKind) :: numk_local
    integer (kind=IntKind), parameter :: nr_int_max = 3
@@ -264,6 +251,8 @@ contains
 !
    use ChargeScreeningModule, only : initChargeScreeningModule
 !
+   use AngularIntegrationModule, only : initAngularIntegration
+!
    implicit none
 !
    character (len=*), intent(in) :: istop
@@ -287,11 +276,14 @@ contains
    integer (kind=IntKind) :: kmax_max, lmax_pot, jmax_pot
    integer (kind=IntKind) :: jmt, jend, num_species
    integer (kind=IntKind) :: grid_start(3), grid_end(3), gir(3,3), ng_uniform(3)
+   integer (kind=IntKind) :: ngl_the, ngl_phi, ngl, ip0, it0, n0, it, ip
 !
    real (kind=RealKind) :: alpha, r, alpha_min, alpha_max
    real (kind=RealKind) :: bravais(3,3), vc(3)
    real (kind=RealKind), pointer :: madmat(:), r_mesh(:)
    real (kind=RealKind), allocatable :: radius(:)
+   real (kind=RealKind), pointer :: theta(:), phi(:)
+   real (kind=RealKind), pointer :: wght_phi(:)
 !
    type (NewPotentialStruct), pointer :: p_Pot
 !
@@ -497,13 +489,7 @@ contains
          endif
       endif
 !
-!ywg 11/114/18
-!ywg  call setAngularData(60,40,lmax_max,npola,jend_max)
-  call setAngularData(80,50,lmax_max,npola,jend_max)
-!......
       allocate( indrl_fit(jmax_max,npola) )
-      allocate( pXC_r(jmax_max,npola),pXC_rphi(jmax_max,npola) )
-      allocate( eXC_r(jmax_max,npola),eXC_rphi(jmax_max,npola) )
 !
    endif
 !
@@ -730,7 +716,17 @@ contains
    endif
    
    nullify(global_table_line)
-
+!
+!  ===================================================================
+!  The following lines of the code are moved from calExchangeJl, which 
+!  has been restructed starting from v1.9.2.1 to use AngularIntegrationModule
+!  ===================================================================
+   if ( isFullPot ) then
+!     ----------------------------------------------------------------
+      call initAngularIntegration(50,80,lmax_max,jend_max,n_spin_pola+1)
+!     ----------------------------------------------------------------
+   endif
+!
    end subroutine initPotentialGeneration
 !  ===================================================================
 !
@@ -748,6 +744,8 @@ contains
 !
    use ChargeScreeningModule, only : endChargeScreeningModule
    use ScfDataModule, only : isChargeCorr  
+!
+   use AngularIntegrationModule, only : endAngularIntegration
 !
    implicit none
 !
@@ -808,12 +806,11 @@ contains
 !  -------------------------------------------------------------------
    if ( isFullPot ) then
 !     ----------------------------------------------------------------
-      call clearAngularData()
+      call endAngularIntegration()
       call endParallelFFT()
 !     ----------------------------------------------------------------
       deallocate( fft_c ); nullify( fft_c )
       deallocate( indrl_fit )
-      deallocate( pXC_r, pXC_rphi, eXC_r, eXC_rphi )
    endif
    Initialized = .false.
    EmptyTable = .true.
@@ -4004,29 +4001,26 @@ contains
    use ExchCorrFunctionalModule, only : getExchCorrEnDen
    use ExchCorrFunctionalModule, only : getExchCorrPot
 !
-   implicit none
+   use AngularIntegrationModule, only : getNumSphericalGridPoints,  &
+                                        getUnitVec,                 &
+                                        getSphericalGridData,       &
+                                        calAngularIntegration,      &
+                                        retrieveSphHarmExpanData
 !
-   logical :: isNegCharge
+   implicit none
 !
    integer (kind=IntKind), intent(in) :: id, ia, lmax_in
 !
-   integer (kind=IntKind) :: ir, it, ip, is, jend, ir_lastNeg, ir_fit
-   integer (kind=IntKind) :: l, m, kl, jl, lmax, jmax, kmax, n0, n0max
+   integer (kind=IntKind) :: ir, it, ip, is, jend, ir_fit
+   integer (kind=IntKind) :: l, m, kl, jl, lmax, jmax, kmax, n0
    integer (kind=IntKind) :: ngl_the, ngl_phi, ngl, ing, ip0, it0
-   integer (kind=IntKind) :: chgmom_size
-   integer (kind=IntKind), allocatable :: ip02ip(:), it02it(:)
-!
-!  integer (kind=IntKind), pointer :: flags_jl(:)
+   integer (kind=IntKind) :: size_d1
 !
    real (kind=RealKind) :: posi(3), r, local_t(3)
-   real (kind=RealKind), allocatable :: sint(:), cost(:), sinp(:), cosp(:)
-   real (kind=RealKind), allocatable :: facp(:), upos(:,:)
    real (kind=RealKind) :: grad_rho(3), grad_mom(3)
-   real (kind=RealKind) :: rho, mom, pXC_rtp, eXC_rtp, pXC_r0(2), eXC_r0(2)
+   real (kind=RealKind) :: rho, mom
    real (kind=RealKind), pointer :: r_mesh(:), V_tmp(:)
-   real (kind=RealKind), pointer :: theta(:), phi(:)
-   real (kind=RealKind), pointer :: wght_the(:), wght_phi(:)
-   real (kind=RealKind), pointer :: chgmom_data(:,:,:,:,:)
+   real (kind=RealKind), pointer :: angular_data(:,:)
    real (kind=RealKind), allocatable :: der_rho_tmp(:), der_mom_tmp(:)
 !#ifdef TIMING
    real (kind=RealKind) :: t0, t1, t2, t3, ts, tc1, tc2, tc3
@@ -4038,6 +4032,10 @@ contains
    complex (kind=CmplxKind), pointer :: pylm(:), V_exc(:)
    complex (kind=CmplxKind), pointer :: potL_Exch(:,:,:), enL_Exch(:,:,:)
    complex (kind=CmplxKind), pointer :: ylm_ngl(:,:)
+!
+   integer (kind=IntKind), parameter :: nq = 5
+   integer (kind=IntKind) :: idx_posi(3)
+   real (kind=RealKind) :: uv(3)
 !
 !  -------------------------------------------------------------------
 !  generate points on the sphere to be integrated
@@ -4159,186 +4157,94 @@ contains
 !
    indrl_fit = 0
 !
-   ngl_the = AngularData%n_theta
-   ngl_phi = AngularData%n_phi
-   ngl = AngularData%ngl
-!
-   phi      => AngularData%phi(1:ngl_phi)
-   theta    => AngularData%theta(1:ngl_the)
-   wght_phi => AngularData%wght_phi(1:ngl_phi)
-   wght_the => AngularData%wght_the(1:ngl_the)
-   ylm_ngl  => AngularData%ylm_ngl(1:kmax,1:ngl)
-!
-   chgmom_data => aliasArray5_r(AngularData%radial_data,n_spin_pola,2,ngl_the,ngl_phi,jend)
-   chgmom_size = n_spin_pola*2*ngl_the*ngl_phi*jend
-!
 #ifdef TIMING
     t1 = getTime()
     write(6,*) "calExchangeJl:: Init Time : ",t1-t0
 #endif
 !
-   allocate( sinp(ngl_phi), cosp(ngl_phi), facp(ngl_phi), ip02ip(ngl_phi) )
-   do ip0 = 1,ngl_phi
-      if ( mod(ip0,2)==0 ) then
-         ip = ngl_phi-ip0/2+1
-      else
-         ip = (ip0+1)/2
-      endif
-      cosp(ip0)  = cos(phi(ip))
-      sinp(ip0)  = sin(phi(ip))
-      facp(ip0)  = sinp(ip0)*wght_phi(ip)
-      ip02ip(ip0) = ip
-   enddo
-!
-   allocate( sint(ngl_the), cost(ngl_the), it02it(ngl_the) )
-   do it0 = 1,ngl_the
-      if ( mod(it0,2)==0 ) then
-         it = ngl_the-it0/2+1
-      else
-         it = (it0+1)/2
-      endif
-      sint(it0) = sin(theta(it))
-      cost(it0) = cos(theta(it))
-      it02it(it0) = it
-   enddo
-!
-   n0max = ngl_phi*ngl_the
-   allocate( upos(3,n0max) )
-   n0 = 0
-   do ip0 = 1,ngl_phi
-      do it0 = 1,ngl_the
-         n0 = n0 + 1
-         upos(1,n0) = cost(it0)*sinp(ip0)
-         upos(2,n0) = sint(it0)*sinp(ip0)
-         upos(3,n0) = cosp(ip0)
-      enddo
-   enddo
-!
-   chgmom_data = ZERO
    tc1 = ZERO; tc2 = ZERO; tc3 = ZERO
    ts = getTime()
-   ir_lastNeg = 0
-   do ir = MyPEinEKGroup+1,jend,NumPEsInEKGroup
-      isNegCharge = .false.
-      pXC_r(1,1) = CZERO; eXC_r(1,1) = CZERO
-      pXC_r(1,n_spin_pola) = CZERO; eXC_r(1,n_spin_pola) = CZERO
-      n0 = 0
-      Loop_phi01: do ip0 = 1,ngl_phi
-         ip = ip02ip(ip0)
-!1021    if ( mod(ip0,2)==0 ) then
-!1021       ip = ngl_phi-ip0/2+1
-!1021    else
-!1021       ip = (ip0+1)/2
-!1021    endif
-!1021    cosp  = cos(phi(ip))
-!1021    sinp  = sin(phi(ip))
-         pXC_rphi(1,1) = CZERO; eXC_rphi(1,1) = CZERO
-         pXC_rphi(1,n_spin_pola) = CZERO; eXC_rphi(1,n_spin_pola) = CZERO
-         Loop_the01: do it0 = 1,ngl_the
-            n0 = n0 + 1
-            it = it02it(it0)
-!1021       if ( mod(it0,2)==0 ) then
-!1021          it = ngl_the-it0/2+1
-!1021       else
-!1021          it = (it0+1)/2
-!1021       endif
 !
-! The following code appears alright: theta corresonds to
-! Phi, and phi corresponds to Theta. Just a bad way in naming the variables. -Yang Wang
-!
-!1021       sint = sin(theta(it))
-!1021       cost = cos(theta(it))
-!11/14/18   posi(1) = sint*sinp
-!11/14/18   posi(2) = cost*sinp
-!ywg 11/14/18
-!1021       posi(1) = cost*sinp
-!1021       posi(2) = sint*sinp
-!
-!1021       posi(3) = cosp
-!1021       posi(1:3) = r_mesh(ir)*posi(1:3)
-            posi(1:3) = r_mesh(ir)*upos(1:3,n0)
-!
-            t2 = getTime()
-            if (gga_functional) then
-               rho = getChargeDensityAtPoint( 'TotalNew', id, ia, posi, TEN2m8, grad=grad_rho )
-            else
-               rho = getChargeDensityAtPoint( 'TotalNew', id, ia, posi, TEN2m8 )
-               grad_rho = ZERO
-            endif
-            tc1 = tc1 + (getTime()-t2)  ! cummulating time on getChargeDensityAtPoint
-            if ( rho <= ZERO ) then
-               cycle Loop_the01
-            endif
-            t2 = getTime()
-            if ( n_spin_pola==2 ) then
-               if (gga_functional) then
-                  mom = getMomentDensityAtPoint( 'TotalNew', id, ia, posi, TEN2m8, grad=grad_mom )
-!                 ----------------------------------------------------
-                  call calExchangeCorrelation(rho,grad_rho,mom,grad_mom)
-!                 ----------------------------------------------------
-               else
-                  mom = getMomentDensityAtPoint( 'TotalNew', id, ia, posi, TEN2m8 )
-!                 ----------------------------------------------------
-                  call calExchangeCorrelation(rho,mag_den=mom)
-!                 ----------------------------------------------------
-               endif
-            else
-               if (gga_functional) then
-!                 ----------------------------------------------------
-                  call calExchangeCorrelation(rho,grad_rho_den=grad_rho)
-!                 ----------------------------------------------------
-               else
-!                 ----------------------------------------------------
-                  call calExchangeCorrelation(rho)
-!                 ----------------------------------------------------
-               endif
-            endif
-            tc2 = tc2 + (getTime()-t2)  ! cummulating time on calExchangeCorrelation
-            t2 = getTime()
-            do is = 1,n_spin_pola
-!              -------------------------------------------------------
-               pXC_rtp = getExchCorrPot(is)
-               eXC_rtp = getExchCorrEnDen()
-!              -------------------------------------------------------
-               chgmom_data(is,1,it0,ip0,ir) = pXC_rtp
-               chgmom_data(is,2,it0,ip0,ir) = eXC_rtp
-               pXC_rtp = Y0*pXC_rtp*wght_the(it)
-               pXC_rphi(1,is) = pXC_rphi(1,is) + pXC_rtp ! cmplx(pXC_rtp,ZERO,Kind=CmplxKind)
-               eXC_rtp = Y0*eXC_rtp*wght_the(it)
-               eXC_rphi(1,is) = eXC_rphi(1,is) + eXC_rtp ! cmplx(eXC_rtp,ZERO,Kind=CmplxKind)
-            enddo
-            tc3 = tc3 + (getTime()-t2)  ! cummulating time on getExchCorrPot and getExchCorrEnDen
-         enddo Loop_the01
-!1021    fact = sinp(ip0)*wght_phi(ip)
-         do is = 1,n_spin_pola
-            pXC_r(1,is) = pXC_r(1,is) + facp(ip0)*pXC_rphi(1,is)
-            eXC_r(1,is) = eXC_r(1,is) + facp(ip0)*eXC_rphi(1,is)
-         enddo
-      enddo Loop_phi01
-!
-      do is = 1,n_spin_pola
-         potL_Exch(ir,1,is) = pXC_r(1,is)
-         enL_Exch(ir,1,is)  = eXC_r(1,is)
-!
-#ifdef DEBUG
-         if ( ir==999 ) then
-            write(6,'(a,i4,a,4d16.8)') "id:",id,"Pot-En_Exchange MT-1:", pXC_r(1,is),eXC_r(1,is)
+   ngl = getNumSphericalGridPoints()
+   angular_data => getSphericalGridData()
+   size_d1 = size(angular_data,1)
+   angular_data = ZERO
+   do ing = 1, ngl
+      uv = getUnitVec(ing)
+      LOOP_ir: do ir = MyPEinEKGroup+1, jend, NumPEsInEKGroup
+         posi(1:3) = r_mesh(ir)*uv(1:3)
+
+         t2 = getTime()
+         if (gga_functional) then
+            rho = getChargeDensityAtPoint( 'TotalNew', id, ia, posi, TEN2m8, grad=grad_rho, truncated=.false. )
+         else
+            rho = getChargeDensityAtPoint( 'TotalNew', id, ia, posi, TEN2m8, truncated=.false. )
+            grad_rho = ZERO
          endif
-#endif
-!
-      enddo
+         tc1 = tc1 + (getTime()-t2)  ! cummulating time on getChargeDensityAtPoint
+         if ( rho <= ZERO ) then
+            cycle Loop_ir
+         endif
+         t2 = getTime()
+         if ( n_spin_pola==2 ) then
+            if (gga_functional) then
+               mom = getMomentDensityAtPoint( 'TotalNew', id, ia, posi, TEN2m8, grad=grad_mom, truncated=.false. )
+!              -------------------------------------------------------
+               call calExchangeCorrelation(rho,grad_rho,mom,grad_mom)
+!              -------------------------------------------------------
+            else
+               mom = getMomentDensityAtPoint( 'TotalNew', id, ia, posi, TEN2m8, truncated=.false. )
+!              -------------------------------------------------------
+               call calExchangeCorrelation(rho,mag_den=mom)
+!              -------------------------------------------------------
+            endif
+         else
+            if (gga_functional) then
+!              -------------------------------------------------------
+               call calExchangeCorrelation(rho,grad_rho_den=grad_rho)
+!              -------------------------------------------------------
+            else
+!              -------------------------------------------------------
+               call calExchangeCorrelation(rho)
+!              -------------------------------------------------------
+            endif
+         endif
+         tc2 = tc2 + (getTime()-t2)  ! cummulating time on calExchangeCorrelation
+         n0 = (n_spin_pola+1)*(ir-1)
+         do is = 1,n_spin_pola
+            angular_data(n0+is,ing) = getExchCorrPot(is)
+         enddo
+         angular_data(n0+n_spin_pola+1,ing) = getExchCorrEnDen()
+      enddo LOOP_ir
    enddo
    t3 = getTime()
    if (NumPEsInEKGroup > 1) then
-      do is = 1,n_spin_pola
-!        -------------------------------------------------------------
-         call GlobalSumInGroup(ekGID,potL_Exch(:,1,is),jend)
-         call GlobalSumInGroup(ekGID,enL_Exch(:,1,is),jend)
-!        -------------------------------------------------------------
-      enddo
 !     ----------------------------------------------------------------
-      call GlobalSumInGroup(ekGID,AngularData%radial_data,chgmom_size)
+      call GlobalSumInGroup(ekGID,angular_data,size_d1,ngl)
 !     ----------------------------------------------------------------
+   endif
+!  -------------------------------------------------------------------
+   call calAngularIntegration(MyPEinEKGroup,NumPEsInEKGroup,ekGID)
+!  -------------------------------------------------------------------
+   do is = 1, n_spin_pola
+!     ----------------------------------------------------------------
+      call retrieveSphHarmExpanData(jend,jmax,is,potL_Exch(:,:,is),   &
+                                    MyPEinEKGroup,NumPEsInEKGroup,ekGID)
+!     ----------------------------------------------------------------
+   enddo
+!  -------------------------------------------------------------------
+   call retrieveSphHarmExpanData(jend,jmax,n_spin_pola+1,enL_Exch(:,:,1), &
+                                 MyPEinEKGroup,NumPEsInEKGroup,ekGID)
+!  -------------------------------------------------------------------
+!
+!  ===================================================================
+!  Note: The exchange-correlation energy density is independent of spin
+!        so the following lines of the code is unnacessary and will be
+!        removed after the spin index in the data structure of enL_Exch
+!        is removed in the future.
+!  ===================================================================
+   if (n_spin_pola == 2) then
+      enL_Exch(:,:,2) = enL_Exch(:,:,1)
    endif
 !
    if (MyPE == 0) then
@@ -4360,131 +4266,24 @@ contains
 !     ----------------------------------------------------------------
       call hunt(jend,r_mesh(1:jend),r,ir_fit)
 !     ----------------------------------------------------------------
-      ir_lastNeg = 0
       indrl_fit = ir_fit
 !
       ts = getTime()
 !
-      do ir = MyPEinEKGroup+ir_fit, jend, NumPEsInEKGroup
-         ing=0
-         if ( ir < Potential(id)%jend ) then
-            do is = 1,n_spin_pola
-               pXC_r0(is) = Y0*real(potL_Exch(ir,1,is),kind=RealKind)
-               eXC_r0(is) = Y0*real(enL_Exch(ir,1,is),kind=RealKind)
-            enddo
-         else
-            pXC_r0 = ZERO
-            eXC_r0 = ZERO
-         endif
-!        pXC_r(1:jmax,1:n_spin_pola) = CZERO
-!        eXC_r(1:jmax,1:n_spin_pola) = CZERO
-         pXC_r = CZERO; eXC_r = CZERO
-         n0 = 0
-         Loop_phi1: do ip0 = 1,ngl_phi
-            ip = ip02ip(ip0)
-!1021       if ( mod(ip0,2)==0 ) then
-!1021          ip = ngl_phi-ip0/2+1
-!1021       else
-!1021          ip = (ip0+1)/2
-!1021       endif
-!1021       cosp  = cos(phi(ip))
-!1021       sinp  = sin(phi(ip))
-!1021       pXC_rphi(1:jmax,1:n_spin_pola) = CZERO
-!1021       eXC_rphi(1:jmax,1:n_spin_pola) = CZERO
-            pXC_rphi = CZERO; eXC_rphi = CZERO
-            Loop_the1: do it0 = 1,ngl_the
-               n0 = n0 + 1
-               it = it02it(it0)
-!1021          if ( mod(it0,2)==0 ) then
-!1021             it = ngl_the-it0/2+1
-!1021          else
-!1021             it = (it0+1)/2
-!1021          endif
-               ing = (ip-1)*ngl_the+it
-!1021          sint = sin(theta(it))
-!1021          cost = cos(theta(it))
-!1021          posi(1) = sint*sinp
-!1021          posi(2) = cost*sinp
-!ywg 06/24/20
-!1021          posi(1) = cost*sinp
-!1021          posi(2) = sint*sinp
-!
-!1021          posi(3) = cosp
-!1021          posi(1:3) = r_mesh(ir)*posi(1:3)
-               posi(1:3) = r_mesh(ir)*upos(1:3,n0)
-               pylm => ylm_ngl(1:kmax,ing)
-!
-               do is = 1,n_spin_pola
-                  pXC_rtp = chgmom_data(is,1,it0,ip0,ir)
-                  eXC_rtp = chgmom_data(is,2,it0,ip0,ir)
-!
-                  pXC_rtp = (pXC_rtp -pXC_r0(is))*wght_the(it)
-                  eXC_rtp = (eXC_rtp -eXC_r0(is))*wght_the(it)
-!                  pXC_rtp = pXC_rtp*wght_the(it)
-!                  eXC_rtp = eXC_rtp*wght_the(it)
-!
-                  do jl = 2,jmax
-!     if (flags_jl(jl) > 0) then   ! Added by Yang @ Dec 27, 2014
-                     l = lofj(jl)
-                     m = mofj(jl)
-                     kl = (l+1)*(l+1)-l+mofj(jl)
-                     pXC_rphi(jl,is) = pXC_rphi(jl,is) +                &
-!                     cmplx(pXC_rtp,ZERO,Kind=CmplxKind)*m1m(m)*conjg(pylm(kl))/&
-                     cmplx(pXC_rtp,ZERO,Kind=CmplxKind)*conjg(pylm(kl))/&
-                     r_mesh(ir)**l
-                     eXC_rphi(jl,is) = eXC_rphi(jl,is) +                &
-!                     cmplx(eXC_rtp,ZERO,Kind=CmplxKind)*m1m(m)*conjg(pylm(kl))/&
-                     cmplx(eXC_rtp,ZERO,Kind=CmplxKind)*conjg(pylm(kl))/&
-                     r_mesh(ir)**l
-!     endif
-                  enddo
-               enddo
-!
-            enddo Loop_the1
-!
-!1021       fact = sinp*wght_phi(ip)
+      LOOP_ir1: do ir = 1, jend
+         if (r_mesh(ir)<0.1d0) then
             do is = 1,n_spin_pola
                do jl = 2,jmax
-                  pXC_r(jl,is) = pXC_r(jl,is) + facp(ip0)*pXC_rphi(jl,is)
-                  eXC_r(jl,is) = eXC_r(jl,is) + facp(ip0)*eXC_rphi(jl,is)
-              enddo
+                  l = lofj(jl)
+                  if ( indrl_fit(jl,is)<=ir_fit+1 ) then
+                     indrl_fit(jl,is) = ir+1
+                  endif
+               enddo
             enddo
-!
-         enddo Loop_phi1
-!
-         do is = 1,n_spin_pola
-            do jl = 2,jmax
-               l = lofj(jl)
-               pXC_r(jl,is) = pXC_r(jl,is)*r_mesh(ir)**l
-               eXC_r(jl,is) = eXC_r(jl,is)*r_mesh(ir)**l
-            enddo
-         enddo
-!
-         do is = 1,n_spin_pola
-            do jl = 2,jmax
-               potL_Exch(ir,jl,is) = pXC_r(jl,is)
-               enL_Exch(ir,jl,is)  = eXC_r(jl,is)
-            enddo
-         enddo
-!
-         do is = 1,n_spin_pola
-            do jl = 2,jmax
-               l = lofj(jl)
-               if ( r_mesh(ir)<0.1d0 .and. abs(pXC_r(jl,is))<5.0d0*ten2m12 &
-                    .and. ( indrl_fit(jl,is)<=ir_fit+1 ) ) then
-                  indrl_fit(jl,is) = ir+1
-               endif
-            enddo
-         enddo
-      enddo
-      if (NumPEsInEKGroup > 1) then
-         do is = 1, n_spin_pola
-!           ----------------------------------------------------------
-            call GlobalSumInGroup(ekGID,potL_Exch(:,2:,is),jend,jmax-1)
-            call GlobalSumInGroup(ekGID,enL_Exch(:,2:,is),jend,jmax-1)
-!           ----------------------------------------------------------
-         enddo
-      endif
+         else
+            exit LOOP_ir1
+         endif
+      enddo LOOP_ir1
       if (MyPE == 0) then
          write(6,'(/,a,f10.5)')'Time:: calExchangeJl::Loop_ir 2: ',getTime()-ts
       endif
@@ -4525,8 +4324,6 @@ contains
 !
    endif
 !
-   deallocate(sint, cost, sinp, cosp, upos, facp, it02it, ip02ip)
-!
 !  -------------------------------------------------------------------
    call checkLocalTimer(3,local_t)
    call stopLocalTimer()
@@ -4542,98 +4339,6 @@ contains
    write(6,*) "calExchangeJl:: Time : ",t0
 #endif
    end subroutine calExchangeJl
-!  ===================================================================
-!
-!  *******************************************************************
-!
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine setAngularData(nt,np,ll,ns,nr)
-!  ===================================================================
-   use SphericalHarmonicsModule, only : calYlm
-!
-   implicit none
-!
-   integer (kind=IntKind), intent(in) :: nt, np, ll, ns, nr
-!
-   integer (kind=IntKind) :: ngl, ing, ip, it, kl
-!
-   real (kind=RealKind) :: sint, cost, sinp, cosp, posi(3)
-   real (kind=RealKind), pointer :: theta(:), phi(:)
-   real (kind=RealKind), pointer :: wght_the(:), wght_phi(:)
-   complex (kind=CmplxKind), pointer :: ylm_ngl(:,:)
-!
-   kl = (ll+1)*(ll+1)
-   AngularData%kmax    = kl
-   AngularData%n_theta = nt
-   AngularData%n_phi   = np
-   AngularData%ngl     = nt*np
-   ngl = AngularData%ngl 
-!
-   allocate( AngularData%theta(nt), AngularData%phi(np),              &
-             AngularData%wght_phi(np), AngularData%wght_the(nt) )
-   allocate( AngularData%ylm_ngl(1:AngularData%kmax,1:ngl))
-!
-   phi   => AngularData%phi
-   theta => AngularData%theta
-   wght_the => AngularData%wght_the
-   wght_phi => AngularData%wght_phi
-   ylm_ngl => AngularData%ylm_ngl
-!
-   do it = 1,nt
-      wght_the(it) = PI2/nt
-      theta(it)    = (it-1)*wght_the(it)+HALF*wght_the(it)
-   enddo
-!   do ip = 1,np
-!      wght_phi(ip) = PI/np
-!      phi(ip)    = (ip-1)*wght_phi(ip)+HALF*wght_phi(ip)
-!   enddo
-   call  gauleg(ZERO, PI, phi(1:np), wght_phi(1:np), np)
-!   call  gauleg(ZERO, PI/2, phi(1:np/2), wght_phi(1:np/2), np/2)
-!   call  gauleg(Pi/2, PI, phi(np/2+1:np), wght_phi(np/2+1:np), np/2)
-!   call  gauleg(ZERO, PI, theta(1:nt/2), wght_the(1:nt/2), nt/2)
-!   call  gauleg(PI, PI2, theta(nt/2+1:nt), wght_the(nt/2+1:nt), nt/2)
-!
-   if ( kl>1 ) then!
-      ing=0
-      do ip = 1,np
-         cosp  = cos(phi(ip))
-         sinp  = sin(phi(ip))
-         do it = 1,nt
-            ing = ing+1
-            sint = sin(theta(it))
-            cost = cos(theta(it))
-            posi(1) = sint*sinp
-            posi(2) = cost*sinp
-!
-!ywg 11/14/18
-  posi(1) = cost*sinp
-  posi(2) = sint*sinp
-!
-            posi(3) = cosp
-!           ----------------------------------------------------
-            call calYlm(posi, ll, ylm_ngl(1:kl,ing) )
-!           ----------------------------------------------------
-         enddo
-      enddo
-   endif
-!
-   allocate(AngularData%radial_data(ns*2*nt*np*nr))
-!
-   end subroutine setAngularData
-!  ===================================================================
-!
-!  *******************************************************************
-!
-!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine clearAngularData()
-!  ===================================================================
-   implicit none
-! 
-   deallocate( AngularData%theta, AngularData%phi,                    &
-               AngularData%wght_phi, AngularData%wght_the )
-   deallocate( AngularData%ylm_ngl, AngularData%radial_data )
-!
-   end subroutine clearAngularData
 !  ===================================================================
 !
 !  *******************************************************************
