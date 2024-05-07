@@ -1260,8 +1260,10 @@ contains
    REAL (kind=RealKind), intent(inout) :: s
    REAL (kind=RealKind) :: del, sum, tnm, x, dum
 !
-   complex (kind=CmplxKind), intent(inout) :: aux(AuxArraySize)
-   complex (kind=CmplxKind), target, intent(out) :: aux_t(AuxArraySize,2)
+!  complex (kind=CmplxKind), intent(inout) :: aux(AuxArraySize)
+!  complex (kind=CmplxKind), target, intent(out) :: aux_t(AuxArraySize,2)
+   complex (kind=CmplxKind), intent(inout) :: aux(:)
+   complex (kind=CmplxKind), target, intent(out) :: aux_t(:,:)
    complex (kind=CmplxKind), pointer :: aux_a(:), aux_b(:), aux_sum(:)
 !
    interface

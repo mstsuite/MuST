@@ -3811,7 +3811,7 @@ endif
 !
    character (len=5), parameter :: sname='outws'
 !
-   integer (kind=IntKind), intent(out) :: invp
+   integer (kind=IntKind), intent(inout) :: invp
    integer (kind=IntKind), intent(in) :: imm
    integer (kind=IntKind), intent(in) :: lll
    integer (kind=IntKind), intent(in) :: nodes
