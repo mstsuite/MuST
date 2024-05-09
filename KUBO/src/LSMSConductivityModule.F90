@@ -7,7 +7,7 @@ module LSMSConductivityModule
 
 public :: initLSMSConductivity, &
           endLSMSConductivity,  &
-          calSigmaTildeLSMS
+          computeLSMSConductivity
 
 private
    integer (kind=IntKind) :: LocalNumAtoms, GlobalNumAtoms
@@ -16,11 +16,10 @@ private
    integer (kind=IntKind), allocatable :: num_neighbors(:)
    real (kind=RealKind) :: omega
    complex (kind=CmplxKind) :: eval
-   complex (kind=CmplxKind), pointer :: tau(:,:), tau00(:,:,:)
 
    type TauContainerType
-      complex (kind=CmplxKind), allocatable :: taup(:,:)
-      complex (kind=CmplxKind), allocatable :: taun(:,:)
+      complex (kind=CmplxKind), allocatable :: taup(:,:,:)
+      complex (kind=CmplxKind), allocatable :: taun(:,:,:)
    end type TauContainerType
   
    type TauNeighborType
@@ -76,16 +75,19 @@ contains
    use SystemVolumeModule, only : getSystemVolume
    use PolyhedraModule, only : getVolume
    use SystemModule, only : getAtomTypeName, getAtomType, getNumAtomTypes
+!
+   implicit none
 
    integer (kind=IntKind), intent(in) :: ndir, npola, kmax, iprint
    real (kind=RealKind), intent(in) :: efermi
-   integer (kind=IntKind) :: shin, pot_type, id, i, j, L1, L2
+   integer (kind=IntKind) :: shin, pot_type, id, i, j, L1, L2, is
    integer (kind=IntKind) :: jmsize, jmrank, ne
    real (kind=RealKind) :: delta
    real (kind=RealKind) :: posi(3), posj(3), dist
    complex (kind=CmplxKind) :: eneg, kappa
    complex (kind=CmplxKind), allocatable :: temp(:,:)
    complex (kind=CmplxKind), pointer :: Jx(:,:), Jy(:,:), Jz(:,:)
+   complex (kind=CmplxKind), pointer :: p_tau(:,:)
 
    numspecies = getNumAtomTypes()
    delta = getFermiEnergyImagPart()
@@ -125,10 +127,10 @@ contains
       allocate(TauIJ(i)%neigh1j(Neighbor%NumAtoms+1))
       allocate(TauIJ(i)%neighj1(Neighbor%NumAtoms+1))
       do j = 1, Neighbor%NumAtoms+1
-         allocate(TauIJ(i)%neigh1j(j)%taup(kmax, kmax))
-         allocate(TauIJ(i)%neigh1j(j)%taun(kmax, kmax))
-         allocate(TauIJ(i)%neighj1(j)%taup(kmax, kmax))
-         allocate(TauIJ(i)%neighj1(j)%taun(kmax, kmax))
+         allocate(TauIJ(i)%neigh1j(j)%taup(kmax, kmax, n_spin_pola))
+         allocate(TauIJ(i)%neigh1j(j)%taun(kmax, kmax, n_spin_pola))
+         allocate(TauIJ(i)%neighj1(j)%taup(kmax, kmax, n_spin_pola))
+         allocate(TauIJ(i)%neighj1(j)%taun(kmax, kmax, n_spin_pola))
     !  TauIJ(i,j)%taup = CZERO
     !  TauIJ(i,j)%taun = CZERO
       enddo
@@ -136,6 +138,7 @@ contains
 
 !  Solving for eF - i*delta
 
+!  do is = 1, n_spin_pola
 !  do id = 1, LocalNumAtoms
 !    print *, "Atom number ", id
 !    --------------------------------------------------------------------------
@@ -150,10 +153,11 @@ contains
 !    Neighbor => getNeighbor(i)
 !    do j = 1, Neighbor%NumAtoms+1
 !     if (checkIfNeighbor(i,j)) then
-!        TauIJ(i)%neigh1j(j)%taun = getNeighborTau(i, j, 0)
-!        TauIJ(i)%neighj1(j)%taun = getNeighborTau(i, j, 1)
+!        TauIJ(i)%neigh1j(j)%taun(:,:,is) = getNeighborTau(i, j, 0)
+!        TauIJ(i)%neighj1(j)%taun(:,:,is) = getNeighborTau(i, j, 1)
 !      endif
 !    enddo
+!  enddo
 !  enddo
 
 !  Solving for eF + i*delta
@@ -175,28 +179,30 @@ contains
 
 !     do i = 1, LocalNumAtoms
 !        do j = 1, LocalNumAtoms
-!           TauIJ(i,j)%taup = getClusterTau(i, j)
+!           TauIJ(i,j)%taup(:,:,is) = getClusterTau(i, j)
 !        enddo
 !     enddo 
 
       do i = 1, LocalNumAtoms
          Neighbor => getNeighbor(i)
          do j = 1, Neighbor%NumAtoms+1
-            TauIJ(i)%neigh1j(j)%taup = getNeighborTau(i,j,0)
-            TauIJ(i)%neighj1(j)%taup = getNeighborTau(i,j,1)
+            p_tau => TauIJ(i)%neigh1j(j)%taup(:,:,is)
+            p_tau = getNeighborTau(i,j,0)
+            p_tau => TauIJ(i)%neighj1(j)%taup(:,:,is)
+            p_tau = getNeighborTau(i,j,1)
          enddo
       enddo
 
-!     call writeMatrix('Tau12', TauIJ(1,2)%taup, dsize, dsize)
+!     call writeMatrix('Tau12', TauIJ(1,2)%taup(:,:,is), dsize, dsize)
       do i = 1, LocalNumAtoms
          Neighbor => getNeighbor(i)
          do j = 1, Neighbor%NumAtoms+1
             do L1 = 1, dsize
                do L2 = 1, dsize
-                  TauIJ(i)%neigh1j(j)%taun(L1,L2) = (-1.0)**(getLindex(L1) - getLindex(L2))* &
-                                                    conjg(TauIJ(i)%neighj1(j)%taup(L2,L1))
-                  TauIJ(i)%neighj1(j)%taun(L1,L2) = (-1.0)**(getLindex(L1) - getLindex(L2))* &
-                                                    conjg(TauIJ(i)%neigh1j(j)%taup(L2,L1))
+                  TauIJ(i)%neigh1j(j)%taun(L1,L2,is) = (-1.0)**(getLindex(L1) - getLindex(L2))* &
+                                                       conjg(TauIJ(i)%neighj1(j)%taup(L2,L1,is))
+                  TauIJ(i)%neighj1(j)%taun(L1,L2,is) = (-1.0)**(getLindex(L1) - getLindex(L2))* &
+                                                       conjg(TauIJ(i)%neigh1j(j)%taup(L2,L1,is))
                enddo
             enddo
          enddo
@@ -207,11 +213,13 @@ contains
             Neighbor => getNeighbor(i)
             do j = 1, Neighbor%NumAtoms+1
                if (j == 1) then
-                  write(6,'(a,2i4,2x,2d15.8)')'tau1j = ',getGlobalIndex(i),getGlobalIndex(i),TauIJ(i)%neigh1j(j)%taup(1,1)
-                  write(6,'(a,2i4,2x,2d15.8)')'tauj1 = ',getGlobalIndex(i),getGlobalIndex(i),TauIJ(i)%neighj1(j)%taup(1,1)
+                  write(6,'(a,2i4,2x,2d15.8)')'tau1j = ',getGlobalIndex(i),getGlobalIndex(i),TauIJ(i)%neigh1j(j)%taup(1,1,is)
+                  write(6,'(a,2i4,2x,2d15.8)')'tauj1 = ',getGlobalIndex(i),getGlobalIndex(i),TauIJ(i)%neighj1(j)%taup(1,1,is)
                else
-                  write(6,'(a,2i4,2x,2d15.8)')'tau1j = ',getGlobalIndex(i),Neighbor%GlobalIndex(j-1),TauIJ(i)%neigh1j(j)%taup(1,1)
-                  write(6,'(a,2i4,2x,2d15.8)')'tauj1 = ',getGlobalIndex(i),Neighbor%GlobalIndex(j-1),TauIJ(i)%neighj1(j)%taup(1,1)
+                  write(6,'(a,2i4,2x,2d15.8)')'tau1j = ',getGlobalIndex(i),Neighbor%GlobalIndex(j-1), &
+                                                         TauIJ(i)%neigh1j(j)%taup(1,1,is)
+                  write(6,'(a,2i4,2x,2d15.8)')'tauj1 = ',getGlobalIndex(i),Neighbor%GlobalIndex(j-1), &
+                                                         TauIJ(i)%neighj1(j)%taup(1,1,is)
                endif
             enddo
             write(6,'(a,i4,a,i4)')'Convergence Data For Atom ',getGlobalIndex(i),',  Species ',getAtomType(i)
@@ -219,25 +227,27 @@ contains
             do j = 2, Neighbor%NumAtoms+1
                shin = Neighbor%ShellIndex(j-1)
                write(6,'(2i4,f12.8,2x,d15.8)') Neighbor%GlobalIndex(j-1), getAtomType(Neighbor%GlobalIndex(j-1)), &
-                                               Neighbor%ShellRad(shin), real(TauIJ(i)%neigh1j(j)%taup(1,1),kind=RealKind)
+                                               Neighbor%ShellRad(shin), real(TauIJ(i)%neigh1j(j)%taup(1,1,is),kind=RealKind)
             enddo
 
             write(6,'(a)')'Index,  Species,  (2,2) element'
             do j = 2, Neighbor%NumAtoms+1
                shin = Neighbor%ShellIndex(j-1)
                write(6,'(2i4,f12.8,2x,d15.8)') Neighbor%GlobalIndex(j-1), getAtomType(Neighbor%GlobalIndex(j-1)), &
-                                               Neighbor%ShellRad(shin), real(TauIJ(i)%neigh1j(j)%taup(2,2),kind=RealKind)
+                                               Neighbor%ShellRad(shin), real(TauIJ(i)%neigh1j(j)%taup(2,2,is),kind=RealKind)
             enddo
      
             write(6,'(a)')'Index,  Species,  (3,3) element'
             do j = 2, Neighbor%NumAtoms+1
                shin = Neighbor%ShellIndex(j-1)
                write(6,'(2i4,f12.8,2x,d15.8)') Neighbor%GlobalIndex(j-1), getAtomType(Neighbor%GlobalIndex(j-1)), &
-                                               Neighbor%ShellRad(shin), real(TauIJ(i)%neigh1j(j)%taup(3,3),kind=RealKind)
+                                               Neighbor%ShellRad(shin), real(TauIJ(i)%neigh1j(j)%taup(3,3,is),kind=RealKind)
             enddo
          enddo
       endif
    enddo
+!
+   nullify(p_tau)
 !
    jmsize = getJMatrixSize(jmrank)
    num_dirs = ndir
@@ -335,26 +345,26 @@ contains
   !    call writeMatrix('Jn', Jn, dsize, dsize)
          if (caltype == 1) then
             call zgemm('n', 'n', dsize, dsize, dsize, CONE, Jn, dsize, &
-                       TauIJ(m)%neighj1(n)%taup, dsize, CZERO, temp, dsize)
-  !         call writeMatrix('TauMN', TauIJ(m,n)%taup, dsize, dsize)
-  !         call writeMatrix('TauNM', TauIJ(n,m)%taup, dsize, dsize)
+                       TauIJ(m)%neighj1(n)%taup(1,1,is), dsize, CZERO, temp, dsize)
+  !         call writeMatrix('TauMN', TauIJ(m,n)%taup(:,:,is), dsize, dsize)
+  !         call writeMatrix('TauNM', TauIJ(n,m)%taup(:,:,is), dsize, dsize)
             call zgemm('n', 'n', dsize, dsize, dsize, CONE, &
-                       TauIJ(m)%neigh1j(n)%taup, dsize, temp, dsize, CZERO, temp2, dsize)
+                       TauIJ(m)%neigh1j(n)%taup(1,1,is), dsize, temp, dsize, CZERO, temp2, dsize)
          else if (caltype == 2) then
             call zgemm('n', 'n', dsize, dsize, dsize, CONE, Jn, dsize, &
-                       TauIJ(m)%neighj1(n)%taun, dsize, CZERO, temp, dsize)
+                       TauIJ(m)%neighj1(n)%taun(1,1,is), dsize, CZERO, temp, dsize)
             call zgemm('n', 'n', dsize, dsize, dsize, CONE, &
-                       TauIJ(m)%neigh1j(n)%taup, dsize, temp, dsize, CZERO, temp2, dsize)
+                       TauIJ(m)%neigh1j(n)%taup(1,1,is), dsize, temp, dsize, CZERO, temp2, dsize)
          else if (caltype == 3) then
             call zgemm('n', 'n', dsize, dsize, dsize, CONE, Jn, dsize, &
-                       TauIJ(m)%neighj1(n)%taup, dsize, CZERO, temp, dsize)
+                       TauIJ(m)%neighj1(n)%taup(1,1,is), dsize, CZERO, temp, dsize)
             call zgemm('n', 'n', dsize, dsize, dsize, CONE, &
-                       TauIJ(m)%neigh1j(n)%taun, dsize, temp, dsize, CZERO, temp2, dsize)
+                       TauIJ(m)%neigh1j(n)%taun(1,1,is), dsize, temp, dsize, CZERO, temp2, dsize)
          else if (caltype == 4) then
             call zgemm('n', 'n', dsize, dsize, dsize, CONE, Jn, dsize, &
-                       TauIJ(m)%neighj1(n)%taun, dsize, CZERO, temp, dsize)
+                       TauIJ(m)%neighj1(n)%taun(1,1,is), dsize, CZERO, temp, dsize)
             call zgemm('n', 'n', dsize, dsize, dsize, CONE, &
-                       TauIJ(m)%neigh1j(n)%taun, dsize, temp, dsize, CZERO, temp2, dsize)
+                       TauIJ(m)%neigh1j(n)%taun(1,1,is), dsize, temp, dsize, CZERO, temp2, dsize)
          endif
          call zgemm('n', 'n', dsize, dsize, dsize, CONE, Jm, dsize, &
                     temp2, dsize, CZERO, temp3, dsize)
@@ -657,4 +667,36 @@ contains
 !
    end subroutine cleanExchJmat
 !  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine computeLSMSConductivity(is, dirnum, sigmatilde)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: is, dirnum
+
+   integer (kind=IntKind) :: etype
+   integer (kind=IntKind) :: dir, dir1, nfac
+   complex (kind=CmplxKind) :: int_val
+   complex (kind=CmplxKind), intent(out) :: sigmatilde(3,3,4)
+
+   if (n_spin_pola == 1) then
+      nfac = 2
+   else
+      nfac = 1
+   endif
+
+   sigmatilde = CZERO
+   do etype = 1, 4
+      do dir1 = 1, dirnum
+         do dir = 1, dirnum
+            int_val = calSigmaTildeLSMS(is, dir, dir1, etype)
+            sigmatilde(dir,dir1,etype) = nfac*int_val
+         enddo
+      enddo
+   enddo
+
+   end subroutine computeLSMSConductivity
+!  ===================================================================
+
 end module LSMSConductivityModule

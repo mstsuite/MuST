@@ -2953,6 +2953,7 @@ endif
 !  ===================================================================
 !  initialize quantities
 !  ===================================================================
+   invp=nws  ! This line is added here to initialize invp and should hae no effect since it is followed by setting imm=0  
    imm=0
    iter=0
    dk=kqn

@@ -6,12 +6,7 @@
    use NeighborModule, only : getNeighbor, sortNeighbors
 
 public :: initCPAConductivity, &
-          calSigmaTilde0,   &
-          calSigmaTilde1VC, &
-          calOmegaMatrixCPA,   &
-          calChiMatrixCPA,     &
-          calChiIntegral,      &
-          calVertexCorrectionMatrixCPA, &
+          computeCPAConductivity, &
           endCPAConductivity
 
 private
@@ -37,6 +32,7 @@ private
    complex (kind=CmplxKind), allocatable, target :: tmat_g(:)
    complex (kind=CmplxKind), allocatable :: tmb(:,:), tmbsym(:,:)
 
+   integer (kind=IntKind) :: n_spin_pola
 
 #ifdef USE_SCALAPACK
 !  ===================================================================
@@ -60,9 +56,8 @@ contains
 !  ==================================================================
 
 !  cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine initCPAConductivity(n, is, kmax, efermi, LocalNumAtoms, mode)
+   subroutine initCPAConductivity(n, is, npola, kmax, efermi, LocalNumAtoms, mode)
 !  ==================================================================
- 
    use SSSolverModule, only : solveSingleScattering 
    use CPAMediumModule, only : computeCPAMedium, getCPAMatrix, populateBigTCPA, getSingleSiteMatrix, getSingleSiteTmat
    use AtomModule, only : getLocalNumSpecies, getLocalSpeciesContent
@@ -75,8 +70,10 @@ contains
    use GroupCommModule, only : GlobalMaxInGroup, getGroupCommunicator
    use GroupCommModule, only : syncAllPEsInGroup
    use CrystalMatrixModule, only : calCrystalMatrix, retrieveTauSRO
+!
+   implicit none
 
-   integer (kind=IntKind), intent(in) :: n, is, kmax, LocalNumAtoms, mode
+   integer (kind=IntKind), intent(in) :: n, is, npola, kmax, LocalNumAtoms, mode
    real (kind=RealKind), intent(in) :: efermi
 
    integer (kind=IntKind) :: ic, pot_type
@@ -90,6 +87,7 @@ contains
    global_index = getGlobalIndex(local_index)
    num_atoms = LocalNumAtoms
    
+   n_spin_pola = npola
    spin_pola = is
    dsize = kmax
    global_index = getGlobalIndex(local_index)
@@ -210,6 +208,8 @@ contains
 !  Can do calculation for both single site CPA and supercell case
 !
    use CurrentMatrixModule, only : getJMatrix
+!
+   implicit none
 
    integer (kind=IntKind), intent(in) :: dir1, dir2, caltype
    integer (kind=IntKind) :: ic, ic1, L
@@ -266,6 +266,8 @@ contains
 !  ===================================================================
    
    use CurrentMatrixModule, only : getJMatrix1D
+!
+   implicit none
    
    integer (kind=IntKind), intent(in) :: dir1, dir2, caltype
    integer (kind=IntKind) :: ic, K, L1, L4, K1, K1_t
@@ -309,6 +311,8 @@ contains
 
    use SSSolverModule, only : getScatteringMatrix
    use MatrixModule, only : computeAprojB
+!
+   implicit none
 
    integer (kind=IntKind) :: ic, L1, L2, L3, L4, K1, K2
    real (kind=RealKind) :: c_a
@@ -352,6 +356,8 @@ contains
    use CrystalMatrixModule, only : calChiIntegralCPA
    use CPAMediumModule, only : getSingleSiteTmat
    use WriteMatrixModule, only : writeMatrix
+!
+   implicit none
 
    integer (kind=IntKind) :: L1,L2,L3,L4,K1,K2
    
@@ -393,6 +399,8 @@ contains
    use MatrixModule, only : computeUAUtc, setupUnitMatrix
    use SystemModule, only : getLmaxKKR
    use CurrentMatrixModule, only : getLindex
+!
+   implicit none
 
    LOGICAL :: isHost
 
@@ -635,6 +643,8 @@ contains
 
    use MatrixModule, only : computeAprojB
    use WriteMatrixModule, only : writeMatrix
+!
+   implicit none
 
    integer (kind=IntKind) :: i
 
@@ -656,6 +666,8 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine endCPAConductivity()
 !  ===================================================================
+!
+   implicit none
 
    nullify(tau_c, tc)
    deallocate(tau_cc, tcc, tac, temp1, temp2, temp3, temp4, tau1,  &
@@ -665,4 +677,39 @@ contains
 
    end subroutine endCPAConductivity
 !  ===================================================================
+
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine computeCPAConductivity(is, dirnum, sigmatilde)
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: is, dirnum
+
+   integer (kind=IntKind) :: etype
+   integer (kind=IntKind) :: dir, dir1, nfac
+   complex (kind=CmplxKind) :: int_val
+   complex (kind=CmplxKind), intent(out) :: sigmatilde(3,3,4)
+
+   call calVertexCorrectionMatrixCPA()
+
+   if (n_spin_pola == 1) then
+      nfac = 2
+   else
+      nfac = 1
+   endif
+!
+   sigmatilde = CZERO
+   do etype = 1, 4
+      do dir1 = 1, dirnum
+         do dir = 1, dirnum
+            int_val = calSigmaTilde1VC(dir, dir1, etype) +            &
+                      calSigmaTilde0(dir, dir1, etype)
+            sigmatilde(dir,dir1,etype) = nfac*int_val
+         enddo
+      enddo
+   enddo
+
+   end subroutine computeCPAConductivity
+!  ===================================================================
+
 end module CPAConductivityModule
