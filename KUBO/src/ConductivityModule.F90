@@ -38,6 +38,7 @@ private
    integer (kind=IntKind) :: NumSpecies
 !
    integer (kind=IntKind) :: NumPEsInEGroup, MyPEinEGroup, eGID
+   integer (kind=IntKind) :: NumPEsInAGroup, aGID
 !
    logical :: Initialized = .false.
 ! 
@@ -83,11 +84,15 @@ contains
    n_spin_cant = cant
    NumPolyhedra = getNumPolyhedra()
 !
+   aGID = getGroupID('Unit Cell')
+   NumPEsInAGroup = getNumPEsInGroup(aGID)
+!
    eGID = getGroupID('Energy Mesh')
    NumPEsInEGroup = getNumPEsInGroup(eGID)
    MyPEinEGroup = getMyPEinGroup(eGID)
    if (maxval(iprint) >= 0) then
-      write(6,'(/,a,i4)')'Number of processes for the energy parallelization: ',NumPEsInEGroup
+      write(6,'(/,a,i4)')'Number of processes for the parallelization over the atoms in UC: ',NumPEsInAGroup
+      write(6,'(/,a,i4)')'Number of processes for the parallelization over the energy mesh: ',NumPEsInEGroup
    endif
 ! 
    if (isKKR()) then
@@ -184,6 +189,7 @@ contains
    subroutine calConductivity(efermi, LocalNumAtoms, n_spin_pola)
 !  ===================================================================
    use TimerModule, only : getTime
+   use ErrorHandlerModule, only : ErrorHandler
    use KuboDataModule, only : useCubicSymmetryForSigma
    use CPAConductivityModule, only : initCPAConductivity, endCPAConductivity, &
                                      computeCPAConductivity
@@ -194,7 +200,7 @@ contains
    implicit none
 !
    integer (kind=IntKind), intent(in) :: LocalNumAtoms, n_spin_pola
-   integer (kind=IntKind) :: id, is, dirnum, iprint, dir, dir1
+   integer (kind=IntKind) :: is, dirnum, iprint, dir, dir1
    real (kind=RealKind), intent(in) :: efermi
    real (kind=RealKind) :: t0
 !
@@ -236,40 +242,34 @@ contains
          enddo
       enddo
       call endLSMSConductivity()
-   else
-      do id = 1, LocalNumAtoms
-         do is = 1, n_spin_pola
-            if (mode == 3) then
-      !        ----------------------------------------------------------
-               call initCPAConductivity(id, is, n_spin_pola, kmax_kkr_max, efermi, LocalNumAtoms, mode)
-      !        ---------------------------------------------------------- 
-               call computeCPAConductivity(is, dirnum, sigmatilde)
-      !        ----------------------------------------------------------
-!
-               do dir1 = 1, dirnum
-                  do dir = 1, dirnum
-                     sigma(dir,dir1,is) = 0.25d0*(sigmatilde(dir,dir1,1) -        &
-                                                  sigmatilde(dir,dir1,2) -        &
-                                                  sigmatilde(dir,dir1,3) +        &
-                                                  sigmatilde(dir,dir1,4))
-                  enddo
-               enddo
-               call endCPAConductivity()
-      !        ----------------------------------------------------------
-            else if (mode == 4) then
-      !        ----------------------------------------------------------
-      !        Under development
-               call initCPAConductivity(id, is, n_spin_pola, kmax_kkr_max, efermi, LocalNumAtoms, mode)
-      !        ----------------------------------------------------------
-            endif
-            if (iprint >= 0) then
-               call writeMatrix('sigmatilde1', sigmatilde(:,:,1), 3, 3)
-               call writeMatrix('sigmatilde2', sigmatilde(:,:,2), 3, 3)
-               call writeMatrix('sigmatilde3', sigmatilde(:,:,3), 3, 3)
-               call writeMatrix('sigmatilde4', sigmatilde(:,:,4), 3, 3)
-            endif
+   else if (mode == 3 .or. mode == 4) then
+!     ----------------------------------------------------------------
+      call initCPAConductivity(n_spin_pola, kmax_kkr_max, efermi, LocalNumAtoms)
+!     ----------------------------------------------------------------
+      do is = 1, n_spin_pola
+      !  -------------------------------------------------------------
+         call computeCPAConductivity(is, mode, dirnum, sigmatilde)
+      !  -------------------------------------------------------------
+         do dir1 = 1, dirnum
+            do dir = 1, dirnum
+               sigma(dir,dir1,is) = 0.25d0*(sigmatilde(dir,dir1,1) -        &
+                                            sigmatilde(dir,dir1,2) -        &
+                                            sigmatilde(dir,dir1,3) +        &
+                                            sigmatilde(dir,dir1,4))
+            enddo
          enddo
+         if (iprint >= 0) then
+            call writeMatrix('sigmatilde1', sigmatilde(:,:,1), 3, 3)
+            call writeMatrix('sigmatilde2', sigmatilde(:,:,2), 3, 3)
+            call writeMatrix('sigmatilde3', sigmatilde(:,:,3), 3, 3)
+            call writeMatrix('sigmatilde4', sigmatilde(:,:,4), 3, 3)
+         endif
       enddo
+!     -------------------------------------------------------------
+      call endCPAConductivity()
+!     -------------------------------------------------------------
+   else
+      call ErrorHandler('calConductivity','The calculation mode is not implemented yet',mode)
    endif
    
    if (useCubicSymmetryForSigma()) then

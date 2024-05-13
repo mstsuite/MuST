@@ -11,10 +11,11 @@ public :: initCPAConductivity, &
 
 private
    logical :: vertex_corr
-   integer (kind=IntKind) :: num_atoms, local_index, global_index
+   integer (kind=IntKind) :: local_num_atoms, local_index, global_index
    integer (kind=IntKind) :: lmax_kkr, dsize, num_species, spin_pola
    integer (kind=IntKind) :: LWORK, LIWORK, dbg
-   integer (kind=IntKind) :: NumPEsInGroup, MyPEinGroup, GroupID
+   integer (kind=IntKind) :: NumPEsInAGroup, MyPEinAGroup, aGID
+   integer (kind=IntKind) :: NumPEsInKGroup, MyPEinKGroup, kGID
    integer (kind=IntKind), allocatable :: IWORK(:)
    real (kind=RealKind) :: omega
    real (kind=RealKind), allocatable :: species_content(:)
@@ -56,91 +57,56 @@ contains
 !  ==================================================================
 
 !  cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine initCPAConductivity(n, is, npola, kmax, efermi, LocalNumAtoms, mode)
+   subroutine initCPAConductivity(npola, kmax, efermi, LocalNumAtoms)
 !  ==================================================================
-   use SSSolverModule, only : solveSingleScattering 
-   use CPAMediumModule, only : computeCPAMedium, getCPAMatrix, populateBigTCPA, getSingleSiteMatrix, getSingleSiteTmat
-   use AtomModule, only : getLocalNumSpecies, getLocalSpeciesContent
-   use Atom2ProcModule, only : getGlobalIndex
-   use SystemVolumeModule, only : getAtomicVPVolume
-   use CurrentMatrixModule, only : calCurrentMatrix
+   use AtomModule, only : getLocalNumSpecies
    use KuboDataModule, only : isFermiEnergyRealPart, includeVertexCorrections, &
-     getFermiEnergyRealPart, useStepFunctionForSigma, getFermiEnergyImagPart
+                              getFermiEnergyRealPart, getFermiEnergyImagPart
    use GroupCommModule, only : getGroupID, getNumPEsInGroup, getMyPEinGroup
    use GroupCommModule, only : GlobalMaxInGroup, getGroupCommunicator
    use GroupCommModule, only : syncAllPEsInGroup
-   use CrystalMatrixModule, only : calCrystalMatrix, retrieveTauSRO
 !
    implicit none
 
-   integer (kind=IntKind), intent(in) :: n, is, npola, kmax, LocalNumAtoms, mode
+   integer (kind=IntKind), intent(in) :: npola, kmax, LocalNumAtoms
    real (kind=RealKind), intent(in) :: efermi
 
-   integer (kind=IntKind) :: ic, pot_type
+   integer (kind=IntKind) :: max_species, id
    real (kind=RealKind) :: delta
 
-   GroupID = getGroupID('Unit Cell')
-   NumPEsInGroup = getNumPEsInGroup(GroupID)
-   MyPEinGroup = getMyPEinGroup(GroupID)
+   aGID = getGroupID('Unit Cell')
+   NumPEsInAGroup = getNumPEsInGroup(aGID)
+   MyPEinAGroup = getMyPEinGroup(aGID)
 
-   local_index = n
-   global_index = getGlobalIndex(local_index)
-   num_atoms = LocalNumAtoms
+   kGID = getGroupID('K-Mesh')
+   NumPEsInKGroup = getNumPEsInGroup(kGID)
+   MyPEinKGroup = getMyPEinGroup(kGID)
+
+   local_num_atoms = LocalNumAtoms
    
    n_spin_pola = npola
-   spin_pola = is
    dsize = kmax
-   global_index = getGlobalIndex(local_index)
-   num_species = getLocalNumSpecies(local_index)
-   omega = getAtomicVPVolume(local_index)
-   
+
+   max_species = 0
+   do id = 1, LocalNumAtoms
+      max_species = max(max_species,getLocalNumSpecies(id))
+   enddo
+   allocate(species_content(max_species))
+
    vertex_corr = includeVertexCorrections()
    delta = getFermiEnergyImagPart()
-   pot_type = useStepFunctionForSigma()
 
    if (isFermiEnergyRealPart()) then
      eval = getFermiEnergyRealPart() + SQRTm1*delta
    else
      eval = efermi + SQRTm1*delta
    endif
-
-!  -------------------------------------------------------------------------------
-   call solveSingleScattering(spin=spin_pola,site=local_index,e=eval,vshift=CZERO)
-!  -------------------------------------------------------------------------------
-   if (mode == 4) then
-!    ----------------------------------------------------------------
-     call computeCPAMedium(eval, do_sro=.true.)
-!    ----------------------------------------------------------------------
-     call populateBigTCPA()
-!    ----------------------------------------------------------------
-     call calCrystalMatrix(eval, getSingleSiteMatrix ,use_tmat=.true.,tau_needed=.true., use_sro=.true.)
-!    ----------------------------------------------------------------
-     call retrieveTauSRO()
-!    ----------------------------------------------------------------
-   else
-     call computeCPAMedium(eval)
-   endif
-!  ------------------------------------------------------------------
-   call calCurrentMatrix(local_index,spin_pola,eval,pot_type,3)
-!  ------------------------------------------------------------------
-   
-   
-   allocate(species_content(num_species))
-   do ic = 1, num_species
-     species_content(ic) = getLocalSpeciesContent(local_index, ic)
-   enddo
-   
-   tau_c => getCPAMatrix('Tau',site=local_index,atom=0)
-   tc => getSingleSiteTmat('TInv-Matrix', spin=spin_pola, site=local_index, atom=0)
-   tmat => getSingleSiteTmat('T-Matrix', spin=spin_pola, site=local_index, atom=0)
    
    allocate(tau_cc(dsize, dsize), &
      tcc(dsize, dsize), tac(dsize, dsize), tau1(dsize, dsize), tau2(dsize, dsize), &
      xa(dsize, dsize), xac(dsize, dsize), temp1(dsize, dsize), temp2(dsize, dsize), &
      temp3(dsize, dsize), temp4(dsize, dsize), J1avg(dsize*dsize), J2avg(dsize*dsize))
    
-   tau_cc = conjg(tau_c)
-   tcc = conjg(tc)
    tac = CZERO; tau1 = CZERO; tau2 = CZERO; xa = CZERO; xac = CZERO
    temp1 = CZERO; temp2 = CZERO; temp3 = CZERO; temp4 = CZERO
    J1avg = CZERO; J2avg = CZERO
@@ -154,7 +120,7 @@ contains
    allocate(wtmp(dsize*dsize), wtmpsym(dsize*dsize), wint(dsize*dsize))
    allocate(TMP_MatrixBand(dsize*dsize), WORK(dsize*dsize), tmat_g(dsize*dsize))
    allocate(tmb(dsize, dsize), tmbsym(dsize, dsize))
-   allocate( IPVT(1:dsize+num_atoms*dsize) )
+   allocate( IPVT(1:dsize+local_num_atoms*dsize) )
    LWORK = dsize*dsize
    LIWORK = 2*dsize
    allocate( IWORK(1:LIWORK) )
@@ -163,40 +129,35 @@ contains
    wtmp = CZERO; wtmpsym = CZERO; wint = CZERO;
    TMP_MatrixBand = CZERO
    tmb = CZERO; tmbsym = CZERO;
-!  -------------------------------------------------------------
-   call zcopy(dsize*dsize,tmat(1,1),1,tmat_g(1),1)
-!  -------------------------------------------------------------
-   if (NumPEsInGroup == 1) then  ! ScaLapack will not be used for 1 process case
-      return
-   endif
 !
 #ifdef USE_SCALAPACK
-!  ==================================================================
-!  Initialize ScaLAPACK and set up matrix distribution
-!  ===================================================================
-   ICTXT = getGroupCommunicator(GroupID)
-   call BLACS_GRIDINIT( ICTXT, 'R', 1, NumPEsInGroup )
-!  ===================================================================
-   call BLACS_GRIDINFO(ICTXT, NPROW, NPCOL, MYROW, MYCOL)
-!  -------------------------------------------------------------------
-   if (NPROW /= 1 .or. NPCOL /= NumPEsInGroup .or. MYROW /= 0) then
+   if (NumPEsInAGroup > 1) then  ! ScaLapack will not be used for 1 process case
+!     ===============================================================
+!     Initialize ScaLAPACK and set up matrix distribution
+!     ================================================================
+      ICTXT = getGroupCommunicator(aGID)
+      call BLACS_GRIDINIT( ICTXT, 'R', 1, NumPEsInAGroup )
+!     ================================================================
+      call BLACS_GRIDINFO(ICTXT, NPROW, NPCOL, MYROW, MYCOL)
 !     ----------------------------------------------------------------
-      call ErrorHandler('initCrystalMatrix',                                 &
-              'Failed: NPROW /= 1 || NPCOL /= NumPEsInGroup || MYROW /= 0',  &
-              NPROW, NPCOL, MYROW)
+      if (NPROW /= 1 .or. NPCOL /= NumPEsInAGroup .or. MYROW /= 0) then
+!        -------------------------------------------------------------
+         call ErrorHandler('initCrystalMatrix',                                 &
+                 'Failed: NPROW /= 1 || NPCOL /= NumPEsInAGroup || MYROW /= 0',  &
+                 NPROW, NPCOL, MYROW)
+!        -------------------------------------------------------------
+      else if (MYCOL /= MyPEinAGroup) then
+!        -------------------------------------------------------------
+         call ErrorHandler('initCrystalMatrix','MYCOL /= MyPEinAGroup',MYCOL,MyPEinAGroup)
+!        -------------------------------------------------------------
+      endif
 !     ----------------------------------------------------------------
-   else if (MYCOL /= MyPEinGroup) then
+      call syncAllPEsInGroup(aGID)
 !     ----------------------------------------------------------------
-      call ErrorHandler('initCrystalMatrix','MYCOL /= MyPEinGroup',MYCOL,MyPEinGroup)
+      call DESCINIT( DESC_A, dsize, dsize, dsize, dsize, 0, 0, ICTXT, dsize, INFO )
 !     ----------------------------------------------------------------
    endif
-!  -------------------------------------------------------------------
-   call syncAllPEsInGroup(GroupID)
-!  -------------------------------------------------------------------
-   call DESCINIT( DESC_A, dsize, dsize, dsize, dsize, 0, 0, ICTXT, dsize, INFO )
-!  -------------------------------------------------------------------
 #endif
-
    end subroutine initCPAConductivity
 !  ==================================================================
 
@@ -391,7 +352,7 @@ contains
                            getWeightSum
    use ProcMappingModule, only : isKPointOnMyProc, getNumKsOnMyProc,  &
                                  getKPointIndex, getNumRedundantKsOnMyProc
-   use GroupCommModule, only : getGroupID, GlobalSumInGroup, getMyPEinGroup, getNumPEsInGroup
+   use GroupCommModule, only : GlobalSumInGroup
    use IBZRotationModule, only : getNumIBZRotations, getIBZRotationMatrix
    use StrConstModule, only : getStrConstMatrix, &
                    checkFreeElectronPoles, getFreeElectronPoleFactor
@@ -404,12 +365,12 @@ contains
 
    LOGICAL :: isHost
 
-   integer (kind=IntKind) :: k_loc, k, row, col, MyPEinKGroup, method
-   integer (kind=IntKind) :: NumKs, kGID, aGID, NumKsOnMyProc, NumRedunKs
+   integer (kind=IntKind) :: k_loc, k, row, col, method
+   integer (kind=IntKind) :: NumKs, NumKsOnMyProc, NumRedunKs
    integer (kind=IntKind) :: itertmp, t0size, nt
    integer (kind=IntKind) :: ig, i, j, kkrsz, L1, L2, L3, L4, K1, K2
    integer (kind=IntKind) :: nrot, irot
-   integer (kind=IntKind) :: site_config(num_atoms)
+   integer (kind=IntKind) :: site_config(local_num_atoms)
 
    real (kind=RealKind), pointer :: kpts(:,:), weight(:)
    real (kind=RealKind) :: kfac, kaij, aij(3)
@@ -446,12 +407,9 @@ contains
 !  ===================================================================
 !  Exchange single site scattering matrix among processes.
 !  -------------------------------------------------------------------
-!
-   kGID = getGroupID('K-Mesh')
-   aGID = getGroupID('Unit Cell')
+
    NumKsOnMyProc = getNumKsOnMyProc()
    NumRedunKs = getNumRedundantKsOnMyProc()
-   MyPEinKGroup = getMyPEinGroup(kGID)
 !
    NumKs = getNumKs()
    kpts => getAllKPoints(kfac)
@@ -502,7 +460,7 @@ contains
         TMP_MatrixBand(i+(i-1)*kkrsz) = &
               fepf+TMP_MatrixBand(i+(i-1)*kkrsz)
      enddo
-     if (NumPEsInGroup == 1) then  ! BandSizeCant = KKRMatrixSizeCant
+     if (NumPEsInAGroup == 1) then  ! BandSizeCant = KKRMatrixSizeCant
 !        ----------------------------------------------------------------
          call ZGETRF(kkrsz, kkrsz, TMP_MatrixBand, kkrsz, IPVT, INFO)
 !        ----------------------------------------------------------------
@@ -535,7 +493,7 @@ contains
 #endif
      endif
 !
-     if (NumPEsInGroup == 1) then  ! BandSizeCant = KKRMatrixSizeCant
+     if (NumPEsInAGroup == 1) then  ! BandSizeCant = KKRMatrixSizeCant
 !      ----------------------------------------------------------------
        call ZGETRI(kkrsz, TMP_MatrixBand, kkrsz, IPVT, WORK, LWORK, INFO )
 !      ----------------------------------------------------------------
@@ -648,6 +606,8 @@ contains
 
    integer (kind=IntKind) :: i
 
+   X = CZERO; A = CZERO; W = CZERO
+
    call calChiMatrixCPA()
    
    if (vertex_corr) then
@@ -679,35 +639,101 @@ contains
 !  ===================================================================
 
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine computeCPAConductivity(is, dirnum, sigmatilde)
+   subroutine computeCPAConductivity(is, mode, dirnum, sigmatilde)
 !  ===================================================================
+   use ErrorHandlerModule, only : WarningHandler
+   use GroupCommModule, only : GlobalSumInGroup
+   use AtomModule, only : getLocalNumSpecies, getLocalSpeciesContent
+   use Atom2ProcModule, only : getGlobalIndex
+   use SystemVolumeModule, only : getAtomicVPVolume
+   use SSSolverModule, only : solveSingleScattering 
+   use CPAMediumModule, only : computeCPAMedium, getCPAMatrix, populateBigTCPA, getSingleSiteMatrix, getSingleSiteTmat
+   use CrystalMatrixModule, only : calCrystalMatrix, retrieveTauSRO
+   use KuboDataModule, only : useStepFunctionForSigma
+   use CurrentMatrixModule, only : calCurrentMatrix
+!
    implicit none
 !
-   integer (kind=IntKind), intent(in) :: is, dirnum
+   integer (kind=IntKind), intent(in) :: is, mode, dirnum
 
-   integer (kind=IntKind) :: etype
-   integer (kind=IntKind) :: dir, dir1, nfac
+   integer (kind=IntKind) :: id, etype, dir, dir1, ic, pot_type, nfac
+!
    complex (kind=CmplxKind) :: int_val
    complex (kind=CmplxKind), intent(out) :: sigmatilde(3,3,4)
 
-   call calVertexCorrectionMatrixCPA()
+   spin_pola = is
 
    if (n_spin_pola == 1) then
       nfac = 2
    else
       nfac = 1
    endif
-!
+
+   pot_type = useStepFunctionForSigma()
+
    sigmatilde = CZERO
-   do etype = 1, 4
-      do dir1 = 1, dirnum
-         do dir = 1, dirnum
-            int_val = calSigmaTilde1VC(dir, dir1, etype) +            &
-                      calSigmaTilde0(dir, dir1, etype)
-            sigmatilde(dir,dir1,etype) = nfac*int_val
+   do id = 1, local_num_atoms
+      local_index = id
+      global_index = getGlobalIndex(local_index)
+      num_species = getLocalNumSpecies(local_index)
+      omega = getAtomicVPVolume(local_index)
+
+      do ic = 1, num_species
+         species_content(ic) = getLocalSpeciesContent(local_index, ic)
+      enddo
+!
+!     ----------------------------------------------------------------
+      call solveSingleScattering(spin=spin_pola,site=local_index,e=eval,vshift=CZERO)
+!     ----------------------------------------------------------------
+      if (mode == 4) then ! Under development ...
+!        -------------------------------------------------------------
+         call WarningHandler('computeCPAConductivity','This calculation mode is still under-development',mode)
+!        -------------------------------------------------------------
+         call computeCPAMedium(eval, do_sro=.true.)
+!        -------------------------------------------------------------
+         call populateBigTCPA()
+!        -------------------------------------------------------------
+         call calCrystalMatrix(eval, getSingleSiteMatrix ,use_tmat=.true.,tau_needed=.true., use_sro=.true.)
+!        -------------------------------------------------------------
+         call retrieveTauSRO()
+!        -------------------------------------------------------------
+      else
+!        -------------------------------------------------------------
+         call computeCPAMedium(eval)
+!        -------------------------------------------------------------
+      endif
+!
+!     ----------------------------------------------------------------
+      call calCurrentMatrix(local_index,spin_pola,eval,pot_type,3)
+!     ----------------------------------------------------------------
+   
+      tau_c => getCPAMatrix('Tau',site=local_index,atom=0)
+      tc => getSingleSiteTmat('TInv-Matrix', spin=spin_pola, site=local_index, atom=0)
+      tmat => getSingleSiteTmat('T-Matrix', spin=spin_pola, site=local_index, atom=0)
+!
+      tau_cc = conjg(tau_c)
+      tcc = conjg(tc)
+!     ----------------------------------------------------------------
+      call zcopy(dsize*dsize,tmat(1,1),1,tmat_g(1),1)
+!     ----------------------------------------------------------------
+
+      call calVertexCorrectionMatrixCPA()
+!
+      do etype = 1, 4
+         do dir1 = 1, dirnum
+            do dir = 1, dirnum
+               int_val = calSigmaTilde1VC(dir, dir1, etype) +         &
+                         calSigmaTilde0(dir, dir1, etype)
+               sigmatilde(dir,dir1,etype) = nfac*int_val
+            enddo
          enddo
       enddo
    enddo
+   if (NumPEsInAGroup > 1) then
+!     ----------------------------------------------------------------
+      call GlobalSumInGroup(aGID,sigmatilde,3,3,4)
+!     ----------------------------------------------------------------
+   endif
 
    end subroutine computeCPAConductivity
 !  ===================================================================
