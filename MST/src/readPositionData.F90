@@ -69,7 +69,7 @@
    real (kind=RealKind), pointer :: AtomPosition(:,:), p_AtomPosition(:)
    real (kind=RealKind), pointer :: BravaisLatticeVec(:,:)
 !
-   integer (kind=IntKind), parameter :: MaxComponents = 8 ! This maximum should be more than enough.
+   integer (kind=IntKind), parameter :: MaxComponents = 20 ! This maximum should be more than enough.
    character (len=MaxLenOfAtomName) :: component
    type AlloyStruct
       integer (kind=IntKind) :: NumComponents
