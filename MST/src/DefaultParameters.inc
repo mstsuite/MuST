@@ -318,13 +318,17 @@
    n = n + 1; Keys(n) = 'Average of phonon frequency (K)';  Values(n) = '0.0'
 !        Note; the input format is a real positive value
    n = n + 1; Keys(n) = 'Average of phonon frequency squared (1/sec^2)';  Values(n) = '0.0'
-!        Note; the input format is a real positive value or an chemical element symbol followed by a real positve value
+!        Note; the input format is an atomic index value (corresponding to the atom in the position data), or 
+!              an chemical element symbol, followed by a real positve value
    n = n + 1; Keys(n) = 'Average of phonon frequency squared (K^2)'; Values(n) = '0.0'
-!        Note; the input format is a real positive value or an chemical element symbol followed by a real positve value
+!        Note; the input format is an atomic index value (corresponding to the atom in the position data), or 
+!              an chemical element symbol, followed by a real positve value
    n = n + 1; Keys(n) = 'Atomic mass times <omega^2> (eV/Anst^2)';  Values(n) = '0.0'
-!        Note; the input format is a real positive value or an chemical element symbol followed by a real positve value
+!        Note; the input format is an atomic index value (corresponding to the atom in the position data), or 
+!              an chemical element symbol, followed by a real positve value
    n = n + 1; Keys(n) = 'Atomic mass times <omega^2> (Ryd/BohrRad^2)';    Values(n) = '0.0'
-!        Note; the input format is a real positive value or an chemical element symbol followed by a real positve value
+!        Note; the input format is an atomic index value (corresponding to the atom in the position data), or 
+!              an chemical element symbol, followed by a real positve value
    n = n + 1; Keys(n) = 'Debye Temperature (K)';                 Values(n) = '0'
 !                     = 0: getting from the internal database
 !                     = A real positive number provided by user

@@ -39,7 +39,8 @@
         use GroupCommModule, only : GlobalSumInGroup, getGroupID, getMyPEinGroup
         use GroupCommModule, only : isGroupExisting
         use SystemModule, only : getNumAtomTypes, getNumAtoms, getAtomType, getAtomTypeName
-        use SystemModule, only : getAtomicNumber
+        use SystemModule, only : getAtomicNumber, getNumAlloyElements, getAlloyElementContent
+        use SystemModule, only : getAtomName
         use ErrorHandlerModule, only : ErrorHandler
         use Atom2ProcModule, only : getGlobalIndex
         use ScfDataModule, only : isKKRCPA
@@ -67,17 +68,16 @@
         real (kind=RealKind), pointer :: pDOS_aver(:,:)
 !
         real (kind=RealKind) :: I_Total,sinTerm,Inum,Iden
-        real (kind=RealKind), allocatable :: Phonon_Freq2(:)
-        real (kind=RealKind) :: EPC, EPCnum,EPCden, EPCnumUP, EPCnumDOWN
-        real (kind=RealKind) :: AtomMass
+        real (kind=RealKind), allocatable :: PhononFreq2(:), AtomMass(:)
+        real (kind=RealKind) :: EPC, EPC_pc, EPCnum(2), EPCden
         real (kind=RealKind) :: Coulomb,Coulombnum,Coulombden,mu_star
         real (kind=RealKind) :: SuperTemp,SuperTempExp
-        real (kind=RealKind) :: SumI,Iconst,IconstUp,IconstDown,SumIUP,SumIDOWN
+        real (kind=RealKind) :: SumI(2),Iconst
 !
-        real (kind=RealKind) :: DebyeTemp, M_aver
+        real (kind=RealKind) :: DebyeTemp, M_aver, TD
         real (kind=RealKind) :: species_content
         real (kind=RealKind) :: total_dos, dos_per_spin, total_dos_mt, dos_mt_per_spin, Ef
-        real (kind=RealKind) :: spdos, cpdos,pps, cfac, val_au, av_phonon_freq, eta, eta_aver
+        real (kind=RealKind) :: spdos, cpdos,pps, cfac, val_au, av_phonon_freq, eta, sfac
         real (kind=RealKind) :: nr(0:4)  ! assuming lmax <= 4
 !
         character (len=MaxLenOfAtomName), pointer :: AtomTypeName(:)
@@ -95,40 +95,45 @@
         AtomType => getAtomType()
 !
         allocate(ind_array(NumAtoms), val_array(NumAtoms))
-        allocate(Phonon_Freq2(NumAtoms))
+        allocate(PhononFreq2(NumAtoms), AtomMass(NumAtoms))
 !
         if (n_spin_pola == 1) then
            cfac = HALF
+           sfac = TWO
         else
            cfac = ONE
+           sfac = ONE
         endif
 !
-        if (MyPE == 0 .and. iprint >= 0) then
+        if (MyPE == 0) then
            write(6,*), ' '
            write(6,*), ' '
            write(6,*), "***************************************************"
            write(6,*),         'Output of Gaspari-Gyorffy Formula'
            write(6,*), 'Calculate the Superconducting Transition Teperature'
            write(6,*), "***************************************************"
-           write(6,*), 'n_spin_pola: ', n_spin_pola
+           write(6,'(1x,a,t30,a,i3)')'n_spin_pola',':',n_spin_pola
            do id = 1, LocalNumAtoms
-              write(6,*), 'id: ', id
-              write(6,*), 'kmax_phi: ', PartialDOS(id)%kmax_phi
+              write(6,'(1x,a,t30,a,i3)')'id',':',id
+              write(6,'(1x,a,t30,a,i3)')'kmax_phi',':',PartialDOS(id)%kmax_phi
+              write(6,'(1x,a,t30,a,i3)')'Number of species on site',':',getLocalNumSpecies(id)
               do ia = 1, getLocalNumSpecies(id)
-                 write(6,*), 'ia: ', ia
-                 write(6,*), 'atomic number: ', getLocalAtomicNumber(id,ia)
+                 if (getLocalNumSpecies(id) > 1) then
+                    write(6,'(1x,a,t30,a,i3,a)'), 'ia',':',ia,' ------------'
+                 endif
+                 write(6,'(1x,a,t30,a,i3)')'Atomic number',':',getLocalAtomicNumber(id,ia)
                  if (n_spin_pola == 1) then
-                    write(6,*), 'dos_ws per spin: (St/Ryd)', PartialDOS(id)%dos_ws(1,ia)*HALF
-                    write(6,*), 'dos_ws per spin: (St/eV)', PartialDOS(id)%dos_ws(1,ia)*HALF/Ryd2eV
+                    write(6,'(1x,a,t30,a,d15.8,a)')'dos_ws per spin',':',PartialDOS(id)%dos_ws(1,ia)*HALF,' (St/Ryd)'
+                    write(6,'(1x,a,t30,a,d15.8,a)')'dos_ws per spin',':',PartialDOS(id)%dos_ws(1,ia)*HALF/Ryd2eV,' (St/eV)'
                  else
-                    write(6,*), 'dos_ws for spin-up: (St/Ryd)', PartialDOS(id)%dos_ws(1,ia)
-                    write(6,*), 'dos_ws for spin-up: (St/eV)', PartialDOS(id)%dos_ws(1,ia)/Ryd2eV
-                    write(6,*), 'dos_ws for spin-down: (St/Ryd)', PartialDOS(id)%dos_ws(2,ia)
-                    write(6,*), 'dos_ws for spin-down: (St/eV)', PartialDOS(id)%dos_ws(2,ia)/Ryd2eV
+                    write(6,'(1x,a,t30,a,d15.8,a)')'dos_ws for spin-up',':',PartialDOS(id)%dos_ws(1,ia),' (St/Ryd)'
+                    write(6,'(1x,a,t30,a,d15.8,a)')'dos_ws for spin-up',':',PartialDOS(id)%dos_ws(1,ia)/Ryd2eV,' (St/eV)'
+                    write(6,'(1x,a,t30,a,d15.8,a)')'dos_ws for spin-down',':',PartialDOS(id)%dos_ws(2,ia),' (St/Ryd)'
+                    write(6,'(1x,a,t30,a,d15.8,a)')'dos_ws for spin-down',':',PartialDOS(id)%dos_ws(2,ia)/Ryd2eV,' (St/eV)'
                  endif
               enddo
            enddo
-           write(6,*), 'Efermi: ', efermi
+           write(6,'(/,1x,a,t30,a,f12.8)')'Efermi',':',efermi
            !do kl=1,kmax_phi
            !   write(6,*), 'kl: ', kl, ' l: ', lofk(kl), ' m: ', mofk(kl)
            !   write(6,*), 'phaseshift: ', phase_shift(kl,n_spin_pola)
@@ -137,95 +142,141 @@
            !enddo
         endif
 !
-!       Determine the Debye Temperature and phonon frequency
+!       Determine the atomic mass
+!       ==============================================================
+        do ig = 1, NumAtoms
+           TD = ZERO
+           M_aver = ZERO
+           do ia = 1,  getNumAlloyElements(ig)  ! Loop over atomic species
+              atomic_number = getAtomicNumber(ig,ia)
+              species_content = getAlloyElementContent(ig,ia)
+              M_aver = M_aver + species_content*getAtomicMass(atomic_number)
+           enddo
+           AtomMass(ig) = M_aver*MassUnit2Ryd/LightSpeed**2 ! In atomic units
+        enddo
+!
+!       Determine the Debye Temperature
 !       ==============================================================
         if (getKeyValue(1,'Average of phonon frequency (1/sec)',av_phonon_freq,default_param=.false.) == 0) then
            DebyeTemp = av_phonon_freq/Boltzmann
-           write(6,*), 'Debye 1'
+!          write(6,*), 'Debye 1'
         else if (getKeyValue(1,'Average of phonon frequency (K)',av_phonon_freq,default_param=.false.) == 0) then
            DebyeTemp = av_phonon_freq
-           write(6,*), 'Debye 2'
-        else
-           if (getKeyValue(1,'Debye Temperature (K)',DebyeTemp, default_param=.false.) /= 0) then
-              write(6,*), 'Debye 3'
-              if (NumAtomTypes == 1)  then
-                 write(6,*), 'NumAtomTypes is 1'
-                 atomic_number = getLocalAtomicNumber(1,1)
-                 DebyeTemp = getDebyeTemperature(atomic_number)
-              !!! I think this else statement is not properly indented
-              else
-                 call ErrorHandler('Gaspari-Gyorffy-Formula','Debye temperature is missing from input')
-              endif
+!          write(6,*), 'Debye 2'
+        else if (GetKeyValue(1,'Debye Temperature (K)',DebyeTemp, default_param=.false.) /= 0) then
+!          ===========================================================
+!          In case the Debye temperature is not provided from the input
+!          ===========================================================
+           if (NumAtoms == 1) then  ! For a simple metal or a random
+                                    ! alloy on a simple lattice case
+!             write(6,*), 'Debye 3'
+!             ========================================================
+!             The Debye temperature is to be taken from the internal data base.
+!             In particular, if system is an alloy, it will be averaged over the 
+!             constitutional species, The reliability of this approach
+!             to the alloy's Debye temperature is questionable, though
+!             ========================================================
+              DebyeTemp = ZERO
+              do ia = 1, getLocalNumSpecies(1)  ! Loop over atomic species
+                 atomic_number = getLocalAtomicNumber(1,ia)
+                 species_content = getLocalSpeciesContent(1,ia)
+                 TD = getDebyeTemperature(atomic_number)
+                 if (TD < ONE) then
+                    write(6,'(3a)')'WARNING:: The Debye temp for species ',getName(atomic_number), &
+                                   ' is not available in database.'
+                 else
+                    DebyeTemp = DebyeTemp + species_content*TD
+                 endif
+              enddo
+           else ! For the multi-sublattice case
+!             ========================================================
+!             The Debye temperature needs to be given from the input
+!             ========================================================
+              call ErrorHandler('Gaspari-Gyorffy-Formula',            &
+                                'In supe cell case, Debye Temperature (K) is required')
            endif
         endif
 !
 !       Determine the average phonon frequency squared
 !       ==============================================================
-        ind_array = 0; val_array = ZERO; Phonon_Freq2 = ZERO
+        ind_array = 0; val_array = ZERO; PhononFreq2 = ZERO
         if (getKeyLabelIndexValue(1,'Atomic mass times <omega^2> (eV/Anst^2)', &
                                   NumAtomTypes,AtomTypeName,NumAtoms,AtomType,ind_array,val_array) == 0) then
            do ig = 1, NumAtoms
-              val_au = val_array(ig)*Bohr2Angstrom**2/Ryd2eV ! This is M*<omega^2> in atomic units
-              atomic_number = getAtomicNumber(ig)
               if (MyPE == 0) then
+                 atomic_number = getAtomicNumber(ig)
                  write(6,*) getName(atomic_number), ': M*<omega^2> = ',val_array(ig),'(eV/Anst^2)'
               endif
-              AtomMass=getAtomicMass(atomic_number)*MassUnit2Ryd/LightSpeed**2 ! Atomic Mass in Ryd.
-              Phonon_Freq2(ig) = val_au/AtomMass
+              val_au = val_array(ig)*Bohr2Angstrom**2/Ryd2eV ! This is M*<omega^2> in atomic units
+              PhononFreq2(ig) = val_au/AtomMass(ig)
            enddo
         else if (getKeyLabelIndexValue(1,'Atomic mass times <omega^2> (Ryd/BohrRad^2)', &
-                                  NumAtomTypes,AtomTypeName,NumAtoms,AtomType,ind_array,val_array) == 0) then
+                                       NumAtomTypes,AtomTypeName,NumAtoms,AtomType,ind_array,val_array) == 0) then
            do ig = 1, NumAtoms
-              atomic_number = getAtomicNumber(ig)
               if (MyPE == 0) then
+                 atomic_number = getAtomicNumber(ig)
                  write(6,*) getName(atomic_number), ': M*<omega^2> = ',val_array(ig),'(Ryd/BohrRad^2)'
               endif
-              AtomMass=getAtomicMass(atomic_number)*MassUnit2Ryd/LightSpeed**2 ! Atomic Mass in Ryd.
-              Phonon_Freq2(ig) = val_array(ig)/AtomMass
+              PhononFreq2(ig) = val_array(ig)/AtomMass(ig)
+           enddo
+        else if (getKeyLabelIndexValue(1,'Average of phonon frequency squared (1/sec^2)', &
+                                       NumAtomTypes,AtomTypeName,NumAtoms,AtomType,ind_array,val_array) == 0) then
+           do ig = 1, NumAtoms
+              if (MyPE == 0) then
+                 atomic_number = getAtomicNumber(ig)
+                 write(6,*) getName(atomic_number), ': <omega^2> = ',val_array(ig),'(1/sec^2)'
+              endif
+              PhononFreq2(ig) = val_array(ig)
+           enddo
+        else if (getKeyLabelIndexValue(1,'Average of phonon frequency squared (K^2)', &
+                                       NumAtomTypes,AtomTypeName,NumAtoms,AtomType,ind_array,val_array) == 0) then
+           do ig = 1, NumAtoms
+              if (MyPE == 0) then
+                 atomic_number = getAtomicNumber(ig)
+                 write(6,*) getName(atomic_number), ': <omega^2> = ',val_array(ig),'(K^2)'
+              endif
+              PhononFreq2(ig) = val_array(ig)*Kelvin2Ryd**2
            enddo
         else
-           if (getKeyLabelIndexValue(1,'Average of phonon frequency squared (1/sec^2)', &
-                                     NumAtomTypes,AtomTypeName,NumAtoms,AtomType,ind_array,val_array) == 0) then
-              do ig = 1, NumAtoms
-                 atomic_number = getAtomicNumber(ig)
-                 if (MyPE == 0) then
-                    write(6,*) getName(atomic_number), ': <omega^2> = ',val_array(ig),'(1/sec^2)'
-                 endif
-                 Phonon_Freq2(ig) = val_array(ig)
-              enddo
-           else if (getKeyLabelIndexValue(1,'Average of phonon frequency squared (K^2)', &
-                                          NumAtomTypes,AtomTypeName,NumAtoms,AtomType,ind_array,val_array) == 0) then
-              do ig = 1, NumAtoms
-                 atomic_number = getAtomicNumber(ig)
-                 if (MyPE == 0) then
-                    write(6,*) getName(atomic_number), ': <omega^2> = ',val_array(ig),'(K^2)'
-                 endif
-                 Phonon_Freq2(ig) = val_array(ig)*Kelvin2Ryd**2
-              enddo
+!          ===========================================================
+!          In case where the average of phonon frequency squared is not
+!          given from the input, we take the Debye temperature from the 
+!          internal data base and use it to calculate the average of
+!          the phonon frequency squared.
+!          ===========================================================
+           if (NumAtoms == 1) then
+              PhononFreq2(1) = HALF*(DebyeTemp*Kelvin2Ryd)**2
            else
-              Phonon_Freq2 = HALF*(DebyeTemp*Kelvin2Ryd)**2
+              do ig = 1, NumAtoms
+                 TD = ZERO
+                 do ia = 1,  getNumAlloyElements(ig)  ! Loop over atomic species
+                    atomic_number = getAtomicNumber(ig,ia)
+                    species_content = getAlloyElementContent(ig,ia)
+                    TD = TD + species_content*getDebyeTemperature(atomic_number)
+                 enddo
+                 PhononFreq2(ig) = HALF*(TD*Kelvin2Ryd)**2
+              enddo
            endif
         endif
         do ig = 1, NumAtoms
-           if (Phonon_Freq2(ig) < TEN2m6) then
-              call ErrorHandler('Gaspari-Gyorffy-Formula','Invalid value of <omega^2>',Phonon_Freq2(ig))
+           if (PhononFreq2(ig) < TEN2m6) then
+              call ErrorHandler('Gaspari-Gyorffy-Formula','Invalid value of <omega^2>',PhononFreq2(ig))
            endif
         enddo
 !
         deallocate(ind_array, val_array)
 !
         if (MyPE == 0) then
-           write(6,*), 'Writing Debye Temp'
-           write(6,*), 'Debye Temp (K): ', DebyeTemp
+           write(6,'(/,1x,a,t30,a,f8.3,/)')'Debye Temp (K)',':',DebyeTemp
            do ig = 1, NumAtoms  ! Loop atomic sites
-           !!! Want to use ia to get specific atomic number
-              do ia = 1, NumAtomTypes
-                 write(6,*), 'gettting atomic number', ig, ia
-                 atomic_number = getAtomicNumber(ig,ia)
-              enddo
-              write(6,'(1x,a,a,d15.8,a)')getName(atomic_number),': Average of Phonon Frequency Square =', &
-                                         Phonon_Freq2(ig),' (Ryd^2)'
-!             write(6,'(40x,a,d15.8,a)')'=',Phonon_Freq2(ig)/Kelvin2Ryd**2,' (K^2)'
+              if (getNumAlloyElements(ig) == 1) then
+                 write(6,'(1x,a3,a,d15.8,a)')getAtomName(ig,1),': Average of Phonon Frequency Square =', &
+                                             PhononFreq2(ig),' (Ryd^2)'
+              else
+                 write(6,'(1x,a3,a,d15.8,a)')'CPA',': Average of Phonon Frequency Square =', &
+                                             PhononFreq2(ig),' (Ryd^2)'
+              endif
+              write(6,'(41x,a,d15.8,a)')'=',PhononFreq2(ig)/Kelvin2Ryd**2,' (K^2)'
            enddo
         endif
 !
@@ -257,8 +308,12 @@
            enddo
         enddo
         call GlobalSumInGroup(aGID,total_dos)
+
         dos_per_spin = HALF*total_dos  ! states/Ryd/spin (has both spin up and down)
         dos_mt_per_spin = HALF*total_dos_mt  ! states/Ryd/spin
+
+        Iconst = efermi/PI**2/dos_per_spin**2 ! Ryd^3
+
         if (MyPE == 0) then
            write(6,'(/,1x,a,f10.5,a)')'WS-Volume DOS of Unit cell per spin =', dos_per_spin,' (states/Ryd/spin))'
            write(6,'(  1x,a,f10.5,a)')'                                    =', dos_per_spin/Ryd2eV,' (states/eV/spin)'
@@ -266,41 +321,31 @@
            write(6,'(  1x,a,f10.5,a)')'                                    =', dos_mt_per_spin/Ryd2eV,' (states/eV/spin)'
         endif
 !
-!       Calculate Lamda (or EPC) ...........
-!       ==============================================================
         kmax_kkr_max = 0
         do id = 1, LocalNumAtoms
            kmax_kkr_max = max(kmax_kkr_max,PartialDOS(id)%kmax_kkr)
         enddo
 
-        if (isKKRCPA()) then
-           allocate(phase_shift_aver(kmax_kkr_max,n_spin_pola))
-        endif
-
         kappa = sqrt(efermi)
+
+!       Calculate Lamda (or EPC) ...........
+!       ==============================================================
         nr = ZERO
         EPC = ZERO
         do id = 1, LocalNumAtoms  ! Loop atomic sites
-           if (isKKRCPA()) then
-              do is = 1, n_spin_pola
-                 t_mat => PartialDOS(id)%t_aver(:,:,is)
-                 do kl = 1, PartialDOS(id)%kmax_kkr
-                     phase_shift_aver(kl,is) = atan(kappa*t_mat(kl,kl)/(-CONE+SQRTm1*kappa*t_mat(kl,kl)))
-                 enddo
-              enddo
-           endif
            kmax_phi = PartialDOS(id)%kmax_phi
            kmax_kkr = PartialDOS(id)%kmax_kkr
            lmax_kkr = lofk(kmax_phi)
 
            ig = getGlobalIndex(id) 
+!
+           EPCden = AtomMass(ig)*PhononFreq2(ig) ! Ryd/au^2
 
            do ia = 1, getLocalNumSpecies(id)  ! Loop over atomic species
                                               ! at each atomic site. The
                                               ! number of species is usually 1,
                                               ! except for the KKR-CPA case.
               species_content = getLocalSpeciesContent(id,ia)
-              atomic_number = getLocalAtomicNumber(id,ia)
               phase_shift => PartialDOS(id)%phase_shift(:,:,ia)
               ss_pdos_mt => PartialDOS(id)%ss_pdos_mt(:,:,ia)
               partial_dos_mt => PartialDOS(id)%partial_dos_mt(:,:,ia)
@@ -310,8 +355,6 @@
               endif
 !
               SumI = ZERO
-              SumIUP = ZERO
-              SumIDOWN = ZERO
               do is = 1, n_spin_pola
                  if (n_spin_pola == 2 .and. getMyPEinGroup(bGID) == 0) then
                     write(6,'(1x,a,i4)')'spin index = ',is
@@ -359,107 +402,78 @@
                     klp1 = (l+2)**2-l-1
                     kl = (l+1)**2-l
                     sinTerm = sin(phase_shift(klp1,is)-phase_shift(kl,is))
-                    if (n_spin_pola == 1) then
-                       SumI = SumI + TWO*(l+1)*sinTerm**2*nr(l+1)*nr(l)
-                    else
-                       if (is == 1) then
-                       !  SumIUP = SumIUP + TWO*(l+1)*sinTerm**2*nr(l+1)*nr(l)
-                          SumIUP = SumIUP + (l+1)*sinTerm**2*nr(l+1)*nr(l)
-                       else
-                       !  SumIDOWN = SumIDOWN + TWO*(l+1)*sinTerm**2*nr(l+1)*nr(l)
-                          SumIDOWN = SumIDOWN + (l+1)*sinTerm**2*nr(l+1)*nr(l)
-                       endif
-                    endif
+                    SumI(is) = SumI(is) + sfac*(l+1)*sinTerm**2*nr(l+1)*nr(l)
                  enddo
+              enddo ! loop over is
+!
+              eta = ZERO
+              do is = 1, n_spin_pola
+                 EPCnum(is) = dos_per_spin*Iconst*SumI(is)
+                 eta = eta + EPCnum(is)  ! Ryd/au^2
               enddo
-!
-              if (n_spin_pola == 1) then
-                 Iconst = efermi/PI**2/dos_per_spin**2 ! Ryd^3
-                 I_Total = Iconst*SumI ! Ryd^2/au^2
-              else
-                 IconstUp = efermi/PI**2/PartialDOS(id)%dos_ws(1,ia)**2 ! Ryd^3
-                 IconstDown = efermi/PI**2/PartialDOS(id)%dos_ws(2,ia)**2 ! Ryd^3
-              endif
-              Iconst = efermi/PI**2/dos_per_spin**2 ! Ryd^3
-!
-              AtomMass=getAtomicMass(atomic_number)*MassUnit2Ryd/LightSpeed**2
-              EPCden = AtomMass*Phonon_Freq2(ig) ! Ryd/au^2
-!
-              if (n_spin_pola == 1) then
-                 EPCnum = dos_per_spin*I_Total  ! Ryd/au^2
-                 eta = EPCnum
-              else
-             !!  EPCnumUP = PartialDOS(id)%dos_ws(1,ia)*IconstUp*SumIUP
-             !!  EPCnumDOWN = PartialDOS(id)%dos_ws(2,ia)*IconstDown*SumIDOWN
-                 EPCnumUP = dos_per_spin*Iconst*SumIUP
-                 EPCnumDOWN = dos_per_spin*Iconst*SumIDOWN
-                 eta = EPCnumUp+EPCnumDown
-              endif
 !
               EPC = EPC + getLocalSpeciesContent(id,ia)*eta/EPCden ! unitless
 !
               if (getMyPEinGroup(bGID) == 0) then
-                 write(6,'(1x,a,f12.5)')'AtomicMass (Ryd/c^2) =', AtomMass
-                 write(6,'(1x,a,f12.5)')'M<Omega^2> (Ryd/au^2)=', EPCden
-                 write(6,'(1x,a,f12.5)')'M<Omega^2> (eV/A^2)  =', EPCden*Ryd2eV/Bohr2Angstrom**2
-                 if (n_spin_pola == 1) then
-                    write(6,'(1x,a,f12.5)')'SumI                 =', SumI
-                    write(6,'(1x,a,f12.5)')'I (eV^2/A^2)         =', I_Total*(Ryd2eV/Bohr2Angstrom)**2
-                    write(6,'(1x,a,f12.5)')'I (Ryd^2/au^2)       =', I_Total
-                    write(6,'(1x,a,f12.5)')'eta (Ryd/au^2)       =', EPCnum
-                    write(6,'(1x,a,f12.5)')'eta (eV/A^2)         =', EPCnum*Ryd2eV/Bohr2Angstrom**2
-                    write(6,'(1x,a,f12.5)')'eta/(M<Omega^2>      =', EPCnum/EPCden
-                 else
-                    write(6,'(1x,a,f12.5)')'eta up (Ryd/au^2)    =', EPCnumUP
-                    write(6,'(1x,a,f12.5)')'eta up (eV/A^2)      =', EPCnumUP*Ryd2eV/Bohr2Angstrom**2
-                    write(6,'(1x,a,f12.5)')'eta down (Ryd/au^2)  =', EPCnumDOWN
-                    write(6,'(1x,a,f12.5)')'eta down (eV/A^2)    =', EPCnumDOWN*Ryd2eV/Bohr2Angstrom**2
-                    write(6,'(1x,a,f12.5)')'eta (Ryd/au^2)       =', eta
-                    write(6,'(1x,a,f12.5)')'eta (eV/A^2)         =', eta*Ryd2eV/Bohr2Angstrom**2
-                    write(6,'(1x,a,f12.5)')'eta/(M<Omega^2>      =', eta/EPCden
-                 endif
-                 write(6,'(1x,a,f12.5)')'lamda                =', eta/EPCden
+                 write(6,'(/)')
+                 write(6,'(1x,a,f12.5)')'AtomicMass (Ryd/c^2)    =', AtomMass(ig)
+                 write(6,'(1x,a,f12.5)')'M<Omega^2> (Ryd/au^2)   =', EPCden
+                 write(6,'(1x,a,f12.5)')'M<Omega^2> (eV/A^2)     =', EPCden*Ryd2eV/Bohr2Angstrom**2
+                 do is = 1, n_spin_pola
+                    if (n_spin_pola == 1) then
+                       write(6,'(/)')
+                    else
+                       write(6,'(/,1x,a,i2)')'Spin index              =', is
+                    endif
+                    write(6,'(1x,a,f12.5)')'SumI                    =', SumI(is)
+                    write(6,'(1x,a,f12.5)')'I (eV^2/A^2)            =', Iconst*SumI(is)*(Ryd2eV/Bohr2Angstrom)**2
+                    write(6,'(1x,a,f12.5)')'I (Ryd^2/au^2)          =', Iconst*SumI(is)
+                    write(6,'(1x,a,f12.5)')'EPCnum(is) (Ryd/au^2)   =', EPCnum(is)
+                    write(6,'(1x,a,f12.5)')'EPCnum(is) (eV/A^2)     =', EPCnum(is)*Ryd2eV/Bohr2Angstrom**2
+                    write(6,'(1x,a,f12.5)')'EPCnum(is)/(M<Omega^2>  =', EPCnum(is)/EPCden
+                 enddo
+                 write(6,'(1x,a,f12.5)')'eta (Ryd/au^2)          =', eta
+                 write(6,'(1x,a,f12.5)')'eta (eV/A^2)            =', eta*Ryd2eV/Bohr2Angstrom**2
+                 write(6,'(1x,a,f12.5)')'lamda = eta/(M<Omega^2> =', eta/EPCden
               endif
            enddo  ! Loop over ia
         enddo  ! Loop over id
+
         call GlobalSumInGroup(aGID, EPC)
+
         if (MyPE == 0) then
            write(6,'(/,1x,a)')'For the system ...'
-           write(6,'(1x,a,f12.5)')'lamda (EPC)                  =', EPC
+           write(6,'(1x,a,t32,a,f12.5)')'Total lamda (EPC)/unit cell','=',EPC
         endif
 !
-!       Calculate Lamda AVER (or EPC) ...........
+!       ==============================================================
+!       In the KKR-CPA case, we also consider a different approach to
+!       calculation of averaged EPC (or lambda). In this approach,
+!       which was first suggested by P. Chatterje, t_cpa is used to 
+!       calculate the averaged partial phase shift.
 !       ==============================================================
         if (isKKRCPA()) then
-           write(6,'(/,1x,a)')'FOR AVERAGED ETA AND LAMBDA'
-           kmax_kkr_max = 0
-           do id = 1, LocalNumAtoms
-              kmax_kkr_max = max(kmax_kkr_max,PartialDOS(id)%kmax_kkr)
-           enddo
+           if (MyPE == 0) then
+              write(6,'(/,1x,a)')'An alternative approach to the AVERAGED ETA AND LAMBDA'
+           endif
+           allocate(phase_shift_aver(kmax_kkr_max,n_spin_pola))
            allocate(ss_pDOS_aver(kmax_kkr_max,n_spin_pola))
            allocate(pDOS_aver(kmax_kkr_max,n_spin_pola))
-           kappa = sqrt(efermi)
+
            nr = ZERO
-           EPC = ZERO
+           EPC_pc = ZERO
            do id = 1, LocalNumAtoms  ! Loop atomic sites
-              do is = 1, n_spin_pola
-                 t_mat => PartialDOS(id)%t_aver(:,:,is)
-                 do kl = 1, PartialDOS(id)%kmax_kkr
-                        phase_shift(kl,is) = atan(kappa*t_mat(kl,kl)/(-CONE+SQRTm1*kappa*t_mat(kl,kl)))
-                 enddo
-              enddo
               kmax_phi = PartialDOS(id)%kmax_phi
               kmax_kkr = PartialDOS(id)%kmax_kkr
               lmax_kkr = lofk(kmax_phi)
-              ig = getGlobalIndex(id)
 
-              pDOS_aver = 0.0
-              ss_pDOS_aver = 0.0
-              M_aver = 0.0
+              ig = getGlobalIndex(id)
+!
+              EPCden = AtomMass(ig)*PhononFreq2(ig) ! Ryd/au^2
+
+              pDOS_aver = ZERO
+              ss_pDOS_aver = ZERO
               do ia = 1, getLocalNumSpecies(id)
-                 species_content = getLocalSpeciesContent(id,ia)
-                 atomic_number = getLocalAtomicNumber(id,ia)
-                 M_aver = M_aver +species_content*getAtomicMass(atomic_number)*MassUnit2Ryd/LightSpeed**2
                  partial_dos_mt => PartialDOS(id)%partial_dos_mt(:,:,ia)
                  ss_pdos_mt => PartialDOS(id)%ss_pdos_mt(:,:,ia)
                  species_content = getLocalSpeciesContent(id,ia)
@@ -470,149 +484,84 @@
                     enddo
                  enddo
               enddo
-              do ia = 1, getLocalNumSpecies(id)  ! Loop over atomic species
-                                              ! at each atomic site. The
-                                              ! number of species is usually 1,
-                                              ! except for the KKR-CPA case.
-                 species_content = getLocalSpeciesContent(id,ia)
-                 atomic_number = getLocalAtomicNumber(id,ia)
-!
-                 if (getMyPEinGroup(bGID) == 0) then
-                    write(6,'(/,1x,a,a)')'For species: ',getLocalAtomName(id,ia)
-                 endif
-!
-                 SumI = ZERO
-                 SumIUP = ZERO
-                 SumIDOWN = ZERO
-                 do is = 1, n_spin_pola
-                    if (n_spin_pola == 2 .and. getMyPEinGroup(bGID) == 0) then
-                       write(6,'(1x,a,i4)')'spin index = ',is
-                    endif
-                    do l=0,lmax_kkr
-                       cpdos = ZERO
-                       spdos = ZERO
-                       do m = -l, l
-                          kl = (l+1)**2-l+m
-                          cpdos = cpdos + pDOS_aver(kl,is)
-                          spdos = spdos + ss_pDOS_aver(kl,is)
-                       enddo
-                       nr(l) = cpdos/spdos
-                       cpdos = cfac*cpdos
-                       spdos = cfac*spdos
-                       if (getMyPEinGroup(bGID) == 0) then
-                          kl = (l+1)**2-l
-                          if (phase_shift(kl,is) > PI*HALF) then
-                             pps = phase_shift(kl,is) - PI
-                          else if (phase_shift(kl,is) < -PI*HALF) then
-                             pps = phase_shift(kl,is) + PI
-                          else
-                             pps = phase_shift(kl,is)
-                          endif
-                          if (l == 0) then
-                             write(6,'(1x,5(a,f12.5))')'s-state: phase shift =',pps, &
-                                                    ', partial DOS =',cpdos, ', DOS ratio =',nr(l), ', f_l = ', &
-                                                    cpdos/(PartialDOS(id)%dos_ws(is,ia))
-                          else if (l == 1) then
-                             write(6,'(1x,5(a,f12.5))')'p-state: phase shift =',pps, &
-                                                    ', partial DOS =',cpdos, ', DOS ratio =',nr(l), ', f_l = ', &
-                                                    cpdos/(PartialDOS(id)%dos_ws(is,ia))
-                          else if (l == 2) then
-                             write(6,'(1x,5(a,f12.5))')'d-state: phase shift =',pps, &
-                                                    ', partial DOS =',cpdos, ', DOS ratio =',nr(l),', f_l = ', &
-                                                    cpdos/(PartialDOS(id)%dos_ws(is,ia))
-                          else if (l == 3) then
-                             write(6,'(1x,5(a,f12.5))')'f-state: phase shift =',pps, &
-                                                    ', partial DOS =',cpdos, ', DOS ratio =',nr(l),', f_l = ', &
-                                                    cpdos/(PartialDOS(id)%dos_ws(is,ia))
-                          endif
-                       endif
-                    enddo
-                    do l=0,lmax_kkr-1 ! sum over l
-                       klp1 = (l+2)**2-l-1
-                       kl = (l+1)**2-l
-                       sinTerm = abs(sin(phase_shift(klp1,is)-phase_shift(kl,is)))
-                       if (n_spin_pola == 1) then
-                          SumI = SumI + TWO*(l+1)*sinTerm**2*nr(l+1)*nr(l)
-                       else
-                          if (is == 1) then
-                          !  SumIUP = SumIUP + TWO*(l+1)*sinTerm**2*nr(l+1)*nr(l)
-                             SumIUP = SumIUP + (l+1)*sinTerm**2*nr(l+1)*nr(l)
-                          else
-                          !  SumIDOWN = SumIDOWN + TWO*(l+1)*sinTerm**2*nr(l+1)*nr(l)
-                             SumIDOWN = SumIDOWN + (l+1)*sinTerm**2*nr(l+1)*nr(l)
-                          endif
-                       endif
-                    enddo
+
+              do is = 1, n_spin_pola
+                 t_mat => PartialDOS(id)%t_aver(:,:,is)
+                 do kl = 1, PartialDOS(id)%kmax_kkr
+                    phase_shift_aver(kl,is) = atan(kappa*t_mat(kl,kl)/(-CONE+SQRTm1*kappa*t_mat(kl,kl)))
                  enddo
+              enddo
+
+              SumI = ZERO
+              do is = 1, n_spin_pola
+                 do l=0,lmax_kkr
+                    cpdos = ZERO
+                    spdos = ZERO
+                    do m = -l, l
+                       kl = (l+1)**2-l+m
+                       cpdos = cpdos + pDOS_aver(kl,is)
+                       spdos = spdos + ss_pDOS_aver(kl,is)
+                    enddo
+                    nr(l) = cpdos/spdos
+                 enddo
+                 do l=0,lmax_kkr-1 ! sum over l
+                    klp1 = (l+2)**2-l-1
+                    kl = (l+1)**2-l
+                    sinTerm = abs(sin(phase_shift_aver(klp1,is)-phase_shift_aver(kl,is)))
+                    SumI(is) = SumI(is) + sfac*(l+1)*sinTerm**2*nr(l+1)*nr(l)
+                 enddo
+              enddo
 !
-                 if (n_spin_pola == 1) then
-                    Iconst = efermi/PI**2/dos_per_spin**2 ! Ryd^3
-                    I_Total = Iconst*SumI ! Ryd^2/au^2
-                 else
-                    IconstUp = efermi/PI**2/PartialDOS(id)%dos_ws(1,ia)**2 ! Ryd^3
-                    IconstDown = efermi/PI**2/PartialDOS(id)%dos_ws(2,ia)**2 ! Ryd^3
-                 endif
-                 Iconst = efermi/PI**2/dos_per_spin**2 ! Ryd^3
+              eta = ZERO
+              do is = 1, n_spin_pola
+                 EPCnum(is) = dos_per_spin*Iconst*SumI(is)
+                 eta = eta + EPCnum(is)  ! Ryd/au^2
+              enddo
 !
-                 !AtomMass=getAtomicMass(atomic_number)*MassUnit2Ryd/LightSpeed**2
-                 EPCden = M_aver*Phonon_Freq2(ig) ! Ryd/au^2
+              EPC_pc = EPC_pc + eta/EPCden ! unitless
 !
-                 if (n_spin_pola == 1) then
-                    EPCnum = dos_per_spin*I_Total  ! Ryd/au^2
-                    eta = EPCnum
-                 else
-                !!  EPCnumUP = PartialDOS(id)%dos_ws(1,ia)*IconstUp*SumIUP
-                !!  EPCnumDOWN = PartialDOS(id)%dos_ws(2,ia)*IconstDown*SumIDOWN
-                    EPCnumUP = dos_per_spin*Iconst*SumIUP
-                    EPCnumDOWN = dos_per_spin*Iconst*SumIDOWN
-                    eta = EPCnumUp+EPCnumDown
-                 endif
-!
-                 EPC = EPC + getLocalSpeciesContent(id,ia)*eta/EPCden ! unitless
-!
-                 if (getMyPEinGroup(bGID) == 0) then
-                    write(6,'(1x,a,f12.5)')'AtomicMass (Ryd/c^2) =', M_aver
-                    write(6,'(1x,a,f12.5)')'M<Omega^2> (Ryd/au^2)=', EPCden
-                    write(6,'(1x,a,f12.5)')'M<Omega^2> (eV/A^2)  =', EPCden*Ryd2eV/Bohr2Angstrom**2
+              if (getMyPEinGroup(bGID) == 0) then
+                 do is = 1, n_spin_pola
                     if (n_spin_pola == 1) then
-                       write(6,'(1x,a,f12.5)')'SumI                 =', SumI
-                       write(6,'(1x,a,f12.5)')'I (eV^2/A^2)         =', I_Total*(Ryd2eV/Bohr2Angstrom)**2
-                       write(6,'(1x,a,f12.5)')'I (Ryd^2/au^2)       =', I_Total
-                       write(6,'(1x,a,f12.5)')'eta (Ryd/au^2)       =', EPCnum
-                       write(6,'(1x,a,f12.5)')'eta (eV/A^2)         =', EPCnum*Ryd2eV/Bohr2Angstrom**2
-                       write(6,'(1x,a,f12.5)')'eta/(M<Omega^2>      =', EPCnum/EPCden
+                       write(6,'(/)')
                     else
-                       write(6,'(1x,a,f12.5)')'eta up (Ryd/au^2)    =', EPCnumUP
-                       write(6,'(1x,a,f12.5)')'eta up (eV/A^2)      =', EPCnumUP*Ryd2eV/Bohr2Angstrom**2
-                       write(6,'(1x,a,f12.5)')'eta down (Ryd/au^2)  =', EPCnumDOWN
-                       write(6,'(1x,a,f12.5)')'eta down (eV/A^2)    =', EPCnumDOWN*Ryd2eV/Bohr2Angstrom**2
-                       write(6,'(1x,a,f12.5)')'eta (Ryd/au^2)       =', eta
-                       write(6,'(1x,a,f12.5)')'eta (eV/A^2)         =', eta*Ryd2eV/Bohr2Angstrom**2
-                       write(6,'(1x,a,f12.5)')'eta/(M<Omega^2>      =', eta/EPCden
+                       write(6,'(/,1x,a,i2)')'Spin index              =', is
                     endif
-                    write(6,'(1x,a,f12.5)')'lamda                =', eta/EPCden
-                 endif
-              enddo  ! Loop over ia
+                    write(6,'(1x,a,f12.5)')'SumI                    =', SumI(is)
+                    write(6,'(1x,a,f12.5)')'I (eV^2/A^2)            =', Iconst*SumI(is)*(Ryd2eV/Bohr2Angstrom)**2
+                    write(6,'(1x,a,f12.5)')'I (Ryd^2/au^2)          =', Iconst*SumI(is)
+                    write(6,'(1x,a,f12.5)')'EPCnum(is) (Ryd/au^2)   =', EPCnum(is)
+                    write(6,'(1x,a,f12.5)')'EPCnum(is) (eV/A^2)     =', EPCnum(is)*Ryd2eV/Bohr2Angstrom**2
+                    write(6,'(1x,a,f12.5)')'EPCnum(is)/(M<Omega^2>  =', EPCnum(is)/EPCden
+                 enddo
+                 write(6,'(1x,a,f12.5)')'eta (Ryd/au^2)          =', eta
+                 write(6,'(1x,a,f12.5)')'eta (eV/A^2)            =', eta*Ryd2eV/Bohr2Angstrom**2
+                 write(6,'(1x,a,f12.5)')'lamda = eta/(M<Omega^2> =', eta/EPCden
+              endif
            enddo  ! Loop over id
-           call GlobalSumInGroup(aGID, EPC)
+
+           call GlobalSumInGroup(aGID, EPC_pc)
+
            if (MyPE == 0) then
               write(6,'(/,1x,a)')'For the system ...'
-              write(6,'(1x,a,f12.5)')'lamda (EPC)                  =', EPC
+              write(6,'(1x,a,t32,a,f12.5)')'Total lamda (EPC)/unit cell','=', EPC_pc
            endif
+           deallocate(phase_shift_aver, ss_pDOS_aver, pDOS_aver)
         endif
+
 !       Calculate mu ...
 !       ==============================================================
         Coulombnum = 0.26D0*total_dos/Ryd2eV
         Coulombden = ONE+total_dos/Ryd2eV
         Coulomb = Coulombnum/Coulombden
-        if (MyPE == 0) then
-           write(6,'(1x,a,f12.5)')'mu* (Coulomb pseudopotential)=', Coulomb
-        endif
         if (getKeyValue(1,'mu* (e-e interaction constant)',mu_star, default_param=.false.) == 0) then
            Coulomb = mu_star
            if (MyPE == 0) then
-              write(6,'(1x,a,f12.5)')'Using the input mu* (Coulomb pseudopotential): ', Coulomb
+              write(6,'(1x,a)')'Using the input mu* (Coulomb pseudopotential) ......'
            endif
+        endif
+        if (MyPE == 0) then
+           write(6,'(/,1x,a,t32,a,f12.5)')'mu* (Coulomb pseudopotential)','=', Coulomb
         endif
 !
 !       if (EPC-Coulomb*(ONE+0.62D0*EPC) < ZERO) then
@@ -626,7 +575,7 @@
 !       ==============================================================
         if (EPC > Coulomb) then
            if (MyPE == 0) then
-              write(6,'(1x,a,f12.5)')'EPC-Coulomb*(ONE+0.62D0*EPC) =', EPC-Coulomb*(ONE+0.62D0*EPC)
+              write(6,'(1x,a,t32,a,f12.5)')'EPC-Coulomb*(ONE+0.62D0*EPC)','=', EPC-Coulomb*(ONE+0.62D0*EPC)
            endif
            SuperTempExp = -1.04D0*(ONE+EPC)/(EPC-Coulomb*(ONE+0.62D0*EPC))
            SuperTemp=DebyeTemp*exp(SuperTempExp)/1.45D0
@@ -636,17 +585,29 @@
            endif
            SuperTemp=ZERO
         endif
+!
         if (MyPE == 0) then
            write(6,'(/,1x,a)')'************************************************'
            write(6,'(1x,a,f12.5)')'Superconducting Transition Temp (K):',SuperTemp
            write(6,'(1x,a,/)')'************************************************'
         endif
 !
-        deallocate(Phonon_Freq2)
-!
         if (isKKRCPA()) then
-           deallocate(phase_shift_aver)
+           if (EPC_pc > Coulomb) then
+              SuperTempExp = -1.04D0*(ONE+EPC_pc)/(EPC_pc-Coulomb*(ONE+0.62D0*EPC_pc))
+              SuperTemp=DebyeTemp*exp(SuperTempExp)/1.45D0
+           else
+              SuperTemp=ZERO
+           endif
+           if (MyPE == 0) then
+              write(6,'(/,1x,a)')'With an alternative approach to the GG formula applied to random alloys ...'
+              write(6,'(/,1x,a)')'************************************************'
+              write(6,'(1x,a,f12.5)')'Superconducting Transition Temp (K):',SuperTemp
+              write(6,'(1x,a,/)')'************************************************'
+           endif
         endif
+!
+        deallocate(PhononFreq2, AtomMass)
 !
 !       ==============================================================
 !       Using the partial phase shift and DOS data published in PRB 15, 4221
@@ -778,14 +739,14 @@
     real (kind=RealKind), intent(in) :: thetaD,Ef,dos_per_spin
     real (kind=RealKind), intent(out) :: eta,lamda,mu,Tc
 !
-    real (kind=RealKind) :: Phonon_Freq2, Iconst, SumI, sinTerm, I_Total
+    real (kind=RealKind) :: PhononFreq2, Iconst, SumI, sinTerm, I_Total
     real (kind=RealKind) :: AtomMass, EPCden, total_dos
     real (kind=RealKind) :: Coulombnum, Coulombden, SuperTempExp
 !
     integer (kind=IntKind), intent(in) :: anum
     integer (kind=IntKind) :: l
 !
-    Phonon_Freq2 = HALF*(thetaD*Kelvin2Ryd)**2
+    PhononFreq2 = HALF*(thetaD*Kelvin2Ryd)**2
     Iconst = Ef/PI**2/dos_per_spin**2 ! Ryd^3
     total_dos = TWO*dos_per_spin ! dos_per_spin = DOS per spin
     AtomMass=getAtomicMass(anum)*MassUnit2Ryd/LightSpeed**2
@@ -798,7 +759,7 @@
     I_Total = Iconst*SumI ! Ryd^2/au^2
 !
     eta = dos_per_spin*I_Total  ! Ryd/au^2
-    EPCden = AtomMass*Phonon_Freq2 ! Ryd/au^2
+    EPCden = AtomMass*PhononFreq2 ! Ryd/au^2
     lamda = eta/EPCden ! unitless
 !
     Coulombnum = 0.26D0*total_dos/Ryd2eV
