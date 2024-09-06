@@ -8,7 +8,8 @@ public :: initForce,    &
           endForce,     &
           calForce,     &
           getForce,     &
-          printForce
+          printForce,   &
+          writeForceData
 !
 private
 !
@@ -19,6 +20,7 @@ private
 !
    real (kind=RealKind), allocatable, target :: force(:,:)
    real (kind=RealKind), allocatable :: GlobalForce(:,:)
+   real (kind=RealKind) :: drift_force(3)
 !
 contains
 !
@@ -123,21 +125,29 @@ contains
    enddo
    call GlobalSumInGroup(GroupID, GlobalForce,3,GlobalNumAtoms)
 !
+   drift_force = ZERO
+   do id=1,GlobalNumAtoms
+      drift_force = drift_force+GlobalForce(1:3,id)
+   enddo
+   drift_force = drift_force/real(GlobalNumAtoms,kind=RealKind)
+!
    end subroutine calForce
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getForce(id) result(f)
+   function getForce(id,df) result(f)
 !  ===================================================================
    implicit none
    integer (kind=IntKind), intent(in) :: id
 !
    real (kind=RealKind), pointer :: f(:)
+   real (kind=RealKind), intent(out) :: df(3)
 !
    if (id < 1 .or. id > LocalNumAtoms) then
       call ErrorHandler('getForce','atom index is out of range',id)
    endif
 !
+   df = drift_force
    f => force(1:3,id)
 !
    end function getForce
@@ -419,7 +429,7 @@ contains
 !
    integer (kind=IntKind) :: id
 !
-   real (kind=RealKind) :: f_mag, fnet(3)
+   real (kind=RealKind) :: f_mag
 !
    write(6,'(/,80(''-''))')
    write(6,'(/,24x,a)')'**************************'
@@ -445,26 +455,91 @@ contains
    write(6,'(80(''=''))')
    write(6,'(a)')'   Global ID          Fx               Fy               Fz               |F|'
    write(6,'(80(''-''))')
-   fnet = ZERO
    do id=1,GlobalNumAtoms
       f_mag = sqrt(GlobalForce(1,id)**2+GlobalForce(2,id)**2+GlobalForce(3,id)**2)
       write(6,'(2x,i6,4x,4(2x,f15.8))')id,GlobalForce(1:3,id),f_mag
-      fnet = fnet+GlobalForce(1:3,id)
    enddo
-   fnet = fnet/real(GlobalNumAtoms,kind=RealKind)
    write(6,'(80(''-''))')
-   write(6,'(a,4(f15.8,2x))')"Average Force:",fnet(1:3),sqrt(fnet(1)**2+fnet(2)**2+fnet(3)**2)
+   write(6,'(a,4(f15.8,2x))')"Drift Force:",drift_force(1:3),sqrt(drift_force(1)**2+drift_force(2)**2+drift_force(3)**2)
    write(6,'(/,a)')'Applying condition that total force on unit cell = 0, the corrected Forces are'
    write(6,'(80(''=''))')
    write(6,'(a)')'   Global ID          Fx               Fy               Fz               |F|'
    write(6,'(80(''-''))')
    do id=1,GlobalNumAtoms
-      f_mag = sqrt((GlobalForce(1,id)-fnet(1))**2+(GlobalForce(2,id)-fnet(2))**2+(GlobalForce(3,id)-fnet(3))**2)
-      write(6,'(2x,i6,4x,4(2x,f15.8))')id,GlobalForce(:,id)-fnet,f_mag
+      f_mag = sqrt((GlobalForce(1,id)-drift_force(1))**2+(GlobalForce(2,id)-drift_force(2))**2+(GlobalForce(3,id)-drift_force(3))**2)
+      write(6,'(2x,i6,4x,4(2x,f15.8))')id,GlobalForce(:,id)-drift_force,f_mag
    enddo
 !
    write(6,'(80(''=''))')
 !
    end subroutine printForce
 !  ==================================================================
+!
+!  ******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!  This subroutine writes the Hellmanm-Feynman force to FORCE_DATA file.
+!  Combining FORCE_DATA files allows to generate FORCE_SETS file as an 
+!  input for PHONONPY 
+!
+!  The format of FORCE_SETS file is described as the follows:
+!
+!  This format is the default format of phonopy and force constants can be
+!  calculated by built-in force constants calculator of phonopy by finite
+!  difference method, though external force constants calculator can be
+!  also used to obtain force constants with this format by the fitting
+!  approach.
+! 
+!  This file gives sets of forces in supercells with finite atomic
+!  displacements. Each supercell involves one displaced atom. The first
+!  line is the number of atoms (NA) in supercell. The second line gives 
+!  number of calculated supercells (NC) with displacements. Below the 
+!  lines, sets of forces with displacements are written. 
+!
+!  In each set, firstly the index of the displaced atom (DA) in supercell 
+!  is written. Secondary, the atomic displacement in Cartesian coordinates 
+!  (DISP) is written. Below the displacement line, atomic forces (HF_FORCE) 
+!  in Cartesian coordinates are successively written, for each atom in 
+!  the unit cell. 
+!
+!  This is repeated for the set of displacements (=NC). 
+!
+!  Blank likes are simply ignored.
+!
+!  FORCE_DATA contains the forces for the current supercell
+!  ===================================================================
+   subroutine writeForceData(fpath)
+!  ===================================================================
+   use KindParamModule, only : IntKind, RealKind
+   use PhysParamModule, only : Bohr2Angstrom, Ryd2eV
+   use ErrorHandlerModule, only : ErrorHandler
+!
+   implicit none
+!
+   character (len=*), intent(in) :: fpath
+!
+   integer (kind=IntKind) :: ia, ios
+   integer (kind=IntKind), parameter :: funit = 201
+!
+   real (kind=RealKind) :: AU2SI
+!
+   AU2SI = Ryd2eV/Bohr2Angstrom
+!
+   open(unit=funit,file=trim(fpath)//'FORCE_DATA',form='formatted',   &
+        status='unknown',iostat=ios, action='write')
+   if (ios > 0) then
+      call ErrorHandler('writeForceData','Error to open FORCE_DATA for writing',ios)
+   endif
+!  ===================================================================
+!  hf_force = the Hellmann-Feynman force acting on each atom in the
+!             supercell. The written data are in eV/Angstrom units
+!  ===================================================================
+   do ia = 1, GlobalNumAtoms
+      write(funit,'(f15.10,1x,f15.10,1x,f15.10)')(GlobalForce(1:3,ia)-drift_force(1:3))*AU2SI
+   enddo
+!
+   close(funit)
+!
+   end subroutine writeForceData
+!  ===================================================================
 end module ForceModule

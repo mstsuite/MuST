@@ -249,7 +249,7 @@ program mst2
 !
    use SurfElementsModule, only : printSurfaceElements
 !
-   use ForceModule, only : initForce, endForce, calForce, printForce
+   use ForceModule, only : initForce, endForce, calForce, printForce, writeForceData
 !
    use KreinModule, only : initKrein, endKrein
 !
@@ -2024,6 +2024,15 @@ program mst2
    if ( MyPE==0 .and. movie > 0) then
       call driverSystemMovie( .false., getEnergyPerAtom(), funit_sysmov, en_movie )
    endif
+!
+   if ( isFullPotential() .and. node_print_level >= 0 .and. ScfConverged) then
+!     ----------------------------------------------------------------
+      call writeForceData(inputpath)
+!     ----------------------------------------------------------------
+   endif
+!  -------------------------------------------------------------------
+   call syncAllPEs()
+!  -------------------------------------------------------------------
 !
    deallocate(LocalEvec)
    deallocate(LocalNumValenceElectrons)

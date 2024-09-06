@@ -267,9 +267,9 @@ contains
    end interface
 !
    interface
-      subroutine readPOSCAR(fname,NumAtomsIn,NumAtomsOut)
+      subroutine readPOSCAR(fpath,fname,NumAtomsIn,NumAtomsOut)
          use KindParamModule, only : IntKind
-         character (len=*), intent(in) :: fname
+         character (len=*), intent(in) :: fpath, fname
          integer (kind=IntKind), intent(in), optional :: NumAtomsIn
          integer (kind=IntKind), intent(out), optional :: NumAtomsOut
       end subroutine readPOSCAR
@@ -323,7 +323,7 @@ contains
 !     ----------------------------------------------------------------
       rstatus = getKeyValue(tbl_id,'Atomic Position File Name',fposi_in)
 !     ----------------------------------------------------------------
-      if (nocaseCompare(fposi_in,'POSCAR')) then
+      if (nocaseCompare(fposi_in(1:6),'POSCAR')) then
          isPOSCAR = .true.
       endif
    else if ( getKeyValue(info_id,'Atomic Position File Name',fposi_in) /= 0) then
@@ -340,7 +340,7 @@ contains
    t0 = getTime()
    if (isPOSCAR) then
 !     ----------------------------------------------------------------
-      call readPOSCAR(trim(file_path),NumAtomsIn=NumAtoms)
+      call readPOSCAR(trim(file_path),trim(fposi_in),NumAtomsIn=NumAtoms)
 !     ----------------------------------------------------------------
    else if ( len_trim(fposi_in) > 0 .and. .not.nocaseCompare(fposi_in,'None') ) then
 !     ----------------------------------------------------------------

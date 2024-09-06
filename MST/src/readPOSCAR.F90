@@ -1,5 +1,5 @@
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine readPOSCAR(fpath,NumAtomsIn,NumAtomsOut)
+   subroutine readPOSCAR(fpath,fname,NumAtomsIn,NumAtomsOut)
 !  ===================================================================
 !
 !  Read POSCAR file used for VASP
@@ -26,6 +26,7 @@
    implicit none
 !
    character (len=*), intent(in) :: fpath
+   character (len=*), intent(in) :: fname
 !
    integer (kind=IntKind), parameter :: text_len = 80
 !
@@ -104,15 +105,15 @@
 !  Check the status of the POSCAR file
 !  ===================================================================
    if (MyPE == IOPE) then
-      inquire(file=trim(fpath)//'POSCAR',exist=FileExist)
+      inquire(file=trim(fpath)//fname,exist=FileExist)
       if (FileExist) then
-         open(unit=funit,file=trim(fpath)//'POSCAR',form='formatted',status='old', &
+         open(unit=funit,file=trim(fpath)//fname,form='formatted',status='old', &
               iostat=ios,action='read')
          if (ios > 0) then
-            call ErrorHandler('realPOSCAR','iostat > 0',ios)
+            call ErrorHandler('readPOSCAR','iostat > 0',ios)
          endif
       else
-         call ErrorHandler('readPOSCAR','POSCAR does not exist in the current directory')
+         call ErrorHandler('readPOSCAR','POSCAR* does not exist in the current directory')
       endif
    endif
 !
