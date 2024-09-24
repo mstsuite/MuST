@@ -70,7 +70,7 @@
       call writeHeadLine('*     one of the following lines. If needed, one will have to add the zero-point      *')
       call writeHeadLine('*     lattice energy to the total energy by hand.                                     *')
       call writeHeadLine('*',87)
-#include "git_version.h"
+      include "git_version.h"
       i = getTokenPosition(7,myunit)
       ver = trim(myunit(i:))
 !     ----------------------------------------------------------------

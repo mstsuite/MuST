@@ -13,7 +13,8 @@ DefaultParamModule.o \
 CmdLineOptionModule.o \
 LatticeModule.o \
 IBZRotationModule.o \
-CheckPointModule.o
+CheckPointModule.o \
+XMLDataModule.o
 
 BasicRoutines = \
 readPositionData.o \
@@ -138,6 +139,9 @@ printDensityOnGrid.o \
 printPotentialOnGrid.o \
 printScfResults.o \
 adjustEnergy.o \
+printxml_code_info.o \
+printxml_scf_param.o \
+printxml_scf_results.o
 
 .SUFFIXES:	.o .f .c .f90 .F90
 
@@ -169,7 +173,7 @@ adjustEnergy.o \
 all: $(ODIR)/preproc print_version $(ODIR)/$(EXEC_NAME)
 
 print_version:
-	cd $(TOP_DIR) && ./src/get_svn.sh ./src/print_version_include.h
+	cd $(TOP_DIR) && ./src/get_svn.sh $(ODIR)/print_version_include.h
 	rm -f $(ODIR)/print_version.o
 
 $(ODIR)/preproc: preproc.o

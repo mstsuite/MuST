@@ -29,7 +29,9 @@ public :: initExchCorrFunctional,         &
           getExchCorrPot,                 &
           getExchCorrEnDen,               &
           calSphExchangeCorrelation,      &
-          calExchangeCorrelation
+          calExchCorrFunctional,          &
+          calExchangeCorrelation,         &
+          getFunctionalType
 !
    interface getExchCorrPot
       module procedure getExchCorrPot_s, getExchCorrPot_v
@@ -1233,6 +1235,208 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine calExchCorrFunctional(posi,getDensity)
+!  ===================================================================
+#ifdef LIBXC5
+   use, intrinsic :: iso_c_binding
+#endif
+   implicit none
+!
+   integer (kind=IntKind) :: is, n
+!
+   real (kind=RealKind), intent(in) :: posi(3)
+   real (kind=RealKind) :: rho_den, mag_den
+   real (kind=RealKind) :: grad_rho_den(3), grad_mag_den(3)
+   real (kind=RealKind) :: rho(2), exc(1), vxc(2)
+   real (kind=RealKind) :: sigma(3), vsig(3)
+   real (kind=RealKind) :: der_rho_sp(2)
+   real (kind=RealKind), allocatable :: gga_term(:,:), der_gga_term(:), xyz(:)
+!
+#ifdef LIBXC5
+   TYPE(xc_f90_func_t), pointer :: xc_func_p
+   integer (kind=c_size_t) :: np
+#elif defined LIBXC
+   TYPE(xc_f90_pointer_t), pointer :: xc_func_p
+   integer (kind=IntKind) :: np
+#endif
+!
+   interface
+      function getDensity(dtype,posi,grad) result(den)
+         use KindParamModule, only : IntKind, RealKind
+         integer (kind=IntKind), intent(in) :: dtype
+         real (kind=RealKind), intent(in) :: posi(3)
+         real (kind=RealKind), intent(out), optional :: grad(3)
+         real (kind=RealKind) :: den
+      end function getDensity
+   end interface
+!
+   if (.not.Initialized) then
+      call ErrorHandler('calExchCorrFunctional',                      &
+                        'ExchCorrFunctional is not initialized')
+   else if (LegacyFunctionalID == -1) then
+      Vexc_s = ZERO
+      Eexc_s = ZERO
+      return
+   else if (FunctionalType == GGA .and. LegacyFunctionalID < 2 ) then
+!     ----------------------------------------------------------------
+      call ErrorHandler('calExchCorrFunctional','Incompatible functional ID',LegacyFunctionalID)
+!     ----------------------------------------------------------------
+   endif
+!
+   if (FunctionalType == LDA) then
+      rho_den = getDensity(0,posi)
+      if (n_spin_pola == 2) then
+         mag_den = getDensity(1,posi)
+      else
+         mag_den = ZERO
+      endif
+      if (LegacyFunctionalID == 0 .or. LegacyFunctionalID == 1) then
+         if (n_spin_pola == 1) then
+!           ----------------------------------------------------------
+            call calExchCorr_s( rho_den )
+!           ----------------------------------------------------------
+         else
+            do is = 1, n_spin_pola
+!              -------------------------------------------------------
+               call calExchCorr_s( rho_den, mag_den, is )
+!              -------------------------------------------------------
+            enddo
+         endif
+      else 
+#if defined LIBXC || defined LIBXC5
+         rho = ZERO
+         if (n_spin_pola == 1) then
+            rho(1) = rho_den
+         else
+            rho(1) = HALF*(rho_den+mag_den)
+            rho(2) = HALF*(rho_den-mag_den)
+         endif
+         Vexc_s = ZERO; Eexc_s = ZERO
+         np = 1
+         do n = 1, NumFunctionals
+            if (n == 1) then
+               xc_func_p => xc_func_1
+            else
+               xc_func_p => xc_func_2
+            endif 
+!           ----------------------------------------------------------
+            call xc_f90_lda_exc_vxc(xc_func_p, np, rho(1), exc(1), vxc(1))
+!           ----------------------------------------------------------
+            do is = 1, n_spin_pola
+               Vexc_s(is) = Vexc_s(is) + vxc(is)
+            enddo
+            Eexc_s = Eexc_s + exc(1)
+         enddo
+         Vexc_s = energy_units_conv*Vexc_s
+         Eexc_s = energy_units_conv*Eexc_s
+#else
+!        -------------------------------------------------------------
+         call ErrorHandler( "calExchCorrFunctional",                  &
+                            "This LDA functional requires LibXC.",    &
+                            LegacyFunctionalID )
+!        -------------------------------------------------------------
+#endif
+      endif
+   else if (FunctionalType == GGA) then
+#if defined LIBXC || defined LIBXC5
+      rho_den = getDensity(0,posi,grad=grad_rho_den)
+      if (n_spin_pola == 2) then
+         mag_den = getDensity(1,posi,grad=grad_mag_den)
+      else
+         mag_den = ZERO
+      endif
+   !? allocate(gga_term(2*nq+1,n_spin_pola),der_gga_term(2*nq+1),xyz(2*nq+1))
+      Vexc_s = ZERO; Eexc_s = ZERO
+      np = 1
+      do n = 1, NumFunctionals
+         if (n == 1) then
+            xc_func_p => xc_func_1
+         else
+            xc_func_p => xc_func_2
+         endif 
+         rho = ZERO
+         if (n_spin_pola == 1) then
+            rho(1) = rho_den
+         else
+            rho(1) = HALF*(rho_den+mag_den)
+            rho(2) = HALF*(rho_den-mag_den)
+         endif
+         sigma = ZERO
+         if (n_spin_pola == 1) then
+            sigma(1) = grad_rho_den(1)**2+grad_rho_den(2)**2+grad_rho_den(3)**2
+         else
+            sigma(1) = HALF*(grad_rho_den(1)+grad_mag_den(1))*HALF*(grad_rho_den(1)+grad_mag_den(1)) + &
+                       HALF*(grad_rho_den(2)+grad_mag_den(2))*HALF*(grad_rho_den(2)+grad_mag_den(2)) + &
+                       HALF*(grad_rho_den(3)+grad_mag_den(3))*HALF*(grad_rho_den(3)+grad_mag_den(3))
+            sigma(2) = HALF*(grad_rho_den(1)+grad_mag_den(1))*HALF*(grad_rho_den(1)-grad_mag_den(1)) + &
+                       HALF*(grad_rho_den(2)+grad_mag_den(2))*HALF*(grad_rho_den(2)-grad_mag_den(2)) + &
+                       HALF*(grad_rho_den(3)+grad_mag_den(3))*HALF*(grad_rho_den(3)-grad_mag_den(3))
+            sigma(3) = HALF*(grad_rho_den(1)-grad_mag_den(1))*HALF*(grad_rho_den(1)-grad_mag_den(1)) + &
+                       HALF*(grad_rho_den(2)-grad_mag_den(2))*HALF*(grad_rho_den(2)-grad_mag_den(2)) + &
+                       HALF*(grad_rho_den(3)-grad_mag_den(3))*HALF*(grad_rho_den(3)-grad_mag_den(3))
+         endif
+!        -------------------------------------------------------------
+         call xc_f90_gga_exc_vxc(xc_func_p, np, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
+!        -------------------------------------------------------------
+    !?   if (k == 1 .and. j == 0) then
+         do is = 1, n_spin_pola
+            Vexc_s(is) = Vexc_s(is) + vxc(is)
+         enddo
+         Eexc_s = Eexc_s + exc(1)
+    !?   endif
+!        =============================================================
+!        Determine the following GGA term in the exchange-correlation potential
+!             div[(rho*d(epsilon_xc)/d(sigma))*grad(rho)]
+!        In the following lines of the code, 
+!             der_rho_sp = d[rho(is)]/d{x, y, or z}, for is = 1 or 2
+!
+!             gga_term = 2*rho*d(epsilon_xc)/d(sigma(is,is)))*d[rho(is)]/d{x, y, or z}
+!                        + rho*d(epsilon_xc)/d(sigma(is,isb)))*d[rho(isb)]/d{x, y, or z}
+!        where isb = 3-is.
+!        =============================================================
+   !?    if (n_spin_pola == 1) then
+   !?       der_rho_sp(1) = grad_rho_den(k)
+   !?    else
+   !?       der_rho_sp(1) = HALF*(grad_rho_den(k)+grad_mag_den(k))
+   !?       der_rho_sp(2) = HALF*(grad_rho_den(k)-grad_mag_den(k))
+   !?    endif
+   !?    if (n_spin_pola == 1) then
+   !?       gga_term(jd,1) = TWO*vsig(1)*der_rho_sp(1)
+   !?    else
+   !?       gga_term(jd,1) = TWO*vsig(1)*der_rho_sp(1) + vsig(2)*der_rho_sp(2)
+   !?       gga_term(jd,2) = TWO*vsig(3)*der_rho_sp(2) + vsig(2)*der_rho_sp(1)
+   !?    endif
+   !?    xyz(jd) = cart(j,k)
+   !?
+   !?    do is = 1, n_spin_pola
+!  !?       ---------------------------------------------------------
+   !?       call newder(gga_term(1,is),der_gga_term,xyz,2*nq+1)
+!  !?       ---------------------------------------------------------
+   !?       Vexc_s(is) = Vexc_s(is) - der_gga_term(nq+1)
+   !?    enddo
+      enddo
+      Vexc_s = energy_units_conv*Vexc_s
+      Eexc_s = energy_units_conv*Eexc_s
+   !? deallocate(gga_term,der_gga_term,xyz)
+#else
+!     ----------------------------------------------------------------
+      call ErrorHandler( "calExchCorrFunctional",                     &
+                         "This GGA functional requires LibXC.",       &
+                         LegacyFunctionalID )
+!     ----------------------------------------------------------------
+#endif
+   else
+!     ----------------------------------------------------------------
+      call ErrorHandler('calExchCorrFunctional','The functional type is not implemented')
+!     ----------------------------------------------------------------
+   endif
+!
+   end subroutine calExchCorrFunctional
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine calExchCorr_s( rho_den, mag_den, js )
 !  ===================================================================
 !
@@ -1670,5 +1874,28 @@ contains
    endif
 !
    end function isHybridFunctional
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getFunctionalType(fn_x,fn_c) result(xc)
+!  ===================================================================
+   implicit none
+!
+   character (len=len(FunctionalName_X)), intent(out), optional :: fn_x
+   character (len=len(FunctionalName_C)), intent(out), optional :: fn_c
+   character (len=len(FunctionalType)) :: xc
+!
+   xc = FunctionalType
+!
+   if (present(fn_x)) then
+      fn_x = FunctionalName_X
+   endif
+   if (present(fn_c)) then
+      fn_c = FunctionalName_C
+   endif
+!
+   end function getFunctionalType
 !  ===================================================================
 end module ExchCorrFunctionalModule

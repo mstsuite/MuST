@@ -34,6 +34,8 @@ program mst2
    use InputModule, only : openInputFile, closeInputFile
    use InputModule, only : getKeyValue, printKeyNames, getTableIndex
 !
+   use XMLDataModule, only : initXMLData, endXMLData
+!
    use OutputModule, only : initOutput, endOutput,  &
                             isStandardOutToScreen,  &
                             getDensityPrintFlag,    &
@@ -269,6 +271,7 @@ program mst2
    character (len=80) :: info_table, info_path
    character (len=160) :: itname, cmd
    character (len=12) :: anm
+   character (len=8)  :: code_version
    character (len=8)  :: exec_date
    character (len=10) :: exec_time
    character (len=200) :: FileName
@@ -423,6 +426,8 @@ program mst2
 !  -------------------------------------------------------------------
 !
    call date_and_time(exec_date,exec_time)
+!
+   include "MuST_version"
 !
    if (MyPE == 0) then
       write(6,'(13a,i5,a)')'Execution starts at ',                            &
@@ -762,6 +767,8 @@ program mst2
 !
    if (node_print_level >= 0 .and. .not.isStandardOutToScreen()) then
 !     ----------------------------------------------------------------
+      call initXMLData(trim(inputpath)//'mstrun.xml',root='mst_run')
+!     ----------------------------------------------------------------
       call getcwd(cmd)
 !     ----------------------------------------------------------------
       write(6,'(a,a)')'Current working directory: ',trim(cmd)
@@ -808,66 +815,67 @@ program mst2
 !!   write(6,'(12x,a)')'********************************************************'
 !!   write(6,'(/)')
 !    -----------------------------------------------------------------
-     call print_version(6)
+      call print_version(6)
+      call printxml_code_info(exec_date,exec_time,code_version)
 !    -----------------------------------------------------------------
-     write(6,'(12x,a,i5)')'Number of atoms on each processor:              ', &
-                          LocalNumAtoms
-     if ( isLSMS() ) then ! In this case, the k-point parallelization is used to
-                          ! paralleize the single site solution for different (l,m).
-        write(6,'(12x,a,i5)')'Number of L-values on each processor:           ', &
-                             getNumKsOnMyProc()
-        write(6,'(12x,a,i5)')'Number of redundant L-values on each processor: ', &
-                             getNumRedundantKsOnMyProc()
-     else
-        write(6,'(12x,a,i5)')'Number of k-points on each processor:           ', &
-                             getNumKsOnMyProc()
-        write(6,'(12x,a,i5)')'Number of redundant k-points on each processor: ', &
-                             getNumRedundantKsOnMyProc()
-     endif
-     write(6,'(12x,a,i5)')'Number of energies on each processor:           ', &
-                          getNumEsOnMyProc()
-     write(6,'(12x,a,i5)')'Number of redundant energies on each processor: ', &
-                          getNumRedundantEsOnMyProc()
-     write(6,'(/,80(''=''))')
+      write(6,'(12x,a,i5)')'Number of atoms on each processor:              ', &
+                           LocalNumAtoms
+      if ( isLSMS() ) then ! In this case, the k-point parallelization is used to
+                           ! paralleize the single site solution for different (l,m).
+         write(6,'(12x,a,i5)')'Number of L-values on each processor:           ', &
+                              getNumKsOnMyProc()
+         write(6,'(12x,a,i5)')'Number of redundant L-values on each processor: ', &
+                              getNumRedundantKsOnMyProc()
+      else
+         write(6,'(12x,a,i5)')'Number of k-points on each processor:           ', &
+                              getNumKsOnMyProc()
+         write(6,'(12x,a,i5)')'Number of redundant k-points on each processor: ', &
+                              getNumRedundantKsOnMyProc()
+      endif
+      write(6,'(12x,a,i5)')'Number of energies on each processor:           ', &
+                           getNumEsOnMyProc()
+      write(6,'(12x,a,i5)')'Number of redundant energies on each processor: ', &
+                           getNumRedundantEsOnMyProc()
+      write(6,'(/,80(''=''))')
 !    -----------------------------------------------------------------
-     call force_openmp()    ! use this only if necessary
-     call print_threads(6)
+      call force_openmp()    ! use this only if necessary
+      call print_threads(6)
 !    -----------------------------------------------------------------
-     if ( isKKR() ) then
-        write(6,'(/,14x,a,/)')'::::  KKR Electronic Structure Calculation ::::'
-     else if ( isLSMS() ) then
-        write(6,'(/,14x,a,/)')'::::  LSMS Electronic Structure Calculation ::::'
-     else if ( isScreenKKR() ) then
-        write(6,'(/,14x,a,/)')'::::  Screend-KKR Electronic Structure Calculation ::::'
-     else if ( isKKRCPA() ) then
-        write(6,'(/,14x,a,/)')'::::  KKR-CPA Electronic Structure Calculation ::::'
-     else if ( isKKRCPASRO() ) then
-        write(6,'(/,14x,a,/)')'::::  KKR-CPA-SRO Electronic Structure Calculation ::::'
-     else if ( isScreenKKR_LSMS() ) then
-        write(6,'(/,14x,a,/)')'::::  Screened-KKR-LSMS Electronic Structure Calculation ::::'
-     else if ( isEmbeddedCluster() ) then
-        write(6,'(/,14x,a,/)')'::::  Embedded-LSMS Electronic Structure Calculation ::::'
-     else if ( isSingleSite() ) then
-        write(6,'(/,14x,a,/)')'::::  Single Site Electronic Structure Calculation ::::'
-     endif
+      if ( isKKR() ) then
+         write(6,'(/,14x,a,/)')'::::  KKR Electronic Structure Calculation ::::'
+      else if ( isLSMS() ) then
+         write(6,'(/,14x,a,/)')'::::  LSMS Electronic Structure Calculation ::::'
+      else if ( isScreenKKR() ) then
+         write(6,'(/,14x,a,/)')'::::  Screend-KKR Electronic Structure Calculation ::::'
+      else if ( isKKRCPA() ) then
+         write(6,'(/,14x,a,/)')'::::  KKR-CPA Electronic Structure Calculation ::::'
+      else if ( isKKRCPASRO() ) then
+         write(6,'(/,14x,a,/)')'::::  KKR-CPA-SRO Electronic Structure Calculation ::::'
+      else if ( isScreenKKR_LSMS() ) then
+         write(6,'(/,14x,a,/)')'::::  Screened-KKR-LSMS Electronic Structure Calculation ::::'
+      else if ( isEmbeddedCluster() ) then
+         write(6,'(/,14x,a,/)')'::::  Embedded-LSMS Electronic Structure Calculation ::::'
+      else if ( isSingleSite() ) then
+         write(6,'(/,14x,a,/)')'::::  Single Site Electronic Structure Calculation ::::'
+      endif
 !
-     if (Symmetrize_mod) then
-        write(6,'(/)')
-        write(6,'(3x,a)')'::::::::::::::::::::::::::  WARNING  ::::::::::::::::::::::::::::::'
-        write(6,'(3x,a)')'::                                                               ::'
-        write(6,'(3x,a)')':: For Full-potential KKR or KKR-CPA calculations with lmax > 5, ::'
-        write(6,'(3x,a)')':: the k-space integration is forced to take place in the entire ::'
-        write(6,'(3x,a)')':: first Brillouin zone (B.Z.), rather than in the irreducible   ::'
-        write(6,'(3x,a)')':: B.Z., since the rotation symmetry of the single site regular  ::'
-        write(6,'(3x,a)')':: solutions and the single site scattering matrices are found   ::'
-        write(6,'(3x,a)')':: broken numerically that the symmetry opertation in B.Z. is no ::'
-        write(6,'(3x,a)')':: longer valid.                                                 ::'
-        write(6,'(3x,a)')':: This rotation symmetry broken problem will be addressed in a  ::'
-        write(6,'(3x,a)')':: future code release.                                          ::'
-        write(6,'(3x,a)')'::                                                               ::'
-        write(6,'(3x,a)')':::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::'
-        write(6,'(/)')
-     endif
+      if (Symmetrize_mod) then
+         write(6,'(/)')
+         write(6,'(3x,a)')'::::::::::::::::::::::::::  WARNING  ::::::::::::::::::::::::::::::'
+         write(6,'(3x,a)')'::                                                               ::'
+         write(6,'(3x,a)')':: For Full-potential KKR or KKR-CPA calculations with lmax > 5, ::'
+         write(6,'(3x,a)')':: the k-space integration is forced to take place in the entire ::'
+         write(6,'(3x,a)')':: first Brillouin zone (B.Z.), rather than in the irreducible   ::'
+         write(6,'(3x,a)')':: B.Z., since the rotation symmetry of the single site regular  ::'
+         write(6,'(3x,a)')':: solutions and the single site scattering matrices are found   ::'
+         write(6,'(3x,a)')':: broken numerically that the symmetry opertation in B.Z. is no ::'
+         write(6,'(3x,a)')':: longer valid.                                                 ::'
+         write(6,'(3x,a)')':: This rotation symmetry broken problem will be addressed in a  ::'
+         write(6,'(3x,a)')':: future code release.                                          ::'
+         write(6,'(3x,a)')'::                                                               ::'
+         write(6,'(3x,a)')':::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::'
+         write(6,'(/)')
+      endif
    endif
 !
 !  ===================================================================
@@ -1593,6 +1601,9 @@ program mst2
 !  Start SCF iterations.
 !  ===================================================================
    if (node_print_level >= 0) then
+!     ----------------------------------------------------------------
+      call printxml_scf_param()
+!     ----------------------------------------------------------------
       write(6,'(/,80(''=''))')
       write(6,'(''Time:: Start-up   '',5x,'' :'',f12.5,''Sec'')') &
                     getTime()-t0
@@ -2115,6 +2126,9 @@ stop 'Under construction...'
 !     ----------------------------------------------------------------
    endif
    if (node_print_level >= 0) then
+!     ----------------------------------------------------------------
+      call printxml_scf_results()
+!     ----------------------------------------------------------------
       write(6,'(/,80(''=''))')
       t3 = getTime()-t0
       t2 = t_inp + t_outp
@@ -2194,6 +2208,9 @@ stop 'Under construction...'
 !
 !  ===================================================================
    if (node_print_level >= 0) then
+!     ----------------------------------------------------------------
+      call endXMLData()
+!     ----------------------------------------------------------------
       call date_and_time(exec_date,exec_time)
       write(6,'(/,12a)')'Execution ends at ',                         &
            exec_time(1:2),':',exec_time(3:4),':',exec_time(5:6),', ', &

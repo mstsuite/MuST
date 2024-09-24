@@ -56,8 +56,8 @@ CXXFLAGS    = -O3 -std=c++14
 # FFLAGS      = -O3
 # F77FLAGS    = -O3
 # the following option "-w -fallow-argument-mismatch" is needed for gcc.10.1.0
-FFLAGS      = -O3 -w #-fallow-argument-mismatch
-F77FLAGS    = -O3 -w #-fallow-argument-mismatch
+FFLAGS      = -O3 -w -I. #-fallow-argument-mismatch
+F77FLAGS    = -O3 -w -I. #-fallow-argument-mismatch
 # FFLAGS      = -O3 -fcheck=all -w -fallow-argument-mismatch
 # F77FLAGS    = -O3 -fcheck=all -w -fallow-argument-mismatch
 OPT_OPENMP  = -fopenmp

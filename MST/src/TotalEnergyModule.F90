@@ -35,6 +35,7 @@ private
    real (kind=RealKind) :: energy_xc
    real (kind=RealKind) :: energy_coul
    real (kind=RealKind) :: energy_kinetic
+   real (kind=RealKind) :: energy_band
    real (kind=RealKind) :: pressure
    real (kind=RealKind), allocatable :: ezpt(:)
    real (kind=RealKind), allocatable :: tpzpt(:)
@@ -95,6 +96,7 @@ contains
    energy_xc = ZERO
    energy_coul = ZERO
    energy_kinetic = ZERO
+   energy_band = ZERO
    pressure = ZERO
 !
    allocate( GlobalIndex(LocalNumAtoms) )
@@ -139,6 +141,7 @@ contains
    energy_xc = ZERO
    energy_coul = ZERO
    energy_kinetic = ZERO
+   energy_band = ZERO
    pressure = ZERO
    ezpt_per_atom = ZERO
    tpzpt_per_atom = ZERO
@@ -158,12 +161,16 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getEnergyPerAtom(zpte) result (e)
+   function getEnergyPerAtom(zpte,e_xc,e_coul,e_kin,e_band) result (e)
 !  ===================================================================
    implicit none
 !
    real (kind=RealKind), optional, intent(out) :: zpte
-   real (kind=RealKind) :: e
+   real (kind=RealKind), optional, intent(out) :: e_xc
+   real (kind=RealKind), optional, intent(out) :: e_coul
+   real (kind=RealKind), optional, intent(out) :: e_kin
+   real (kind=RealKind), optional, intent(out) :: e_band
+   real (kind=RealKind) :: e, per_atom
 !
    if (.not.Initialized) then
       call ErrorHandler('getEnergyPerAtom',                      &
@@ -174,13 +181,31 @@ contains
    endif
 !
    if (GlobalNumAtoms == NumVacancies) then
-      e = total_energy/real(GlobalNumAtoms,RealKind)
+      per_atom = ONE/real(GlobalNumAtoms,RealKind)
    else
-      e = total_energy/real(GlobalNumAtoms-NumVacancies,RealKind)
+      per_atom = ONE/real(GlobalNumAtoms-NumVacancies,RealKind)
    endif
+!
+   e = total_energy*per_atom
 !
    if (present(zpte)) then
       zpte = ezpt_per_atom
+   endif
+!
+   if (present(e_xc)) then
+      e_xc = energy_xc*per_atom
+   endif
+!
+   if (present(e_coul)) then
+      e_coul = energy_coul*per_atom
+   endif
+!
+   if (present(e_kin)) then
+      e_kin = energy_kinetic*per_atom
+   endif
+!
+   if (present(e_band)) then
+      e_band = energy_band*per_atom
    endif
 !
    end function getEnergyPerAtom

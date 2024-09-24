@@ -203,7 +203,8 @@ check-bin:
 check-git-tag:
 	if [ ! -d ../.git ]; then echo '"Develop"' > $(ODIR)/git_version; else [[ `(git tag | sort -V | tail -n 1 | wc -m)` -eq 0 ]] && echo '"Develop"' > $(ODIR)/git_version || git tag | sort -V | tail -n 1 | sed 's/^/\"/' | sed 's/$$/\"/' > $(ODIR)/git_version; fi
 	echo 'write(myunit,'\''("# ",t5,a,t30,": ",a)'\'') "MuST source code version",' > $(ODIR)/prepend
-	cat $(ODIR)/prepend $(ODIR)/git_version | ( tr -d '\n'; echo; ) > src/git_version.h
+	echo 'code_version =' `cat $(ODIR)/git_version` > $(ODIR)/MuST_version
+	cat $(ODIR)/prepend $(ODIR)/git_version | ( tr -d '\n'; echo; ) > $(ODIR)/git_version.h
 #	rm -f $(ODIR)/git_version $(ODIR)/prepend
 
 gen_link:

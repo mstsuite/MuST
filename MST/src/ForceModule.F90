@@ -9,7 +9,8 @@ public :: initForce,    &
           calForce,     &
           getForce,     &
           printForce,   &
-          writeForceData
+          writeForceData, &
+          isForceAvailable
 !
 private
 !
@@ -19,8 +20,10 @@ private
    integer (kind=IntKind) :: print_level
 !
    real (kind=RealKind), allocatable, target :: force(:,:)
-   real (kind=RealKind), allocatable :: GlobalForce(:,:)
-   real (kind=RealKind) :: drift_force(3)
+   real (kind=RealKind), allocatable :: GlobalForce(:,:), AtomicMass(:)
+   real (kind=RealKind) :: drift_force(3), drift_accel(3)
+!
+   logical :: ForceAvailable = .false.
 !
 contains
 !
@@ -28,8 +31,9 @@ contains
    subroutine initForce(na,istop,iprint)
 !  ===================================================================
    use IntegerFactorsModule, only : initIntegerFactors
+   use ChemElementModule, only : getAtomicMass
    use SystemModule, only : getLmaxRho
-   use SystemModule, only : getNumAtoms
+   use SystemModule, only : getNumAtoms, getAtomicNumber
    use GroupCommModule, only : getGroupID
 !
    implicit none
@@ -38,7 +42,7 @@ contains
 !
    integer (kind=IntKind), intent(in) :: na
    integer (kind=IntKind), intent(in) :: iprint
-   integer (kind=IntKind) :: lmax_rho
+   integer (kind=IntKind) :: lmax_rho, ig, n
 !
    LocalNumAtoms = na
    stop_routine = istop
@@ -53,7 +57,19 @@ contains
    GlobalNumAtoms = getNumAtoms()
    GroupID = getGroupID('Unit Cell')
    allocate( GlobalForce(3,GlobalNumAtoms))
+   allocate( AtomicMass(GlobalNumAtoms))
    GlobalForce = ZERO
+!
+!  ===================================================================
+!  This needs to be fixed for the CPA case.
+!  ===================================================================
+   do ig = 1, GlobalNumAtoms
+      n = getAtomicNumber(ig)
+      AtomicMass(ig) = getAtomicMass(n)
+   enddo
+!  ===================================================================
+!
+   ForceAvailable = .false.
 !
    end subroutine initForce
 !  ===================================================================
@@ -67,7 +83,9 @@ contains
 !  -------------------------------------------------------------------
    call endIntegerFactors()
 !  -------------------------------------------------------------------
-   deallocate( force, GlobalForce )
+   deallocate( force, GlobalForce, AtomicMass )
+!
+   ForceAvailable = .false.
 !
    end subroutine endForce
 !  ===================================================================
@@ -84,10 +102,11 @@ contains
 !
    implicit none
 !
-   integer (kind=IntKind) :: id, iend, jrc, id_glb
+   integer (kind=IntKind) :: id, iend, jrc, id_glb, ig
 !
    real (kind=RealKind) :: esf(3), csf(3), Zi
    real (kind=RealKind), pointer :: r_mesh(:)
+   real (kind=RealKind) :: total_mass
 !
    type (GridStruct), pointer :: Grid
 !
@@ -126,29 +145,50 @@ contains
    call GlobalSumInGroup(GroupID, GlobalForce,3,GlobalNumAtoms)
 !
    drift_force = ZERO
-   do id=1,GlobalNumAtoms
-      drift_force = drift_force+GlobalForce(1:3,id)
+   total_mass = ZERO
+   do ig=1,GlobalNumAtoms
+      drift_force = drift_force+GlobalForce(1:3,ig)
+      total_mass = total_mass + AtomicMass(ig)
    enddo
-   drift_force = drift_force/real(GlobalNumAtoms,kind=RealKind)
+   drift_accel = drift_force/total_mass
+!
+   ForceAvailable = .true.
 !
    end subroutine calForce
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getForce(id,df) result(f)
+   function getForce(df,local_id,global_id) result(f)
 !  ===================================================================
-   implicit none
-   integer (kind=IntKind), intent(in) :: id
+   use ChemElementModule, only : getAtomicMass
+   use AtomModule, only : getLocalAtomicNumber
 !
-   real (kind=RealKind), pointer :: f(:)
+   implicit none
+!
+   integer (kind=IntKind), intent(in), optional :: local_id
+   integer (kind=IntKind), intent(in), optional :: global_id
+   integer (kind=IntKind) :: n
+!
+   real (kind=RealKind) :: f(3)
    real (kind=RealKind), intent(out) :: df(3)
 !
-   if (id < 1 .or. id > LocalNumAtoms) then
-      call ErrorHandler('getForce','atom index is out of range',id)
-   endif
+   f = ZERO; df = ZERO
 !
-   df = drift_force
-   f => force(1:3,id)
+   if (present(local_id)) then
+      if (local_id < 1 .or. local_id > LocalNumAtoms) then
+         call ErrorHandler('getForce','atom index is out of range',local_id)
+      endif
+      f = force(:,local_id)
+      n = getLocalAtomicNumber(local_id)
+      df = drift_accel*getAtomicMass(n)
+   else if (present(global_id)) then
+      if (global_id < 1 .or. global_id > GlobalNumAtoms) then
+      endif
+      f = GlobalForce(:,global_id)
+      df = drift_accel*AtomicMass(global_id)
+   else
+      call ErrorHandler('getForce','Atom ID is missing from the calling routine')
+   endif
 !
    end function getForce
 !  ===================================================================
@@ -424,12 +464,16 @@ contains
 !  cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine printForce()
 !  ==================================================================
-!
    implicit none
 !
-   integer (kind=IntKind) :: id
+   integer (kind=IntKind) :: id, ig
 !
    real (kind=RealKind) :: f_mag
+!
+   if (.not.ForceAvailable) then
+      call WarningHandler('printForce','The H-F force is not calculated')
+      return
+   endif
 !
    write(6,'(/,80(''-''))')
    write(6,'(/,24x,a)')'**************************'
@@ -455,19 +499,22 @@ contains
    write(6,'(80(''=''))')
    write(6,'(a)')'   Global ID          Fx               Fy               Fz               |F|'
    write(6,'(80(''-''))')
-   do id=1,GlobalNumAtoms
-      f_mag = sqrt(GlobalForce(1,id)**2+GlobalForce(2,id)**2+GlobalForce(3,id)**2)
-      write(6,'(2x,i6,4x,4(2x,f15.8))')id,GlobalForce(1:3,id),f_mag
+   do ig=1,GlobalNumAtoms
+      f_mag = sqrt(GlobalForce(1,ig)**2+GlobalForce(2,ig)**2+GlobalForce(3,ig)**2)
+      write(6,'(2x,i6,4x,4(2x,f15.8))')ig,GlobalForce(1:3,ig),f_mag
    enddo
    write(6,'(80(''-''))')
-   write(6,'(a,4(f15.8,2x))')"Drift Force:",drift_force(1:3),sqrt(drift_force(1)**2+drift_force(2)**2+drift_force(3)**2)
+   write(6,'(a,4(f15.8,2x))')"Drift Force:",                         &
+      drift_force(1:3),sqrt(drift_force(1)**2+drift_force(2)**2+drift_force(3)**2)
    write(6,'(/,a)')'Applying condition that total force on unit cell = 0, the corrected Forces are'
    write(6,'(80(''=''))')
    write(6,'(a)')'   Global ID          Fx               Fy               Fz               |F|'
    write(6,'(80(''-''))')
-   do id=1,GlobalNumAtoms
-      f_mag = sqrt((GlobalForce(1,id)-drift_force(1))**2+(GlobalForce(2,id)-drift_force(2))**2+(GlobalForce(3,id)-drift_force(3))**2)
-      write(6,'(2x,i6,4x,4(2x,f15.8))')id,GlobalForce(:,id)-drift_force,f_mag
+   do ig=1,GlobalNumAtoms
+      f_mag = sqrt( (GlobalForce(1,ig)-AtomicMass(ig)*drift_accel(1))**2            &
+                   +(GlobalForce(2,ig)-AtomicMass(ig)*drift_accel(2))**2            &
+                   +(GlobalForce(3,ig)-AtomicMass(ig)*drift_accel(3))**2 )
+      write(6,'(2x,i6,4x,4(2x,f15.8))')id,GlobalForce(:,ig)-AtomicMass(ig)*drift_accel,f_mag
    enddo
 !
    write(6,'(80(''=''))')
@@ -518,10 +565,15 @@ contains
 !
    character (len=*), intent(in) :: fpath
 !
-   integer (kind=IntKind) :: ia, ios
+   integer (kind=IntKind) :: ia, ios, ig
    integer (kind=IntKind), parameter :: funit = 201
 !
    real (kind=RealKind) :: AU2SI
+!
+   if (.not.ForceAvailable) then
+      call WarningHandler('writeForceData','The H-F force is not calculated')
+      return
+   endif
 !
    AU2SI = Ryd2eV/Bohr2Angstrom
 !
@@ -534,12 +586,27 @@ contains
 !  hf_force = the Hellmann-Feynman force acting on each atom in the
 !             supercell. The written data are in eV/Angstrom units
 !  ===================================================================
-   do ia = 1, GlobalNumAtoms
-      write(funit,'(f15.10,1x,f15.10,1x,f15.10)')(GlobalForce(1:3,ia)-drift_force(1:3))*AU2SI
+   do ig = 1, GlobalNumAtoms
+      write(funit,'(f15.10,1x,f15.10,1x,f15.10)')(GlobalForce(1:3,ig)  &
+                                                  -AtomicMass(ig)*drift_accel(1:3))*AU2SI
    enddo
 !
    close(funit)
 !
    end subroutine writeForceData
+!  ===================================================================
+!
+!  ******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isForceAvailable() result(y)
+!  ===================================================================
+   implicit none
+!
+   logical :: y
+!
+   y = ForceAvailable
+!
+   end function isForceAvailable
 !  ===================================================================
 end module ForceModule

@@ -54,8 +54,8 @@ FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK
 
 CFLAGS      = -O3
 CXXFLAGS    = -O3 -std=c++14
-FFLAGS      = -O3 -w -fallow-argument-mismatch
-F77FLAGS    = -O3 -w -fallow-argument-mismatch
+FFLAGS      = -O3 -w -fallow-argument-mismatch -I.
+F77FLAGS    = -O3 -w -fallow-argument-mismatch -I.
 OPT_OPENMP  = -fopenmp
 
 LD_FLAGS    =

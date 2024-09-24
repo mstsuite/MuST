@@ -47,7 +47,7 @@ FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK
 
 CFLAGS      = -O3
 CXXFLAGS    = -O3 -std=c++14
-FFLAGS      = -O3
+FFLAGS      = -O3 -I.
 OPT_OPENMP  = -qopenmp
 
 LD_FLAGS    =

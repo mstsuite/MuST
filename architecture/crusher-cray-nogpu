@@ -63,8 +63,8 @@ CPPFLAGS    =
 CFLAGS      = -O3
 CXXFLAGS    = -O3 -std=c++14
 # FFLAGS      = -O1 -K trap=fp,ovf,unf -R bs 
-FFLAGS      = -O2
-F77FLAGS    = -O2
+FFLAGS      = -O2 -I.
+F77FLAGS    = -O2 -I.
 OPT_OPENMP  = -fopenmp
 
 LD_FLAGS    =

@@ -57,8 +57,8 @@ CFLAGS      = -O3
 CXXFLAGS    = -O3 -std=c++14
 # FFLAGS      = -O3 -w -fallow-argument-mismatch
 # F77FLAGS    = -O3 -w -fallow-argument-mismatch
-FFLAGS      = -O3 -w
-F77FLAGS    = -O3 -w
+FFLAGS      = -O3 -w -I.
+F77FLAGS    = -O3 -w -I.
 OPT_OPENMP  = -fopenmp
 
 LD_FLAGS    =

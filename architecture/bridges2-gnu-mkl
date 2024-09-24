@@ -39,11 +39,12 @@ ADD_LIBS   += -lgfortran
 #=====================================================================
 # Compiler tools
 #=====================================================================
-CC          = mpicc
-CXX         = mpicxx
-F77         = mpifort
-FC          = mpifort
-MPICC       = mpicc
+OMPI_BIN_PATH   = /ocean/projects/instalrs/ywg/openmpi-4.1.6-gcc10.2.0-cpu/bin
+CC          = $(OMPI_BIN_PATH)/mpicc
+CXX         = $(OMPI_BIN_PATH)/mpicxx
+F77         = $(OMPI_BIN_PATH)/mpifort
+FC          = $(OMPI_BIN_PATH)/mpifort
+MPICC       = $(OMPI_BIN_PATH)/mpicc
 ACCEL_CXX   = nvcc -arch=sm_52
 ARCHV       = ar -r
 
@@ -63,8 +64,8 @@ CFLAGS      = -O3
 CXXFLAGS    = -O3 -std=c++14
 # FFLAGS      = -O3 -fcheck=all -w -fallow-argument-mismatch
 # F77FLAGS    = -O3 -fcheck=all -w -fallow-argument-mismatch
-FFLAGS      = -O3 -fcheck=all -w -fallow-argument-mismatch
-F77FLAGS    = -O3 -fcheck=all -w -fallow-argument-mismatch
+FFLAGS      = -O3 -fcheck=all -w -fallow-argument-mismatch -I.
+F77FLAGS    = -O3 -fcheck=all -w -fallow-argument-mismatch -I.
 OPT_OPENMP  = -fopenmp
 
 LD_FLAGS    =

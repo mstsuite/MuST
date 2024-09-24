@@ -153,7 +153,8 @@ TEST_CASES = $(ODIR)/testStrConst \
              $(ODIR)/testBandStructure \
              $(ODIR)/testExchCorr \
              $(ODIR)/testAdaptiveIntegration \
-             $(ODIR)/testTokens
+             $(ODIR)/testTokens \
+             $(ODIR)/testXMLData
 
 TEST_CASES_O = $(ODIR)/testStrConst.o \
                $(ODIR)/tst_SurfElements.o \
@@ -183,7 +184,8 @@ TEST_CASES_O = $(ODIR)/testStrConst.o \
                $(ODIR)/testParallelIO.o \
                $(ODIR)/testSSSolver.o \
                $(ODIR)/testBlockInverse.o \
-               $(ODIR)/testFEGreen.o
+               $(ODIR)/testFEGreen.o \
+               $(ODIR)/testXMLData.o
 #
 # Unavailable or missing
 #             $(ODIR)/tst_ScreenTau
@@ -367,3 +369,6 @@ $(ODIR)/testExchCorr: testExchCorr.o $(SRC_OBJS)
 
 $(ODIR)/testTokens: testTokens.o $(ODIR)/getNumTokens.o $(ODIR)/getToken.o
 	$(LD) -o $(ODIR)/testTokens testTokens.o $(ODIR)/getNumTokens.o $(ODIR)/getToken.o $(MSTLIB)
+
+$(ODIR)/testXMLData: testXMLData.o $(ODIR)/XMLDataModule.o
+	$(LD) -o $(ODIR)/testXMLData testXMLData.o $(ODIR)/XMLDataModule.o $(MSTLIB)

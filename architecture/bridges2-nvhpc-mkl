@@ -55,8 +55,8 @@ FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DNVHPC
 
 CFLAGS      = -O3
 CXXFLAGS    = -O3 -std=c++14
-FFLAGS      = -O3
-FFLAGS_ALT  = -O1
+FFLAGS      = -O3 -I.
+FFLAGS_ALT  = -O1 -I.
 # FFLAGS      = -I. -O3 -CB -CU -traceback -ftrapuv -fpe0 -ftz -fp-stack-check
 F77FLAGS    = $(FFLAGS)
 OPT_OPENMP  = -fopenmp -mp=gpu -Minfo=mp,accel

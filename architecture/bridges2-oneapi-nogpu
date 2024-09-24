@@ -51,7 +51,7 @@ CXXFLAGS    = -O3 -std=c++14
 # For ONEAPI 2023, "-check uninit" is found to be problematic ...
 # FFLAGS      = -I. -check bounds -check uninit -check pointers -traceback -ftrapuv -fpe0 -ftz -march=core-avx2
 # FFLAGS      = -I. -check bounds -check pointers -check nouninit -traceback -ftrapuv -fpe0 -ftz -march=core-avx2
-FFLAGS      = -O3 -march=core-avx2
+FFLAGS      = -O3 -march=core-avx2 -I.
 OPT_OPENMP  = -qopenmp
 
 # LD_FLAGS    = -check all
