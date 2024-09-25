@@ -16,7 +16,7 @@ done
 
 for n in `ls POSCAR-* | sed -e s/POSCAR-//g` ; do
     mkdir disp-$n
-    cp POSCAR-$n disp-$n
+    cp POSCAR-$n disp-$n/POSCAR
     cp *_mt_v disp-$n
     if (( j > 0 )); then
        cp ${!j} disp-$n

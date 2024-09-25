@@ -14,8 +14,7 @@ No. Atoms in System (> 0)  ::  8
 ================================================================================
                        Position and Potential Data Files
 ===========================+====================================================
-Atomic Position File Name  :: POSCAR-001
-# Default Potential Input File Name  ::  Cu_mt_v
+Atomic Position File Name  :: POSCAR
 Default Potential Input File Name  ::  Cu_mt_v
 Default Potential Input File Form  ::  0
    = 0: ASCII Format       ----------
