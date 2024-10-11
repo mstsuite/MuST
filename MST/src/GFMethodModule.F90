@@ -2674,7 +2674,7 @@ contains
    endif
 !
 !  -------------------------------------------------------------------
-   call gaspari_gyorffy_formula(LocalNumAtoms,n_spin_pola,chempot,PartialDOS,iprint)
+   call gaspari_gyorffy_formula(LocalNumAtoms,n_spin_pola,chempot,PartialDOS,node_print_level)
 !  -------------------------------------------------------------------
 !
    if ( (MyPEinEGroup == 0 .and. GlobalNumAtoms < 10) .or. node_print_level >= 0 ) then

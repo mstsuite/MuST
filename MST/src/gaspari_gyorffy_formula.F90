@@ -25,7 +25,7 @@
                                            PartialDOS,iprint)
 !  ===========================================================================
         use KindParamModule, only : IntKind, RealKind, CmplxKind
-        use MathParamModule, only : ZERO, HALF, ONE, TWO, PI, TEN2m6, CONE, SQRTm1
+        use MathParamModule, only : ZERO, HALF, ONE, TWO, PI, TEN2m6, TEN2m8, CONE, SQRTm1
         use PhysParamModule, only : Boltzmann, Ryd2eV, Bohr2Angstrom,         &
                                     LightSpeed, MassUnit2Ryd, Kelvin2Ryd, MassUnit2eV
         use PublicTypeDefinitionsModule, only : PDOSStruct
@@ -105,7 +105,7 @@
            sfac = ONE
         endif
 !
-        if (MyPE == 0) then
+        if (iprint >= 0) then
            write(6,*), ' '
            write(6,*), ' '
            write(6,*), "***************************************************"
@@ -203,7 +203,7 @@
         if (getKeyLabelIndexValue(1,'Atomic mass times <omega^2> (eV/Anst^2)', &
                                   NumAtomTypes,AtomTypeName,NumAtoms,AtomType,ind_array,val_array) == 0) then
            do ig = 1, NumAtoms
-              if (MyPE == 0) then
+              if (iprint >= 0) then
                  atomic_number = getAtomicNumber(ig)
                  write(6,*) getName(atomic_number), ': M*<omega^2> = ',val_array(ig),'(eV/Anst^2)'
               endif
@@ -213,25 +213,25 @@
         else if (getKeyLabelIndexValue(1,'Atomic mass times <omega^2> (Ryd/BohrRad^2)', &
                                        NumAtomTypes,AtomTypeName,NumAtoms,AtomType,ind_array,val_array) == 0) then
            do ig = 1, NumAtoms
-              if (MyPE == 0) then
+              if (iprint >= 0) then
                  atomic_number = getAtomicNumber(ig)
                  write(6,*) getName(atomic_number), ': M*<omega^2> = ',val_array(ig),'(Ryd/BohrRad^2)'
               endif
               PhononFreq2(ig) = val_array(ig)/AtomMass(ig)
            enddo
-        else if (getKeyLabelIndexValue(1,'Average of phonon frequency squared (1/sec^2)', &
+        else if (getKeyLabelIndexValue(1,'Average of phonon frequency squared (Ryd^2)', &
                                        NumAtomTypes,AtomTypeName,NumAtoms,AtomType,ind_array,val_array) == 0) then
            do ig = 1, NumAtoms
-              if (MyPE == 0) then
+              if (iprint >= 0) then
                  atomic_number = getAtomicNumber(ig)
-                 write(6,*) getName(atomic_number), ': <omega^2> = ',val_array(ig),'(1/sec^2)'
+                 write(6,*) getName(atomic_number), ': <omega^2> = ',val_array(ig),'(Ryd^2)'
               endif
               PhononFreq2(ig) = val_array(ig)
            enddo
         else if (getKeyLabelIndexValue(1,'Average of phonon frequency squared (K^2)', &
                                        NumAtomTypes,AtomTypeName,NumAtoms,AtomType,ind_array,val_array) == 0) then
            do ig = 1, NumAtoms
-              if (MyPE == 0) then
+              if (iprint >= 0) then
                  atomic_number = getAtomicNumber(ig)
                  write(6,*) getName(atomic_number), ': <omega^2> = ',val_array(ig),'(K^2)'
               endif
@@ -259,14 +259,14 @@
            endif
         endif
         do ig = 1, NumAtoms
-           if (PhononFreq2(ig) < TEN2m6) then
+           if (PhononFreq2(ig) < TEN2m8) then
               call ErrorHandler('Gaspari-Gyorffy-Formula','Invalid value of <omega^2>',PhononFreq2(ig))
            endif
         enddo
 !
         deallocate(ind_array, val_array)
 !
-        if (MyPE == 0) then
+        if (iprint >= 0) then
            write(6,'(/,1x,a,t30,a,f8.3,/)')'Debye Temp (K)',':',DebyeTemp
            do ig = 1, NumAtoms  ! Loop atomic sites
               if (getNumAlloyElements(ig) == 1) then
@@ -314,7 +314,7 @@
 
         Iconst = efermi/PI**2/dos_per_spin**2 ! Ryd^3
 
-        if (MyPE == 0) then
+        if (iprint >= 0) then
            write(6,'(/,1x,a,f10.5,a)')'WS-Volume DOS of Unit cell per spin =', dos_per_spin,' (states/Ryd/spin))'
            write(6,'(  1x,a,f10.5,a)')'                                    =', dos_per_spin/Ryd2eV,' (states/eV/spin)'
            write(6,'(  1x,a,f10.5,a)')'MT-Volume DOS of Unit cell per spin =', dos_mt_per_spin,' (states/Ryd/spin))'
@@ -350,13 +350,15 @@
               ss_pdos_mt => PartialDOS(id)%ss_pdos_mt(:,:,ia)
               partial_dos_mt => PartialDOS(id)%partial_dos_mt(:,:,ia)
 !
-              if (getMyPEinGroup(bGID) == 0) then
+!             if (getMyPEinGroup(bGID) == 0) then
+              if (iprint >= 0) then
                  write(6,'(/,1x,a,a)')'For species: ',getLocalAtomName(id,ia)
               endif
 !
               SumI = ZERO
               do is = 1, n_spin_pola
-                 if (n_spin_pola == 2 .and. getMyPEinGroup(bGID) == 0) then
+!                if (n_spin_pola == 2 .and. getMyPEinGroup(bGID) == 0) then
+                 if (n_spin_pola == 2 .and. iprint >= 0) then
                     write(6,'(1x,a,i4)')'spin index = ',is
                  endif
                  do l=0,lmax_kkr
@@ -370,7 +372,8 @@
                     nr(l) = cpdos/spdos
                     cpdos = cfac*cpdos
                     spdos = cfac*spdos
-                    if (getMyPEinGroup(bGID) == 0) then
+!                   if (getMyPEinGroup(bGID) == 0) then
+                    if (iprint >= 0) then
                        kl = (l+1)**2-l
                        if (phase_shift(kl,is) > PI*HALF) then
                           pps = phase_shift(kl,is) - PI
@@ -414,7 +417,8 @@
 !
               EPC = EPC + getLocalSpeciesContent(id,ia)*eta/EPCden ! unitless
 !
-              if (getMyPEinGroup(bGID) == 0) then
+!             if (getMyPEinGroup(bGID) == 0) then
+              if (iprint >= 0) then
                  write(6,'(/)')
                  write(6,'(1x,a,f12.5)')'AtomicMass (Ryd/c^2)    =', AtomMass(ig)
                  write(6,'(1x,a,f12.5)')'M<Omega^2> (Ryd/au^2)   =', EPCden
@@ -441,7 +445,7 @@
 
         call GlobalSumInGroup(aGID, EPC)
 
-        if (MyPE == 0) then
+        if (iprint >= 0) then
            write(6,'(/,1x,a)')'For the system ...'
            write(6,'(1x,a,t32,a,f12.5)')'Total lamda (EPC)/unit cell','=',EPC
         endif
@@ -453,7 +457,7 @@
 !       calculate the averaged partial phase shift.
 !       ==============================================================
         if (isKKRCPA()) then
-           if (MyPE == 0) then
+           if (iprint >= 0) then
               write(6,'(/,1x,a)')'An alternative approach to the AVERAGED ETA AND LAMBDA'
            endif
            allocate(phase_shift_aver(kmax_kkr_max,n_spin_pola))
@@ -520,7 +524,8 @@
 !
               EPC_pc = EPC_pc + eta/EPCden ! unitless
 !
-              if (getMyPEinGroup(bGID) == 0) then
+!             if (getMyPEinGroup(bGID) == 0) then
+              if (iprint >= 0) then
                  do is = 1, n_spin_pola
                     if (n_spin_pola == 1) then
                        write(6,'(/)')
@@ -542,7 +547,7 @@
 
            call GlobalSumInGroup(aGID, EPC_pc)
 
-           if (MyPE == 0) then
+           if (iprint >= 0) then
               write(6,'(/,1x,a)')'For the system ...'
               write(6,'(1x,a,t32,a,f12.5)')'Total lamda (EPC)/unit cell','=', EPC_pc
            endif
@@ -556,16 +561,16 @@
         Coulomb = Coulombnum/Coulombden
         if (getKeyValue(1,'mu* (e-e interaction constant)',mu_star, default_param=.false.) == 0) then
            Coulomb = mu_star
-           if (MyPE == 0) then
+           if (iprint >= 0) then
               write(6,'(1x,a)')'Using the input mu* (Coulomb pseudopotential) ......'
            endif
         endif
-        if (MyPE == 0) then
+        if (iprint >= 0) then
            write(6,'(/,1x,a,t32,a,f12.5)')'mu* (Coulomb pseudopotential)','=', Coulomb
         endif
 !
 !       if (EPC-Coulomb*(ONE+0.62D0*EPC) < ZERO) then
-!          if (MyPE == 0) then
+!          if (iprint >= 0) then
 !             write(6,*), 'Warning: EPC-Coulomb*(ONE+0.62D0*EPC) < 0'
 !             write(6,*), 'EPC/(ONE+0.62D0*EPC) =', EPC/(ONE+0.62D0*EPC)
 !          endif
@@ -574,19 +579,19 @@
 !       Calculate Tc ...
 !       ==============================================================
         if (EPC > Coulomb) then
-           if (MyPE == 0) then
+           if (iprint >= 0) then
               write(6,'(1x,a,t32,a,f12.5)')'EPC-Coulomb*(ONE+0.62D0*EPC)','=', EPC-Coulomb*(ONE+0.62D0*EPC)
            endif
            SuperTempExp = -1.04D0*(ONE+EPC)/(EPC-Coulomb*(ONE+0.62D0*EPC))
            SuperTemp=DebyeTemp*exp(SuperTempExp)/1.45D0
         else
-           if (MyPE == 0) then
+           if (iprint >= 0) then
               write(6,'(1x,a)') 'EPC <= Coulomb'
            endif
            SuperTemp=ZERO
         endif
 !
-        if (MyPE == 0) then
+        if (iprint >= 0) then
            write(6,'(/,1x,a)')'************************************************'
            write(6,'(1x,a,f12.5)')'Superconducting Transition Temp (K):',SuperTemp
            write(6,'(1x,a,/)')'************************************************'
@@ -599,7 +604,7 @@
            else
               SuperTemp=ZERO
            endif
-           if (MyPE == 0) then
+           if (iprint >= 0) then
               write(6,'(/,1x,a)')'With an alternative approach to the GG formula applied to random alloys ...'
               write(6,'(/,1x,a)')'************************************************'
               write(6,'(1x,a,f12.5)')'Superconducting Transition Temp (K):',SuperTemp
@@ -613,14 +618,14 @@
 !       Using the partial phase shift and DOS data published in PRB 15, 4221
 !       (1977) to check against the calculated Tc published in the paper
 !       --------------------------------------------------------------
-        call testPRB15_4221_1977()
+!       call testPRB15_4221_1977(iprint)
 !       --------------------------------------------------------------
 !
         end subroutine gaspari_gyorffy_formula
 !   ==================================================================
 !
 !   cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-    subroutine testPRB15_4221_1977()
+    subroutine testPRB15_4221_1977(iprint)
 !   ==================================================================
 !
 !       Test the data published in PRB 15, 4221 (1977)
@@ -632,6 +637,7 @@
                                     LightSpeed, MassUnit2Ryd, Kelvin2Ryd
         use MPPModule, only : MyPE
 !
+        integer (kind=IntKind), intent(in) :: iprint
         integer (kind=IntKind) :: atomic_number
 !
         real (kind=RealKind) :: nr(0:4)  ! assuming lmax <= 4
@@ -639,7 +645,7 @@
         real (kind=RealKind) :: DebyeTemp, Ef, dos_per_spin
         real (kind=RealKind) :: EPCnum,EPC,Coulomb,SuperTemp
 !
-        if (MyPE == 0) then
+        if (iprint >= 0) then
            write(6,'(a)')  '............................................'
            write(6,'(/,a)')'Check against the data for Nb, Ti, and V published in PRB 15, 4221 (1977)'
            write(6,'(a)')  '............................................'
@@ -655,7 +661,7 @@
         call calculateMcMillanTc(atomic_number,ps,nr,DebyeTemp,Ef,    &
                                  dos_per_spin,EPCnum,EPC,Coulomb,SuperTemp)
 !
-        if (MyPE == 0) then
+        if (iprint >= 0) then
            write(6,'(/,a)')'For Niobium'
            write(6,'(a,f12.5)')'eta (eV/A^2): ', EPCnum*Ryd2eV/Bohr2Angstrom**2
            write(6,'(a,f12.5)')'lamda = ',EPC
@@ -673,7 +679,7 @@
         call calculateMcMillanTc(atomic_number,ps,nr,DebyeTemp,Ef,    &
                                  dos_per_spin,EPCnum,EPC,Coulomb,SuperTemp)
 !
-        if (MyPE == 0) then
+        if (iprint >= 0) then
            write(6,'(/,a)')'For Titanium'
            write(6,'(a,f12.5)')'eta (eV/A^2): ', EPCnum*Ryd2eV/Bohr2Angstrom**2
            write(6,'(a,f12.5)')'lamda = ',EPC
@@ -691,7 +697,7 @@
         call calculateMcMillanTc(atomic_number,ps,nr,DebyeTemp,Ef,    &
                                  dos_per_spin,EPCnum,EPC,Coulomb,SuperTemp)
 !
-        if (MyPE == 0) then
+        if (iprint >= 0) then
            write(6,'(/,a)')'For Vanadium'
            write(6,'(a,f12.5)')'eta (eV/A^2): ', EPCnum*Ryd2eV/Bohr2Angstrom**2
            write(6,'(a,f12.5)')'lamda = ',EPC
@@ -709,7 +715,7 @@
         call calculateMcMillanTc(atomic_number,ps,nr,DebyeTemp,Ef,    &
                                  dos_per_spin,EPCnum,EPC,Coulomb,SuperTemp)
 !
-        if (MyPE == 0) then
+        if (iprint >= 0) then
            write(6,'(/,a)')'For Potassium'
            write(6,'(a,f12.5)')'eta (eV/A^2): ', EPCnum*Ryd2eV/Bohr2Angstrom**2
            write(6,'(a,f12.5)')'lamda = ',EPC

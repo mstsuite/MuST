@@ -34,6 +34,7 @@ contains
    use ChemElementModule, only : getAtomicMass
    use SystemModule, only : getLmaxRho
    use SystemModule, only : getNumAtoms, getAtomicNumber
+   use SystemModule, only : getNumAlloyElements, getAlloyElementContent
    use GroupCommModule, only : getGroupID
 !
    implicit none
@@ -42,7 +43,7 @@ contains
 !
    integer (kind=IntKind), intent(in) :: na
    integer (kind=IntKind), intent(in) :: iprint
-   integer (kind=IntKind) :: lmax_rho, ig, n
+   integer (kind=IntKind) :: lmax_rho, ig, n, ia
 !
    LocalNumAtoms = na
    stop_routine = istop
@@ -64,8 +65,12 @@ contains
 !  This needs to be fixed for the CPA case.
 !  ===================================================================
    do ig = 1, GlobalNumAtoms
-      n = getAtomicNumber(ig)
-      AtomicMass(ig) = getAtomicMass(n)
+      AtomicMass(ig) = ZERO
+      do ia = 1, getNumAlloyElements(ig)
+         n = getAtomicNumber(ig,ia)
+         AtomicMass(ig) = AtomicMass(ig) +                            &
+                          getAlloyElementContent(ig,ia)*getAtomicMass(n)
+      enddo
    enddo
 !  ===================================================================
 !
@@ -161,13 +166,14 @@ contains
    function getForce(df,local_id,global_id) result(f)
 !  ===================================================================
    use ChemElementModule, only : getAtomicMass
+   use Atom2ProcModule, only : getGlobalIndex
    use AtomModule, only : getLocalAtomicNumber
 !
    implicit none
 !
    integer (kind=IntKind), intent(in), optional :: local_id
    integer (kind=IntKind), intent(in), optional :: global_id
-   integer (kind=IntKind) :: n
+   integer (kind=IntKind) :: n, ig
 !
    real (kind=RealKind) :: f(3)
    real (kind=RealKind), intent(out) :: df(3)
@@ -180,7 +186,9 @@ contains
       endif
       f = force(:,local_id)
       n = getLocalAtomicNumber(local_id)
-      df = drift_accel*getAtomicMass(n)
+!     df = drift_accel*getAtomicMass(n)
+      ig = getGlobalIndex(local_id)
+      df = drift_accel*AtomicMass(ig)
    else if (present(global_id)) then
       if (global_id < 1 .or. global_id > GlobalNumAtoms) then
       endif
