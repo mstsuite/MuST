@@ -2,6 +2,7 @@ module CPAMediumModule
    use KindParamModule, only : IntKind, RealKind, CmplxKind
    use MathParamModule, only : ZERO, HALF, ONE, TWO, CZERO, CONE, SQRTm1, TEN2m6, TEN2m8
    use ErrorHandlerModule, only : ErrorHandler, WarningHandler
+   use InputModule, only : getKeyValue
 !
 public :: initCPAMedium,            &
           endCPAMedium,             &
@@ -16,9 +17,9 @@ public :: initCPAMedium,            &
 !
 private
    integer (kind=IntKind) :: MaxIterations = 50
-!  integer (kind=IntKind), parameter :: niter_switch = 20
-   integer (kind=IntKind), parameter :: niter_switch = 25
-   integer (kind=IntKind), parameter :: MaxSchemeSwitch = 10
+!  integer (kind=IntKind) :: niter_switch = 20
+   integer (kind=IntKind) :: niter_switch = 25
+   integer (kind=IntKind) :: MaxSchemeSwitch = 10
    integer (kind=IntKind) :: iteration = 0
 !
    integer (kind=IntKind) :: GlobalNumSites, LocalNumSites
@@ -107,7 +108,7 @@ contains
    integer (kind=IntKind), intent(in) :: iprint(:)
    integer (kind=IntKind), intent(in) :: lmax_kkr(:)
    logical, intent(in), optional :: is_sro
-   integer (kind=IntKind) :: i, ig, kmaxi, ic, n, NumImpurities
+   integer (kind=IntKind) :: i, ig, kmaxi, ic, n, NumImpurities, rstatus
    integer (kind=IntKind) :: aid, num, dsize, lmaxi, nsize, mixing_type
 !
    real (kind=RealKind), intent(in) :: cpa_mix_0, cpa_mix_1, cpa_eswitch, cpa_tol
@@ -153,6 +154,9 @@ contains
    CPA_alpha = cpa_mix_0
    CPA_slow_alpha = cpa_mix_1
    CPA_switch_param = cpa_eswitch
+!
+   rstatus = getKeyValue(1,'Number of iterations with aggressive mixing',niter_switch)
+   rstatus = getKeyValue(1,'Maximum number of mixing scheme changes',MaxSchemeSwitch)
 !
    kmax_kkr_max = 0
    do ig = 1, GlobalNumSites
@@ -256,10 +260,14 @@ contains
    InitialMixingType = cpa_mix_type
    mixing_type = mod(InitialMixingType,4)
 !
-   if (print_instruction >= 0 .and. isATA) then
-      write(6,'(/,1x,a)')'*************************************************************'
-      write(6,'(1x,a)')  'Note: ATA medium, instead of CPA medium, is to be calculated!'
-      write(6,'(1x,a,/)')'*************************************************************'
+   if (print_instruction >= 0) then
+      write(6,'(/,1x,a,i3)')'No. CPA iters with aggressive mixing =',niter_switch
+      write(6,'(  1x,a,i3)')'Maximum no. mixing scheme changes    =',MaxSchemeSwitch
+      if (isATA) then
+         write(6,'(/,1x,a)')'*************************************************************'
+         write(6,'(1x,a)')  'Note: ATA medium, instead of CPA medium, is to be calculated!'
+         write(6,'(1x,a,/)')'*************************************************************'
+      endif
    endif
 !
 !  -------------------------------------------------------------------

@@ -247,6 +247,10 @@
 !                   is for the energy points in conservative mixing mode
    n = n + 1; Keys(n) = 'Effective Medium Mixing eSwitch Value'; Values(n) = '0.003'
 !             Note: If Re[E] > 0 and Im[E] < eSwitch, the effective medium iteration is switched to the conservative mode
+   n = n + 1; Keys(n) = 'Number of iterations with aggressive mixing'; Values(n) = '25'
+!             Note: This is the number of CPA iterations for each aggressive mixing scheme, e.g., Broyden and Anderson 
+   n = n + 1; Keys(n) = 'Maximum number of mixing scheme changes'; Values(n) = '10'
+!             Note: This is the maximum number of mixing scheme changes
    n = n + 1; Keys(n) = 'Effective Medium T-matrix Tol (> 0)';   Values(n) = '0.0000001'
    n = n + 1; Keys(n) = 'Default Core Radius';                   Values(n) = '0'
 !                     =-1: Using the circumscribed sphere radius for full-potential calculations
