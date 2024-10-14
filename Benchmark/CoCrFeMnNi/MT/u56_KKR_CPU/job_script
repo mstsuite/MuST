@@ -1,0 +1,18 @@
+#!/bin/bash
+#SBATCH -A DMR22013
+#SBATCH -N 1
+#SBATCH -p gg
+#SBATCH --ntasks-per-node=112
+#SBATCH --job-name=CoCrFeMnNi
+#SBATCH -t 01:00:00
+#SBATCH -o CoCrFeMnNi.out
+#SBATCH -e CoCrFeMnNi.err
+
+# ulimit -s unlimited
+ml purge
+ml use /home1/apps/nvidia/modulefiles
+ml nvhpc-hpcx-cuda12/24.7
+export OMP_NUM_THREADS=1
+echo "SLURM_NTASKS: " $SLURM_NTASKS
+export OMPI_MCA_coll="^hcoll"
+ibrun $HOME/MuST/bin/nvhpc-cpu/mst2 < i_mst
