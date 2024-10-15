@@ -1,0 +1,88 @@
+#=====================================================================
+# Acceleration = 1: enable GPU acceleration
+# Acceleration = 0: otherwise
+#=====================================================================
+Acceleration = 1
+
+#=====================================================================
+# Library paths and elements, e.g.,
+#    HDF5_PATH   = /opt/packages/HDF5/hdf5-1.10.5/PGI
+#    LIBXC_PATH  = /opt/packages/LibXC/libxc-4.3.4/PGI
+#    ACCEL_PATH  = /usr/local/cuda
+#    FFTW_PATH   = /usr/local/FFTW/fftw-3.3.8/PGI
+#    P3DFFT_PATH = /opt/packages/P3DFFT/p3dfft-2.7.9/PGI
+#    LUA_PATH    = /opt/packages/Lua/lua-5.3.5/PGI
+#  
+# If LUA_PATH, LIBXC_PATH, FFTW_PATH, and/or P3DFFT_PATH are empty, the
+# corresponding packages will be installed under $(EXTERN_LIB_PATH)
+#=====================================================================
+NVHPC_ROOT := $(dir $(shell which pgcc))
+NVHPC_ROOT := $(patsubst %/compilers/bin/,%, $(NVHPC_ROOT))
+$(info NVHPC_ROOT is $(NVHPC_ROOT))
+
+#NVHPC_ROOT=/opt/nvidia/hpc_sdk/Linux_aarch64/24.1
+
+HDF5_PATH   =
+ACCEL       = CUDA
+ACCEL_PATH=${NVHPC_ROOT}/cuda
+ACCEL_LIBS=${NVHPC_ROOT}/math_libs
+#COMPILER_LIBS=/opt/nvidia/hpc_sdk/Linux_aarch64/23.7/compilers/lib/
+#COMPILER_LIBS=/opt/nvidia/nvpl/23.09-alpha/lib/
+
+# MPI and scalapack depends on nvhpc, or nvhpc-hpcx
+# scalapack lib in nvhpc-hpcx
+#COMM_LIBS = $(NVHPC_ROOT)/comm_libs/hpcx/hpcx-2.13/ompi/lib/
+# scalapack lib in nvhpc
+#nvhpc-hpcx-cuda12/23.7
+#COMM_LIBS=/opt/nvidia/hpc_sdk/Linux_aarch64/23.7/comm_libs/12.2/hpcx/hpcx-2.15/ompi/lib
+#nvhpc/23.5
+#COMM_LIBS=/opt/nvidia/hpc_sdk/Linux_aarch64/23.5/comm_libs/mpi/lib/
+#LIBXC_PATH  = /scratch1/01032/hliu/works/CSA/gh2/MuST/external_nvpl/libxc/LibXC/
+#FFTW_PATH   = /scratch1/01032/hliu/works/CSA/gh2/MuST/external_nvpl/fftw/FFTW/
+#P3DFFT_PATH = /scratch1/01032/hliu/works/CSA/gh2/MuST/external_nvpl/p3dfft/P3DFFT/
+LUA_PATH    =
+MATH_PATH   =
+#LIBS       += -L/scratch/projects/compilers/nvhpc_22.1/Linux_x86_64/22.1/compilers/lib/ -lblas -llapack -L/scratch/projects/compilers/nvhpc_22.1/Linux_x86_64/22.1//comm_libs/mpi/lib/ -lscalapack
+#LIBS       += -L$(COMPILER_LIBS) -lblas -llapack
+#LIBS       += -L$(COMPILER_LIBS) -lnvpl_blas_lp64_gomp -lnvpl_lapack_lp64_gomp  
+LIBS       += -Mnvpl -Mscalapack \
+              -L$(ACCEL_PATH)/lib64 -lcudart \
+              -L$(ACCEL_LIBS)/lib64 -lcublas -lstdc++ -lcusolver
+#=====================================================================
+# Compiler tools
+#=====================================================================
+CC          = mpicc
+CXX         = mpicxx
+F77         = mpif90
+FC          = mpif90
+MPICC       = mpicc
+ACCEL_CXX   = nvcc -arch=sm_90a
+ARCHV       = ar -r
+
+#=====================================================================
+# Preprocessor/Compiler/Linker flags, e.g.,
+#    FFLAGS = -I. -O3 -CB -CU -traceback -ftrapuv -fpe0 -ftz -fp-stack-check
+# Note: "FPPFLAGS = -DMPI" enables MPI parallel processing.
+#=====================================================================
+FPPDEFS     = -cpp -DNVHPC
+CPPDEFS     = -cpp
+#FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK
+FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK
+OPT_OPENMP  = -mp
+CFLAGS      = -O3 $(OPT_OPENMP)
+CXXFLAGS    = -O3 -std=c++14 $(OPT_OPENMP) 
+FFLAGS      = -O3 -I.  $(OPT_OPENMP)  
+FFLAGS_ALT  = -O1
+
+LD_FLAGS    =  $(OPT_OPENMP)  #make sure NVPL is threaded. 
+LD          = $(FC) $(LD_FLAGS)
+
+#=====================================================================
+# LIBXC_CONFIG_FLAGS, P3DFFT_CONFIG_FLAGS and FFTW_CONFIG_FLAGS are 
+# ./configure flags for hdf5, libxc, p3dfft, and fftw package, respectively.
+# Note: for hdf5, "--enable-parallel" might be needed in the future.
+#=====================================================================
+HDF5_CONFIG_FLAGS   = --enable-fortran --enable-static-exec CC=$(CC) CXX=$(CXX) FC=$(FC)
+LIBXC_CONFIG_FLAGS  = CC=$(CC) CFLAGS="$(CFLAGS)" FC=$(FC) FFLAGS="$(FFLAGS)"
+P3DFFT_CONFIG_FLAGS = --enable-pgi --enable-estimate FC=$(FC) CC=$(CC) --enable-openmpi
+FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS)" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)"
