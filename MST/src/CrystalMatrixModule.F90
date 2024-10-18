@@ -195,6 +195,8 @@ private
    integer (kind=IntKind) :: MYROW
    integer (kind=IntKind) :: MYCOL
    integer (kind=IntKind) :: DESC_A( DLEN_ )
+#else
+   complex (kind=CmplxKind), allocatable :: KKR_matrix(:,:)
 #endif
    integer (kind=IntKind) :: INFO
    integer (kind=IntKind), allocatable :: IPVT(:)
@@ -581,6 +583,10 @@ contains
                   BandSizeCant, BandSizeCant, 0, 0, ICTXT,            &
                   KKRMatrixSizeCant, INFO )
 !  -------------------------------------------------------------------
+#else
+   if (MyPEinGroup == 0) then
+      allocate(KKR_matrix(KKRMatrixSizeCant, KKRMatrixSizeCant))
+   endif
 #endif
 !
 !  call ErrorHandler('initCrystalMatrix', 'init works fine')
@@ -650,7 +656,10 @@ contains
    call BLACS_GRIDEXIT(ICTXT)
 !  -------------------------------------------------------------------
 !  call BLACS_EXIT(1)
-!
+#else
+   if (MyPEinGroup == 0) then
+      deallocate(KKR_matrix)
+   endif
 #endif
 !
    end subroutine endCrystalMatrix
@@ -2041,10 +2050,7 @@ contains
    complex (kind=CmplxKind), pointer :: p_sinej(:), w2(:,:)
    complex (kind=CmplxKind), intent(out), target :: p_MatrixBand(:)
    complex (kind=CmplxKInd) :: cfac, wfac
-#ifdef ACCEL
-   complex (kind=CmplxKind), allocatable :: KKR_matrix(:,:)
    integer (kind=IntKind) :: mpi_i, mpi_j, block_size
-#endif
 !
    logical :: do_sro = .false.
 !
@@ -2379,139 +2385,41 @@ contains
    endif
 !
 
-   if (NumPEsInGroup == 1) then  ! BandSizeCant = KKRMatrixSizeCant
-!    ----------------------------------------------------------------
+   if (NumPEsInGroup == 1) then  ! In this case, the atoms are not distributed, so that BandSizeCant = KKRMatrixSizeCant
+!     ***************************************************************
 #ifdef ACCEL
-     !no atom parallelism, just invert the p_MatrixBand on process 0
-     call invertMatrixKKR_CUDA(p_MatrixBand, KKRMatrixSizeCant)
+      !no atom parallelism, just invert the p_MatrixBand on process 0
+!     ---------------------------------------------------------------
+      call invertMatrixKKR_CUDA(p_MatrixBand, KKRMatrixSizeCant)
+!     ---------------------------------------------------------------
 #else
-     if(do_sro) then
-         call ZGETRF(OKKRMatrixSizeCant, OKKRMatrixSizeCant,               &
-                     p_MatrixBand, OKKRMatrixSizeCant, IPVT, INFO)
-     else
-         call ZGETRF(KKRMatrixSizeCant, KKRMatrixSizeCant,                 &
-                     p_MatrixBand, KKRMatrixSizeCant, IPVT, INFO)
-     endif
-!    ----------------------------------------------------------------
-!    call ZGETRF(kmaxi_ns, kmaxj_ns,               &
-!                p_MatrixBand, kmaxi_ns), IPVT, INFO)
-!    ----------------------------------------------------------------
-     if (INFO /= 0) then
+      if(do_sro) then
 !        -------------------------------------------------------------
-         call ErrorHandler('calCrystalMatrix','Failed in ZGETRF',INFO)
-!        -------------------------------------------------------------
-     endif
-#endif
-   else
-
-
-#ifdef ACCEL
-     GroupID = getGroupID('Unit Cell')
-     comm = getGroupCommunicator(GroupID)
-     call setCommunicator(comm,MyPEinGroup,NumPEsInGroup,sync=.true.)
-     !there is atom parallelism, should invert the KKR matrix on process 0
-     block_size = KKRMatrixSizeCant/NumPEsInGroup
-     !assign KKR matrix on process 0 first
-     !t1 = getTime()
-     if (MyPEinGroup == 0) then
-         allocate(KKR_matrix(KKRMatrixSizeCant, KKRMatrixSizeCant))
-     endif
-     if (MyPEinGroup == 0) then
-         do j=1,block_size
-             do i=1,KKRMatrixSizeCant
-                 KKR_matrix(i, j) = p_MatrixBand(i+(j-1)*KKRMatrixSizeCant)
-             enddo
-         enddo
-     endif
-     !collect part of KKR matrix from each process, p_MatrixBand is part of KKR matrix
-     do mpi_i=1,NumPEsInGroup-1
-         if (MyPEinGroup == mpi_i) then
-             call sendMessage(p_MatrixBand,block_size * KKRMatrixSizeCant,1010,0)!sendMessage(message,size1,msgtype,target_node)
-         endif
-         if (MyPEinGroup == 0) then
-             call recvMessage(KKR_matrix(:,mpi_i*block_size+1:(mpi_i+1)*block_size), KKRMatrixSizeCant, block_size,1010,mpi_i)!recvMessage(message,size1,msgtype,source_node)
-         endif
-     enddo
-     !t2 = getTime()
-     !invert the KKR matrix
-     if (MyPEinGroup == 0) then 
-         call invertMatrixKKR_CUDA(KKR_matrix, KKRMatrixSizeCant)
-         !assign part of inverted matrix on process 0
-         do j=1,block_size
-             do i=1,KKRMatrixSizeCant
-                 p_MatrixBand(i+(j-1)*KKRMatrixSizeCant) = KKR_matrix(i, j)
-             enddo
-         enddo
-     endif
-     !distribute the inverted matrix to each process
-     !t3 = getTime()
-     do mpi_i=1,NumPEsInGroup-1
-         if (MyPEinGroup == 0) then
-             call sendMessage(KKR_matrix(:,mpi_i*block_size+1:(mpi_i+1)*block_size),KKRMatrixSizeCant, block_size,1010,mpi_i)
-         endif
-         if (MyPEinGroup == mpi_i) then
-             call recvMessage(p_MatrixBand,block_size * KKRMatrixSizeCant,1010,0)
-         endif
-     enddo
-     !t4 = getTime()
-     !if (MyPEinGroup == 0) then
-     !    print *,"Time for building matrix on PE 0",t4-t3+t2-t1,"seconds"
-     !endif
-     call resetCommunicator(sync=.true.)
-#else
-
-
-#ifdef USE_SCALAPACK
-!     ----------------------------------------------------------------
-      if (do_sro) then
-         call PZGETRF(OKKRMatrixSizeCant, OKKRMatrixSizeCant,         &
-                    p_MatrixBand, 1, 1, DESC_A, IPVT, INFO)
-      else
-         !t1 = getTime()
-         call PZGETRF(KKRMatrixSizeCant, KKRMatrixSizeCant,           &
-                    p_MatrixBand, 1, 1, DESC_A, IPVT, INFO)
-         !t2 = getTime()
-      endif
-!     ----------------------------------------------------------------
-!      call PZGETRF(KKRMatrixSizeCant, KKRMatrixSizeCant,              &
-!???  call PZGETRF(KKRMatrixSizeCant, BandSizeCant,                   &
-!                  p_MatrixBand, 1, 1, DESC_A, IPVT, INFO)
-!     ----------------------------------------------------------------
-      if (INFO /= 0) then
-!        -------------------------------------------------------------
-         call ErrorHandler('calCrystalMatrix','Failed in PZGETRF',INFO)
-!        -------------------------------------------------------------
-      endif
-#else
-!     ----------------------------------------------------------------
-      call ErrorHandler('calCrystalMatrix','Compiling with -DUSE_SCALAPACK is needed!')
-!     ----------------------------------------------------------------
-      if (do_sro) then
          call ZGETRF(OKKRMatrixSizeCant, OKKRMatrixSizeCant,         &
-                 p_MatrixBand, OKKRMatrixSizeCant, IPVT, INFO)
+                     p_MatrixBand, OKKRMatrixSizeCant, IPVT, INFO)
+!        -------------------------------------------------------------
       else
+!        -------------------------------------------------------------
          call ZGETRF(KKRMatrixSizeCant, KKRMatrixSizeCant,           &
-                  p_MatrixBand, KKRMatrixSizeCant, IPVT, INFO)
+                     p_MatrixBand, KKRMatrixSizeCant, IPVT, INFO)
+!        -------------------------------------------------------------
       endif
-!     ----------------------------------------------------------------
+!     ---------------------------------------------------------------
+!     call ZGETRF(kmaxi_ns, kmaxj_ns,               &
+!                 p_MatrixBand, kmaxi_ns), IPVT, INFO)
+!     ---------------------------------------------------------------
       if (INFO /= 0) then
 !        -------------------------------------------------------------
          call ErrorHandler('calCrystalMatrix','Failed in ZGETRF',INFO)
 !        -------------------------------------------------------------
       endif
-#endif
-#endif
-   endif
-!
-#ifndef ACCEL
-   if (NumPEsInGroup == 1) then  ! BandSizeCant = KKRMatrixSizeCant
-!     ----------------------------------------------------------------
+
       if (do_sro) then
          call ZGETRI( OKKRMatrixSizeCant, p_MatrixBand, OKKRMatrixSizeCant,  &
-                       IPVT, WORK_sro, LWORK_sro, INFO)
+                      IPVT, WORK_sro, LWORK_sro, INFO)
       else
          call ZGETRI( KKRMatrixSizeCant, p_MatrixBand, KKRMatrixSizeCant,  &
-                       IPVT, WORK, LWORK, INFO )
+                      IPVT, WORK, LWORK, INFO )
       endif
 !     ----------------------------------------------------------------
       if (INFO /= 0) then
@@ -2519,16 +2427,38 @@ contains
          call ErrorHandler('calCrystalMatrix','Failed in ZGETRS',INFO)
 !        -------------------------------------------------------------
       endif
-   else
+
+#endif
+   else ! In this case, the atoms are distributed
+!     ***************************************************************
 #ifdef USE_SCALAPACK
+!=================== ifdef USE_SCALAPACK
+!     write(6,'(/,a,i5)')'Start SCALAPACK ..........',MyPE
 !     ----------------------------------------------------------------
       if (do_sro) then
+         call PZGETRF(OKKRMatrixSizeCant, OKKRMatrixSizeCant,         &
+                      p_MatrixBand, 1, 1, DESC_A, IPVT, INFO)
+      else
+         !t1 = getTime()
+!        write(6,'(a,3i5)')'Before PZGETRF: ',MyPE,KKRMatrixSizeCant,BandSizeCant
+         call PZGETRF(KKRMatrixSizeCant, KKRMatrixSizeCant,           &
+!???     call PZGETRF(KKRMatrixSizeCant, BandSizeCant,                &
+                      p_MatrixBand, 1, 1, DESC_A, IPVT, INFO)
+         !t2 = getTime()
+      endif
+      if (INFO /= 0) then
+!        -------------------------------------------------------------
+         call ErrorHandler('calCrystalMatrix','Failed in PZGETRF',INFO)
+!        -------------------------------------------------------------
+      endif
+      if (do_sro) then
          call PZGETRI(OKKRMatrixSizeCant, p_MatrixBand, 1, 1,         &
-                   DESC_A, IPVT, WORK_sro, LWORK_sro, IWORK_sro, LIWORK_sro, INFO )
+                      DESC_A, IPVT, WORK_sro, LWORK_sro, IWORK_sro, LIWORK_sro, INFO )
       else
          !t3 = getTime()
+!        write(6,'(a,2i5,2x,2d15.8)')'Before PZGETRI: ',MyPE,KKRMatrixSizeCant,p_MatrixBand(1)
          call PZGETRI(KKRMatrixSizeCant, p_MatrixBand, 1, 1,         &
-                   DESC_A, IPVT, WORK, LWORK, IWORK, LIWORK, INFO)
+                      DESC_A, IPVT, WORK, LWORK, IWORK, LIWORK, INFO)
          !t4 = getTime()
       endif
       !if (MyPEinGroup == 0) then
@@ -2540,26 +2470,99 @@ contains
          call ErrorHandler('calCrystalMatrix','Failed in PZGETRS',INFO)
 !        -------------------------------------------------------------
       endif
+!     write(6,'(a,i5)')'End SCALAPACK ..........',MyPE
 #else
-!     ----------------------------------------------------------------
-      call ErrorHandler('calCrystalMatrix','Compiling with -DUSE_SCALAPACK is needed!')
-!     ----------------------------------------------------------------
-      if (do_sro) then
-         call ZGETRI(OKKRMatrixSizeCant, p_MatrixBand, OKKRMatrixSizeCant,    & 
-                      IPVT, WORK_sro, LWORK_sro, INFO)
-      else
-         call ZGETRI( KKRMatrixSizeCant, p_MatrixBand, KKRMatrixSizeCant,     &
-                      IPVT, WORK, LWORK, INFO )
+!=================== else ifdef USE_SCALAPACK
+      GroupID = getGroupID('Unit Cell')
+      comm = getGroupCommunicator(GroupID)
+      call setCommunicator(comm,MyPEinGroup,NumPEsInGroup,sync=.true.)
+      !there is atom parallelism, should invert the KKR matrix on process 0
+      block_size = KKRMatrixSizeCant/NumPEsInGroup
+      !assign KKR matrix on process 0 first
+      !t1 = getTime()
+      if (MyPEinGroup == 0) then
+         do j=1,block_size
+            do i=1,KKRMatrixSizeCant
+               KKR_matrix(i, j) = p_MatrixBand(i+(j-1)*KKRMatrixSizeCant)
+            enddo
+         enddo
       endif
-!     ----------------------------------------------------------------
-      if (INFO /= 0) then
+      !collect part of KKR matrix from each process, p_MatrixBand is part of KKR matrix
+      do mpi_i=1,NumPEsInGroup-1
+         if (MyPEinGroup == mpi_i) then
+            call sendMessage(p_MatrixBand,block_size * KKRMatrixSizeCant,1010,0) !sendMessage(message,size1,msgtype,target_node)
+         endif
+         if (MyPEinGroup == 0) then
+            call recvMessage(KKR_matrix(:,mpi_i*block_size+1:(mpi_i+1)*block_size), &
+                             KKRMatrixSizeCant, block_size,1010,mpi_i) !recvMessage(message,size1,msgtype,source_node)
+         endif
+      enddo
+      !t2 = getTime()
+      !invert the KKR matrix
+      if (MyPEinGroup == 0) then 
+#ifdef ACCEL
+!%%%%%%%%%%% ifdef ACCEL
 !        -------------------------------------------------------------
-         call ErrorHandler('calCrystalMatrix','Failed in ZGETRS',INFO)
+         call invertMatrixKKR_CUDA(KKR_matrix, KKRMatrixSizeCant)
 !        -------------------------------------------------------------
-      endif
+#else
+!%%%%%%%%%%% else ifdef ACCEL
+         if (do_sro) then
+            call ZGETRF(OKKRMatrixSizeCant, OKKRMatrixSizeCant,         &
+                        KKR_matrix, OKKRMatrixSizeCant, IPVT, INFO)
+         else
+            call ZGETRF(KKRMatrixSizeCant, KKRMatrixSizeCant,           &
+                        KKR_matrix, KKRMatrixSizeCant, IPVT, INFO)
+         endif
+!        -------------------------------------------------------------
+         if (INFO /= 0) then
+!           ----------------------------------------------------------
+            call ErrorHandler('calCrystalMatrix','Failed in ZGETRF',INFO)
+!           ----------------------------------------------------------
+         endif
+         if (do_sro) then
+            call ZGETRI(OKKRMatrixSizeCant, KKR_matrix, OKKRMatrixSizeCant,    & 
+                        IPVT, WORK_sro, LWORK_sro, INFO)
+         else
+            call ZGETRI( KKRMatrixSizeCant, KKR_matrix, KKRMatrixSizeCant,     &
+                         IPVT, WORK, LWORK, INFO )
+         endif
+!        -------------------------------------------------------------
+         if (INFO /= 0) then
+!           ----------------------------------------------------------
+            call ErrorHandler('calCrystalMatrix','Failed in ZGETRS',INFO)
+!           ----------------------------------------------------------
+         endif
+!%%%%%%%%%%% end ifdef ACCEL
 #endif
+         !assign part of inverted matrix on process 0
+         do j=1,block_size
+            do i=1,KKRMatrixSizeCant
+               p_MatrixBand(i+(j-1)*KKRMatrixSizeCant) = KKR_matrix(i, j)
+            enddo
+         enddo
+      endif
+      !distribute the inverted matrix to each process
+      !t3 = getTime()
+      do mpi_i=1,NumPEsInGroup-1
+         if (MyPEinGroup == 0) then
+            call sendMessage(KKR_matrix(:,mpi_i*block_size+1:(mpi_i+1)*block_size), &
+                             KKRMatrixSizeCant, block_size,1010,mpi_i)
+         endif
+         if (MyPEinGroup == mpi_i) then
+             call recvMessage(p_MatrixBand,block_size * KKRMatrixSizeCant,1010,0)
+         endif
+      enddo
+     !t4 = getTime()
+     !if (MyPEinGroup == 0) then
+     !    print *,"Time for building matrix on PE 0",t4-t3+t2-t1,"seconds"
+     !endif
+     call resetCommunicator(sync=.true.)
+!=================== end ifdef USE_SCALAPACK
+#endif
+!     ***************************************************************
    endif
-#endif
+!
 !  ==================================================================
 !  Since we are only dealing with method = 2 for SRO, no need to make
 !  any changes here
