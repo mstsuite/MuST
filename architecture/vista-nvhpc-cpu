@@ -73,7 +73,7 @@ CXXFLAGS    = -O3 -std=c++14 $(OPT_OPENMP)
 FFLAGS      = -O3 -I.  $(OPT_OPENMP)  
 FFLAGS_ALT  = -O1
 
-LD_FLAGS    =  $(OPT_OPENMP)  #make sure NVPL is threaded. 
+LD_FLAGS    =  $(OPT_OPENMP) -cudalib=nvtx3  #make sure NVPL is threaded. 
 LD          = $(FC) $(LD_FLAGS)
 
 #=====================================================================

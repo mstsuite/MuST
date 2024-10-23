@@ -16,65 +16,53 @@ Acceleration = 1
 # If LUA_PATH, LIBXC_PATH, FFTW_PATH, and/or P3DFFT_PATH are empty, the
 # corresponding packages will be installed under $(EXTERN_LIB_PATH)
 #=====================================================================
-NVHPC_ROOT := $(dir $(shell which pgcc))
-NVHPC_ROOT := $(patsubst %/compilers/bin/,%, $(NVHPC_ROOT))
-$(info NVHPC_ROOT is $(NVHPC_ROOT))
-
-#NVHPC_ROOT=/opt/nvidia/hpc_sdk/Linux_aarch64/24.1
-
-HDF5_PATH   =
+MATH_PATH   = 
+HDF5_PATH   = 
 ACCEL       = CUDA
-ACCEL_PATH=${NVHPC_ROOT}/cuda
-ACCEL_LIBS=${NVHPC_ROOT}/math_libs
-#COMPILER_LIBS=/opt/nvidia/hpc_sdk/Linux_aarch64/23.7/compilers/lib/
-#COMPILER_LIBS=/opt/nvidia/nvpl/23.09-alpha/lib/
-
-# MPI and scalapack depends on nvhpc, or nvhpc-hpcx
-# scalapack lib in nvhpc-hpcx
-#COMM_LIBS = $(NVHPC_ROOT)/comm_libs/hpcx/hpcx-2.13/ompi/lib/
-# scalapack lib in nvhpc
-#nvhpc-hpcx-cuda12/23.7
-#COMM_LIBS=/opt/nvidia/hpc_sdk/Linux_aarch64/23.7/comm_libs/12.2/hpcx/hpcx-2.15/ompi/lib
-#nvhpc/23.5
-#COMM_LIBS=/opt/nvidia/hpc_sdk/Linux_aarch64/23.5/comm_libs/mpi/lib/
-#LIBXC_PATH  = /scratch1/01032/hliu/works/CSA/gh2/MuST/external_nvpl/libxc/LibXC/
-#FFTW_PATH   = /scratch1/01032/hliu/works/CSA/gh2/MuST/external_nvpl/fftw/FFTW/
-#P3DFFT_PATH = /scratch1/01032/hliu/works/CSA/gh2/MuST/external_nvpl/p3dfft/P3DFFT/
+# ACCEL_PATH  = /home1/apps/nvidia/Linux_aarch64/24.7/cuda
+LIBXC_PATH  = 
+FFTW_PATH   = 
+P3DFFT_PATH =
 LUA_PATH    =
-MATH_PATH   =
-#LIBS       += -L/scratch/projects/compilers/nvhpc_22.1/Linux_x86_64/22.1/compilers/lib/ -lblas -llapack -L/scratch/projects/compilers/nvhpc_22.1/Linux_x86_64/22.1//comm_libs/mpi/lib/ -lscalapack
-#LIBS       += -L$(COMPILER_LIBS) -lblas -llapack
-#LIBS       += -L$(COMPILER_LIBS) -lnvpl_blas_lp64_gomp -lnvpl_lapack_lp64_gomp  
-LIBS       += -Mnvpl -Mscalapack \
-              -L$(ACCEL_PATH)/lib64 -lcudart \
-              -L$(ACCEL_LIBS)/lib64 -lcublas -lstdc++ -lcusolver
+LIBS       += -lnvpl_blas_lp64_gomp -lnvpl_lapack_lp64_gomp -lnvpl_blacs_lp64_openmpi5 -lnvpl_scalapack_lp64 \
+              -L/home1/apps/nvidia/Linux_aarch64/24.7/cuda/12.5/lib64 -lcudart -lcuda -L/opt/apps/nvidia_math/12.4/lib64 -lcublas -lstdc++ -lcusolver
+
 #=====================================================================
 # Compiler tools
 #=====================================================================
 CC          = mpicc
 CXX         = mpicxx
-F77         = mpif90
-FC          = mpif90
+F77         = mpifort
+FC          = mpifort
 MPICC       = mpicc
-ACCEL_CXX   = nvcc -arch=sm_90a
+ACCEL_CXX   = nvcc -arch=sm_90
 ARCHV       = ar -r
 
 #=====================================================================
 # Preprocessor/Compiler/Linker flags, e.g.,
 #    FFLAGS = -I. -O3 -CB -CU -traceback -ftrapuv -fpe0 -ftz -fp-stack-check
 # Note: "FPPFLAGS = -DMPI" enables MPI parallel processing.
+# Unfortunately, rpc on b2t02 is not properly installed.
+#     Specifically, gssrpc_xdr_double is missing from libgssrpc.so
+#     I have to disable using XDR format.
 #=====================================================================
 FPPDEFS     = -cpp -DNVHPC
 CPPDEFS     = -cpp
-#FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK
 FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK
-OPT_OPENMP  = -mp
-CFLAGS      = -O3 $(OPT_OPENMP)
-CXXFLAGS    = -O3 -std=c++14 $(OPT_OPENMP) 
-FFLAGS      = -O3 -I.  $(OPT_OPENMP)  
-FFLAGS_ALT  = -O1
 
-LD_FLAGS    =  $(OPT_OPENMP) -cudalib=nvtx3  #make sure NVPL is threaded. 
+CFLAGS      = -O3
+CXXFLAGS    = -O3 -std=c++14
+# FFLAGS      = -O3
+# F77FLAGS    = -O3
+# the following option "-w -fallow-argument-mismatch" is needed for gcc.10.1.0
+FFLAGS      = -O3 -w -I. #-fallow-argument-mismatch
+F77FLAGS    = -O3 -w -I. #-fallow-argument-mismatch
+FFLAGS_ALT  = -O1 #additional flag for preventing nvhpc compilers generating numerical error
+# FFLAGS      = -O3 -fcheck=all -w -fallow-argument-mismatch
+# F77FLAGS    = -O3 -fcheck=all -w -fallow-argument-mismatch
+OPT_OPENMP  = -mp
+
+LD_FLAGS    = -mp
 LD          = $(FC) $(LD_FLAGS)
 
 #=====================================================================
@@ -84,5 +72,5 @@ LD          = $(FC) $(LD_FLAGS)
 #=====================================================================
 HDF5_CONFIG_FLAGS   = --enable-fortran --enable-static-exec CC=$(CC) CXX=$(CXX) FC=$(FC)
 LIBXC_CONFIG_FLAGS  = CC=$(CC) CFLAGS="$(CFLAGS)" FC=$(FC) FFLAGS="$(FFLAGS)"
-P3DFFT_CONFIG_FLAGS = --enable-pgi --enable-estimate FC=$(FC) CC=$(CC) --enable-openmpi
-FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS)" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)"
+P3DFFT_CONFIG_FLAGS = FC=$(FC) CC=$(CC) --enable-openmpi FCFLAGS="$(FFLAGS)"
+FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS)" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)" LIBS="$(ADD_LIBS)"
