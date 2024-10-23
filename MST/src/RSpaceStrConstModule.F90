@@ -58,7 +58,6 @@ module RSpaceStrConstModule
 !
    use IntegerFactorsModule, only : lofk, mofk
 !
-   use SphericalHarmonicsModule, only : calYlmConjg
 !
 public :: initRSpaceStrConst, &
           endRSpaceStrConst,  &
@@ -73,9 +72,9 @@ private
 !
    integer (kind=IntKind) :: lmax_max
    integer (kind=IntKind) :: kmax_max
-   integer (kind=IntKind) :: lmax_dlm
    integer (kind=IntKind) :: kmax_dlm
    integer (kind=IntKind) :: print_level
+   integer (kind=IntKind) :: kmax_max2
 !
    complex (kind=CmplxKind), allocatable :: illp(:,:)
    complex (kind=CmplxKind), allocatable :: ilp1(:)
@@ -83,11 +82,12 @@ private
    complex (kind=CmplxKind), allocatable :: ylmcc(:)
    complex (kind=CmplxKind), allocatable :: dlm(:)
    complex (kind=CmplxKind), allocatable :: hfn(:)
-   complex (kind=CmplxKind), allocatable, target :: gijp(:)
+!  complex (kind=CmplxKind), allocatable, target :: gijp(:)
+!ACC DECLARE CREATE (illp, ilp1, ylmcc, dlm, hfn)
 !
 contains
 !
-   include '../lib/arrayTools.F90'
+!  include '../lib/arrayTools.F90'
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine genFactors(lmax)
@@ -134,7 +134,7 @@ contains
 !
    integer (kind=IntKind), intent(in) :: lmax
    integer (kind=IntKind), intent(in) :: iprint
-   integer (kind=IntKind) :: lmax_max2, kmax_max2
+   integer (kind=IntKind) :: lmax_max2
 !
    Initialized=.true.
    stop_routine=istop
@@ -146,7 +146,7 @@ contains
    kmax_max2=(lmax_max2+1)*(lmax_max2+1)
    call initIntegerFactors(lmax_max2)
    allocate( illp(1:kmax_max2,1:kmax_max2), ilp1(0:lmax_max2) )
-   allocate( gijp(kmax_max*kmax_max) )
+!  allocate( gijp(kmax_max*kmax_max) )
    allocate( ylmcc(kmax_max2) )
    allocate( dlm(kmax_max2) )
    allocate( hfn(0:lmax_max2) )
@@ -154,7 +154,6 @@ contains
    call genFactors(lmax_max2)
 !  -------------------------------------------------------------------
 !
-   lmax_dlm=0
    kmax_dlm=1
 !
    end subroutine initRSpaceStrConst
@@ -175,7 +174,7 @@ contains
 !     ----------------------------------------------------------------
    endif
 !
-   deallocate( gijp, ylmcc, dlm, hfn )
+   deallocate( ylmcc, dlm, hfn )
 !
    deallocate( illp, ilp1 )
 !  -------------------------------------------------------------------
@@ -190,7 +189,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getStrConstMatrix(kappa,rij,lmaxi,lmaxj) result(gij)
+   subroutine getStrConstMatrix(lmaxi,lmaxj,kappa,rij,gij)
 !  ===================================================================
 !
 !  *******************************************************************
@@ -252,16 +251,22 @@ contains
 !  *                                                                 *
 !  *******************************************************************
 !
+#ifndef _OPENACC
    use GauntFactorsModule, only : getK3
    use GauntFactorsModule, only : getNumK3
    use GauntFactorsModule, only : getGauntFactor
+#else
+   use GauntFactorsModule
+#endif
+   use SphericalHarmonicsModule, only : calYlmConjg
 !
    implicit   none
+!$ACC ROUTINE SEQ
 !
    character (len=23), parameter :: sname='getRSpaceStrConstMatrix'
 !
-   integer (kind=IntKind), intent(in) :: lmaxi
-   integer (kind=IntKind), intent(in) :: lmaxj
+   integer (kind=IntKind), value, intent(in) :: lmaxi
+   integer (kind=IntKind), value, intent(in) :: lmaxj
 !
    integer (kind=IntKind) :: kmaxi
    integer (kind=IntKind) :: kmaxj
@@ -272,24 +277,30 @@ contains
    integer (kind=IntKind) :: klp
    integer (kind=IntKind) :: lp
    integer (kind=IntKind) :: nnj3
+   integer (kind=IntKind) :: lmax_dlm
 #ifdef DEBUG
    integer (kind=IntKind) :: mp
 #endif
+#ifndef _OPENACC
    integer (kind=IntKind), pointer :: nj3(:,:)
    integer (kind=IntKind), pointer :: kj3(:,:,:)
    integer (kind=IntKind), pointer :: pkj3(:)
+#endif
 !
    real (kind=RealKind), intent(in) :: rij(3)
 !
    real (kind=RealKind) :: rmag
+#ifndef _OPENACC
    real (kind=RealKind), pointer :: cgnt(:,:,:)
    real (kind=RealKind), pointer :: pcgnt(:)
+#endif
 !
-   complex (kind=CmplxKind), intent(in) :: kappa
+   complex (kind=CmplxKind), value, intent(in) :: kappa
 !
    complex (kind=CmplxKind) :: z
    complex (kind=CmplxKind) :: fac, gij_llp
-   complex (kind=CmplxKind), pointer :: gij(:,:)
+   complex (kind=CmplxKind), intent(out) :: gij(:,:)
+   complex (kind=CmplxKind) :: ylmcc_local(100)
 !
    rmag=sqrt(rij(1)*rij(1)+rij(2)*rij(2)+rij(3)*rij(3))
 !
@@ -320,8 +331,8 @@ contains
    kmaxi=(lmaxi+1)*(lmaxi+1)
    kmaxj=(lmaxj+1)*(lmaxj+1)
 !
-   gijp = CZERO
-   gij => aliasArray2_c(gijp,kmaxi,kmaxj)
+!  gijp = CZERO
+!  gij => aliasArray2_c(gijp,kmaxi,kmaxj)
 !
    lmax_dlm=lmaxi+lmaxj
    kmax_dlm=(lmax_dlm+1)*(lmax_dlm+1)
@@ -341,7 +352,7 @@ contains
 !  ====================================================================
 !  calculate Y(l,m)...................................................
 !  --------------------------------------------------------------------
-   call calYlmConjg(rij,lmax_dlm,ylmcc)
+   call calYlmConjg(rij,lmax_dlm,ylmcc_local)
 !  --------------------------------------------------------------------
 !
 !  ===================================================================
@@ -357,15 +368,17 @@ contains
       l =lofk(kl)
 !     fac = -hfn(l)*z*ilp1(l)   ! 08/28/14
       fac =  hfn(l)*z/ilp1(l)
-      dlm(kl) = fac*ylmcc(kl)
+      dlm(kl) = fac*ylmcc_local(kl)
    enddo
 !
 !  ===================================================================
 !  calculate g(R_ij)...................................................
 !  ===================================================================
+#ifndef _OPENACC
    nj3 => getNumK3()
    kj3 => getK3()
    cgnt => getGauntFactor()
+#endif
 !
 !  ===================================================================
 !  loop over klp......................................................
@@ -384,11 +397,11 @@ contains
 !        perform sum over j with gaunt # ..............................
 !        =============================================================
          nnj3 = nj3(klp,kl)
-         pkj3 => kj3(1:nnj3,klp,kl)
-         pcgnt=> cgnt(1:nnj3,klp,kl)
+!!!      pkj3 => kj3(1:nnj3,klp,kl)
+!!!      pcgnt=> cgnt(1:nnj3,klp,kl)
          gij_llp = CZERO
          do j = 1,nnj3
-            gij_llp = gij_llp+pcgnt(j)*dlm(pkj3(j))
+            gij_llp = gij_llp+cgnt(j,klp,kl)*dlm(kj3(j,klp,kl))
          enddo
          gij(kl,klp)=pi4*illp(kl,klp)*gij_llp
       enddo
@@ -414,26 +427,28 @@ contains
       enddo
    endif
 #endif
+#ifndef _OPENACC
 !  -------------------------------------------------------------------
    nullify( nj3, kj3, cgnt )
 !  -------------------------------------------------------------------
-   end function getStrConstMatrix
+#endif
+   end subroutine getStrConstMatrix
 !  ===================================================================
 !
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function aliasArray_c(size1,size2,array)              result(parray)
+!  function aliasArray_c(size1,size2,array)              result(parray)
 !  ===================================================================
-   implicit none
+!  implicit none
 !
-   integer(kind=IntKind), intent(in) :: size1,size2
-   complex(kind=CmplxKind), target :: array(size1,size2)
+!  integer(kind=IntKind), intent(in) :: size1,size2
+!  complex(kind=CmplxKind), target :: array(size1,size2)
 !
-   complex(kind=CmplxKind), pointer :: parray(:,:)
+!  complex(kind=CmplxKind), pointer :: parray(:,:)
 !
-   parray => array
+!  parray => array
 !
-   end function aliasArray_c
+!  end function aliasArray_c
 !  ===================================================================
 end module RSpaceStrConstModule

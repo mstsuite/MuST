@@ -25,17 +25,17 @@ public :: initGauntFactors, &
       module procedure getGauntFactor0, getGauntFactor2, getGauntFactor3
    end interface
 !
+   integer (kind=IntKind), allocatable, target, public :: nj3(:,:)
+   integer (kind=IntKind), allocatable, target, public :: kj3(:,:,:)
+   real (kind=RealKind), allocatable, target, public :: cgnt(:,:,:)
 private
 !
    integer (kind=IntKind) :: lmax_sav
    integer (kind=IntKind) :: kmax_sav
    integer (kind=IntKind) :: MaxJ3
-   integer (kind=IntKind), allocatable, target :: nj3(:,:)
-   integer (kind=IntKind), allocatable, target :: kj3(:,:,:)
 !
    real (kind=RealKind) :: tol = ten2m14
    real (kind=RealKind), pointer :: clm(:)
-   real (kind=RealKind), allocatable, target :: cgnt(:,:,:)
 !
    logical :: Initialized = .false.
 !
@@ -138,9 +138,11 @@ contains
 !
    integer (kind=IntKind), pointer :: pnj3(:,:)
 !
+#ifndef _OPENACC
    if (.not.Initialized) then
       call ErrorHandler('getNumK3','GauntFactorsModule is not initialized')
    endif
+#endif
 !
    pnj3 => nj3(:,:)
 !
@@ -157,6 +159,7 @@ contains
    integer (kind=IntKind), intent(in) :: k1, k2
    integer (kind=IntKind) :: pnj3
 !
+#ifndef _OPENACC
    if (.not.Initialized) then
       call ErrorHandler('getNumK3','GauntFactorsModule is not initialized')
    else if (k1 > kmax_sav .or. k1 < 1) then
@@ -164,6 +167,7 @@ contains
    else if (k2 > kmax_sav .or. k2 < 1) then
       call ErrorHandler('getNumK3','K2 index out of bound',k2)
    endif
+#endif
 !
    pnj3 = nj3(k1,k2)
 !
@@ -179,9 +183,11 @@ contains
 !
    integer (kind=IntKind), pointer :: pkj3(:,:,:)
 !
+#ifndef _OPENACC
    if (.not.Initialized) then
       call ErrorHandler('getK3','GauntFactorsModule is not initialized')
    endif
+#endif
 !
    pkj3 => kj3(:,:,:)
 !
@@ -198,6 +204,7 @@ contains
    integer (kind=IntKind), intent(in) :: k1, k2
    integer (kind=IntKind), pointer :: pkj3(:)
 !
+#ifndef _OPENACC
    if (.not.Initialized) then
       call ErrorHandler('getK3','GauntFactorsModule is not initialized')
    else if (k1 > kmax_sav .or. k1 < 1) then
@@ -205,6 +212,7 @@ contains
    else if (k2 > kmax_sav .or. k2 < 1) then
       call ErrorHandler('getK3','K2 index out of bound',k2)
    endif
+#endif
 !
    pkj3 => kj3(1:MaxJ3,k1,k2)
 !
@@ -220,10 +228,12 @@ contains
 !
    real (kind=RealKind), pointer :: pcgnt(:,:,:)
 !
+#ifndef _OPENACC
    if (.not.Initialized) then
       call ErrorHandler('getGauntFactor',                             &
                         'GauntFactorsModule is not initialized')
    endif
+#endif
 !
    pcgnt => cgnt(:,:,:)
 !
@@ -240,6 +250,7 @@ contains
 !
    real (kind=RealKind), pointer :: pcgnt(:)
 !
+#ifndef _OPENACC
    if (.not.Initialized) then
       call ErrorHandler('getGauntFactor',                             &
                         'GauntFactorsModule is not initialized')
@@ -248,6 +259,7 @@ contains
    else if (k2 > kmax_sav .or. k2 < 1) then
       call ErrorHandler('getGauntFactor','K2 index out of bound',k2)
    endif
+#endif
 !
    pcgnt => cgnt(1:MaxJ3,k1,k2)
 !
@@ -272,6 +284,7 @@ contains
 !
    real (kind=RealKind) :: cg
 !
+#ifndef _OPENACC
    if (.not.Initialized) then
       call ErrorHandler('getGauntFactor',                             &
                         'GauntFactorsModule is not initialized')
@@ -280,6 +293,7 @@ contains
    else if (k2 > kmax_sav .or. k2 < 1) then
       call ErrorHandler('getGauntFactor','K2 index out of bound',k2)
    endif
+#endif
 !
    cg = ZERO
    do j3 = 1, nj3(k1,k2)

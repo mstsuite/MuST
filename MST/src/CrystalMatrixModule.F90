@@ -2030,6 +2030,7 @@ contains
    use MPPModule, only : setCommunicator, resetCommunicator
    use GroupCommModule, only : getGroupID, getGroupCommunicator
 !   use TimerModule, only : getTime
+   use NVTX  ! use the NVTX module to profie the code performance
    implicit none
 !   double precision :: t1,t2,t3,t4
 !
@@ -2081,6 +2082,8 @@ contains
      do_sro = .false.
    endif
 
+!  Start profiing here
+   call nvtxStartRange("Calculating the distributed KKR-Matrix components on each process")
 !  ===================================================================
 !  calculate the following modified KKR Matrix (or the M-matrix).
 !  Method 0:
@@ -2388,11 +2391,13 @@ contains
    if (NumPEsInGroup == 1) then  ! In this case, the atoms are not distributed, so that BandSizeCant = KKRMatrixSizeCant
 !     ***************************************************************
 #ifdef ACCEL
+      call nvtxStartRange("Invertihng the KKR-Matrix by offloading")
       !no atom parallelism, just invert the p_MatrixBand on process 0
 !     ---------------------------------------------------------------
       call invertMatrixKKR_CUDA(p_MatrixBand, KKRMatrixSizeCant)
 !     ---------------------------------------------------------------
 #else
+      call nvtxStartRange("Invertihng the KKR-Matrix using Lapack")
       if(do_sro) then
 !        -------------------------------------------------------------
          call ZGETRF(OKKRMatrixSizeCant, OKKRMatrixSizeCant,         &
@@ -2435,6 +2440,7 @@ contains
 !=================== ifdef USE_SCALAPACK
 !     write(6,'(/,a,i5)')'Start SCALAPACK ..........',MyPE
 !     ----------------------------------------------------------------
+      call nvtxStartRange("Invertihng the KKR-Matrix using Scalapack")
       if (do_sro) then
          call PZGETRF(OKKRMatrixSizeCant, OKKRMatrixSizeCant,         &
                       p_MatrixBand, 1, 1, DESC_A, IPVT, INFO)
@@ -2473,6 +2479,7 @@ contains
 !     write(6,'(a,i5)')'End SCALAPACK ..........',MyPE
 #else
 !=================== else ifdef USE_SCALAPACK
+      call nvtxStartRange("Communicating and setting up the KKR-Matrix on Process 0")
       GroupID = getGroupID('Unit Cell')
       comm = getGroupCommunicator(GroupID)
       call setCommunicator(comm,MyPEinGroup,NumPEsInGroup,sync=.true.)
@@ -2502,11 +2509,13 @@ contains
       if (MyPEinGroup == 0) then 
 #ifdef ACCEL
 !%%%%%%%%%%% ifdef ACCEL
+      call nvtxStartRange("Inverting the KKR-Matrix on Process 0 by offloading")
 !        -------------------------------------------------------------
          call invertMatrixKKR_CUDA(KKR_matrix, KKRMatrixSizeCant)
 !        -------------------------------------------------------------
 #else
 !%%%%%%%%%%% else ifdef ACCEL
+      call nvtxStartRange("Inverting the KKR-Matrix on Process 0 using Lapack")
          if (do_sro) then
             call ZGETRF(OKKRMatrixSizeCant, OKKRMatrixSizeCant,         &
                         KKR_matrix, OKKRMatrixSizeCant, IPVT, INFO)
@@ -2544,6 +2553,7 @@ contains
       endif
       !distribute the inverted matrix to each process
       !t3 = getTime()
+      call nvtxStartRange("Distributing the KKR-Matrix inverse results to other procresses")
       do mpi_i=1,NumPEsInGroup-1
          if (MyPEinGroup == 0) then
             call sendMessage(KKR_matrix(:,mpi_i*block_size+1:(mpi_i+1)*block_size), &

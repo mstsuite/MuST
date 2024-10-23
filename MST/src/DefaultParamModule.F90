@@ -497,7 +497,7 @@ contains
 !
    n = 0; Keys = ' '; Values = ' '
 !
-   include '../src/DefaultParameters.inc'
+   include 'DefaultParameters.inc'
 !
    if (n > size(Keys)) then
       call ErrorHandler('loadDefaultKeyValues','n > size of Keys',n,size(Keys))

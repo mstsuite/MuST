@@ -517,7 +517,7 @@ contains
 !
    n = 0; Options = ' '; OptionKeys = ' '; OptionValues = ' '
 !
-   include '../src/CmdLineOptions.inc'
+   include 'CmdLineOptions.inc'
 !
    if (n > MaxOptions) then
       call ErrorHandler('loadCmdLineOptions','n > MaxOptions',n,MaxOptions)

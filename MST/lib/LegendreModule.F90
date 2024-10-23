@@ -14,6 +14,7 @@ contains
    use MathParamModule, only : ten2m8
 !
    implicit none
+!$ACC ROUTINE SEQ
 !
    integer (kind=IntKind), intent(in) :: lmax
 !
@@ -39,11 +40,13 @@ contains
 !  N.B. The definition of p(l,m) has been modified.
 !  p(l,m) of this code = [(-1)**m]*p(l,m) of "Numerical Recipes".
 !  ===================================================================
+#ifndef _OPENACC
    if(lmax.lt.0) then
       call ErrorHandler('Legendre','bad lmax: lmax < 0',lmax)
    else if(abs(x).gt.one) then
       call ErrorHandler('Legendre','bad arguments: abs(x) > 1',x)
    endif
+#endif
 !
    plm = zero
    jmax=(lmax+1)*(lmax+2)/2

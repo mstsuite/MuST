@@ -148,6 +148,7 @@ contains
    subroutine calClm(lmax,clm_local)
 !  ===================================================================
    implicit none
+!$ACC ROUTINE SEQ
    integer (kind=IntKind), intent(in) :: lmax
    integer (kind=IntKind) :: l
    integer (kind=IntKind) :: m
@@ -166,9 +167,11 @@ contains
 !                      [   4*pi*(l+|m|)! ]
 !
 !  ====================================================================
+#ifndef _OPENACC
    if(lmax < 0 ) then
       call ErrorHandler('calClm','lmax < 0',lmax)
    endif
+#endif
 !
    clm_local(1)=sqrt(one/pi4)
    if (lmax < 50) then
@@ -217,17 +220,20 @@ contains
    function getClm(lmax) result(pclm)
 !  ===================================================================
    implicit none
+!$ACC ROUTINE SEQ
 !
    integer (kind=IntKind), intent(in) :: lmax
    integer (kind=IntKind) :: jmax
 !
    real (kind=RealKind), pointer :: pclm(:)
 !
+#ifndef _OPENACC
    if (.not.Initialized) then
       call ErrorHandler('getClm','Module not initialized')
    else if (lmax > lmax_max) then
       call ErrorHandler('getClm','lmax > lmax_max',lmax,lmax_max)
    endif
+#endif
 !
    jmax = ((lmax+1)*(lmax+2))/2
    pclm => clm(1:jmax)
@@ -241,6 +247,7 @@ contains
    subroutine SphericalHarmonics0(x,y,z,lmax,ylm)
 !  ===================================================================
    implicit none
+!$ACC ROUTINE SEQ
 !
    integer (kind=IntKind), intent(in) :: lmax
 !
@@ -260,11 +267,13 @@ contains
 !
    complex (kind=CmplxKind) :: iphi
 !
+#ifndef _OPENACC
    if (.not.Initialized) then
       call ErrorHandler('calYlm','Module not initialized')
    else if (lmax > lmax_max) then
       call ErrorHandler('calYlm','lmax > lmax_max',lmax,lmax_max)
    endif
+#endif
 !
    jmax=(lmax+1)*(lmax+2)/2
    kmax=(lmax+1)*(lmax+1)
@@ -323,6 +332,7 @@ contains
 !  ===================================================================
 !
    implicit none
+!$ACC ROUTINE SEQ
 !
    integer (kind=IntKind), intent(in) :: lmax
 !
@@ -342,11 +352,13 @@ contains
 !
    complex (kind=CmplxKind) :: iphi
 !
+#ifndef _OPENACC
    if (.not.Initialized) then
       call ErrorHandler('calYlm','Module not initialized')
    else if (lmax > lmax_max) then
       call ErrorHandler('calYlm','lmax > lmax_max',lmax,lmax_max)
    endif
+#endif
    ylm = czero
 !
    jmax=((lmax+1)*(lmax+2))/2
@@ -405,6 +417,7 @@ contains
 !  ===================================================================
 !
    implicit none
+!$ACC ROUTINE SEQ
 !
    integer (kind=IntKind), intent(in) :: lmax
 !
@@ -426,11 +439,13 @@ contains
 !
    complex (kind=CmplxKind) :: iphi
 !
+#ifndef _OPENACC
    if (.not.Initialized) then
       call ErrorHandler('calYlm','Module not initialized')
    else if (lmax > lmax_max) then
       call ErrorHandler('calYlm','lmax > lmax_max',lmax,lmax_max)
    endif
+#endif
 !
    jmax=((lmax+1)*(lmax+2))/2
    kmax=(lmax+1)*(lmax+1)
@@ -495,6 +510,7 @@ contains
 !  ===================================================================
 !
    implicit none
+!$ACC ROUTINE SEQ
 !
    integer (kind=IntKind), intent(in) :: lmax
 !
@@ -516,11 +532,13 @@ contains
 !
    complex (kind=CmplxKind) :: iphi
 !
+#ifndef _OPENACC
    if (.not.Initialized) then
       call ErrorHandler('calYlm','Module not initialized')
    else if (lmax > lmax_max) then
       call ErrorHandler('calYlm','lmax > lmax_max',lmax,lmax_max)
    endif
+#endif
 !
    jmax=((lmax+1)*(lmax+2))/2
    kmax=(lmax+1)*(lmax+1)
@@ -585,6 +603,7 @@ contains
 !  ===================================================================
 !
    implicit none
+!$ACC ROUTINE SEQ
 !
    integer (kind=IntKind), intent(in) :: lmax
 !
@@ -604,11 +623,13 @@ contains
 !
    complex (kind=CmplxKind) :: iphi
 !
+#ifndef _OPENACC
    if (.not.Initialized) then
       call ErrorHandler('calYlm','Module not initialized')
    else if (lmax > lmax_max) then
       call ErrorHandler('calYlm','lmax > lmax_max',lmax,lmax_max)
    endif
+#endif
 !
    jmax=((lmax+1)*(lmax+2))/2
    kmax=(lmax+1)*(lmax+1)
@@ -667,6 +688,7 @@ contains
 !  ===================================================================
 !
    implicit none
+!$ACC ROUTINE SEQ
 !
    integer (kind=IntKind), intent(in) :: lmax
 !
@@ -686,11 +708,13 @@ contains
 !
    complex (kind=CmplxKind) :: iphi
 !
+#ifndef _OPENACC
    if (.not.Initialized) then
       call ErrorHandler('calYlm','Module not initialized')
    else if (lmax > lmax_max) then
       call ErrorHandler('calYlm','lmax > lmax_max',lmax,lmax_max)
    endif
+#endif
 !
    jmax=((lmax+1)*(lmax+2))/2
    kmax=(lmax+1)*(lmax+1)
@@ -749,6 +773,7 @@ contains
 !  ===================================================================
 !
    implicit none
+!$ACC ROUTINE SEQ
 !
    integer (kind=IntKind), intent(in) :: lmax
 !
@@ -770,11 +795,13 @@ contains
 !
    complex (kind=CmplxKind) :: iphi
 !
+#ifndef _OPENACC
    if (.not.Initialized) then
       call ErrorHandler('calYlm','Module not initialized')
    else if (lmax > lmax_max) then
       call ErrorHandler('calYlm','lmax > lmax_max',lmax,lmax_max)
    endif
+#endif
 !
    jmax=((lmax+1)*(lmax+2))/2
    kmax=(lmax+1)*(lmax+1)
@@ -844,6 +871,7 @@ contains
 !  ===================================================================
 !
    implicit none
+!$ACC ROUTINE SEQ
 !
    integer (kind=IntKind), intent(in) :: lmax
 !
@@ -865,11 +893,13 @@ contains
 !
    complex (kind=CmplxKind) :: iphi
 !
+#ifndef _OPENACC
    if (.not.Initialized) then
       call ErrorHandler('calYlm','Module not initialized')
    else if (lmax > lmax_max) then
       call ErrorHandler('calYlm','lmax > lmax_max',lmax,lmax_max)
    endif
+#endif
 !
    jmax=((lmax+1)*(lmax+2))/2
    kmax=(lmax+1)*(lmax+1)
@@ -940,6 +970,7 @@ contains
 !  ===================================================================
 !
    implicit none
+!$ACC ROUTINE SEQ
 !
    integer (kind=IntKind), intent(in) :: lmax
 !
@@ -963,11 +994,13 @@ contains
 !
    complex (kind=CmplxKind) :: iphi
 !
+#ifndef _OPENACC
    if (.not.Initialized) then
       call ErrorHandler('calYlm','Module not initialized')
    else if (lmax > lmax_max) then
       call ErrorHandler('calYlm','lmax > lmax_max',lmax,lmax_max)
    endif
+#endif
 !
    jmax=(lmax+1)*(lmax+2)/2
    kmax=(lmax+1)*(lmax+1)
@@ -1091,6 +1124,7 @@ contains
    subroutine SphericalHarmonics5(vec,lmax,ylm,grady)
 !  ===================================================================
    implicit none
+!$ACC ROUTINE SEQ
 !
    integer (kind=IntKind), intent(in) :: lmax
 !

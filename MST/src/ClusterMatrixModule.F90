@@ -85,7 +85,6 @@ private
 !
    type (NeighborStruct), pointer :: Neighbor
 !
-   complex (kind=CmplxKind) :: kappa
    complex (kind=CmplxKind), allocatable, target :: wsTau00L(:)
    complex (kind=CmplxKind), allocatable, target :: wsKau00L(:)
    complex (kind=CmplxKind), allocatable, target :: wsStoreA(:)
@@ -100,6 +99,7 @@ private
    complex (kind=CmplxKind), allocatable, target :: remote_jsmtx(:,:)
    complex (kind=CmplxKind), allocatable, target :: local_jsmtx(:,:)
    complex (kind=CmplxKind), allocatable, target :: store_sine(:)
+   complex (kind=CmplxKind), allocatable :: gij(:,:)
 #ifdef OpenMPI
    complex (kind=CmplxKind), allocatable, target :: jsmtx_buf(:,:,:)
 #else
@@ -321,6 +321,8 @@ contains
 !
    if (Relativity > 1) then
       allocate( gijrel(kmax_max*n_spin_cant, kmax_max*n_spin_cant) )
+   else
+      allocate( gij(kmax_max, kmax_max) )
    endif
 !
    ExchSSSmatAllocated = .false.
@@ -379,6 +381,8 @@ contains
 !
    if (Relativity > 1) then
       deallocate( gijrel )
+   else
+      deallocate( gij )
    endif
 !
 !  -------------------------------------------------------------------
@@ -734,7 +738,7 @@ contains
 !
    use SpinRotationModule, only : rotateGtoL
 !
-   use RSpaceStrConstModule, only : getGij => getStrConstMatrix
+   use RSpaceStrConstModule, only : getStrConstMatrix
 !
    use MatrixModule, only : setupUnitMatrix, computeUAUts
 !
@@ -759,7 +763,7 @@ contains
 !
    real (kind=RealKind) :: rij(3), posi(3), posj(3)
 !
-   complex (kind=CmplxKind), pointer :: gij(:,:)
+   complex (kind=CmplxKind) :: kappa
    complex (kind=CmplxKind), pointer :: p_jinvi(:)
    complex (kind=CmplxKind), pointer :: p_sinej(:)
    complex (kind=CmplxKind), pointer :: OmegaHat(:,:)
@@ -827,7 +831,7 @@ contains
        nbr_kkri_ns = nbr_kkri*n_spin_cant
        if (my_atom .ne. my_atom2) then
          rij = posj - posi
-         gij => getGij(kappa,rij,lmaxi,lmaxj)
+         call getStrConstMatrix(lmaxi,lmaxj,kappa,rij,gij)
          do js = 1, n_spin_cant
            do is = 1, n_spin_cant
 !            ----------------------------------------------
@@ -904,13 +908,15 @@ use MPPModule, only : MyPE, syncAllPEs
 !
    use SpinRotationModule, only : rotateGtoL
 !
-   use RSpaceStrConstModule, only : getGij => getStrConstMatrix
+   use RSpaceStrConstModule, only : getStrConstMatrix
 !
    use MatrixModule, only : setupUnitMatrix, computeUAUts
 !
    use MatrixBlockInversionModule, only : invertMatrixBlock
    use MatrixInverseModule, only : MtxInv_LU
    use WriteMatrixModule, only : writeMatrix
+   !
+   use NVTX
 !
    implicit none
 !
@@ -927,9 +933,9 @@ use MPPModule, only : MyPE, syncAllPEs
 !
    integer (kind=IntKind) :: lid_i, lid_j, pei, pej, jid, info, iid
 !
-   real (kind=RealKind) :: rij(3), posi(3), posj(3)
+   real (kind=RealKind) :: rij(3), posi(3), posj(3), t0
 !
-   complex (kind=CmplxKind), pointer :: gij(:,:)
+   complex (kind=CmplxKind) :: kappa_1, kappa
    complex (kind=CmplxKind), pointer :: p_jinvi(:)
    complex (kind=CmplxKind), pointer :: p_sinej(:)
    complex (kind=CmplxKind), pointer :: pBigMatrix(:,:)
@@ -972,12 +978,14 @@ use MPPModule, only : MyPE, syncAllPEs
 !  -------------------------------------------------------------------
 !
    if (present(kp)) then
-     kappa = kp
+     kappa_1 = kp
    else
-     kappa = sqrt(energy)
+     kappa_1 = sqrt(energy)
    endif
    kmax_max_ns = kmax_max*n_spin_cant
    tsize = kmax_max*kmax_max*n_spin_cant*n_spin_cant
+!
+   call nvtxStartRange("Step 1")
 !
    do my_atom = 1, LocalNumAtoms
       Neighbor => getNeighbor(my_atom)
@@ -998,6 +1006,10 @@ use MPPModule, only : MyPE, syncAllPEs
 !           number of neighbors associated with each atom is different.
 !     ================================================================
       nbj=0
+      !$ACC PARALLEL LOOP GANG VECTOR &
+      !$ACC PRIVATE(rij,kappa_1,kappa,lmaxi,lmaxj,posj,p_sinej,p_jinvi,store_sine,posi,gij,gijrel) &
+      !$ACC DEFAULT (PRESENT) &
+      !$ACC REDUCTION(+:nbj)
       do irj=0,Neighbor%NumAtoms
 !        =============================================================
 !        get the Jinv-matrix and Sine-matrix and store the data in
@@ -1024,11 +1036,11 @@ use MPPModule, only : MyPE, syncAllPEs
 !
          if (pej == MyPEinGroup) then
             nbr_kkrj = kmax_kkr(lid_j)
-            p_sinej => local_jsmtx(tsize+2:2*tsize+1,lid_j)
+!!!         p_sinej => local_jsmtx(tsize+2:2*tsize+1,lid_j)
          else
             jid = mapping_jsmtx(irj,my_atom)
             nbr_kkrj = remote_kmax(jid)
-            p_sinej => remote_jsmtx(tsize+1:2*tsize,jid)
+!!!         p_sinej => remote_jsmtx(tsize+1:2*tsize,jid)
          endif
          kkrj  = (lmaxj+1)*(lmaxj+1)
 !        ==============================================================
@@ -1036,11 +1048,13 @@ use MPPModule, only : MyPE, syncAllPEs
 !        kkrj = kmax to be used in the construction of the "big matrix"
 !             <= nbr_kkrj
 !        ==============================================================
+#ifndef _OPENACC
          if (nbr_kkrj < kkrj) then
 !           -----------------------------------------------------------
             call ErrorHandler('calTauMatrix','remote atom kmax < kmaxj',nbr_kkrj,kkrj)
 !           -----------------------------------------------------------
          endif
+#endif
          kkrj_ns  = kkrj*n_spin_cant
          nbr_kkrj_ns  = nbr_kkrj*n_spin_cant
 !
@@ -1081,22 +1095,24 @@ use MPPModule, only : MyPE, syncAllPEs
             kkri = (lmaxi+1)*(lmaxi+1)
             if (pei == MyPEinGroup) then
                nbr_kkri = kmax_kkr(lid_i)
-               p_jinvi => local_jsmtx(2:tsize+1,lid_i)
+!!!            p_jinvi => local_jsmtx(2:tsize+1,lid_i)
             else
                iid = mapping_jsmtx(iri,my_atom)
                nbr_kkri = remote_kmax(iid)
-               p_jinvi => remote_jsmtx(1:tsize,iid)
+!!!            p_jinvi => remote_jsmtx(1:tsize,iid)
             endif
 !           ===========================================================
 !           nbr_kkri = kmax of the remote atom
 !           kkri = kmax to be used in the construction of the "big matrix"
 !                <= nbr_kkri
 !           ===========================================================
+#ifndef _OPENACC
             if (nbr_kkri < kkri) then
 !              --------------------------------------------------------
                call ErrorHandler('calTauMatrix','remote atom kmax < kmaxi',nbr_kkri,kkri)
 !              --------------------------------------------------------
             endif
+#endif
             kkri_ns = kkri*n_spin_cant
             nbr_kkri_ns = nbr_kkri*n_spin_cant
 !
@@ -1113,16 +1129,16 @@ use MPPModule, only : MyPE, syncAllPEs
 !              =======================================================
 !08/28/14      rij(1:3) = posi(1:3)-posj(1:3)
                rij = posj - posi
-               gij => getGij(kappa,rij,lmaxi,lmaxj)
+               kappa = kappa_1
+               call getStrConstMatrix(lmaxi,lmaxj,kappa,rij,gij)
 !
+#ifndef _OPENACC
                if (Relativity > 1) then
 !                 ----------------------------------------------------
                   call convertGijToRel(gij, gijrel, kkri, kkrj, energy)
 !                 ----------------------------------------------------
-                  gij => gijrel
-!                 ----------------------------------------------------
                   call zgemm('n', 'n', kkri_ns, kkrj_ns, kkri_ns, CONE,&
-                             p_jinvi, nbr_kkri_ns, gij, kkri_ns, CZERO, jig, kkri_ns)
+                             p_jinvi, nbr_kkri_ns, gijrel, kkri_ns, CZERO, jig, kkri_ns)
 !                 ----------------------------------------------------
                else
                   do js = 1, n_spin_cant
@@ -1140,24 +1156,27 @@ use MPPModule, only : MyPE, syncAllPEs
                   ! In this case, p_sinej data have been rearranged and copied
                   ! to store_sine
 !                 ----------------------------------------------------
-                  call zgemm('n', 'n', kkri_ns, kkrj_ns, kkrj_ns, -CONE/kappa, &
+                  call zgemm('n', 'n', kkri_ns, kkrj_ns, kkrj_ns, -CONE/kappa_1, &
                              jig, kkri_ns, store_sine, kkrj_ns, CZERO,         &
                              BigMatrix(dsize*nbj+nbi+1), dsize)
 !                 ----------------------------------------------------
                else
 !                 ----------------------------------------------------
-                  call zgemm('n', 'n', kkri_ns, kkrj_ns, kkrj_ns, -CONE/kappa, &
+                  call zgemm('n', 'n', kkri_ns, kkrj_ns, kkrj_ns, -CONE/kappa_1, &
                              jig, kkri_ns, p_sinej, nbr_kkrj_ns, CZERO,        &
                              BigMatrix(dsize*nbj+nbi+1), dsize)
 !                 ----------------------------------------------------
                  !call writeMatrix('BigMatrixIteration', BigMatrix, dsize*dsize)
                endif
+#endif
             endif
             nbi = nbi + kkri_ns
          enddo
          nbj = nbj + kkrj_ns
       enddo
 !     call writeMatrix('BigMatrix',BigMatrix,dsize_max*dsize_max)
+      call nvtxEndRange()
+      call nvtxStartRange("Step 2")
 !
       if ( nbi /= nbj ) then
 !        -------------------------------------------------------------
@@ -1296,7 +1315,7 @@ use MPPModule, only : MyPE, syncAllPEs
                ns = ns + 1
 !              -------------------------------------------------------
                call zgemm('n', 'n', kmax_kkr(my_atom), kmax_kkr(my_atom), &
-                          kmax_kkr(my_atom), kappa, wau_l(1,1,ns),        &
+                          kmax_kkr(my_atom), kappa_1, wau_l(1,1,ns),        &
                           kmax_kkr(my_atom), OmegaHat, kmax_kkr(my_atom), &
                           CZERO, Tau00(my_atom)%kau_l(1,1,ns), kmax_kkr(my_atom))
 !              -------------------------------------------------------
@@ -1317,12 +1336,12 @@ use MPPModule, only : MyPE, syncAllPEs
                      OmegaHatj => aliasArray2_c(p_oh,kmax_kkr(my_atom),kmax_kkr(my_atom))
                    endif
                    call zgemm('n', 'n', kmax_kkr(my_atom), kmax_kkr(my_atom), &
-                    kmax_kkr(my_atom), kappa, Tau00(my_atom)%neigh1j(j)%wau_l, &
+                    kmax_kkr(my_atom), kappa_1, Tau00(my_atom)%neigh1j(j)%wau_l, &
                     kmax_kkr(my_atom), OmegaHatj, kmax_kkr(my_atom), &
                     CZERO, Tau00(my_atom)%neigh1j(j)%kau_l, kmax_kkr(my_atom))
 !                  ----------------------------------------------------------
                    call zgemm('n', 'n', kmax_kkr(my_atom), kmax_kkr(my_atom), &
-                    kmax_kkr(my_atom), kappa, Tau00(my_atom)%neighj1(j)%wau_l, &
+                    kmax_kkr(my_atom), kappa_1, Tau00(my_atom)%neighj1(j)%wau_l, &
                     kmax_kkr(my_atom), OmegaHat, kmax_kkr(my_atom), &
                     CZERO, Tau00(my_atom)%neighj1(j)%kau_l, kmax_kkr(my_atom))
 !                  ----------------------------------------------------------
@@ -1341,6 +1360,8 @@ use MPPModule, only : MyPE, syncAllPEs
          enddo
       endif
    enddo
+   call nvtxEndRange()
+   call nvtxStartRange("Step 3")
 !  ===================================================================
 !  Determine Tau00 = S*Kau00*S^{*T}/energy + t_matrix
 !  calculate tau00 if needed
@@ -1403,8 +1424,10 @@ use MPPModule, only : MyPE, syncAllPEs
        Tau00(my_atom)%neighj1(1)%tau_l = Tau00(my_atom)%neighj1(1)%tau_l + tm
      enddo
    endif
+!
+   call nvtxEndRange()
 
-   nullify(gij, p_jinvi, p_sinej, jig, wau_g, wau_l, ubmat, pBlockMatrix, pBigMatrix)
+   nullify(p_jinvi, p_sinej, jig, wau_g, wau_l, ubmat, pBlockMatrix, pBigMatrix)
 !
    end subroutine calClusterMatrix
 !  ===================================================================

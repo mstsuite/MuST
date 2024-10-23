@@ -1224,10 +1224,17 @@ program mst2
    MaxVal_Integer(1) = lmax_rho_max
    MaxVal_Integer(2) = lmax_pot_max
 !  -------------------------------------------------------------------
+#ifdef NVHPC
+   call GlobalMax(lmax_pot_max)
+   call GlobalMax(lmax_rho_max)
+#else
+print *,'Before MaxVal_Integer = ',MaxVal_Integer(1:2)
    call GlobalMax(MaxVal_Integer,2)
+print *,'After  MaxVal_Integer = ',MaxVal_Integer(1:2)
 !  -------------------------------------------------------------------
    lmax_rho_max = MaxVal_Integer(1)
    lmax_pot_max = MaxVal_Integer(2)
+#endif
    lmax_gaunt = max(lmax_max,2*lmax_pot_max,2*lmax_rho_max)
 !  ===================================================================
 !  setup factors
