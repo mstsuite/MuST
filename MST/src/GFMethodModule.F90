@@ -496,7 +496,7 @@ contains
       endif
 !     ----------------------------------------------------------------
       call initSMatrixPoles(LocalNumAtoms,n_spin_pola,n_spin_cant,LocalNumSpecies,&
-                            min(lmax_kkr,4),lmax_green,iprint_loc)
+                            min(lmax_kkr,4),lmax_green,max_print_level)
 !     ----------------------------------------------------------------
    endif
 !
@@ -508,7 +508,7 @@ contains
       endif
 !     ----------------------------------------------------------------
       call initSineMatrixZeros(LocalNumAtoms,n_spin_pola,LocalNumSpecies,&
-                               min(lmax_kkr,4),lmax_green,iprint_loc)
+                               min(lmax_kkr,4),lmax_green,max_print_level)
 !     ----------------------------------------------------------------
    endif
 !
@@ -2982,6 +2982,7 @@ contains
                                   computeResonanceStateDensity, &
                                   computeBoundStateDensity,     &
                                   examBoundStateDegen,          &
+                                  clearSMatrixPoles,            &
                                   printSMatrixPoleInfo
 !
    use SineMatrixZerosModule, only : findSineMatrixZeros,       &
@@ -3424,7 +3425,11 @@ contains
 !     ================================================================
 !     Searching the S-matrix poles in the energy range (ErBotto, 0.0),
 !     in addition to (0.0, etop), allows to find shallow bound states.
-!     ================================================================
+!     
+!     Before the searching, clear the stored data first.
+!     ----------------------------------------------------------------
+      call clearSMatrixPoles()
+!     ----------------------------------------------------------------
       do id =  1, LocalNumAtoms
          do is = 1, n_spin_pola
             do ia = 1, ssLastValue(id)%NumSpecies

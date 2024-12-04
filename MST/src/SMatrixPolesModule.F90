@@ -978,9 +978,9 @@ contains
 !
    if (eb > et) then
       call ErrorHandler('findSMatrixPoles','eb > et',eb,et)
-   else
+!  else
 !     ----------------------------------------------------------------
-      call clearSMatrixPoles()
+!     call clearSMatrixPoles()
 !     ----------------------------------------------------------------
    endif
 !
@@ -1906,6 +1906,7 @@ contains
 !  Perform contour integration with radius = HALF*(e2-e1)
 !  ===================================================================
    if ( print_level >= 0) then
+      write(6,'(/,3(a,i4))')'For spin index:',is,', atom id:',id,', species id:',ia
       write(6,'(a,f8.5,a)')'Performing contour integration, with radius = ',bse_rad,   &
                              ', around the bound state over the'
       write(6,'(a,f8.5,a,f8.5,a,i5,a)')'energy domain: (',eb-bse_rad,',',eb+bse_rad,'), with ', &
