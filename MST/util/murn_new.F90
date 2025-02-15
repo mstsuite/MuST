@@ -7,9 +7,13 @@
 !
 !  ====================================================================
 program murn_new
+   use KindParamModule, only : IntKind, RealKind
+!
    implicit none
-   integer, parameter :: IntKind = kind(1)
-   integer, parameter :: RealKind = kind(1.0d0)
+!  integer, parameter :: IntKind = kind(1)
+!  integer, parameter :: RealKind = kind(1.0d0)
+!
+   character (len=80) :: text_in, text_trim
 !
    integer (kind=IntKind), parameter :: NVAR=4
    integer (kind=IntKind), parameter :: LIM=20
@@ -30,6 +34,24 @@ program murn_new
    real (kind=RealKind) :: VOLMIN,VOLMAX,B0MIN,B0MAX,B0PMIN,B0PMAX,FFF
    real (kind=RealKind), allocatable :: EDATA(:),VDATA(:), ADATA(:)
    real (kind=RealKind), allocatable :: X(:),AUX(:)
+!
+   interface
+      function getNumTokens(s) result(NumTokens)
+         use KindParamModule, only : IntKind
+         implicit none
+         character (len=*), intent(in) :: s
+         integer (kind=IntKind) :: NumTokens
+      end function getNumTokens
+   end interface
+!
+   interface
+      function trim_string(s1,c) result(s2)
+         implicit none
+         character (len=*), intent(in) :: s1
+         character (len=len(s1)) :: s2
+         character (len=1), optional, intent(in) :: c
+      end function trim_string
+   end interface
 !
    IN=5
    IOUT=6
@@ -117,14 +139,20 @@ program murn_new
 !  Read in alat vs e or vol vs e data
 !  ====================================================================
    DO I=1,NNN
-      READ(IN,*)ADATA(I),VDATA(I),eninp
-!     READ(IN,*)avinp,eninp
-!     if (aorv == 1) then
-!        VDATA(I)=avinp**3*CONVAV
-!     else
-!        VDATA(I)=avinp
-!        avinp = (VDATA(I)/CONVAV)**third
-!     endif
+      READ(IN,'(a)') text_in
+      text_trim = trim_string(text_in,'#')
+      if (getNumTokens(text_trim) == 3) then
+         READ(text_trim,*)ADATA(I),VDATA(I),eninp
+      else
+         READ(text_trim,*)avinp,eninp
+         if (aorv == 1) then
+            VDATA(I)=avinp**3*CONVAV
+         else
+            VDATA(I)=avinp
+            avinp = (VDATA(I)/CONVAV)**third
+         endif
+         ADATA(I)=avinp
+      endif
       EDATA(I)=eninp*CONV_inp
       WRITE(IOUT,'(1X,I5,F10.5,6x,F10.5,4x,F12.5,8x,f12.5)') &
             I,ADATA(I),VDATA(I),EDATA(I),eninp
