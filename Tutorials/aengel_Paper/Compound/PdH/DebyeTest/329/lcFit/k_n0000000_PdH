@@ -1,0 +1,23 @@
+***************************************************************************************
+*  Note:                                                                              *
+*     In the MuST version 1.8.2 and prior, the total energy value includes the zero-  *
+*     point lattice energy. Starting from version v1.8.3, the zero point lattice      *
+*     energy is removed from the total energy value and is explicitly printed out in  *
+*     one of the following lines. If needed, one will have to add the zero-point      *
+*     lattice energy to the total energy by hand.                                     *
+***************************************************************************************
+Source Code Version                  : v1.9.3.1                                          
+System Description                   : PdH, NaCl structure                               
+Number of Atoms in Unit Cell         : 2                                                 
+Number of Atomic Species             : 2                                                 
+Number of Atoms in Each Type         : 1(Pd), 1(H)                                       
+Unit Cell Volume (au^3)              : 0.56105795D+02                                    
+Average Atomic Volume (au^3)         : 28.05290                                          
+Zero Point Lattice Energy/Atom (Ryd) : 0.00651                                           
+Zero Point Lattice PV3/Atom (Ryd)    : 0.04455                                           
+Energy Offset                        : -5044                                             
+=======================================================================================
+    Iter    Energy      3PV     Efermi   Rms_rho    Rms_pot   Mix Alg   Alpha 
+---------------------------------------------------------------------------------------
+**     1  -0.132983  222.2970  0.76634  0.121E-01  0.199E+00  pot  B   0.10000
+**     2   1.209277  226.3139  0.64679  0.248E-03  0.676E-02  pot  B   0.10000

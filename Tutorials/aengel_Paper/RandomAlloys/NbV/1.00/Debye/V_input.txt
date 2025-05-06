@@ -1,0 +1,27 @@
+# Name of the system
+System: V
+
+# Different parameters used in calculations of the same system
+Variation: 
+
+# Elements in the system (separated by spaces)
+Elements: V
+
+# Number of atoms in the unit cell corresponding to the elements (separated by spaces)
+Numbers: 1
+
+# Energy and volume per atom data (one data point per line)
+-1883.935686 66.32549999999999
+-1883.952715 70.30400000000002
+-1883.964923 74.43849999999999
+-1883.972747 78.73200000000001
+-1883.976597 83.1875
+-1883.976918 87.80799999999998
+-1883.97416 92.5965
+-1883.968713 97.556
+-1883.960949 102.68950000000001
+-1883.951207 108.0
+-1883.939816 113.49049999999997
+-1883.927059 119.16400000000002
+-1883.913184 125.02349999999998
+-1883.898419 131.07200000000003
