@@ -1,0 +1,23 @@
+***************************************************************************************
+*  Note:                                                                              *
+*     In the MuST version 1.8.2 and prior, the total energy value includes the zero-  *
+*     point lattice energy. Starting from version v1.8.3, the zero point lattice      *
+*     energy is removed from the total energy value and is explicitly printed out in  *
+*     one of the following lines. If needed, one will have to add the zero-point      *
+*     lattice energy to the total energy by hand.                                     *
+***************************************************************************************
+Source Code Version                  : v1.9.3.1                                          
+System Description                   : Ti, BCC structure                                 
+Number of Atoms in Unit Cell         : 1                                                 
+Number of Atomic Species             : 1                                                 
+Number of Atoms in Each Type         : 1(Ti)                                             
+Unit Cell Volume (au^3)              : 0.11592121D+03                                    
+Average Atomic Volume (au^3)         : 115.92121                                         
+Zero Point Lattice Energy/Atom (Ryd) : 0.00313                                           
+Zero Point Lattice PV3/Atom (Ryd)    : 0.01108                                           
+Energy Offset                        : -1695                                             
+=======================================================================================
+    Iter    Energy      3PV     Efermi   Rms_rho    Rms_pot   Mix Alg   Alpha 
+---------------------------------------------------------------------------------------
+**     1  -0.037253  -0.15137  0.59069  0.918E-07  0.608E-05  pot  B   0.10000
+**     2  -0.037253  -0.15163  0.59069  0.677E-07  0.469E-05  pot  B   0.10000

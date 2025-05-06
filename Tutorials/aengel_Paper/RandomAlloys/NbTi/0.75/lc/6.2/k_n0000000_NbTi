@@ -1,0 +1,40 @@
+***************************************************************************************
+*  Note:                                                                              *
+*     In the MuST version 1.8.2 and prior, the total energy value includes the zero-  *
+*     point lattice energy. Starting from version v1.8.3, the zero point lattice      *
+*     energy is removed from the total energy value and is explicitly printed out in  *
+*     one of the following lines. If needed, one will have to add the zero-point      *
+*     lattice energy to the total energy by hand.                                     *
+***************************************************************************************
+Source Code Version                  : v1.9.3.1                                          
+System Description                   : NbTi, BCC structure                               
+Number of Atoms in Unit Cell         : 1                                                 
+Number of Atomic Species             : 1                                                 
+Number of Atoms in Each Type         : 1(CPA)                                            
+Unit Cell Volume (au^3)              : 0.11916400D+03                                    
+Average Atomic Volume (au^3)         : 119.16400                                         
+Zero Point Lattice Energy/Atom (Ryd) : 0.00276                                           
+Zero Point Lattice PV3/Atom (Ryd)    : 0.01037                                           
+Energy Offset                        : -3146                                             
+=======================================================================================
+    Iter    Energy      3PV     Efermi   Rms_rho    Rms_pot   Mix Alg   Alpha 
+---------------------------------------------------------------------------------------
+**     1  -0.866070   0.78369  0.60382  0.360E-03  0.487E-01  pot  B   0.10000
+       2  -0.972466  -0.27633  0.60538  0.977E-03  0.352E-01  pot  B   0.10000
+       3  -0.999846  -0.37790  0.60232  0.390E-03  0.462E-02  pot  B   0.10000
+       4  -1.000260  -0.30655  0.60113  0.602E-04  0.635E-02  pot  B   0.10000
+       5  -1.000979   0.01537  0.59732  0.140E-03  0.201E-02  pot  B   0.10000
+       6  -1.001027  -0.14952  0.60052  0.370E-04  0.126E-02  pot  B   0.10000
+       7  -1.001027  -0.23856  0.60250  0.279E-04  0.492E-03  pot  B   0.10000
+       8  -1.001048  -0.13850  0.60169  0.212E-04  0.117E-03  pot  B   0.10000
+       9  -1.001047  -0.14740  0.60184  0.200E-05  0.865E-04  pot  B   0.10000
+      10  -1.001046  -0.15502  0.60192  0.286E-05  0.234E-04  pot  B   0.10000
+      11  -1.001046  -0.15310  0.60188  0.687E-06  0.492E-04  pot  B   0.10000
+      12  -1.001046  -0.15691  0.60190  0.976E-06  0.114E-04  pot  B   0.10000
+      13  -1.001046  -0.15745  0.60191  0.169E-06  0.888E-05  pot  B   0.10000
+      14  -1.001046  -0.15767  0.60192  0.222E-06  0.453E-05  pot  B   0.10000
+      15  -1.001046  -0.15761  0.60191  0.580E-07  0.230E-05  pot  B   0.10000
+      16  -1.001046  -0.15751  0.60191  0.687E-07  0.229E-05  pot  B   0.10000
+      17  -1.001046  -0.15760  0.60191  0.401E-07  0.155E-06  pot  B   0.10000
+      18  -1.001046  -0.15758  0.60191  0.428E-08  0.932E-08  pot  B   0.10000
+      19  -1.001046  -0.15758  0.60191  0.874E-09  0.192E-07  pot  B   0.10000
