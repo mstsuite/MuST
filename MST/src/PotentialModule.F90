@@ -112,8 +112,7 @@ private
 !
    integer (kind=IntKind) :: RECORD_LENGTH
 !
-   real (kind=RealKind) :: efermi
-!  real (kind=RealKind) :: efermi, efermi_min, efermi_max
+   real (kind=RealKind) :: efermi, efermi_min, efermi_max
    real (kind=RealKind), allocatable :: efermi_in(:,:)
    real (kind=RealKind), target :: vdif(1)
    real (kind=RealKind) :: v0(2)
@@ -1725,6 +1724,8 @@ contains
 !
    use PotentialTypeModule, only : isFullPotential
 !
+   use InputModule, only : getKeyValue
+!
    implicit none
 !
    logical :: isChgSymm_save
@@ -1732,16 +1733,31 @@ contains
    character (len=13), parameter :: sname='readPotential'
    character (len=10), parameter :: file_status = 'READ'
    character (len=11) :: file_form
+   character (len=50) :: efval
 !
    integer (kind=IntKind) :: id, ia, is, vunit, str_len, iend, ir
-   integer (kind=IntKind) :: n, ig
+   integer (kind=IntKind) :: n, ig, rstatus, ef_flag
 !
    real (kind=RealKind) :: pot_shift, efermi_sum
 !
+   interface
+      function isInteger(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isInteger
+   end interface
+!
+   interface
+      function isRealNumber(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isRealNumber
+   end interface
+!
    file_form = adjustl(getInPotFileForm())
 !
-!  efermi_min=1.0d+10 ! efermi_min and efermi_max will be updated inside
-!  efermi_max=ZERO    ! readFormattedData or readUnformattedData
+   efermi_min=1.0d+10 ! efermi_min and efermi_max will be updated inside
+   efermi_max=ZERO    ! readFormattedData or readUnformattedData
 !
    if (trim(file_form) == 'FORMATTED') then
 !     if (getInPotFileForm(id) == 'FORMATTED') then
@@ -1814,21 +1830,35 @@ contains
 !  call GlobalSumInGroup(GroupID,efermi)
 !  -------------------------------------------------------------------
 !  efermi = efermi/real(NumPEsInGroup,kind=RealKind)
-!  call GlobalMinInGroup(GroupID,efermi_min)
-!  call GlobalMaxInGroup(GroupID,efermi_max)
-!  efermi = HALF*(efermi_min+efermi_max)
-!  -------------------------------------------------------------------
-   efermi_sum = ZERO
-   do id =1, LocalNumAtoms
-      ig = getGlobalIndex(id)
-      do ia = 1, NumSpecies(id)
-         efermi_sum = efermi_sum + getAlloyElementContent(ig,ia)*efermi_in(ia,id)
-      enddo
-   enddo
-!  -------------------------------------------------------------------
-   call GlobalSumInGroup(GroupID,efermi_sum)
-!  -------------------------------------------------------------------
-   efermi = efermi_sum/real(GlobalNumAtoms,kind=RealKind)
+   rstatus = getKeyValue(1,'Initial Fermi Energy Setting',efval)
+   if ( isInteger(efval) ) then
+      read(efval,*)ef_flag
+      if (ef_flag == 0) then
+         efermi_sum = ZERO
+         do id =1, LocalNumAtoms
+            ig = getGlobalIndex(id)
+            do ia = 1, NumSpecies(id)
+               efermi_sum = efermi_sum + getAlloyElementContent(ig,ia)*efermi_in(ia,id)
+            enddo
+         enddo
+!        -------------------------------------------------------------
+         call GlobalSumInGroup(GroupID,efermi_sum)
+!        -------------------------------------------------------------
+         efermi = efermi_sum/real(GlobalNumAtoms,kind=RealKind)
+      else
+!        -------------------------------------------------------------
+         call GlobalMinInGroup(GroupID,efermi_min)
+         call GlobalMaxInGroup(GroupID,efermi_max)
+!        -------------------------------------------------------------
+         efermi = HALF*(efermi_min+efermi_max)
+      endif
+   else if ( isRealNumber(efval) ) then
+      read(efval,*)efermi
+   else
+!     ----------------------------------------------------------------
+      call ErrorHandler(sname,'Unknown initial Fermi energy parameter',efval)
+!     ----------------------------------------------------------------
+   endif
 !
 !  ===================================================================
 !  The starting potential may come with different fermi energy.
@@ -2017,6 +2047,27 @@ contains
       end function getToken
    end interface
 !
+   interface
+      function isNumber(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isNumber
+   end interface
+!
+   interface
+      function isInteger(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isInteger
+   end interface
+!
+   interface
+      function isRealNumber(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isRealNumber
+   end interface
+!
    ThisP=>Potential(id)
 !
 !06/11/23   if (SiteMaxNumc(id) >= 1) then
@@ -2067,16 +2118,28 @@ contains
          k = getTokenPosition(3,text) - 1
          read(text(1:k),*) ns,vdif(1)
          text_work = getToken(3,text)
-         read(text_work,*)atom
+         atom = trim(text_work)
          spin_flip = 0
       else 
 !        read(text,'(i5,3x,d20.13,a20,i5)') ns,vdif(1),atom,spin_flip
          k = getTokenPosition(3,text) - 1
          read(text(1:k),*) ns,vdif(1)
-         text_work = getToken(3,text)
-         read(text_work,*)atom
-         text_work = getToken(4,text)
-         read(text_work,*)spin_flip
+         text_work = getToken(n,text)
+         if (isInteger(text_work)) then
+            atom = getToken(n-1,text)
+            read(text_work,*)spin_flip
+            if (isNumber(atom)) then
+               call ErrorHandler('readFormattedData','Invalid alter atom name',atom)
+            else if (spin_flip < 0 .or. spin_flip > 1) then
+               call ErrorHandler('readFormattedData','Invalid spin_flip value',spin_flip)
+            endif
+         else if (isNumber(text_work)) then
+            atom = ' '
+            spin_flip = 0
+         else
+            atom = trim(text_work)
+            spin_flip = 0
+         endif
       endif
 !
       if (ns /= n_spin_pola .and. MyPE == 0) then
@@ -2394,8 +2457,8 @@ contains
 !        the parallelization. I now change to taking the mid of min/max values.
 !     efermi = efermi + efermi_in(ia,id); nef = nef + 1
 !     ===============================================================
-!     efermi_min = min(efermi_min,efermi_in(ia,id))
-!     efermi_max = max(efermi_max,efermi_in(ia,id))
+      efermi_min = min(efermi_min,efermi_in(ia,id))
+      efermi_max = max(efermi_max,efermi_in(ia,id))
 !     ===============================================================
 !
       close(unit=funit)
@@ -2566,8 +2629,8 @@ contains
 !        the parallelization. I now change to taking the maximum value.
 !     efermi = efermi + efermi_in(ia,id); nef = nef + 1
 !     ===============================================================
-!     efermi_min = min(efermi_min, efermi_in(ia,id))
-!     efermi_max = max(efermi_max, efermi_in(ia,id))
+      efermi_min = min(efermi_min, efermi_in(ia,id))
+      efermi_max = max(efermi_max, efermi_in(ia,id))
 !
       do is = 1, n_spin_pola
          do i = 1, numc(ia)

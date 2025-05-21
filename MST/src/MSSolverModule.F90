@@ -705,13 +705,16 @@ contains
 !
    nullify(mat)
 !
+!  ===================================================================
+!  It needs to take a look at GreenFunctionModule under LSMS_2.0r800
+!  ===================================================================
    call ErrorHandler('getMSGreenMatrix','Density matrix calculation is not implemented yet')
 !
    end function getMSGreenMatrix
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine computeMSTMatrix(is,e)
+   subroutine computeMSTMatrix(is,e,tau_needed)
 !  ===================================================================
    use ScfDataModule, only : isLSMS, isScreenKKR, isKKRCPA,  &
          isKKRCPASRO, isKKR, isEmbeddedCluster, isSROSCF
@@ -732,13 +735,22 @@ contains
    complex (kind=CmplxKind), intent(in) :: e
    complex (kind=CmplxKind), pointer :: tcpa(:,:)
 !
+   logical, intent(in), optional :: tau_needed
+   logical :: cal_tau
+!
+   if (present(tau_needed)) then
+      cal_tau = tau_needed
+   else
+      cal_tau = .false.
+   endif
+!
 !  ===================================================================
 !  call calClusterMatrix or calCrystalMatrix to calculate the TAU(0,0) matrix
 !  NOTE: Needs to be checked for is = 2 and n_spin_cant = 2
 !  ===================================================================
    if ( isLSMS() ) then
 !     ----------------------------------------------------------------
-      call calClusterMatrix(e,getScatteringMatrix)
+      call calClusterMatrix(e,getScatteringMatrix,tau_needed=cal_tau)
 !     ----------------------------------------------------------------
    else if (isScreenKKR()) then
 !     ----------------------------------------------------------------
@@ -747,10 +759,10 @@ contains
 !     ----------------------------------------------------------------
    else if (isKKR()) then
 !     ----------------------------------------------------------------
-      call calCrystalMatrix(e,getScatteringMatrix)
+      call calCrystalMatrix(e,getScatteringMatrix,tau_needed=cal_tau)
 !     call calCrystalMatrix(e,getScatteringMatrix,use_tmat=.true.)
-!     call calCrystalMatrix(e,getScatteringMatrix,tau_needed=.true.)
-!     call calCrystalMatrix(e,getScatteringMatrix,use_tmat=.true.,tau_needed=.true.)
+!     call calCrystalMatrix(e,getScatteringMatrix,tau_needed=cal_tau)
+!     call calCrystalMatrix(e,getScatteringMatrix,use_tmat=.true.,tau_needed=cal_tau)
 !     ----------------------------------------------------------------
    else if (isKKRCPA()) then
 !     ----------------------------------------------------------------
@@ -775,7 +787,7 @@ contains
       endif 
    else if (isEmbeddedCluster()) then  ! Needs further work.....
 !     ----------------------------------------------------------------
-      call calClusterMatrix(e,getScatteringMatrix)
+      call calClusterMatrix(e,getScatteringMatrix,tau_needed=.true.)
 !     ----------------------------------------------------------------
       call computeCPAMedium(e)
 !     ----------------------------------------------------------------

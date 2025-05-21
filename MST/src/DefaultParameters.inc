@@ -351,6 +351,11 @@
    n = n + 1; Keys(n) = 'Default Local f-Orbital Energy';        Values(n) = '0.4'
    n = n + 1; Keys(n) = 'Default Local Orbital Energy';          Values(n) = '0.5'
 !        Note: The orbital energy value is real and is in Rydberg unit
+!
+   n = n + 1; Keys(n) = 'Initial Fermi Energy Setting';          Values(n) = '0'
+!                     = 0: the Fermi energy is set to be the average of the Fermi energy data from input potential
+!                     = 1: the Fermi energy is set to be the average of the Max and Min of the Fermi energy data
+!                     = A real number as the initial Fermi energy
 !  =============================================================================
 !  Additional input parameters can be added to this table using the 
 !  following format:

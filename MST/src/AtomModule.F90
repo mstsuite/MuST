@@ -201,7 +201,7 @@ contains
    use ChemElementModule, only : getImplicitCoreRadius
    use ChemElementModule, only : MaxLenOfAtomName
    use StringModule, only : initString, endString, readToken
-   use MPPModule, only : MyPE
+   use MPPModule, only : MyPE, syncAllPEs
    use PublicParamDefinitionsModule, only : ASA, MuffinTin, MuffinTinASA
    use Atom2ProcModule, only : getLocalNumAtoms, getGlobalIndex
    use InputModule, only : getKeyValue, getKeyLabelIndexValue
@@ -226,13 +226,14 @@ contains
    character (len=50), allocatable :: potoutname(:)
    character (len=MaxLenOfAtomName), pointer :: atname(:)
    character (len=MaxLenOfAtomName) :: atom
-   character (len=80) :: text, twork
+   character (len=80) :: text
+   character (len=40) :: twork1, twork2
 !
    logical :: f_exist, pr
    logical :: atom_with_alt_name
 !
    integer (kind=IntKind), intent(in) :: info_id, iprint
-   integer (kind=IntKind) :: i, j, ig, n, nt, GlobalNumAtoms, ri, ns
+   integer (kind=IntKind) :: i, j, ig, n, nt, n0, GlobalNumAtoms, ri, ns
    integer (kind=IntKind) :: anum, funit, flen, lmax_n, ia, rstatus, lmax_diff
    integer (kind=IntKind), allocatable :: potinform(:)
    integer (kind=IntKind), allocatable :: potoutform(:)
@@ -294,6 +295,13 @@ contains
 !
    character (len=50), allocatable :: rmt_input(:)
    character (len=50), allocatable :: rcr_input(:)
+!
+   interface
+      function isNumber(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isNumber
+   end interface
 !
    interface
       function isRealNumber(s) result(t)
@@ -775,15 +783,31 @@ contains
             endif
             read(funit,'(a)')dummy
             read(funit,'(a)')text
-            if (getNumTokens(text) > 2) then
-!              read(text,'(i5,3x,d20.13,a20)') ns,vdif,atom
-               twork = getToken(3,text)
-               read(twork,*)atom
-               atom_with_alt_name = .true.
-            else
+!
+            n0 = getNumTokens(text)
+            if (n0 < 2) then
+!              -------------------------------------------------------
+               call ErrorHandler('initAtomModule','Invalid 2nd line in potential data',trim(text))
+!              -------------------------------------------------------
+            else if (n0 == 2) then
                atom = ' '
                atom_with_alt_name = .false.
+            else
+!              read(text,'(i5,3x,d20.13,a20)') ns,vdif,atom
+               twork1 = getToken(n0-1,text)
+               twork2 = getToken(n0,text)
+               if (.not.isNumber(twork2)) then
+                  atom = trim(twork2)
+                  atom_with_alt_name = .true.
+               else if (.not.isNumber(twork1) .and. isInteger(twork2)) then
+                  atom = trim(twork1)
+                  atom_with_alt_name = .true.
+               else
+                  atom = ' '
+                  atom_with_alt_name = .false.
+               endif
             endif
+!
             read(funit,'(a)')dummy
             read(funit,*)Za
             close(unit=funit)
@@ -839,15 +863,27 @@ contains
                   endif
                   read(funit,'(a)')dummy
                   read(funit,'(a)')text
-                  if (getNumTokens(text) > 2) then
-!                    read(text,'(i5,3x,d20.13,a20)') ns,vdif,atom
-                     twork = getToken(3,text)
-                     read(twork,*)atom
-                     atom_with_alt_name = .true.
-                  else
+
+                  n0 = getNumTokens(text)
+                  if (n0 == 2) then
                      atom = ' '
                      atom_with_alt_name = .false.
+                  else
+!                    read(text,'(i5,3x,d20.13,a20)') ns,vdif,atom
+                     twork1 = getToken(n0-1,text)
+                     twork2 = getToken(n0,text)
+                     if (.not.isNumber(twork2)) then
+                        atom = trim(twork2)
+                        atom_with_alt_name = .true.
+                     else if (.not.isNumber(twork1) .and. isInteger(twork2)) then
+                        atom = trim(twork1)
+                        atom_with_alt_name = .true.
+                     else
+                        atom = ' '
+                        atom_with_alt_name = .false.
+                     endif
                   endif
+
                   read(funit,'(a)')dummy
                   read(funit,*)Za
                   close(unit=funit)

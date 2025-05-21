@@ -154,6 +154,10 @@ contains
             do i=1, num_columns_old
                call readToken(i+1,ColumnValue(i),ColumnLength(i))
             enddo
+         else if (getNumTokens() == num_columns_old+2) then
+            do i=1, num_columns_old+1
+               call readToken(i+1,ColumnValue(i),ColumnLength(i))
+            enddo
          else
             call WarningHandler('initBookKeeping','Invalid line',text)
             do i=1, getNumTokens()
