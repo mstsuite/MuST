@@ -110,9 +110,18 @@ ifndef NotUse_LIBXC
       LIBXC_PATH = $(EXTERN_LIB_PATH)/libxc/LibXC/$(SUFFIX)
    endif
    ifeq (,$(findstring -DLIBXC,$(FPPFLAGS)))
+#     if "-DLIBXC" is not part of the FPPFLAGS string
 #     ADD_LIBS  += -L$(LIBXC_PATH)/lib -lxcf90 -lxc
-      ADD_LIBS  += $(LIBXC_PATH)/lib/libxcf90.a $(LIBXC_PATH)/lib/libxc.a
-      FPPFLAGS += -DLIBXC5 -I$(LIBXC_PATH)/include
+      ifneq (,$(wildcard $(LIBXC_PATH)/lib/libxcf90.a))
+         ADD_LIBS  += $(LIBXC_PATH)/lib/libxcf90.a $(LIBXC_PATH)/lib/libxc.a
+         FPPFLAGS += -DLIBXCF90 -I$(LIBXC_PATH)/include
+      else ifneq (,$(wildcard $(LIBXC_PATH)/lib/libxcf03.a))
+         ADD_LIBS  += $(LIBXC_PATH)/lib/libxcf03.a $(LIBXC_PATH)/lib/libxc.a
+         FPPFLAGS += -DLIBXCF03 -I$(LIBXC_PATH)/include
+      else
+         ERROR_CODE = error
+         ERROR_MESSAGE = "LibXC library file, libxcf03.a or libxcf90.a, is missing. Please check the installation of LibXC on your system."
+      endif
    endif
 else
    ifeq "$(NotUse_LIBXC)" "0"
@@ -121,9 +130,18 @@ else
          LIBXC_PATH = $(EXTERN_LIB_PATH)/libxc/LibXC/$(SUFFIX)
       endif
       ifeq (,$(findstring -DLIBXC,$(FPPFLAGS)))
+#        if "-DLIBXC" is not part of the FPPFLAGS string
 #        ADD_LIBS  += -L$(LIBXC_PATH)/lib -lxcf90 -lxc
-         ADD_LIBS  += $(LIBXC_PATH)/lib/libxcf90.a $(LIBXC_PATH)/lib/libxc.a
-         FPPFLAGS += -DLIBXC5 -I$(LIBXC_PATH)/include
+         ifneq (,$(wildcard $(LIBXC_PATH)/lib/libxcf90.a))
+            ADD_LIBS  += $(LIBXC_PATH)/lib/libxcf90.a $(LIBXC_PATH)/lib/libxc.a
+            FPPFLAGS += -DLIBXCF90 -I$(LIBXC_PATH)/include
+         else ifneq (,$(wildcard $(LIBXC_PATH)/lib/libxcf03.a))
+            ADD_LIBS  += $(LIBXC_PATH)/lib/libxcf03.a $(LIBXC_PATH)/lib/libxc.a
+            FPPFLAGS += -DLIBXCF03 -I$(LIBXC_PATH)/include
+         else
+            ERROR_CODE = error
+            ERROR_MESSAGE = "LibXC library file, libxcf03.a or libxcf90.a, is missing. Please check the installation of LibXC on your system."
+         endif
       endif
    endif
 endif

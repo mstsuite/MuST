@@ -6,7 +6,9 @@ module ExchCorrFunctionalModule
    use ErrorHandlerModule, only : ErrorHandler, WarningHandler,        &
                                   StopHandler
 !
-#ifdef LIBXC5
+#if defined LIBXCF03
+   use xc_f03_lib_m
+#elif defined LIBXC5 || defined LIBXCF90
    use xc_f90_lib_m
 #elif defined LIBXC
    use xc_f90_lib_m
@@ -85,7 +87,13 @@ private
    logical :: Correlation = .false.
    logical :: ECin1 = .false.
 !
-#ifdef LIBXC5
+#if defined LIBXCF03
+   TYPE(xc_f03_func_t), target :: xc_func_1
+   TYPE(xc_f03_func_t), target :: xc_func_2
+   TYPE(xc_f03_func_info_t), target :: xc_info_1
+   TYPE(xc_f03_func_info_t), target :: xc_info_2
+   real (kind=RealKind), parameter :: energy_units_conv = TWO ! From Hartree to Rydberg
+#elif defined LIBXC5 || defined LIBXCF90
    TYPE(xc_f90_func_t), target :: xc_func_1
    TYPE(xc_f90_func_t), target :: xc_func_2
    TYPE(xc_f90_func_info_t), target :: xc_info_1
@@ -115,16 +123,16 @@ contains
 !
    character (len=*), intent(in) :: excorr_name
    integer (kind=IntKind), intent(in) :: pola, iprint
-#ifdef LIBXC5
    integer (kind=IntKind) :: vmajor, vminor, vmicro, fid1, fid2, i, n, j
    character (len=40) :: fname1, fname2, fname
    character (len=120) :: func_name, func_kind, func_family, ref
+#if defined LIBXCF03
+   TYPE(xc_f03_func_t), pointer :: xc_func_p
+   TYPE(xc_f03_func_info_t), pointer :: xc_info_p
+#elif defined LIBXC5 || defined LIBXCF90
    TYPE(xc_f90_func_t), pointer :: xc_func_p
    TYPE(xc_f90_func_info_t), pointer :: xc_info_p
 #elif defined LIBXC
-   integer (kind=IntKind) :: vmajor, vminor, vmicro, fid1, fid2, i, n
-   character (len=40) :: fname1, fname2, fname
-   character (len=120) :: func_name, func_kind, func_family, ref
    TYPE(xc_f90_pointer_t), pointer :: xc_func_p
    TYPE(xc_f90_pointer_t), pointer :: xc_info_p
 #endif
@@ -155,10 +163,16 @@ contains
    FunctionalID_C = -1
    FunctionalID_XC = -1
 !
-#if defined LIBXC || defined LIBXC5
+#if defined LIBXC || defined LIBXC5  || defined LIBXCF90 || defined LIBXCF03
+#if defined LIBXCF03
+!  -------------------------------------------------------------------
+   call xc_f03_version(vmajor, vminor, vmicro)
+!  -------------------------------------------------------------------
+#else
 !  -------------------------------------------------------------------
    call xc_f90_version(vmajor, vminor, vmicro)
 !  -------------------------------------------------------------------
+#endif
    if (print_level >= 0) then
       write(6,'(/,3x,68("*"))')
       write(6,'(3x,a,66x,a)')"*","*"
@@ -182,7 +196,10 @@ contains
       FunctionalName_C = 'LDA_C_VBH'
       FunctionalType = LDA
       NumFunctionals = 2
-#if defined LIBXC || defined LIBXC5
+#if defined LIBXCF03
+      FunctionalID_X   = xc_f03_functional_get_number("XC_LDA_X")
+      FunctionalID_C   = xc_f03_functional_get_number("XC_LDA_C_vBH")
+#elif defined LIBXC || defined LIBXC5 || defined LIBXCF90
       FunctionalID_X   = XC_LDA_X
       FunctionalID_C   = XC_LDA_C_vBH
 #else
@@ -194,7 +211,10 @@ contains
       FunctionalName_C = 'LDA_C_VWN'
       FunctionalType = LDA
       NumFunctionals = 2
-#if defined LIBXC || defined LIBXC5
+#if defined LIBXCF03
+      FunctionalID_X   = xc_f03_functional_get_number("XC_LDA_X")
+      FunctionalID_C   = xc_f03_functional_get_number("XC_LDA_C_VWN_1")
+#elif defined LIBXC || defined LIBXC5 || defined LIBXCF90
       FunctionalID_X   = XC_LDA_X
       FunctionalID_C   = XC_LDA_C_VWN_1
 #else
@@ -206,7 +226,10 @@ contains
       FunctionalName_C = 'LDA_C_PZ'
       FunctionalType = LDA
       NumFunctionals = 2
-#if defined LIBXC || defined LIBXC5
+#if defined LIBXCF03
+      FunctionalID_X  = xc_f03_functional_get_number("XC_LDA_X")
+      FunctionalID_C  = xc_f03_functional_get_number("XC_LDA_C_PZ")
+#elif defined LIBXC || defined LIBXC5 || defined LIBXCF90
       FunctionalID_X  = XC_LDA_X
       FunctionalID_C  = XC_LDA_C_PZ
 #else
@@ -219,7 +242,10 @@ contains
       FunctionalName_C = 'GGA_C_PW91'
       FunctionalType = GGA
       NumFunctionals = 2
-#if defined LIBXC || defined LIBXC5
+#if defined LIBXCF03
+      FunctionalID_X  = xc_f03_functional_get_number("XC_GGA_X_PW91")
+      FunctionalID_C  = xc_f03_functional_get_number("XC_GGA_C_PW91")
+#elif defined LIBXC || defined LIBXC5 || defined LIBXCF90
       FunctionalID_X  = XC_GGA_X_PW91
       FunctionalID_C  = XC_GGA_C_PW91
 #else
@@ -232,7 +258,10 @@ contains
       FunctionalName_C = 'GGA_C_PBE'
       FunctionalType = GGA
       NumFunctionals = 2
-#if defined LIBXC || defined LIBXC5
+#if defined LIBXCF03
+      FunctionalID_X   = xc_f03_functional_get_number("XC_GGA_X_PBE")
+      FunctionalID_C   = xc_f03_functional_get_number("XC_GGA_C_PBE")
+#elif defined LIBXC || defined LIBXC5 || defined LIBXCF90
       FunctionalID_X   = XC_GGA_X_PBE
       FunctionalID_C   = XC_GGA_C_PBE
 #else
@@ -241,7 +270,7 @@ contains
       call ErrorHandler( "initExchCorrFunctional", "This functional requires enabling LibXC", LegacyFunctionalID )
 #endif
    else if (LegacyFunctionalID == -2) then
-#if defined LIBXC || defined LIBXC5
+#if defined LIBXC || defined LIBXC5 || defined LIBXCF90 || defined LIBXCF03
       call initString(excorr_name,separator="+")
       NumFunctionals = getNumTokens()
       if (NumFunctionals == 1) then
@@ -264,7 +293,7 @@ contains
       call ErrorHandler( "initExchCorrFunctional", "Functional ID is invalid", LegacyFunctionalID )
    endif
 !
-#if defined LIBXC || defined LIBXC5
+#if defined LIBXC || defined LIBXC5 || defined LIBXCF90 || defined LIBXCF03
    if ( LegacyFunctionalID >= 0 ) then
       if (NumFunctionals == 1) then
          fname1 = FunctionalName_XC
@@ -275,9 +304,19 @@ contains
    endif
 !
    if (NumFunctionals == 1) then
+#if defined LIBXCF03
+      fid1 = xc_f03_functional_get_number(fname1)
+#else
       fid1 = xc_f90_functional_get_number(fname1)
+#endif
       if (n_spin_pola == 1) then
-#if defined LIBXC5
+#if defined LIBXCF03
+!        -------------------------------------------------------------
+         call xc_f03_func_init(xc_func_1, fid1, XC_UNPOLARIZED)
+!        -------------------------------------------------------------
+         xc_info_1 = xc_f03_func_get_info(xc_func_1)
+!        -------------------------------------------------------------
+#elif defined LIBXC5 || defined LIBXCF90
 !        -------------------------------------------------------------
          call xc_f90_func_init(xc_func_1, fid1, XC_UNPOLARIZED)
 !        -------------------------------------------------------------
@@ -289,7 +328,13 @@ contains
 !        -------------------------------------------------------------
 #endif
       else
-#if defined LIBXC5
+#if defined LIBXCF03
+!        -------------------------------------------------------------
+         call xc_f03_func_init(xc_func_1, fid1, XC_POLARIZED)
+!        -------------------------------------------------------------
+         xc_info_1 = xc_f03_func_get_info(xc_func_1)
+!        -------------------------------------------------------------
+#elif defined LIBXC5 || defined LIBXCF90
 !        -------------------------------------------------------------
          call xc_f90_func_init(xc_func_1, fid1, XC_POLARIZED)
 !        -------------------------------------------------------------
@@ -301,7 +346,11 @@ contains
 !        -------------------------------------------------------------
 #endif
       endif
-#if defined LIBXC5
+#if defined LIBXCF03
+      if (xc_f03_func_info_get_kind(xc_info_1) == XC_EXCHANGE_CORRELATION) then
+         FunctionalName_XC = xc_f03_func_info_get_name(xc_info_1)
+         FunctionalID_XC = xc_f03_func_info_get_number(xc_info_1)
+#elif defined LIBXC5 || defined LIBXCF90
       if (xc_f90_func_info_get_kind(xc_info_1) == XC_EXCHANGE_CORRELATION) then
          FunctionalName_XC = xc_f90_func_info_get_name(xc_info_1)
          FunctionalID_XC = xc_f90_func_info_get_number(xc_info_1)
@@ -316,10 +365,25 @@ contains
                             "The functional does not include both exchange and correlation", fname1 )
       endif
    else
+#if defined LIBXCF03
+      fid1 = xc_f03_functional_get_number(fname1)
+      fid2 = xc_f03_functional_get_number(fname2)
+#else
       fid1 = xc_f90_functional_get_number(fname1)
       fid2 = xc_f90_functional_get_number(fname2)
+#endif
       if (n_spin_pola == 1) then
-#if defined LIBXC5
+#if defined LIBXCF03
+!        -------------------------------------------------------------
+         call xc_f03_func_init(xc_func_1, fid1, XC_UNPOLARIZED)
+!        -------------------------------------------------------------
+         xc_info_1 = xc_f03_func_get_info(xc_func_1)
+!        -------------------------------------------------------------
+         call xc_f03_func_init(xc_func_2, fid2, XC_UNPOLARIZED)
+!        -------------------------------------------------------------
+         xc_info_2 = xc_f03_func_get_info(xc_func_2)
+!        -------------------------------------------------------------
+#elif defined LIBXC5 || defined LIBXCF90
 !        -------------------------------------------------------------
          call xc_f90_func_init(xc_func_1, fid1, XC_UNPOLARIZED)
 !        -------------------------------------------------------------
@@ -337,7 +401,17 @@ contains
 !        -------------------------------------------------------------
 #endif
       else
-#if defined LIBXC5
+#if defined LIBXCF03
+!        -------------------------------------------------------------
+         call xc_f03_func_init(xc_func_1, fid1, XC_POLARIZED)
+!        -------------------------------------------------------------
+         xc_info_1 = xc_f03_func_get_info(xc_func_1)
+!        -------------------------------------------------------------
+         call xc_f03_func_init(xc_func_2, fid2, XC_POLARIZED)
+!        -------------------------------------------------------------
+         xc_info_2 = xc_f03_func_get_info(xc_func_2)
+!        -------------------------------------------------------------
+#elif defined LIBXC5 || defined LIBXCF90
 !        -------------------------------------------------------------
          call xc_f90_func_init(xc_func_1, fid1, XC_POLARIZED)
 !        -------------------------------------------------------------
@@ -355,7 +429,16 @@ contains
 !        -------------------------------------------------------------
 #endif
       endif
-#if defined LIBXC5
+#if defined LIBXCF03
+      if (xc_f03_func_info_get_kind(xc_info_1) == XC_EXCHANGE) then
+         FunctionalName_X = xc_f03_func_info_get_name(xc_info_1)
+         FunctionalID_X = xc_f03_func_info_get_number(xc_info_1)
+         Exchange = .true.
+      else if (xc_f03_func_info_get_kind(xc_info_1) == XC_CORRELATION) then
+         FunctionalName_C = xc_f03_func_info_get_name(xc_info_1)
+         FunctionalID_C = xc_f03_func_info_get_number(xc_info_1)
+         Correlation = .true.
+#elif defined LIBXC5 || defined LIBXCF90
       if (xc_f90_func_info_get_kind(xc_info_1) == XC_EXCHANGE) then
          FunctionalName_X = xc_f90_func_info_get_name(xc_info_1)
          FunctionalID_X = xc_f90_func_info_get_number(xc_info_1)
@@ -378,7 +461,16 @@ contains
          call ErrorHandler( "initExchCorrFunctional",                 &
                             "The functional is neither exchange nor correlation", fname1 )
       endif
-#if defined LIBXC5
+#if defined LIBXCF03
+      if (xc_f03_func_info_get_kind(xc_info_2) == XC_EXCHANGE) then
+         FunctionalName_X = xc_f03_func_info_get_name(xc_info_2)
+         FunctionalID_X = xc_f03_func_info_get_number(xc_info_2)
+         Exchange = .true.
+      else if (xc_f03_func_info_get_kind(xc_info_2) == XC_CORRELATION) then
+         FunctionalName_C = xc_f03_func_info_get_name(xc_info_2)
+         FunctionalID_C = xc_f03_func_info_get_number(xc_info_2)
+         Correlation = .true.
+#elif defined LIBXC5 || defined LIBXCF90
       if (xc_f90_func_info_get_kind(xc_info_2) == XC_EXCHANGE) then
          FunctionalName_X = xc_f90_func_info_get_name(xc_info_2)
          FunctionalID_X = xc_f90_func_info_get_number(xc_info_2)
@@ -412,7 +504,9 @@ contains
 !  ===================================================================
 !  Determine the functional type via xc_info_1.
 !  ===================================================================
-#if defined LIBXC5
+#if defined LIBXCF03
+   select case (xc_f03_func_info_get_family(xc_info_1))
+#elif defined LIBXC5 || defined LIBXCF90
    select case (xc_f90_func_info_get_family(xc_info_1))
 #else
    select case (xc_f90_info_family(xc_info_1))
@@ -444,7 +538,9 @@ contains
             xc_info_p => xc_info_2
             fname = fname2
          endif
-#if defined LIBXC5
+#if defined LIBXCF03
+         select case(xc_f03_func_info_get_kind(xc_info_p))
+#elif defined LIBXC5 || defined LIBXCF90
          select case(xc_f90_func_info_get_kind(xc_info_p))
 #else
          select case(xc_f90_info_kind(xc_info_p))
@@ -460,7 +556,9 @@ contains
             case default
                write(func_kind, '(a)') "of unknown kind"
          end select
-#if defined LIBXC5
+#if defined LIBXCF03
+         select case (xc_f03_func_info_get_family(xc_info_p))
+#elif defined LIBXC5 || defined LIBXCF90
          select case (xc_f90_func_info_get_family(xc_info_p))
 #else
          select case (xc_f90_info_family(xc_info_p))
@@ -478,7 +576,9 @@ contains
             case default;
                write(func_family,'(a)') "unknown"
          end select
-#if defined LIBXC5
+#if defined LIBXCF03
+         func_name = xc_f03_func_info_get_name(xc_info_p)
+#elif defined LIBXC5 || defined LIBXCF90
          func_name = xc_f90_func_info_get_name(xc_info_p)
 #else
          call xc_f90_info_name(xc_info_p,func_name)
@@ -489,7 +589,13 @@ contains
         &          "'' family and is defined in the reference(s):")') &
                trim(func_name), trim(func_kind), trim(func_family)
          i = 0
-#if defined LIBXC5
+#if defined LIBXCF03
+         do while(i >= 0)
+            j = i + 1
+            ref = xc_f03_func_reference_get_ref(xc_f03_func_info_get_references(xc_info_p, i))
+            write(6,'(a,i1,2a)') "[", j, "] ", trim(ref)
+         end do
+#elif defined LIBXC5 || defined LIBXCF90
          do while(i >= 0)
             j = i + 1
             ref = xc_f90_func_reference_get_ref(xc_f90_func_info_get_references(xc_info_p, i))
@@ -525,7 +631,19 @@ contains
    endif
 !
    if (.not.isHartreeApproximation()) then
-#if defined LIBXC || defined LIBXC5
+#if defined LIBXCF03
+      if (ECin1) then
+!        -------------------------------------------------------------
+         call xc_f03_func_end(xc_func_1)
+!        -------------------------------------------------------------
+      else
+!        -------------------------------------------------------------
+         call xc_f03_func_end(xc_func_1)
+!        -------------------------------------------------------------
+         call xc_f03_func_end(xc_func_2)
+!        -------------------------------------------------------------
+      endif
+#elif defined LIBXC || defined LIBXC5 || defined LIBXCF90
       if (ECin1) then
 !        -------------------------------------------------------------
          call xc_f90_func_end(xc_func_1)
@@ -661,7 +779,7 @@ contains
 !        charge density. Therefore, in this case, the contribution from
 !        the GGA term to the exchange-correlation potential is zero.
 !  *******************************************************************
-#ifdef LIBXC5
+#if defined LIBXC5 || defined LIBXCF90 || defined LIBXCF03
    use, intrinsic :: iso_c_binding
 #endif
    implicit none
@@ -673,14 +791,15 @@ contains
    real (kind=RealKind), intent(in), optional :: mag_den
    real (kind=RealKind), intent(in), optional :: der_mag_den
 !
-#ifdef LIBXC5
    real (kind=RealKind) :: rho(2), exc(1), vxc(2)
    real (kind=RealKind) :: sigma(3), vsig(3)
+#if defined LIBXCF03
+   TYPE(xc_f03_func_t), pointer :: xc_func_p
+   integer (kind=c_size_t) :: np
+#elif defined LIBXC5 || defined LIBXCF90
    TYPE(xc_f90_func_t), pointer :: xc_func_p
    integer (kind=c_size_t) :: np
 #elif defined LIBXC
-   real (kind=RealKind) :: rho(2), exc(1), vxc(2)
-   real (kind=RealKind) :: sigma(3), vsig(3)
    TYPE(xc_f90_pointer_t), pointer :: xc_func_p
    integer (kind=IntKind) :: np
 #endif
@@ -708,7 +827,7 @@ contains
 !           ----------------------------------------------------------
          enddo
       endif
-#if defined LIBXC || defined LIBXC5
+#if defined LIBXC || defined LIBXC5 || defined LIBXCF90 || defined LIBXCF03
    else 
       rho = ZERO
       if (n_spin_pola == 1) then
@@ -729,9 +848,15 @@ contains
 !           ==========================================================
 !           exc = epsilon_xc
 !           vxc = epsion_xc + rho*d(epsilon_xc)/d(rho)
+#if defined LIBXCF03
+!           ----------------------------------------------------------
+            call xc_f03_lda_exc_vxc(xc_func_p, np, rho(1), exc(1), vxc(1))
+!           ----------------------------------------------------------
+#else
 !           ----------------------------------------------------------
             call xc_f90_lda_exc_vxc(xc_func_p, np, rho(1), exc(1), vxc(1))
 !           ----------------------------------------------------------
+#endif
          else if (FunctionalType == GGA) then
             sigma = ZERO
             if (n_spin_pola == 1 .and. present(der_rho_den)) then
@@ -750,9 +875,15 @@ contains
 !           exc = epsilon_xc
 !           vxc = epsion_xc + rho*d(epsilon_xc)/d(rho)
 !           vsig = rho*d(epsilon_xc)/d(sigma)
+#if defined LIBXCF03
+!           ----------------------------------------------------------
+            call xc_f03_gga_exc_vxc(xc_func_p, np, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
+!           ----------------------------------------------------------
+#else
 !           ----------------------------------------------------------
             call xc_f90_gga_exc_vxc(xc_func_p, np, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
 !           ----------------------------------------------------------
+#endif
          else
             call ErrorHandler('calSphExchangeCorrelation_s',          &
                  'Evauation of the functionals other LDA and GGA has not been implemented yet.')
@@ -780,7 +911,7 @@ contains
    subroutine calSphExchangeCorrelation_v(n_Rpts,rho_den,r_mesh,      &
                                           der_rho_den, mag_den,der_mag_den)
 !  ===================================================================
-#ifdef LIBXC5
+#if defined LIBXC5 || defined LIBXCF90 || defined LIBXCF03
    use, intrinsic :: iso_c_binding
 #endif
    implicit none
@@ -794,18 +925,17 @@ contains
    real (kind=RealKind), intent(in), optional :: mag_den(n_Rpts)
    real (kind=RealKind), intent(in), optional :: der_mag_den(n_Rpts)
 !
-#ifdef LIBXC5
    real (kind=RealKind), allocatable :: vxc(:), exc(:), rho(:)
    real (kind=RealKind), allocatable :: sigma(:), vsig(:)
    real (kind=RealKind), allocatable :: gga_term(:,:), der_gga_term(:)
    real (kind=RealKind), allocatable :: der_rho_sp(:,:), sqrt_r(:)
+#if defined LIBXCF03
+   TYPE(xc_f03_func_t), pointer :: xc_func_p
+   integer (kind=c_size_t) :: np
+#elif defined LIBXC5 || defined LIBXCF90
    TYPE(xc_f90_func_t), pointer :: xc_func_p
    integer (kind=c_size_t) :: np
 #elif defined LIBXC
-   real (kind=RealKind), allocatable :: vxc(:), exc(:), rho(:)
-   real (kind=RealKind), allocatable :: sigma(:), vsig(:)
-   real (kind=RealKind), allocatable :: gga_term(:,:), der_gga_term(:)
-   real (kind=RealKind), allocatable :: der_rho_sp(:,:), sqrt_r(:)
    TYPE(xc_f90_pointer_t), pointer :: xc_func_p
    integer (kind=IntKind) :: np
 #endif
@@ -849,7 +979,7 @@ contains
 !           ----------------------------------------------------------
          enddo
       endif
-#if defined LIBXC || defined LIBXC5
+#if defined LIBXC || defined LIBXC5 || defined LIBXCF90 || defined LIBXCF03
    else 
       allocate( rho(n_Rpts*n_spin_pola) )
       allocate( vxc(n_Rpts*n_spin_pola), exc(n_Rpts) )
@@ -887,9 +1017,15 @@ contains
 !           ==========================================================
 !           exc = epsilon_xc
 !           vxc = epsion_xc + rho*d(epsilon_xc)/d(rho)
+#if defined LIBXCF03
+!           ----------------------------------------------------------
+            call xc_f03_lda_exc_vxc(xc_func_p, np, rho(1), exc(1), vxc(1))
+!           ----------------------------------------------------------
+#else
 !           ----------------------------------------------------------
             call xc_f90_lda_exc_vxc(xc_func_p, np, rho(1), exc(1), vxc(1))
 !           ----------------------------------------------------------
+#endif
          else if (FunctionalType == GGA) then
             if (n_spin_pola == 1 .and. present(der_rho_den)) then
                do i = 1, n_Rpts
@@ -927,9 +1063,15 @@ contains
 !           exc = epsilon_xc
 !           vxc = epsion_xc + rho*d(epsilon_xc)/d(rho)
 !           vsig = rho*d(epsilon_xc)/d(sigma)
+#if defined LIBXCF03
+!           ----------------------------------------------------------
+            call xc_f03_gga_exc_vxc(xc_func_p, np, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
+!           ----------------------------------------------------------
+#else
 !           ----------------------------------------------------------
             call xc_f90_gga_exc_vxc(xc_func_p, np, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
 !           ----------------------------------------------------------
+#endif
          else
             call ErrorHandler('calSphExchangeCorrelation_v',          &
                  'Evauation of the functionals other LDA and GGA has not been implemented yet.')
@@ -993,7 +1135,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine calExchangeCorrelation_lda(rho_den,mag_den)
 !  ===================================================================
-#ifdef LIBXC5
+#if defined LIBXC5 || defined LIBXCF90 || defined LIBXCF03
    use, intrinsic :: iso_c_binding
 #endif
    implicit none
@@ -1003,12 +1145,14 @@ contains
    real (kind=RealKind), intent(in) :: rho_den
    real (kind=RealKind), intent(in), optional :: mag_den
 !
-#ifdef LIBXC5
    real (kind=RealKind) :: rho(2), exc(1), vxc(2)
+#if defined LIBXCF03
+   TYPE(xc_f03_func_t), pointer :: xc_func_p
+   integer (kind=c_size_t) :: np
+#elif defined LIBXC5 || defined LIBXCF90
    TYPE(xc_f90_func_t), pointer :: xc_func_p
    integer (kind=c_size_t) :: np
 #elif defined LIBXC
-   real (kind=RealKind) :: rho(2), exc(1), vxc(2)
    TYPE(xc_f90_pointer_t), pointer :: xc_func_p
    integer (kind=IntKind) :: np
 #endif
@@ -1040,7 +1184,7 @@ contains
 !           ----------------------------------------------------------
          enddo
       endif
-#if defined LIBXC || defined LIBXC5
+#if defined LIBXC || defined LIBXC5 || defined LIBXCF90 || defined LIBXCF03
    else 
       rho = ZERO
       if (n_spin_pola == 1) then
@@ -1057,9 +1201,15 @@ contains
          else
             xc_func_p => xc_func_2
          endif 
+#if defined LIBXCF03
+!        -------------------------------------------------------------
+         call xc_f03_lda_exc_vxc(xc_func_p, np, rho(1), exc(1), vxc(1))
+!        -------------------------------------------------------------
+#else
 !        -------------------------------------------------------------
          call xc_f90_lda_exc_vxc(xc_func_p, np, rho(1), exc(1), vxc(1))
 !        -------------------------------------------------------------
+#endif
          do is = 1, n_spin_pola
             Vexc_s(is) = Vexc_s(is) + vxc(is)
          enddo
@@ -1099,7 +1249,7 @@ contains
 !        (x0, y0, z0), where
 !           x0 = cart(0,1), y0 = cart(0,2), z0 = cart(0,3)
 !  *******************************************************************
-#ifdef LIBXC5
+#if defined LIBXC5 || defined LIBXCF90 || defined LIBXCF03
    use, intrinsic :: iso_c_binding
 #endif
    implicit none
@@ -1111,18 +1261,17 @@ contains
    real (kind=RealKind), intent(in), optional :: mag_den
    real (kind=RealKind), intent(in), optional :: grad_mag_den(3)
 !
-#ifdef LIBXC5
    real (kind=RealKind) :: rho(2), exc(1), vxc(2)
    real (kind=RealKind) :: sigma(3), vsig(3)
    real (kind=RealKind), allocatable :: gga_term(:,:), der_gga_term(:), xyz(:)
    real (kind=RealKind) :: der_rho_sp(2)
+#if defined LIBXCF03
+   TYPE(xc_f03_func_t), pointer :: xc_func_p
+   integer (kind=c_size_t) :: np
+#elif defined LIBXC5 || defined LIBXCF90
    TYPE(xc_f90_func_t), pointer :: xc_func_p
    integer (kind=c_size_t) :: np
 #elif defined LIBXC
-   real (kind=RealKind) :: rho(2), exc(1), vxc(2)
-   real (kind=RealKind) :: sigma(3), vsig(3)
-   real (kind=RealKind), allocatable :: gga_term(:,:), der_gga_term(:), xyz(:)
-   real (kind=RealKind) :: der_rho_sp(2)
    TYPE(xc_f90_pointer_t), pointer :: xc_func_p
    integer (kind=IntKind) :: np
 #endif
@@ -1146,7 +1295,7 @@ contains
 !     ----------------------------------------------------------------
       call ErrorHandler('calExchangeCorrelation_gga','Incompatible functional ID',LegacyFunctionalID)
 !     ----------------------------------------------------------------
-#if defined LIBXC || defined LIBXC5
+#if defined LIBXC || defined LIBXC5 || defined LIBXCF90 || defined LIBXCF03
    else 
    !? allocate(gga_term(2*nq+1,n_spin_pola),der_gga_term(2*nq+1),xyz(2*nq+1))
       Vexc_s = ZERO; Eexc_s = ZERO
@@ -1178,9 +1327,15 @@ contains
                        HALF*(grad_rho_den(2)-grad_mag_den(2))*HALF*(grad_rho_den(2)-grad_mag_den(2)) + &
                        HALF*(grad_rho_den(3)-grad_mag_den(3))*HALF*(grad_rho_den(3)-grad_mag_den(3))
          endif
+#if defined LIBXCF03
+!        -------------------------------------------------------------
+         call xc_f03_gga_exc_vxc(xc_func_p, np, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
+!        -------------------------------------------------------------
+#else
 !        -------------------------------------------------------------
          call xc_f90_gga_exc_vxc(xc_func_p, np, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
 !        -------------------------------------------------------------
+#endif
     !?   if (k == 1 .and. j == 0) then
          do is = 1, n_spin_pola
             Vexc_s(is) = Vexc_s(is) + vxc(is)
@@ -1237,7 +1392,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine calExchCorrFunctional(posi,getDensity)
 !  ===================================================================
-#ifdef LIBXC5
+#if defined LIBXC5 || defined LIBXCF90 || defined LIBXCF03
    use, intrinsic :: iso_c_binding
 #endif
    implicit none
@@ -1252,7 +1407,10 @@ contains
    real (kind=RealKind) :: der_rho_sp(2)
    real (kind=RealKind), allocatable :: gga_term(:,:), der_gga_term(:), xyz(:)
 !
-#ifdef LIBXC5
+#if defined LIBXCF03
+   TYPE(xc_f03_func_t), pointer :: xc_func_p
+   integer (kind=c_size_t) :: np
+#elif defined LIBXC5 || defined LIBXCF90
    TYPE(xc_f90_func_t), pointer :: xc_func_p
    integer (kind=c_size_t) :: np
 #elif defined LIBXC
@@ -1303,7 +1461,7 @@ contains
             enddo
          endif
       else 
-#if defined LIBXC || defined LIBXC5
+#if defined LIBXC || defined LIBXC5 || defined LIBXCF90 || defined LIBXCF03
          rho = ZERO
          if (n_spin_pola == 1) then
             rho(1) = rho_den
@@ -1319,9 +1477,15 @@ contains
             else
                xc_func_p => xc_func_2
             endif 
+#if defined LIBXCF03
+!           ----------------------------------------------------------
+            call xc_f03_lda_exc_vxc(xc_func_p, np, rho(1), exc(1), vxc(1))
+!           ----------------------------------------------------------
+#else
 !           ----------------------------------------------------------
             call xc_f90_lda_exc_vxc(xc_func_p, np, rho(1), exc(1), vxc(1))
 !           ----------------------------------------------------------
+#endif
             do is = 1, n_spin_pola
                Vexc_s(is) = Vexc_s(is) + vxc(is)
             enddo
@@ -1338,7 +1502,7 @@ contains
 #endif
       endif
    else if (FunctionalType == GGA) then
-#if defined LIBXC || defined LIBXC5
+#if defined LIBXC || defined LIBXC5 || defined LIBXCF90 || defined LIBXCF03
       rho_den = getDensity(0,posi,grad=grad_rho_den)
       if (n_spin_pola == 2) then
          mag_den = getDensity(1,posi,grad=grad_mag_den)
@@ -1375,9 +1539,15 @@ contains
                        HALF*(grad_rho_den(2)-grad_mag_den(2))*HALF*(grad_rho_den(2)-grad_mag_den(2)) + &
                        HALF*(grad_rho_den(3)-grad_mag_den(3))*HALF*(grad_rho_den(3)-grad_mag_den(3))
          endif
+#if defined LIBXCF03
+!        -------------------------------------------------------------
+         call xc_f03_gga_exc_vxc(xc_func_p, np, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
+!        -------------------------------------------------------------
+#else
 !        -------------------------------------------------------------
          call xc_f90_gga_exc_vxc(xc_func_p, np, rho(1), sigma(1), exc(1), vxc(1), vsig(1))
 !        -------------------------------------------------------------
+#endif
     !?   if (k == 1 .and. j == 0) then
          do is = 1, n_spin_pola
             Vexc_s(is) = Vexc_s(is) + vxc(is)
