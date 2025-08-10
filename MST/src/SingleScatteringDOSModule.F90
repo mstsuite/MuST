@@ -173,7 +173,7 @@ contains
 !  The function also returns aux, a data set that can be integrated
 !  on an energy grid
 !
-!  In the no-spin-polarized case, a factor of 2 is included in dos.
+!  In the no-spin-polarized case, the returned dos is per spin.
 !  ===================================================================
    use PhysParamModule, only : Boltzmann
 !
@@ -556,7 +556,7 @@ contains
 !  The function also returns aux, a data set that can be integrated
 !  on an energy grid
 !
-!  In the no-spin-polarized case, a factor of 2 is included in dos.
+!  In the no-spin-polarized case, the returned dos is per spin.
 !  ===================================================================
    use PotentialTypeModule, only : isASAPotential, isFullPotential
 !
@@ -633,10 +633,8 @@ contains
 !           calculated.
 !     ----------------------------------------------------------------
       call solveSingleScattering(spin=is,site=id,atom=atom,e=energy,vshift=CZERO, &
-                                 isSphSolver=.true.) !,useIrrSol='h')
-      call computeGreenFunction(spin=is,site=id,atom=atom,noIrrTerm=.true.)
-!     ----------------------------------------------------------------
-   !  call computeGreenFunction(spin=is,site=id,atom=atom)
+                                 isSphSolver=.true.,useIrrSol='h')
+      call computeGreenFunction(spin=is,site=id,atom=atom)
 !     ----------------------------------------------------------------
    endif
 !
@@ -724,7 +722,7 @@ contains
                                                truncated=.false. ) - greenint
 !        -------------------------------------------------------------
          aux(n+4) = SQRTm1*greenint/PI
-         if (node_print_level >= 0) then
+         if (node_print_level >= 1) then
             write(6,'(f12.8,3x,d15.8,2x,2(4x,d15.8))')real(energy,kind=RealKind), &
                                                       real(aux(n+1),RealKind),    &
                                                       real(aux(n+2),RealKind),    &

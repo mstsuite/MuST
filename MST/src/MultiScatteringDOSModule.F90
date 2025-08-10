@@ -298,22 +298,22 @@ contains
          if (node_print_level >= 0) then
             write(6,'(/,''getMScatteringDOS: energy ='',2f18.12,'', id ='',i4,'', ia ='',i4)')energy,id,ia
             if (gform == 0) then
-               write(6,'(  ''                       Int [Z*(Tau-t)*Z] on MT         ='',2f18.12)') &
+               write(6,'(  ''                       Int [Z*(Tau-t)*Z] on MT         ='',2f22.12)') &
                      dosmt_pola(1:n_spin_cant)*PI/(SQRTm1*cmul*sfac)
-               write(6,'(  ''                       Int [Z*(Tau-t)*Z] on VP         ='',2f18.12)') &
+               write(6,'(  ''                       Int [Z*(Tau-t)*Z] on VP         ='',2f22.12)') &
                      dosws_pola(1:n_spin_cant)*PI/(SQRTm1*cmul*sfac)
-               write(6,'(  ''                       Im{-Int [Z*(Tau-t)*Z]/pi on MT} ='',f18.12)')  &
+               write(6,'(  ''                       Im{-Int [Z*(Tau-t)*Z]/pi on MT} ='',f22.12)')  &
                      real(dosmt_pola(1:n_spin_cant)/(cmul*sfac),RealKind)
-               write(6,'(  ''                       Im{-Int [Z*(Tau-t)*Z]/pi on VP} ='',f18.12)')  &
+               write(6,'(  ''                       Im{-Int [Z*(Tau-t)*Z]/pi on VP} ='',f22.12)')  &
                      real(dosws_pola(1:n_spin_cant)/(cmul*sfac),RealKind)
             else if (gform == 1) then
-               write(6,'(  ''                       Int [Z*Tau*Z-Z*J] on MT         ='',2f18.12)') &
+               write(6,'(  ''                       Int [Z*Tau*Z-Z*J] on MT         ='',2f22.12)') &
                      dosmt_pola(1:n_spin_cant)*PI/(SQRTm1*cmul*sfac)
-               write(6,'(  ''                       Int [Z*Tau*Z-Z*J] on VP         ='',2f18.12)') &
+               write(6,'(  ''                       Int [Z*Tau*Z-Z*J] on VP         ='',2f22.12)') &
                      dosws_pola(1:n_spin_cant)*PI/(SQRTm1*cmul*sfac)
-               write(6,'(  ''                       Im{-Int [Z*Tau*Z-Z*J]/pi on MT} ='',f18.12)')  &
+               write(6,'(  ''                       Im{-Int [Z*Tau*Z-Z*J]/pi on MT} ='',f22.12)')  &
                      real(dosmt_pola(1:n_spin_cant)/(cmul*sfac),RealKind)
-               write(6,'(  ''                       Im{-Int [Z*Tau*Z-Z*J]/pi on VP} ='',f18.12)')  &
+               write(6,'(  ''                       Im{-Int [Z*Tau*Z-Z*J]/pi on VP} ='',f22.12)')  &
                      real(dosws_pola(1:n_spin_cant)/(cmul*sfac),RealKind)
                do ks = 1, n_spin_pola
                   if (real(dosws_pola(ks)/(cmul*sfac),RealKind) < ZERO) then
@@ -322,13 +322,13 @@ contains
                   endif
                enddo
             else
-               write(6,'(  ''                       Int [Z*Tau*Z] on MT         ='',2f18.12)')     &
+               write(6,'(  ''                       Int [Z*Tau*Z] on MT         ='',2f22.12)')     &
                      dosmt_pola(1:n_spin_cant)*PI/(SQRTm1*cmul*sfac)
-               write(6,'(  ''                       Int [Z*Tau*Z] on VP         ='',2f18.12)')     &
+               write(6,'(  ''                       Int [Z*Tau*Z] on VP         ='',2f22.12)')     &
                      dosws_pola(1:n_spin_cant)*PI/(SQRTm1*cmul*sfac)
-               write(6,'(  ''                       Im{-Int [Z*Tau*Z]/pi on MT} ='',f18.12)')      &
+               write(6,'(  ''                       Im{-Int [Z*Tau*Z]/pi on MT} ='',f22.12)')      &
                      real(dosmt_pola(1:n_spin_cant)/(cmul*sfac),RealKind)
-               write(6,'(  ''                       Im{-Int [Z*Tau*Z]/pi on VP} ='',f18.12)')      &
+               write(6,'(  ''                       Im{-Int [Z*Tau*Z]/pi on VP} ='',f22.12)')      &
                      real(dosws_pola(1:n_spin_cant)/(cmul*sfac),RealKind)
             endif
          endif ! print_level

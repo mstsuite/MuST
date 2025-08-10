@@ -905,6 +905,8 @@ contains
 !
    use ScfDataModule, only : ErBottom, ErTop !xianglin 
 !
+!  use MagneticForceModule, only : initMagneticForce, endMagneticForce
+!
    implicit none
 !
    integer (kind=IntKind) :: id, is, ia, pot_type, kmax, num_species
@@ -1003,6 +1005,12 @@ contains
                         stop_routine, print_level, derivative=rad_derivative)
 !  -------------------------------------------------------------------
    endif
+!
+!  if (n_spin_cant == 2) then
+!     ----------------------------------------------------------------
+!     call initMagneticForce(LocalNumAtoms,lmax_kkr,stop_routine,node_print_level)
+!     ----------------------------------------------------------------
+!  endif
 !
    chempot = getFermiEnergy()
    efermi = chempot
@@ -1173,6 +1181,10 @@ contains
                          Timing_SS,' (sec)'
    endif
 !
+!  if (n_spin_cant == 2) then
+!     call endMagneticForce()
+!  endif
+!
    if (RelativisticFlag == 2) then
       call endRelMSSolver() 
       call endRelSSSolver()
@@ -1208,6 +1220,8 @@ contains
    subroutine calValenceDOS()
 !  ===================================================================
    use GroupCommModule, only : GlobalSumInGroup
+!
+   use InputModule, only : getKeyValue
 !
    use AtomModule, only : getLocalEvec, getLocalNumSpecies,        &
                           getLocalAtomicNumber
@@ -1256,8 +1270,9 @@ contains
    integer (kind=IntKind) :: num_species, nsize
    integer (kind=IntKind) :: NumCalls_SS = 0
 !
+   real (kind=RealKind), parameter :: e_tran = 0.1d0
    real (kind=RealKind) :: Timing_SS = ZERO
-   real (kind=RealKind) :: e_imag, de, msDOS(2), ssDOS, eb, sfac
+   real (kind=RealKind) :: e_imag, de, msDOS(2), ssDOS, eb, sfac, ei, ei_bot
    real (kind=RealKind), allocatable :: e_real(:)
    real (kind=RealKind), pointer :: p1(:)
 !
@@ -1356,6 +1371,10 @@ contains
 !  ===================================================================
    eb = ErBottom
 !
+   if (getKeyValue(1,'Imaginary energy shift',ei) /= 0) then
+      ei = 0.001d0
+   endif
+!
 !  ne = int((chempot+0.2d0-eb)/chempot*NumSS_IntEs)+1
    ne = NumSS_IntEs
 !
@@ -1417,21 +1436,34 @@ contains
    do ie = 1, ne
       e_real(ie) = eb + (ie-1)*de
    enddo
+!
+   if (isLSMS() .or. isFullPotential()) then
+      ei_bot = max(0.005d0,EiBottom)
+   endif
+!
    do is = 1, n_spin_pola/n_spin_cant
       ie = 0
       do while (ie < ne)
          ie = ie + 1
-         if (isFullPotential()) then
-            if (abs(e_real(ie)) < 0.001d0) then  ! In case of the energy is too close to the origin
-               e_imag = max(0.01d0,EiBottom) ! we take a larger imaginary part
-            else if (e_real(ie) < 0.1d0) then     ! In case of existing shallow bound states or low lying resonance states
-               e_imag = max(0.005d0,EiBottom) ! we take a larger imaginary part
-            else
-               e_imag = max(0.001d0,EiBottom) ! in case EiBottom is zero or too small
+!        =============================================================
+!        The following code for setting up the imaginary part of the energy
+!        mesh needs to be re-visited.
+!        In the LSMS calculation of DOS, the LIZ cluster may form shallow
+!        bound states at negative energy (Re[e] < 0) which give rise to
+!        large peaks in DOS. -- July 30, 2025
+!        -------------------------------------------------------------
+         e_imag = ei
+         if (isLSMS() .or. isFullPotential()) then
+       !!!  if (e_real(ie) < -ei_bot) then
+            if (e_real(ie) < ZERO) then
+               e_imag = ei_bot
+            else if (e_real(ie) <= e_tran) then
+!              Make Imag[energy] drops linearly from ei_bot to ei
+       !!!     e_imag = ei_bot + (e_real(ie)+ei_bot)*(ei-ei_bot)/(e_tran+ei_bot)
+               e_imag = ei_bot + e_real(ie)*(ei-ei_bot)/e_tran
             endif
-         else
-            e_imag = max(0.001d0,EiBottom) ! in case EiBottom is zero or too small
          endif
+!        =============================================================
          if (ie > me) then
             redundant = .true.
          else
@@ -1556,10 +1588,10 @@ contains
                      do js = 1, n_spin_cant*n_spin_cant
                         do id = 1, LocalNumAtoms
                            do ia = 1, LastValue(id)%NumSpecies
-                              write(6,'(/,''getSScatteringDOS:   energy ='',2f18.12,'', id ='',i4)')energy,id
-                              write(6,'(''                       Single Site DOS_MT   ='',f18.12)') &
+                              write(6,'(/,''getSScatteringDOS: energy ='',2f18.12,'', id ='',i4)')energy,id
+                              write(6,'(''                   Single Site DOS_MT   ='',f22.12)') &
                                     real(LastValue(id)%dos_mt(js,ia),RealKind)
-                              write(6,'(''                       Single Site DOS_VP   ='',f18.12)') &
+                              write(6,'(''                   Single Site DOS_VP   ='',f22.12)') &
                                     real(LastValue(id)%dos(js,ia),RealKind)
                            enddo
                         enddo
@@ -2983,6 +3015,7 @@ contains
                                   computeBoundStateDensity,     &
                                   examBoundStateDegen,          &
                                   clearSMatrixPoles,            &
+                                  getBoundStateChargeInCell,    &
                                   printSMatrixPoleInfo
 !
    use SineMatrixZerosModule, only : findSineMatrixZeros,       &
@@ -3018,10 +3051,12 @@ contains
    logical :: contour_int, modified = .false.
    logical, parameter :: romberg = .true.
 !
-   real (kind=RealKind) :: ssdos_int, IDOS_cell, ps, e0, ps0, ssDOS, width
+   real (kind=RealKind) :: IDOS_cell, ps, e0, ps0, ssDOS, width
+   real (kind=RealKind) :: ssdos_int, ssdos_int_ia, ssdos_bs, ssdos_bs_ia
    real (kind=RealKind) :: scaling_factor, IDOS_space, IDOS_out, sfac
    real (kind=RealKind) :: resonance_contour_radius, resonance_width
    real (kind=RealKind) :: ebot, etop, er, ep, ei, e1, e2, e_delta, e_bound, w, rfac, maxd, err
+   real (kind=RealKind) :: qvp_bs, qmt_bs, qmt_ib
    real (kind=RealKind) :: contour_radius(MaxShallowBoundStates)
    real (kind=RealKind), allocatable :: xg(:), wg(:)
 !
@@ -3253,12 +3288,13 @@ contains
                      call ErrorHandler('calSingleScatteringIDOS',&
                                        'relativistic AdaptiveIntegration not implemented')
                   else if (isPole_plus) then
-                     ssdos_int = getWeightedIntegration(NumSS_IntEs,ebot,etop,info, &
-                                                        getRelSScatteringDOS,     &
-                                                        MatrixPoles(id)%NumPoles_plus(ia,1),MatrixPoles(id)%Poles_plus(:,ia,1))
+                     ssdos_int_ia = getWeightedIntegration(NumSS_IntEs,ebot,etop,info,          &
+                                                           getRelSScatteringDOS,                &
+                                                           MatrixPoles(id)%NumPoles_plus(ia,1), &
+                                                           MatrixPoles(id)%Poles_plus(:,ia,1))
                      nm=NumSS_IntEs
                   else
-                     ssdos_int = getUniFormIntegration(NumSS_IntEs,ebot,etop,info,getRelSScatteringDOS,nm)
+                     ssdos_int_ia = getUniFormIntegration(NumSS_IntEs,ebot,etop,info,getRelSScatteringDOS,nm)
                   endif
                   if ( node_print_level >= 0) then
                      write(6,'(a)')   '================================================================================'
@@ -3516,8 +3552,8 @@ contains
 !              -------------------------------------------------------
                call examBoundStateDegen(id,ia,is,contour_radius,modified)
 !              -------------------------------------------------------
-               if (modified .and. MyPE == 0) then
-                  write(6,'(a)')'The number of shallow bound states has been modified.'
+               if (modified .and. node_print_level >= 0) then
+                  write(6,'(/,a)')'The number of shallow bound states has been modified.'
                   write(6,'(3(a,i3),2x,a,i3)')'id = ',id,', is = ',is,', ia = ',ia, &
                                               ', Modified number of bound states = ',getNumBoundStates(id,ia,is)
                   do ib = 1, getNumBoundStates(id,ia,is)
@@ -3529,10 +3565,13 @@ contains
                endif
 !
                info(1) = is; info(2) = id; info(3) = ia; info(4) = 1; info(5) = lmax_phi(id) 
+               qvp_bs = ZERO; qmt_bs = ZERO; qmt_ib = ZERO
                do ib = 1, getNumBoundStates(id,ia,is)
 !                 ----------------------------------------------------
                   call computeBoundStateDensity(id,ia,is,contour_radius(ib),ib,chempot,wk_dos)
 !                 ----------------------------------------------------
+                  qvp_bs = qvp_bs + getBoundStateChargeInCell(id,ia,is,ib,qmt_ib)
+                  qmt_bs = qmt_bs + qmt_ib
 !                 ====================================================
 !                 The bound state density will be added to ssIntegrValue
 !                 after the single site Green function is integrated 
@@ -3544,6 +3583,11 @@ contains
 !                 call addElectroStruct(getLocalSpeciesContent(id,ia),ssLastValue(id),ssIntegrValue(id),ns,ia)
 !                 ----------------------------------------------------
                enddo
+               if (node_print_level >= 0) then
+                  write(6,'(/,3(a,i4))')'In GFMethodModule: For spin index:',is,', atom id:',id,', species id:',ia
+                  write(6,'(a,f18.13)')'Sum of Qmt per spin over the bound states = ',qmt_bs
+                  write(6,'(a,f18.13)')'Sum of Qvp per spin over the bound states = ',qvp_bs
+               endif
             enddo
          enddo
       enddo
@@ -3558,6 +3602,7 @@ contains
          do is = 1, n_spin_pola
             ns = (2*n_spin_cant-1)*is - (n_spin_cant-1)*2  ! ns = 1 or 2, if n_spin_cant = 1
                                                            ! ns = 1 or 4, if n_spin_cant = 2
+            ssdos_int = ZERO; ssdos_bs = ZERO
             do ia = 1, ssLastValue(id)%NumSpecies
                info(1) = is; info(2) = id; info(3) = ia; info(4) = 1; info(5) = lmax_phi(id) 
 !              info(6) = getNumResonanceStates(id,ia,is)
@@ -3617,7 +3662,7 @@ contains
                   exc(ia,id) = exc(ia,id) + (3.d0-2.d0*is)*er
                endif
 !
-               ssdos_int = ZERO
+               ssdos_int_ia = ZERO
                e2 = ebot
                ib = 0
                do while (ib <= getNumResonanceStates(id,ia,is))
@@ -3684,6 +3729,7 @@ contains
                                           getAdaptiveIntegrationMethod())
 !                       ----------------------------------------------
                      endif
+                     ssdos_int_ia = ssdos_int_ia + ssDOS
                      ssdos_int = ssdos_int + ssDOS*getLocalSpeciesContent(id,ia)
 !
                      if ( node_print_level >= 0) then
@@ -3719,7 +3765,7 @@ contains
                      er = getResonanceStateEnergy(id,ia,is,ib,width,sorted=.true.)
                      if ( node_print_level >= 0) then
                         write(6,'(/,a,f12.8,a,f12.8)')'Found resonance at energy = ',er,', with width = ',width
-                        write(6,'(a,f12.8)')'Before adding the resonance contribution, ssdos_int = ',ssdos_int
+                        write(6,'(a,f12.8)')'Before adding the resonance contribution, ssdos_int_ia = ',ssdos_int_ia
                      endif
 !                    =================================================
 !                    Check if the next resonance energy happens to 
@@ -3857,12 +3903,13 @@ contains
                                               ssLastValue(id),ssIntegrValue(id),ns,species=ia)
 !                       ----------------------------------------------
                      endif
+                     ssdos_int_ia = ssdos_int_ia + ssDOS
                      ssdos_int = ssdos_int + ssDOS*getLocalSpeciesContent(id,ia)
                      if ( node_print_level >= 0) then
                         write(6,'(a)')&
                        '=========================================================================================='
                         write(6,'(a,i4)')'Number of mesh points for the integration: ',nm
-                        write(6,'(a,f12.8,/)')'After  adding the resonance contribution, ssdos_int = ',ssdos_int
+                        write(6,'(a,f12.8,/)')'After  adding the resonance contribution, ssdos_int_ia = ',ssdos_int_ia
                      endif
                   endif
                enddo
@@ -3877,11 +3924,11 @@ contains
                IDOS_out = ssIDOS_out(id)%rarray2(ns,ia)
                IDOS_cell = IDOS_space - IDOS_out
 !
-               scaling_factor = IDOS_cell/ssdos_int
+               scaling_factor = IDOS_cell/ssdos_int_ia
 !              =======================================================
                if ( node_print_level >= 0) then
                   write(6,'(a,f12.8,a,d15.8)')'At energy = ',etop,     &
-                                              ': Single site IDOS given by Green function  =',ssdos_int
+                                              ': Single site IDOS given by Green function  =',ssdos_int_ia
                   write(6,'(26x,a,d15.8)')      'Integrated DOS outside the atomic cell    =', IDOS_out
 !                 ====================================================
                   write(6,'(26x,a,d15.8)')      'Single site sum. of partial phase shifts  =',ps
@@ -3889,7 +3936,7 @@ contains
                   write(6,'(26x,a,d15.8)')      'Free electron DOS in the atomic cell      =', &
                                           (2/n_spin_pola)*getVolume(id)*sqrt(etop**3)/(6.0d0*PI**2)
                   write(6,'(26x,a,d15.8)')      'Single site {phase shift sum-OutsideIDOS} =',IDOS_cell
-                  write(6,'(26x,a,d15.8,/)')    'Renormalization factor to Green function  =',scaling_factor
+                  write(6,'(26x,a,d15.8)')    'Renormalization factor to Green function  =',scaling_factor
 !                 ====================================================
                endif
 !              =======================================================
@@ -3905,12 +3952,20 @@ contains
 !                 ----------------------------------------------------
                endif
 !
+               
+               if ( node_print_level >= 0) then
+                  write(6,'(/,3(a,i2))')'Spin index = ',is,', Site index = ',id,', Species index = ',ia
+                  write(6,'(a,i4)')'Number of shallow bound states = ',getNumBoundStates(id,ia,is)
+               endif
+               ssdos_bs_ia = ZERO
                do ib = 1, getNumBoundStates(id,ia,is)
 !                 ====================================================
 !                 add the shallow bound state densities to the
 !                 single site density
 !                 ----------------------------------------------------
                   ssDOS = returnIDOSofBoundStates(id,ia,is,ib,wk_dos) ! A factor 2 for the non-spin-polarized case is included
+                  ssdos_bs_ia = ssdos_bs_ia + ssDOS
+                  ssdos_int_ia = ssdos_int_ia + ssDOS
                   ssdos_int = ssdos_int + ssDOS*getLocalSpeciesContent(id,ia)
 !                 ----------------------------------------------------
                   call calElectroStruct(info,1,wk_dos,ssLastValue(id),ss_int=.true.,species=ia,fac=CONE)
@@ -3919,20 +3974,24 @@ contains
                                         species=ia)
 !                 ----------------------------------------------------
                   if ( node_print_level >= 0) then
-                     write(6,'(a,i4,2x,f12.8,2x,d15.8)')'Bound state id, e, and DOS = ',&
-                       ib,getBoundStateEnergy(id=id,ia=ia,is=is,ibs=ib),ssDOS
-                     write(6,'(a,i4,2x,d15.8)')'Bound state id, ssDOS = ',ib,ssDOS
-                     write(6,'(a,i4,2x,d15.8)')'Bound state id, ssLastValue =',ib,          &
-                                               real(ssLastValue(id)%dos(ns,ia),kind=RealKind)
+                     write(6,'(a,i4,2x,f12.8)')'Bound state id, e = ',ib,getBoundStateEnergy(id=id,ia=ia,is=is,ibs=ib)
+                     write(6,'(4x,a,d15.8)')'The bound state DOS  = ',ssDOS
+                     write(6,'(4x,a,d15.8)')'Stored Re[dos(ns,ia)]= ',real(ssLastValue(id)%dos(ns,ia),kind=RealKind)
                   endif
                enddo
-               if ( node_print_level >= 0) then
-                  write(6, '(a,2x,d15.8)') 'Total value of ssdos_int (integrated single site DOS)', ssdos_int
+               ssdos_bs  = ssdos_bs + ssdos_bs_ia*getLocalSpeciesContent(id,ia)
+               if ( node_print_level >= 0 .and. ssLastValue(id)%NumSpecies > 1) then
+                  write(6, '(a,2x,d15.8)') 'The integrated single site DOS over (Eb, 0.0) = ', ssdos_bs_ia
+                  write(6, '(a,2x,d15.8)') 'The integrated single site DOS over (Eb, Ef)  = ', ssdos_int_ia
                endif
-            enddo
+            enddo ! Loop over ia
 !           ----------------------------------------------------------
             call syncAllPEs()
 !           ----------------------------------------------------------
+            if ( node_print_level >= 0) then
+               write(6, '(a,2x,d15.8)') 'The integrated single site DOS over (Eb, 0.0) = ', ssdos_bs
+               write(6, '(a,2x,d15.8)') 'The integrated single site DOS over (Eb, Ef)  = ', ssdos_int
+            endif
          enddo
       enddo
       deallocate(wk_tmp)
@@ -4111,6 +4170,8 @@ contains
    use LocalGFModule, only : computeLocalGF, getLocalGF, getNumOrbitals
 !
    use WriteMatrixModule,  only : writeMatrix
+!
+!  use MagneticForceModule, only : computeMagneticForce
 !
    implicit none
 !
@@ -4303,6 +4364,11 @@ contains
 !              ----------------------------------------------------------
                isZtauZ = .false.
             endif
+!           if (n_spin_cant == 2) then
+!              ----------------------------------------------------------
+!              call computeMagneticForce(adjustEnergy(1,EPoint(ie)))
+!              ----------------------------------------------------------
+!           endif
             do id = 1, LocalNumAtoms
                pCurrentValue => LastValue(id) ! Use LastValue space for temporary working space.
 !              ----------------------------------------------------------
