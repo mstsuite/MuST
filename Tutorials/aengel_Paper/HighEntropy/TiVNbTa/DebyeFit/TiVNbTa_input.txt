@@ -1,0 +1,28 @@
+# Name of the system
+System: TiVNbTa
+
+# Different parameters used in calculations of the same system
+Variation: 
+
+# Elements in the system (separated by spaces)
+Elements: Ti V Nb Ta
+
+# Number of atoms in the unit cell corresponding to the elements (separated by spaces)
+Numbers: 0.25 0.25 0.25 0.25
+
+# Energy and volume per atom data (one data point per line)
+-10168.363378 83.1875
+-10168.381845 87.80799999999998
+-10168.395937 92.5965
+-10168.406013 97.556
+-10168.412437 102.68950000000001
+-10168.415558 108.0
+-10168.415709 113.49049999999997
+-10168.413204 119.16400000000002
+-10168.408345 125.02349999999998
+-10168.401417 131.07200000000003
+-10168.392687 137.3125
+-10168.382406 143.748
+-10168.370806 150.38150000000002
+-10168.358099 157.21599999999998
+-10168.344477 164.25450000000004
