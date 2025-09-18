@@ -126,6 +126,7 @@ contains
    subroutine initClusterMatrix(num_latoms,index,lmaxkkr,lmaxphi,     &
                                 posi,cant,rel,istop,iprint)
 !  ===================================================================
+   use MPPModule, only : MyPE
    use GroupCommModule, only : getGroupID, getNumPEsInGroup, getMyPEinGroup
 !
    use ScfDataModule, only : Minv_alg, NumEs, tauij_needed
@@ -308,6 +309,13 @@ contains
 !    allocate (ClusterTau(LocalNumAtoms*kmax_max,LocalNumAtoms*kmax_max))
    endif
 !
+#ifdef ACCEL
+!  -------------------------------------------------------------------
+   call init_lsms_gpu(dsize_max,isize_max,MyPEinGroup)
+!* call cu_init_lsms_gpu(dsize_max,isize_max)
+!  -------------------------------------------------------------------
+#endif
+!
 !  -------------------------------------------------------------------
    call initMatrixBlockInv( Minv_alg, LocalNumAtoms, NumEs, nblck,    &
                            max_nblck, kblocks, print_level ) 
@@ -384,6 +392,10 @@ contains
 !  -------------------------------------------------------------------
    call endRSpaceStrConst()
 !  -------------------------------------------------------------------
+!
+#ifdef ACCEL
+   call finalize_lsms_gpu()
+#endif
 !
    Initialized = .false.
 !
@@ -982,15 +994,22 @@ use MPPModule, only : MyPE, syncAllPEs
    do my_atom = 1, LocalNumAtoms
       Neighbor => getNeighbor(my_atom)
       kkrsz_ns = kmax_kkr(my_atom)*n_spin_cant
-      jig => wsStoreA
 !     ================================================================
 !     Construct BigMatrix for local atom: my_atom
 !     ================================================================
       dsize = dsize_l(my_atom)  ! This is the number of rows of BigMatrix
+!
+#ifdef ACCEL
+      if (Neighbor%NumAtoms > 0) then
+         call init_bigmatrix_gpu(dsize)
+      endif
+#else
+      jig => wsStoreA
 !     ================================================================
 !     initialize BigMatrix so that it is a unit matrix to begin with..
 !     ================================================================
       call setupUnitMatrix(dsize,BigMatrix)
+#endif
 !     ================================================================
 !     loop over cluster neighbors to build BigMatrix [1-Jinv*G*S]
 !
@@ -1024,12 +1043,15 @@ use MPPModule, only : MyPE, syncAllPEs
 !
          if (pej == MyPEinGroup) then
             nbr_kkrj = kmax_kkr(lid_j)
+            p_jinvi => local_jsmtx(2:tsize+1,lid_j)
             p_sinej => local_jsmtx(tsize+2:2*tsize+1,lid_j)
          else
             jid = mapping_jsmtx(irj,my_atom)
             nbr_kkrj = remote_kmax(jid)
+            p_jinvi => remote_jsmtx(1:tsize,jid)
             p_sinej => remote_jsmtx(tsize+1:2*tsize,jid)
          endif
+!
          kkrj  = (lmaxj+1)*(lmaxj+1)
 !        ==============================================================
 !        nbr_kkrj = kmax of the remote atom
@@ -1043,6 +1065,13 @@ use MPPModule, only : MyPE, syncAllPEs
          endif
          kkrj_ns  = kkrj*n_spin_cant
          nbr_kkrj_ns  = nbr_kkrj*n_spin_cant
+!
+#ifdef ACCEL
+!        --------------------------------------------------------------
+         call push_submatrix_gpu(1,irj,irj,p_sinej,nbr_kkrj_ns)
+         call push_submatrix_gpu(2,irj,irj,p_jinvi,nbr_kkrj_ns)
+!        --------------------------------------------------------------
+#endif
 !
 !        =============================================================
 !        Rearrange the sine matrix storage if needed..................
@@ -1114,6 +1143,21 @@ use MPPModule, only : MyPE, syncAllPEs
 !08/28/14      rij(1:3) = posi(1:3)-posj(1:3)
                rij = posj - posi
                gij => getGij(kappa,rij,lmaxi,lmaxj)
+#ifdef ACCEL
+               if (Relativity > 1) then
+!                 ----------------------------------------------------
+                  call convertGijToRel(gij, gijrel, kkri, kkrj, energy)
+!                 ----------------------------------------------------
+                  gij => gijrel
+!                 -----------------------------------------------------
+                  call push_submatrix_gpu(3,iri,irj,gij,kkri_ns)
+!                 -----------------------------------------------------
+               else
+!                 -----------------------------------------------------
+                  call push_gij_matrix_gpu(n_spin_cant,iri,irj,gij,kkri)
+!                 -----------------------------------------------------
+               endif
+#else
 !
                if (Relativity > 1) then
 !                 ----------------------------------------------------
@@ -1152,12 +1196,20 @@ use MPPModule, only : MyPE, syncAllPEs
 !                 ----------------------------------------------------
                  !call writeMatrix('BigMatrixIteration', BigMatrix, dsize*dsize)
                endif
+#endif
             endif
             nbi = nbi + kkri_ns
          enddo
          nbj = nbj + kkrj_ns
       enddo
-!     call writeMatrix('BigMatrix',BigMatrix,dsize_max*dsize_max)
+#ifdef ACCEL
+!     ----------------------------------------------------------------
+      call commit_to_gpu(1)
+      call commit_to_gpu(2)
+      call commit_to_gpu(3)
+      call construct_bigmatrix_gpu(-CONE/kappa)
+!     ----------------------------------------------------------------
+#endif
 !
       if ( nbi /= nbj ) then
 !        -------------------------------------------------------------
@@ -1220,39 +1272,30 @@ use MPPModule, only : MyPE, syncAllPEs
 !              Different MPI processes give slightly different results.
 !              It needs to be further checked
 !        =============================================================
-!write(6,'(a,i5,2f9.5,2x,4d16.8)')'BigMatrix =',MyPE,energy,          &
-!      BigMatrix((dsize-1)*dsize-kkrsz_ns-1),BigMatrix(kkrsz_ns*dsize+2)
-!call syncAllPEs()
-!        -------------------------------------------------------------
-!         print *,"In calClusterMatrix"
-!         print *,"my_atom = ",my_atom
-!         print *,"pBlockMatrix shape", shape(pBlockMatrix)
-!         print *,"kkrsz_ns",kkrsz_ns
-!         print *,"dsize = ",dsize
-!         print *,"BigMatrix shape",shape(BigMatrix)
-#ifdef ACCEL
-         pBigMatrix => aliasArray2_c(BigMatrix, dsize, dsize)
-         call invertMatrixLSMS_CUDA(my_atom, pBlockMatrix, kkrsz_ns,  &
-                                 pBigMatrix, dsize )
-!         print *,"CUDA pBlockMatrix(:, 1) = ",pBlockMatrix(:,1)
-#else
-         call invertMatrixBlock( my_atom, pBlockMatrix, kkrsz_ns, kkrsz_ns,  &
-                                 BigMatrix, dsize, dsize )
-#endif
-!        -------------------------------------------------------------
-!write(6,'(a,i5,2f9.5,2x,4d16.8)')'Block =',MyPE,energy,pBlockMatrix(1,1),pBlockMatrix(3,3)
-!call syncAllPEs()
-!
-!        =============================================================
-!        store [1 - BlockMatrix] in ubmat, which uses wsTau00L as temporary space
-!        =============================================================
          ubmat => aliasArray2_c(wsTau00L, kkrsz_ns, kkrsz_ns)
 !        -------------------------------------------------------------
          call setupUnitMatrix(kkrsz_ns,ubmat)
 !        -------------------------------------------------------------
+         wau_g => aliasArray2_c(wsStoreA, kkrsz_ns, kkrsz_ns)
+#ifdef ACCEL
+         call invert_bigmatrix_gpu(pBlockMatrix,kkrsz_ns)
+!**      pBigMatrix => aliasArray2_c(BigMatrix, dsize, dsize)
+!**      call invert_lsms_matrix(pBlockMatrix, kkrsz_ns, pBigMatrix, dsize )
+         wau_g = pBlockMatrix - ubmat
+!!!      call invertMatrixLSMS_CUDA(my_atom, pBlockMatrix, kkrsz_ns,  &
+!!!                              pBigMatrix, dsize )
+#else
+!        call writeMatrix('BigMatrix',BigMatrix,dsize_max*dsize_max)
+!        -------------------------------------------------------------
+         call invertMatrixBlock( my_atom, pBlockMatrix, kkrsz_ns, kkrsz_ns,  &
+                                 BigMatrix, dsize, dsize )
+!        -------------------------------------------------------------
+!
+!        =============================================================
+!        store [1 - BlockMatrix] in ubmat, which uses wsTau00L as temporary space
+!        =============================================================
          ubmat = ubmat - pBlockMatrix
 !
-         wau_g => aliasArray2_c(wsStoreA, kkrsz_ns, kkrsz_ns)
 !        =============================================================
 !        Calculate wau_g = {[1-Jinv*G*S]**(-1)-1} : for central site only
 !        solve the eigenvectors of the following linear equations:
@@ -1266,6 +1309,7 @@ use MPPModule, only : MyPE, syncAllPEs
          call zgetrs( 'n', kkrsz_ns, kkrsz_ns, ubmat, kkrsz_ns, ipvt, &
                       wau_g, kkrsz_ns, info )
 !        -------------------------------------------------------------
+#endif
          nullify( pBlockMatrix )
          nullify( pBigMatrix )
 !        -------------------------------------------------------------

@@ -64,13 +64,17 @@ finalize_matinv_cuda.o \
 zblock_lu_accel.o \
 zblock_lu_cuda_c.o \
 cusolver_LSMS_c.o \
+zgemm_c.o \
+zgemm_accel.o \
 invertMatrixLSMS_CUDA.o \
 cusolver_KKR_c.o \
 invertMatrixKKR_CUDA.o \
 zblock_lu_CPU.o \
 inverse.o \
 DeviceStorage.o \
-interface_dstore.o
+interface_dstore.o \
+invert_lsms_matrix.o \
+LSMS_CUDA_Acceleration.o
 
 $(ACCLIB): $(OBJ0)
 	$(ARCHV) $@ $(OBJ0)
