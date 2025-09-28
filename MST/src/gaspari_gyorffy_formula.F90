@@ -21,8 +21,7 @@
 !                    number m
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-        subroutine gaspari_gyorffy_formula(LocalNumAtoms,n_spin_pola,efermi,  &
-                                           PartialDOS,iprint)
+   subroutine gaspari_gyorffy_formula(LocalNumAtoms,n_spin_pola,efermi,PartialDOS,iprint)
 !  ===========================================================================
         use KindParamModule, only : IntKind, RealKind, CmplxKind
         use MathParamModule, only : ZERO, HALF, ONE, TWO, PI, TEN2m6, TEN2m8, CONE, SQRTm1
@@ -88,6 +87,81 @@
         complex (kind=CmplxKind) :: kappa
         complex (kind=CmplxKind), pointer :: t_mat(:,:)
         complex (kind=CmplxKind), allocatable :: phase_shift_aver(:,:)
+!
+        character (len=50) :: mu_star_inp, t1, t2
+        integer (kind=IntKind) :: n, mu_int
+        real (kind=RealKind) :: A, EPC_TF, Coulomb_TF, SuperTemp_TF
+!
+        logical :: is_mu_from_input
+!
+!  ===================================================================
+   interface
+      function isNumber(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isNumber
+   end interface
+!
+   interface
+      function isRealNumber(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isRealNumber
+   end interface
+!
+   interface
+      function getNumTokens(s) result (n)
+         use KindParamModule, only : IntKind
+         character (len=*), intent(in) :: s
+         integer (kind=IntKind) :: n
+      end function getNumTokens
+   end interface
+!
+   interface
+      function getToken(k,s,n,e) result (t)
+         use KindParamModule, only : IntKind
+         character (len=*), intent(in) :: s
+         character (len=len(s)) :: t
+         integer (kind=IntKind), intent(in) :: k
+         integer (kind=IntKind), intent(out), optional :: n, e
+      end function getToken
+   end interface
+!
+   interface
+      function isInteger(s) result(t)
+         character (len=*), intent(in) :: s
+         logical :: t
+      end function isInteger
+   end interface
+!
+   interface
+      function getmustar(dos_ef_Ryd,Afac) result(mu_star)
+         use KindParamModule, only : IntKind, RealKind
+         implicit none
+!
+         real (kind=RealKind), intent(in) :: dos_ef_Ryd
+         real (kind=RealKind), intent(in), optional :: Afac
+         real (kind=RealKind) :: mu_star
+      end function getmustar
+   end interface
+!
+   interface
+      function getmustar_TF(LocalNumAtoms,n_spin_pola,Ef,DebyeTemp,PartialDOS, &
+                            lambda) result(mu_star)
+         use KindParamModule, only : IntKind, RealKind
+         use PublicTypeDefinitionsModule, only : PDOSStruct
+         implicit none
+!
+         integer (kind=IntKind), intent(in) :: LocalNumAtoms, n_spin_pola
+!
+         real (kind=RealKind), intent(in) :: Ef, DebyeTemp
+         real (kind=RealKind), intent(out) :: lambda
+         real (kind=RealKind) :: mu_star
+!
+         type (PDOSStruct), intent(in) :: PartialDOS(LocalNumAtoms)
+      end function getmustar_TF
+   end interface
+!  ===================================================================
 !
         NumAtoms = getNumAtoms()
         NumAtomTypes = getNumAtomTypes()
@@ -458,7 +532,9 @@
 !       ==============================================================
         if (isKKRCPA()) then
            if (iprint >= 0) then
-              write(6,'(/,1x,a)')'An alternative approach to the AVERAGED ETA AND LAMBDA'
+              write(6,'(/,1x,a)')'************************************************************'
+              write(6,'(  1x,a)')'*  An alternative approach to the AVERAGED ETA AND LAMBDA  *'
+              write(6,'(  1x,a)')'************************************************************'
            endif
            allocate(phase_shift_aver(kmax_kkr_max,n_spin_pola))
            allocate(ss_pDOS_aver(kmax_kkr_max,n_spin_pola))
@@ -527,10 +603,8 @@
 !             if (getMyPEinGroup(bGID) == 0) then
               if (iprint >= 0) then
                  do is = 1, n_spin_pola
-                    if (n_spin_pola == 1) then
-                       write(6,'(/)')
-                    else
-                       write(6,'(/,1x,a,i2)')'Spin index              =', is
+                    if (n_spin_pola == 2) then
+                       write(6,'(1x,a,i2)')   'Spin index              =', is
                     endif
                     write(6,'(1x,a,f12.5)')'SumI                    =', SumI(is)
                     write(6,'(1x,a,f12.5)')'I (eV^2/A^2)            =', Iconst*SumI(is)*(Ryd2eV/Bohr2Angstrom)**2
@@ -541,33 +615,116 @@
                  enddo
                  write(6,'(1x,a,f12.5)')'eta (Ryd/au^2)          =', eta
                  write(6,'(1x,a,f12.5)')'eta (eV/A^2)            =', eta*Ryd2eV/Bohr2Angstrom**2
-                 write(6,'(1x,a,f12.5)')'lamda = eta/(M<Omega^2> =', eta/EPCden
+                 write(6,'(1x,a,f12.5,/)')'lamda = eta/(M<Omega^2> =', eta/EPCden
               endif
            enddo  ! Loop over id
 
            call GlobalSumInGroup(aGID, EPC_pc)
 
            if (iprint >= 0) then
-              write(6,'(/,1x,a)')'For the system ...'
+              write(6,'(1x,a)')'For the system ...'
               write(6,'(1x,a,t32,a,f12.5)')'Total lamda (EPC)/unit cell','=', EPC_pc
            endif
            deallocate(phase_shift_aver, ss_pDOS_aver, pDOS_aver)
         endif
 
+!       ==============================================================
 !       Calculate mu ...
 !       ==============================================================
-        Coulombnum = 0.26D0*total_dos/Ryd2eV
-        Coulombden = ONE+total_dos/Ryd2eV
-        Coulomb = Coulombnum/Coulombden
-        if (getKeyValue(1,'mu* (e-e interaction constant)',mu_star, default_param=.false.) == 0) then
-           Coulomb = mu_star
-           if (iprint >= 0) then
-              write(6,'(1x,a)')'Using the input mu* (Coulomb pseudopotential) ......'
+!       Coulombnum = 0.26D0*total_dos/Ryd2eV
+!       Coulombden = ONE+total_dos/Ryd2eV
+!       Coulomb = Coulombnum/Coulombden
+!       if (getKeyValue(1,'mu* (e-e interaction constant)',mu_star, default_param=.false.) == 0) then
+!          Coulomb = mu_star
+!          if (iprint >= 0) then
+!             write(6,'(1x,a)')'Using the input mu* (Coulomb pseudopotential) ......'
+!          endif
+!       endif
+!       **************************************************************
+        is_mu_from_input = .false.
+        A = 0.26D0
+        if (getKeyValue(1,'mu* (e-e interaction constant)',mu_star_inp) == 0) then
+           n = getNumTokens(mu_star_inp)
+           if (n == 1) then
+              if (isInteger(mu_star_inp)) then
+                 read(mu_star_inp,*)mu_int
+                 if (mu_int == 0) then
+!                   Coulombnum = 0.26D0*total_dos/Ryd2eV
+!                   Coulombden = ONE+total_dos/Ryd2eV
+!                   Coulomb = Coulombnum/Coulombden
+                    Coulomb = getmustar(total_dos)
+                 else
+!                   --------------------------------------------------
+                    call ErrorHandler('Gaspari-Gyorffy-Formula','The input value of mu* is invalid',mu_int)
+!                   --------------------------------------------------
+                 endif
+              else if (isRealNumber(mu_star_inp)) then
+                 read(mu_star_inp,*)Coulomb
+                 is_mu_from_input = .true.
+              else
+!                -----------------------------------------------------
+                 call ErrorHandler('Gaspari-Gyorffy-Formula','The input value of mu* is invalid')
+!                -----------------------------------------------------
+              endif
+           else if (n == 2) then
+              t1 = getToken(1,mu_star_inp)
+              t2 = getToken(2,mu_star_inp)
+              if (isInteger(t1) .and. isRealNumber(t2)) then
+                 read(t1,*)mu_int 
+              else
+!                -----------------------------------------------------
+                 call ErrorHandler('Gaspari-Gyorffy-Formula','The input value of mu* is invalid')
+!                -----------------------------------------------------
+              endif
+              if (mu_int == 0) then
+                 read(t2,*)A
+!                Coulombnum = A*total_dos/Ryd2eV
+!                Coulombden = ONE+total_dos/Ryd2eV
+!                Coulomb = Coulombnum/Coulombden
+                 Coulomb = getmustar(total_dos,A)
+              else
+!                -----------------------------------------------------
+                 call ErrorHandler('Gaspari-Gyorffy-Formula','The input form for mu* is invalid')
+!                -----------------------------------------------------
+              endif
+           else
+!             --------------------------------------------------------
+              call ErrorHandler('Gaspari-Gyorffy-Formula','The input for mu* is not invalid')
+!             --------------------------------------------------------
            endif
+        else
+!          Coulombnum = 0.26D0*total_dos/Ryd2eV
+!          Coulombden = ONE+total_dos/Ryd2eV
+!          Coulomb = Coulombnum/Coulombden
+           Coulomb = getmustar(total_dos)
         endif
+!
         if (iprint >= 0) then
-           write(6,'(/,1x,a,t32,a,f12.5)')'mu* (Coulomb pseudopotential)','=', Coulomb
+           write(6,'(/,1x,48(''=''))')
+           if (is_mu_from_input) then
+              write(6,'(1x,a)')'Using the input mu* (Coulomb pseudopotential) ......'
+           else if (abs(A-0.26D0) < TEN2m6) then
+              write(6,'(1x,a)')'Bennemann and Garland formula'
+           else
+              write(6,'(1x,a,f8.5)')'Modified Bennemann and Garland formula with prefactor =',A
+           endif
+           write(6,'(1x,48(''-''))')
+           write(6,'(1x,a,t32,a,f12.5)')'mu* (Coulomb pseudopotential)','=', Coulomb
+           write(6,'(1x,48(''=''),/)')
         endif
+!
+        Coulomb_TF = getmustar_TF(LocalNumAtoms,n_spin_pola,efermi,DebyeTemp,PartialDOS,EPC_TF)
+!
+        if (iprint >= 0) then
+           write(6,'(/,1x,48(''=''))')
+           write(6,'(1x,a)')'The Morel-Andewrson formula in Thomas-Fermi model'
+           write(6,'(1x,48(''-''))')
+           write(6,'(1x,a,t32,a,f12.5)')'mu* (Coulomb pseudopotential)','=',Coulomb_TF
+!          write(6,'(1x,a,t32,a,f12.5)')'lambda (e-ph coupling param)','=',EPC_TF
+           write(6,'(1x,48(''=''),/)')
+        endif
+!
+!       **************************************************************
 !
 !       if (EPC-Coulomb*(ONE+0.62D0*EPC) < ZERO) then
 !          if (iprint >= 0) then
@@ -578,9 +735,9 @@
 !
 !       Calculate Tc ...
 !       ==============================================================
-        if (EPC > Coulomb) then
+        if (EPC > Coulomb*(ONE+0.62D0*EPC)) then
            if (iprint >= 0) then
-              write(6,'(1x,a,t32,a,f12.5)')'EPC-Coulomb*(ONE+0.62D0*EPC)','=', EPC-Coulomb*(ONE+0.62D0*EPC)
+              write(6,'(/,1x,a,t32,a,f12.5)')'EPC-Coulomb*(ONE+0.62D0*EPC)','=', EPC-Coulomb*(ONE+0.62D0*EPC)
            endif
            SuperTempExp = -1.04D0*(ONE+EPC)/(EPC-Coulomb*(ONE+0.62D0*EPC))
            SuperTemp=DebyeTemp*exp(SuperTempExp)/1.45D0
@@ -598,7 +755,7 @@
         endif
 !
         if (isKKRCPA()) then
-           if (EPC_pc > Coulomb) then
+           if (EPC_pc > Coulomb*(ONE+0.62D0*EPC_pc)) then
               SuperTempExp = -1.04D0*(ONE+EPC_pc)/(EPC_pc-Coulomb*(ONE+0.62D0*EPC_pc))
               SuperTemp=DebyeTemp*exp(SuperTempExp)/1.45D0
            else
@@ -612,6 +769,50 @@
            endif
         endif
 !
+!       ==============================================================
+!       Calculate Tc using the Coulomb pseudopotential (mu*) calculated using
+!       Morel-Anderson formula with Thomas-Fermi approximation.
+!       ==============================================================
+        if (iprint >= 0) then
+           write(6,'(/,1x,80(''=''))')
+           write(6,'(1x,a)')'With mu* calculated using Morel-Andewrson formula in Thomas-Fermi approximation'
+           write(6,'(1x,80(''-''))')
+        endif
+!
+        if (EPC > Coulomb_TF*(ONE+0.62D0*EPC)) then
+!          if (iprint >= 0) then
+!             write(6,'(/,1x,a,t32,a,f12.5)')'EPC-Coulomb*(ONE+0.62D0*EPC)','=', EPC-Coulomb_TF*(ONE+0.62D0*EPC)
+!          endif
+           SuperTempExp = -1.04D0*(ONE+EPC)/(EPC-Coulomb_TF*(ONE+0.62D0*EPC))
+           SuperTemp_TF=DebyeTemp*exp(SuperTempExp)/1.45D0
+        else
+!          if (iprint >= 0) then
+!             write(6,'(1x,a)') 'EPC <= Coulomb_TF'
+!          endif
+           SuperTemp_TF=ZERO
+        endif
+!
+        if (iprint >= 0) then
+           write(6,'(/,1x,80(''*''))')
+           write(6,'(1x,a,f12.5)')'Superconducting Transition Temp (K) with Thomas-Fermi approximation:',SuperTemp_TF
+           write(6,'(1x,80(''*''),/)')
+        endif
+!
+        if (isKKRCPA()) then
+           if (EPC_pc > Coulomb_TF*(ONE+0.62D0*EPC_pc)) then
+              SuperTempExp = -1.04D0*(ONE+EPC_pc)/(EPC_pc-Coulomb_TF*(ONE+0.62D0*EPC_pc))
+              SuperTemp_TF=DebyeTemp*exp(SuperTempExp)/1.45D0
+           else
+              SuperTemp_TF=ZERO
+           endif
+           if (iprint >= 0) then
+              write(6,'(/,1x,a)')'With an alternative approach to the GG formula applied to random alloys ...'
+              write(6,'(/,1x,80(''*''))')
+              write(6,'(1x,a,f12.5)')'Superconducting Transition Temp (K) with Thomas-Fermi approximation:',SuperTemp_TF
+              write(6,'(1x,80(''*''),/)')
+           endif
+        endif
+!
         deallocate(PhononFreq2, AtomMass)
 !
 !       ==============================================================
@@ -621,7 +822,102 @@
 !       call testPRB15_4221_1977(iprint)
 !       --------------------------------------------------------------
 !
-        end subroutine gaspari_gyorffy_formula
+   end subroutine gaspari_gyorffy_formula
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getmustar(dos_ef_Ryd,Afac) result(mu_star)
+!  ===================================================================
+   use KindParamModule, only : IntKind, RealKind
+   use MathParamModule, only : ONE
+   use PhysParamModule, only : Ryd2eV
+   use ErrorHandlerModule, only : WarningHandler
+   implicit none
+!
+   real (kind=RealKind), intent(in) :: dos_ef_Ryd
+   real (kind=RealKind), intent(in), optional :: Afac
+   real (kind=RealKind) :: dos_ef_ev
+   real (kind=RealKind) :: mu_star
+!
+   dos_ef_ev = dos_ef_Ryd/Ryd2eV
+!
+   if (present(Afac)) then
+      if (Afac < 0.1d0) then
+         call WarningHandler('getmustar','Afac is too small and could be wrong',Afac)
+      endif
+      mu_star = Afac*dos_ef_ev/(ONE+dos_ef_ev)
+   else
+      mu_star = 0.26D0*dos_ef_ev/(ONE+dos_ef_ev)
+   endif
+!
+   end function getmustar
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getmustar_TF(LocalNumAtoms,n_spin_pola,Ef,DebyeTemp,PartialDOS, &
+                         lambda) result(mu_star)
+!  ===================================================================
+    use KindParamModule, only : IntKind, RealKind
+    use MathParamModule, only : ZERO, HALF, ONE, THIRD, TWO, THREE, FOUR, FIVE, PI, SIX
+    use PhysParamModule, only : Ryd2eV, Kelvin2Ryd
+    use ErrorHandlerModule, only : WarningHandler
+    use PublicTypeDefinitionsModule, only : PDOSStruct
+    use ChemElementModule, only : getZval
+    use AtomModule, only : getLocalNumSpecies, getLocalAtomicNumber,  &
+                           getLocalSpeciesContent
+    implicit none
+!
+    integer (kind=IntKind), intent(in) :: LocalNumAtoms, n_spin_pola
+    integer (kind=IntKind) :: id, ia, atomic_number
+!
+    real (kind=RealKind), intent(in) :: Ef, DebyeTemp
+    real (kind=RealKind), intent(out) :: lambda
+!
+    type (PDOSStruct), intent(in) :: PartialDOS(LocalNumAtoms)
+!
+    real (kind=RealKind) :: nve, dos_ef_Ryd, q2_TF, k2_TF, THIRD2, a2, sfac
+    real (kind=RealKind) :: mu, species_content, total_dos, q2_D, omega_ph
+    real (kind=RealKind) :: mu_star
+!
+    THIRD2 = TWO*THIRD
+    if (n_spin_pola == 2) then
+       sfac = ONE
+    else
+       sfac = HALF
+    endif
+!
+    omega_ph = DebyeTemp*Kelvin2Ryd
+    if (omega_ph > Ef) then
+!      ---------------------------------------------------------------
+       call WarningHandler('getmustar_TF',                                                 &
+                           'The Morel-Anderson formula is questionable for omega_ph > Ef', &
+                           omega_ph,Ef)
+!      ---------------------------------------------------------------
+    endif
+!
+    mu = ZERO
+    lambda = ZERO
+    do id = 1, LocalNumAtoms
+       nve = ZERO
+       dos_ef_Ryd = ZERO
+       do ia = 1, getLocalNumSpecies(id)
+          species_content = getLocalSpeciesContent(id,ia)
+          atomic_number = getLocalAtomicNumber(id,ia)
+          total_dos = sfac*(PartialDOS(id)%dos_ws(1,ia)+PartialDOS(id)%dos_ws(n_spin_pola,ia))
+          dos_ef_Ryd = dos_ef_Ryd + species_content*total_dos
+          nve = nve + species_content*getZval(atomic_number)
+       enddo
+       q2_TF = 8*PI*dos_ef_Ryd
+       k2_TF = (3*PI**2*nve)**THIRD2
+       a2 = FOUR*k2_TF/q2_TF
+       q2_D = (SIX*PI**2*nve)**THIRD2
+       mu = mu + HALF*log(ONE+a2)/a2
+       lambda = lambda + HALF/(ONE+THREE*q2_D/q2_TF/FIVE)**2
+    enddo
+!
+    mu_star = mu/(ONE+mu*log(Ef/omega_ph))
+!
+    end function getmustar_TF
 !   ==================================================================
 !
 !   cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
