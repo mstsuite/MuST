@@ -668,7 +668,7 @@
 !
          public :: startRoundTurn
          public :: finishMyTurn
-
+!
          integer (kind=IntKind), public :: MPP_BUFFER_MEM = 1024000 ! A conservative guess
 !
          integer (kind=IntKind), public :: NumPEs = 1
@@ -679,6 +679,9 @@
 #else
          integer (kind=IntKind), parameter, public :: AnyPE = -1
 #endif
+!
+         integer (kind=IntKind), public :: NumPEsOnNode = 0
+         integer (kind=IntKind), public :: MyPEOnNode = -1
 !
          private
          integer (kind=IntKind), parameter :: MaxIOPEs=32
@@ -889,6 +892,7 @@
          subroutine initMPP_comm(comm)
             implicit none
             integer (kind=IntKind) :: comm
+            integer (kind=IntKind) :: local_comm
 !
             communicator = comm
 #ifdef MPI
@@ -950,6 +954,21 @@
                print *,'Number of Procs = ',NumPEs
                print *,' '
             endif
+!
+            ! Split communicator by shared memory (node-local)
+!           ----------------------------------------------------------
+            call MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, &
+                                     MPI_INFO_NULL, local_comm, info) 
+!           ----------------------------------------------------------
+            ! Query local communicator
+!           ----------------------------------------------------------
+            call MPI_Comm_size(local_comm, NumPEsOnNode, info)
+            call MPI_Comm_rank(local_comm, MyPEOnNode, info)
+!           ----------------------------------------------------------
+            ! Free local communicator
+!           ----------------------------------------------------------
+            call MPI_Comm_free(local_comm, info)
+!           ----------------------------------------------------------
 #endif
             MyPE_comm = MyPE
             NumPEs_comm = NumPEs

@@ -83,6 +83,10 @@ Read E-mesh from emeshs.inp :: 0
      1. Yes. In this case, the following data have no effect
 No. Energy Grids           ::  5
 Real Axis Bottom, erbot    ::  -0.40
+Initial Fermi Energy Setting :: 1
+     = 0: the Fermi energy is set to be the average of the Fermi energy data from input potential
+     = 1: the Fermi energy is set to be the average of the Max and Min of the Fermi energy data
+     = A real number as the initial Fermi energy
 ================================================================================
                   * * *              * * *              * * *
 ================================================================================

@@ -490,25 +490,25 @@ contains
 !
    if (.not.isSMatrixPolesInitialized()) then
       if (MyPE == 0) then
-         iprint_loc = 0
+         iprint_loc = max_print_level
       else
          iprint_loc = -1
       endif
 !     ----------------------------------------------------------------
       call initSMatrixPoles(LocalNumAtoms,n_spin_pola,n_spin_cant,LocalNumSpecies,&
-                            min(lmax_kkr,4),lmax_green,max_print_level)
+                            min(lmax_kkr,4),lmax_green,iprint_loc)
 !     ----------------------------------------------------------------
    endif
 !
    if (.not.isSineMatrixZerosInitialized()) then
       if (MyPE == 0) then
-         iprint_loc = 0
+         iprint_loc = max_print_level
       else
          iprint_loc = -1
       endif
 !     ----------------------------------------------------------------
       call initSineMatrixZeros(LocalNumAtoms,n_spin_pola,LocalNumSpecies,&
-                               min(lmax_kkr,4),lmax_green,max_print_level)
+                               min(lmax_kkr,4),lmax_green,iprint_loc)
 !     ----------------------------------------------------------------
    endif
 !
@@ -572,7 +572,7 @@ contains
    use SineMatrixZerosModule, only : isSineMatrixZerosInitialized,    &
                                      endSineMatrixZeros
 !
-   use ScfDataModule, only : isDMFTenabled
+   use ScfDataModule, only : isDMFTenabled, isLSMS
 !
    use LocalGFModule, only : endLocalGF
 !

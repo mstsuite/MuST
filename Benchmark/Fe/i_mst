@@ -6,22 +6,22 @@
 ================================================================================
                            System-related Parameters
 ===========================+====================================================
-Text Identification        ::  CoCrFeMnNi
-Alloy System Description   ::  CoCrFeMnNi, fcc structure
-No. Atoms in System (> 0)  ::  56000
+Text Identification        ::  Fe
+Alloy System Description   ::  Fe, fcc structure
+No. Atoms in System (> 0)  ::  4
 ================================================================================
                   * * *              * * *              * * *
 ================================================================================
                        Position and Potential Data Files
 ===========================+====================================================
 Atomic Position File Name  :: position.dat
-Default Potential Input File Name  ::  Co_v, Cr_v, Fe_v, Mn_v, Ni_v
+Default Potential Input File Name  ::  Fe_v
 Default Potential Input File Form  ::  0
    = 0: ASCII Format       ----------
    = 1: XDR Format         ----------
    = 2: HDF Format         ----------
    = 3: Machine Dependent Binary ----
-Default Potential Output File Name ::  CoCrFeMnNi_mt_w
+Default Potential Output File Name ::  Fe_mt_w
 Default Potential Output File Form ::  1
    = 0: ASCII Format       ----------
    = 1: XDR Format         ----------
@@ -33,7 +33,7 @@ Default Potential Output File Form ::  1
                             SCF-related Parameters
 ===========================+====================================================
 Stop-at Routine Name       :: main
-No. Iterations (> 0)       ::  3 
+No. Iterations (> 0)       ::  3
 Method of SCF Calculation  ::  1
    -2. Single Site         -----------
    -1. ScreenKKR-LSMS      -----------(To be implemented)
@@ -83,10 +83,6 @@ Read E-mesh from emeshs.inp :: 0
      1. Yes. In this case, the following data have no effect
 No. Energy Grids           ::  32 
 Real Axis Bottom, erbot    ::  -0.40
-Initial Fermi Energy Setting :: 1
-     = 0: the Fermi energy is set to be the average of the Fermi energy data from input potential
-     = 1: the Fermi energy is set to be the average of the Max and Min of the Fermi energy data
-     = A real number as the initial Fermi energy
 ================================================================================
                   * * *              * * *              * * *
 ================================================================================
@@ -128,7 +124,7 @@ Mixing algorithm           ::  0
 Mixing quantity type       ::  1
      0. Charge mixing      ---------
      1. Potential mixing   ---------
-Default Mixing Parameter   ::  0.0010
+Default Mixing Parameter   ::  0.0500
 Default Evec Mix Param.    ::  0.0000
 Energy (Ryd) Tol (> 0)     ::  0.000005
 Potential Tol (> 0)        ::  0.0000001

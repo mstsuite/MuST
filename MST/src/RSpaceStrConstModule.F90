@@ -190,7 +190,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function getStrConstMatrix(kappa,rij,lmaxi,lmaxj) result(gij)
+   function getStrConstMatrix(kappa,rij,lmaxi,lmaxj,iprint) result(gij)
 !  ===================================================================
 !
 !  *******************************************************************
@@ -255,6 +255,8 @@ contains
    use GauntFactorsModule, only : getK3
    use GauntFactorsModule, only : getNumK3
    use GauntFactorsModule, only : getGauntFactor
+use LegendreModule, only : legendre
+use SphericalHarmonicsModule, only : getClm
 !
    implicit   none
 !
@@ -262,6 +264,7 @@ contains
 !
    integer (kind=IntKind), intent(in) :: lmaxi
    integer (kind=IntKind), intent(in) :: lmaxj
+   integer (kind=IntKind), intent(in), optional :: iprint
 !
    integer (kind=IntKind) :: kmaxi
    integer (kind=IntKind) :: kmaxj
@@ -284,6 +287,9 @@ contains
    real (kind=RealKind) :: rmag
    real (kind=RealKind), pointer :: cgnt(:,:,:)
    real (kind=RealKind), pointer :: pcgnt(:)
+real (kind=RealKind), pointer :: clm(:)
+real (kind=RealKind) :: plm(138), cos_theta
+integer (kind=IntKind) :: jmax_dlm
 !
    complex (kind=CmplxKind), intent(in) :: kappa
 !
@@ -343,6 +349,28 @@ contains
 !  --------------------------------------------------------------------
    call calYlmConjg(rij,lmax_dlm,ylmcc)
 !  --------------------------------------------------------------------
+   if (present(iprint)) then
+      if (iprint > 0) then
+         write(6,'(a,3f12.5)')'rij = ',rij(1:3)
+clm => getClm(lmax_dlm)
+cos_theta=rij(3)/rmag
+plm = ZERO
+call legendre(lmax_dlm,cos_theta,plm)
+jmax_dlm=(lmax_dlm+1)*(lmax_dlm+2)/2
+         write(6,'(a,1i5,2d15.8)')'jl, Plm, Clm ',jmax_dlm-lmax_dlm+1, &
+                                   plm(jmax_dlm-lmax_dlm+1),clm(jmax_dlm-lmax_dlm+1)
+         write(6,'(a,1i5,2d15.8)')'kl, Ylmcc = ',kmax_dlm-lmax_dlm+1,  &
+                                  ylmcc(kmax_dlm-lmax_dlm+1)
+         write(6,'(a,1i5,2d15.8)')'jl, Plm, Clm ',jmax_dlm-1, &
+                                   plm(jmax_dlm-1),clm(jmax_dlm-1)
+         write(6,'(a,1i5,2d15.8)')'kl, Ylmcc = ',kmax_dlm-1,  &
+                                  ylmcc(kmax_dlm-1)
+         write(6,'(a,1i5,2d15.8)')'jl, Plm, Clm ',jmax_dlm, &
+                                   plm(jmax_dlm),clm(jmax_dlm)
+         write(6,'(a,1i5,2d15.8)')'kl, Ylmcc = ',kmax_dlm,  &
+                                  ylmcc(kmax_dlm)
+      endif
+   endif
 !
 !  ===================================================================
 !  generate the KKR real space lattice structure matrix for the energy
@@ -359,6 +387,21 @@ contains
       fac =  hfn(l)*z/ilp1(l)
       dlm(kl) = fac*ylmcc(kl)
    enddo
+   if (present(iprint)) then
+      if (iprint > 0) then
+         write(6,'(a,3f12.5)')'rij(1:3) = ',rij(1:3)
+         write(6,'(a,2d15.8)')'kappa = ',kappa
+         write(6,'(a,2d15.8)')'hfn   = ',hfn(4)
+         write(6,'(a,2d15.8)')'hfn   = ',hfn(7)
+         write(6,'(a,2d15.8)')'hfn   = ',hfn(8)
+         write(6,'(a,2d15.8)')'ylmcc(37) = ',ylmcc(37)
+         write(6,'(a,2d15.8)')'ylmcc(66) = ',ylmcc(66)
+         write(6,'(a,2d15.8)')'ylmcc(81) = ',ylmcc(81)
+         write(6,'(a,2d15.8)')'dlm(37)   = ',dlm(37)
+         write(6,'(a,2d15.8)')'dlm(66)   = ',dlm(66)
+         write(6,'(a,2d15.8)')'dlm(81)   = ',dlm(81)
+      endif
+   endif
 !
 !  ===================================================================
 !  calculate g(R_ij)...................................................
@@ -389,10 +432,23 @@ contains
          gij_llp = CZERO
          do j = 1,nnj3
             gij_llp = gij_llp+pcgnt(j)*dlm(pkj3(j))
+   if (present(iprint)) then
+      if (iprint > 0 .and. kl == 25 .and. klp == 17) then
+         write(6,'(a,i5,2x,2d15.8)')'pkj3, dlm = ',pkj3(j),dlm(pkj3(j))
+         write(6,'(a,d15.8,2x,2d15.8)')'pcgnt, gllp = ',pcgnt(1), gij_llp
+      endif
+   endif
          enddo
          gij(kl,klp)=pi4*illp(kl,klp)*gij_llp
       enddo
    enddo
+   if (present(iprint)) then
+      if (iprint > 0) then
+         write(6,'(a,2i5)')'nj3(25,17),nj3(17,25) = ',nj3(25,17),nj3(17,25)
+         write(6,'(a,2d15.8)')'gij(25,17) = ', gij(25,17)
+         write(6,'(a,2d15.8)')'gij(17,25) = ', gij(17,25)
+      endif
+   endif
 !
 #ifdef DEBUG
    if(print_level >= 1) then

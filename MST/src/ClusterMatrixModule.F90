@@ -52,6 +52,7 @@ private
    integer (kind=IntKind) :: NumPEsInGroup, MyPEinGroup, GroupID
 !
    real (kind=RealKind), allocatable :: Position(:,:)
+   real (kind=RealKind), allocatable :: position_array(:)
 !
    complex (kind=CmplxKind), allocatable, target :: jinv_g(:)
    complex (kind=CmplxKind), allocatable, target :: sine_g(:)
@@ -93,6 +94,7 @@ private
 !
    logical :: Initialized = .false.
    logical :: InitializedFactors = .false.
+   logical :: GPU_Offloading = .false.
 !
    logical :: ExchSSSmatAllocated = .false.
    logical :: istauij_needed = .false.
@@ -106,6 +108,8 @@ private
    complex (kind=CmplxKind), allocatable :: jsmtx_buf(:,:)
 #endif
 !
+   integer (kind=IntKind) :: NumGPUsOnNode, NumCoresOnNode
+!
    integer (kind=IntKind) :: NumNonLocalNeighbors
    integer (kind=IntKind) :: NumReceives
    integer (kind=IntKind) :: NumSends
@@ -115,6 +119,7 @@ private
    integer (kind=IntKind), allocatable :: remote_kmax(:)
    integer (kind=IntKind), allocatable :: mapping_jsmtx(:,:)
    integer (kind=IntKind), allocatable :: recv_msgid(:), send_msgid(:)
+   integer (kind=IntKind), allocatable :: numnb_array(:)
 !
    character (len=15) :: stop_routine
 !
@@ -126,7 +131,8 @@ contains
    subroutine initClusterMatrix(num_latoms,index,lmaxkkr,lmaxphi,     &
                                 posi,cant,rel,istop,iprint)
 !  ===================================================================
-   use MPPModule, only : MyPE
+   use MPPModule, only : MyPE, NumPEsOnNode
+!
    use GroupCommModule, only : getGroupID, getNumPEsInGroup, getMyPEinGroup
 !
    use ScfDataModule, only : Minv_alg, NumEs, tauij_needed
@@ -137,6 +143,16 @@ contains
 !
    use MatrixBlockInversionModule, only : initMatrixBlockInv
    use WriteMatrixModule, only : writeMatrix
+!
+#ifdef ACCEL
+   use IntegerFactorsModule, only : lofk
+   use GauntFactorsModule, only : getK3
+   use GauntFactorsModule, only : getNumK3
+   use GauntFactorsModule, only : getGauntFactor
+   use SphericalHarmonicsModule, only : getClm
+#endif
+!
+   implicit none
 !
    integer (kind=IntKind), intent(in) :: num_latoms
    integer (kind=IntKind), intent(in) :: index(num_latoms)
@@ -150,11 +166,21 @@ contains
 !
    real (kind=RealKind), intent(in) :: posi(3,num_latoms)
 !
-   integer (kind=IntKind) :: lmax, i, j, max_nblck, kmaxns, bsz
+   integer (kind=IntKind) :: lmax, i, j, max_nblck, kmaxns, bsz, n
    integer (kind=IntKind) :: wsTau00_size, pos_tau
    integer (kind=IntKind), allocatable :: nblck(:),kblocks(:,:)
 !
+   integer (kind=IntKind), parameter :: MaxProcsPerGPU = 8
+!
    complex (kind=CmplxKind), pointer :: p1(:)
+!
+#ifdef ACCEL
+   integer (kind=IntKind) :: kj3_size_1, kj3_size_2
+   integer (kind=IntKind), pointer :: nj3(:,:)
+   integer (kind=IntKind), pointer :: kj3(:,:,:)
+   real (kind=RealKind), pointer :: cgnt(:,:,:)
+   real (kind=RealKind), pointer :: clm(:)
+#endif
 !
    n_spin_cant = cant
    Relativity = rel
@@ -309,11 +335,95 @@ contains
 !    allocate (ClusterTau(LocalNumAtoms*kmax_max,LocalNumAtoms*kmax_max))
    endif
 !
+   GPU_Offloading = .false.
+!
 #ifdef ACCEL
-!  -------------------------------------------------------------------
-   call init_lsms_gpu(dsize_max,isize_max,MyPEinGroup)
-!* call cu_init_lsms_gpu(dsize_max,isize_max)
-!  -------------------------------------------------------------------
+   call get_node_resources(NumCoresOnNode,NumGPUsOnNode)
+   if (MaxPrintLevel >= 0) then
+      write(6,'(a,i5)')'Num CPU Cores on Node = ',NumCoresOnNode
+      write(6,'(a,i5)')'Num Processes on Node = ',NumPEsOnNode
+      write(6,'(a,i5)')'Num GPUs on Node      = ',NumGPUsOnNode
+   endif
+   if (NumGPUsOnNode > 0) then
+      if (NumPEsOnNode/NumGPUsOnNode <= MaxProcsPerGPU) then
+         GPU_Offloading = .true.
+      else ! Disable GPU offloading if the number of MPI processes per GPU > MaxProcsPerGPU
+         GPU_Offloading = .false.
+         if (MaxPrintLevel >= 0) then
+            write(6,'(/)')
+            write(6,'(80(''*''))')
+            write(6,'(a)')'!!!    GPU offloading is disabled: Too many MPI prcesses per GPU on node     !!!'
+            write(6,'(80(''*''))')
+            write(6,'(/)')
+         endif
+      endif
+      if (GPU_Offloading) then
+         do i = 1,LocalNumAtoms
+            Neighbor => getNeighbor(i)
+            if (Neighbor%NumAtoms <= 1) then
+               GPU_Offloading = .false.
+!              -------------------------------------------------------
+               call WarningHandler('initClusterMatrix',                       &
+                                   'GPU offloading is disabled for LIZ <= 1', &
+                                   Neighbor%NumAtoms)
+!              -------------------------------------------------------
+            endif
+         enddo
+      endif
+   else
+      if (MaxPrintLevel >= 0) then
+         write(6,'(/)')
+         write(6,'(80(''*''))')
+         write(6,'(a)')'!!!         GPU offloading is disabled: No GPU is found available            !!!'
+         write(6,'(80(''*''))')
+         write(6,'(/)')
+      endif
+   endif
+#endif
+!
+#ifdef ACCEL
+   if (GPU_Offloading) then
+      allocate(position_array(3*(numnb_max+1)*LocalNumAtoms))
+      allocate(numnb_array(LocalNumAtoms))
+      position_array = ZERO
+      n = 0
+      do i = 1,LocalNumAtoms
+!        In the acceleration case, we require that lmax_kkr is the same for all atoms in the LIZ
+!        This makes coding much simpler.
+         if (lmax_max /= lmax_kkr(i)) then
+            call ErrorHandler('initClusterMatrix','lmax_kkr is not kept the same for all atoms', &
+                              lmax_max,lmax_kkr(i))
+         endif
+         Neighbor => getNeighbor(i)
+         numnb_array(i) = Neighbor%NumAtoms
+         do j = 0, Neighbor%NumAtoms
+            if (j == 0) then
+               position_array(n+j*3+1) = Position(1,i)
+               position_array(n+j*3+2) = Position(2,i)
+               position_array(n+j*3+3) = Position(3,i)
+            else
+               position_array(n+j*3+1) = Neighbor%Position(1,j)
+               position_array(n+j*3+2) = Neighbor%Position(2,j)
+               position_array(n+j*3+3) = Neighbor%Position(3,j)
+            endif
+         enddo
+         n = n + 3*(numnb_max+1)
+      enddo
+      clm => getClm(2*lmax_max)
+      nj3 => getNumK3()
+      kj3 => getK3()
+      cgnt => getGauntFactor()
+      kj3_size_1 = size(kj3,1)
+      kj3_size_2 = size(kj3,2)
+!     ----------------------------------------------------------------
+      call push_parameters_gpu(2*lmax_max,lofk,kj3_size_1,kj3_size_2,nj3,kj3,cgnt,clm)
+      call compute_ylm_gpu(lmax_max,LocalNumAtoms,numnb_max,numnb_array, &
+                           position_array,MyPEinGroup)
+!     ----------------------------------------------------------------
+      call init_lsms_gpu(lmax_max,dsize_max,isize_max,MyPEinGroup)
+!*    call cu_init_lsms_gpu(dsize_max,isize_max)
+!     ----------------------------------------------------------------
+   endif
 #endif
 !
 !  -------------------------------------------------------------------
@@ -394,7 +504,11 @@ contains
 !  -------------------------------------------------------------------
 !
 #ifdef ACCEL
-   call finalize_lsms_gpu()
+   if (GPU_Offloading) then
+      call finalize_lsms_gpu()
+      deallocate(position_array, numnb_array)
+!     call free_parameters_gpu()
+   endif
 #endif
 !
    Initialized = .false.
@@ -912,7 +1026,7 @@ contains
    subroutine calClusterMatrix(energy,getSingleScatteringMatrix,tau_needed,kp)
 !  ===================================================================
    use TimerModule, only : getTime
-use MPPModule, only : MyPE, syncAllPEs
+   use MPPModule, only : MyPE, NumPEsOnNode, syncAllPEs
 !
    use SpinRotationModule, only : rotateGtoL
 !
@@ -940,8 +1054,9 @@ use MPPModule, only : MyPE, syncAllPEs
    integer (kind=IntKind) :: lid_i, lid_j, pei, pej, jid, info, iid
 !
    real (kind=RealKind) :: rij(3), posi(3), posj(3)
+   real (kind=RealKind) :: t0
 !
-   complex (kind=CmplxKind), pointer :: gij(:,:)
+   complex (kind=CmplxKind), pointer :: gij(:,:), gij_d(:,:)
    complex (kind=CmplxKind), pointer :: p_jinvi(:)
    complex (kind=CmplxKind), pointer :: p_sinej(:)
    complex (kind=CmplxKind), pointer :: pBigMatrix(:,:)
@@ -1000,225 +1115,336 @@ use MPPModule, only : MyPE, syncAllPEs
       dsize = dsize_l(my_atom)  ! This is the number of rows of BigMatrix
 !
 #ifdef ACCEL
-      if (Neighbor%NumAtoms > 0) then
+      if (GPU_Offloading) then
+!        -------------------------------------------------------------
          call init_bigmatrix_gpu(dsize)
-      endif
-#else
-      jig => wsStoreA
-!     ================================================================
-!     initialize BigMatrix so that it is a unit matrix to begin with..
-!     ================================================================
-      call setupUnitMatrix(dsize,BigMatrix)
-#endif
-!     ================================================================
-!     loop over cluster neighbors to build BigMatrix [1-Jinv*G*S]
-!
-!     NOTE: The following code may fail if the 
-!           number of neighbors associated with each atom is different.
-!     ================================================================
-      nbj=0
-      do irj=0,Neighbor%NumAtoms
-!        =============================================================
-!        get the Jinv-matrix and Sine-matrix and store the data in
-!        the following way:
-!             jinvi(nbr_kkrj_ns,nbr_kkrj_ns)
-!             sinej(nbr_kkrj_ns,nbr_kkrj_ns)
-!
-!        Note: nbr_kkri and nbr_kkri are the actual kmax of the neighboring
-!              atom, while kkri and kkrj are the reduced kmax of the neighboring 
-!              atom which decreases as the distance from the center atom further
-!              away.
-!        =============================================================
-         if (irj == 0) then
-            lid_j = my_atom
-            pej = MyPEinGroup
-            posj(1:3) = Position(1:3,my_atom)
-            lmaxj = lmax_kkr(my_atom)
-         else
-            lid_j = Neighbor%LocalIndex(irj)
-            pej = Neighbor%ProcIndex(irj)
-            posj(1:3) = Neighbor%Position(1:3,irj)
-            lmaxj = Neighbor%Lmax(irj)
-         endif
-!
-         if (pej == MyPEinGroup) then
-            nbr_kkrj = kmax_kkr(lid_j)
-            p_jinvi => local_jsmtx(2:tsize+1,lid_j)
-            p_sinej => local_jsmtx(tsize+2:2*tsize+1,lid_j)
-         else
-            jid = mapping_jsmtx(irj,my_atom)
-            nbr_kkrj = remote_kmax(jid)
-            p_jinvi => remote_jsmtx(1:tsize,jid)
-            p_sinej => remote_jsmtx(tsize+1:2*tsize,jid)
-         endif
-!
-         kkrj  = (lmaxj+1)*(lmaxj+1)
-!        ==============================================================
-!        nbr_kkrj = kmax of the remote atom
-!        kkrj = kmax to be used in the construction of the "big matrix"
-!             <= nbr_kkrj
-!        ==============================================================
-         if (nbr_kkrj < kkrj) then
+!        -------------------------------------------------------------
+         do irj=0,Neighbor%NumAtoms
+            if (irj == 0) then
+               position_array(irj*3+1) = Position(1,my_atom)
+               position_array(irj*3+2) = Position(2,my_atom)
+               position_array(irj*3+3) = Position(3,my_atom)
+               lid_j = my_atom
+               pej = MyPEinGroup
+            else
+               position_array(irj*3+1) = Neighbor%Position(1,irj)
+               position_array(irj*3+2) = Neighbor%Position(2,irj)
+               position_array(irj*3+3) = Neighbor%Position(3,irj)
+               lid_j = Neighbor%LocalIndex(irj)
+               pej = Neighbor%ProcIndex(irj)
+            endif
+            if (pej == MyPEinGroup) then
+               nbr_kkrj = kmax_kkr(lid_j)
+               p_jinvi => local_jsmtx(2:tsize+1,lid_j)
+               p_sinej => local_jsmtx(tsize+2:2*tsize+1,lid_j)
+            else
+               jid = mapping_jsmtx(irj,my_atom)
+               nbr_kkrj = remote_kmax(jid)
+               p_jinvi => remote_jsmtx(1:tsize,jid)
+               p_sinej => remote_jsmtx(tsize+1:2*tsize,jid)
+            endif
+            nbr_kkrj_ns  = nbr_kkrj*n_spin_cant
 !           -----------------------------------------------------------
-            call ErrorHandler('calTauMatrix','remote atom kmax < kmaxj',nbr_kkrj,kkrj)
+            call push_submatrix_gpu(1,irj,irj,p_sinej,nbr_kkrj_ns)
+            call push_submatrix_gpu(2,irj,irj,p_jinvi,nbr_kkrj_ns)
 !           -----------------------------------------------------------
-         endif
-         kkrj_ns  = kkrj*n_spin_cant
-         nbr_kkrj_ns  = nbr_kkrj*n_spin_cant
-!
-#ifdef ACCEL
+         enddo
 !        --------------------------------------------------------------
-         call push_submatrix_gpu(1,irj,irj,p_sinej,nbr_kkrj_ns)
-         call push_submatrix_gpu(2,irj,irj,p_jinvi,nbr_kkrj_ns)
+         call commit_to_gpu(1)
+         call commit_to_gpu(2)
 !        --------------------------------------------------------------
-#endif
+         if (NumPEsOnNode <= 4) then
+            t0 = getTime()
+!           -----------------------------------------------------------
+            call calculate_gij_gpu(kappa,n_spin_cant,numnb_max,my_atom,      &
+                                   Neighbor%NumAtoms,lmax_kkr(my_atom))
+!           -----------------------------------------------------------
+            if (MyPE == 0) then
+               write(6,'(a,f10.5)')'Timing for calculatig Gij on GPU:',getTime()-t0
+            endif
+!======================================================================
+!           iri=1; irj=3
+!           posj(1) = position_array(irj*3+1)
+!           posj(2) = position_array(irj*3+2)
+!           posj(3) = position_array(irj*3+3)
+!           posi(1) = position_array(iri*3+1)
+!           posi(2) = position_array(iri*3+2)
+!           posi(3) = position_array(iri*3+3)
+!           rij = posj - posi
+!           lmaxi = Neighbor%Lmax(iri)
+!           lmaxj = Neighbor%Lmax(irj)
+!           gij => getGij(kappa,rij,lmaxi,lmaxj,1)
+!======================================================================
+         else
+            t0 = getTime()
+            do irj=0,Neighbor%NumAtoms
+               posj(1) = position_array(irj*3+1)
+               posj(2) = position_array(irj*3+2)
+               posj(3) = position_array(irj*3+3)
+               if (irj == 0) then
+                  lmaxj = lmax_kkr(my_atom)
+               else
+                  lmaxj = Neighbor%Lmax(irj)
+               endif
+               kkrj  = (lmaxj+1)*(lmaxj+1)
 !
-!        =============================================================
-!        Rearrange the sine matrix storage if needed..................
-         if (n_spin_cant == 2 .and. kkrj_ns /= nbr_kkrj_ns) then
-            do js = 1, n_spin_cant
-               sbi = (js-1)*nbr_kkrj_ns*nbr_kkrj
-               sbj = (js-1)*kkrj_ns*kkrj
-               do klj = 1, kkrj
-                  do is = 1, n_spin_cant
-                     do kli = 1, kkrj
-                        store_sine(sbj+kli)=p_sinej(sbi+kli)
-                     enddo
-                     sbi = sbi + nbr_kkrj
-                     sbj = sbj + kkrj
-                  enddo
+               do iri=0,Neighbor%NumAtoms
+                  posi(1) = position_array(iri*3+1)
+                  posi(2) = position_array(iri*3+2)
+                  posi(3) = position_array(iri*3+3)
+                  if (iri == 0) then
+                     lmaxi = lmax_kkr(my_atom)
+                  else
+                     lmaxi = Neighbor%Lmax(iri)
+                  endif
+                  kkri = (lmaxi+1)*(lmaxi+1)
+                  if ( irj /= iri ) then
+                     rij = posj - posi
+!                    =================================================
+!                    For testing purposes ...
+!                    =================================================
+!                    if ((iri==1 .and. irj==3) .or. (iri==2 .and. irj==13)) then 
+!                       gij => getGij(kappa,rij,lmaxi,lmaxj,1)
+!                    else
+!                       gij => getGij(kappa,rij,lmaxi,lmaxj)
+!                    endif
+!                    gij_d => aliasArray2_c(wsTau00L, kkri, kkri)
+!                    =================================================
+!                    Check gij against gij_d which are calculated on GPU.
+!                    -------------------------------------------------
+!                    call get_gij_from_gpu(iri,irj,lmaxi,gij_d)
+!                    -------------------------------------------------
+!                    do klj = 1, kkri
+!                       do kli = 1, kkri
+!                          if (abs(gij_d(kli,klj)-gij(kli,klj)) > 0.00000001d0) then
+!                             write(6,'(a,4i3,a,2d15.8,a,2d15.8)')'iri,irj,kli,klj=', &
+!                                iri,irj,kli,klj,', gij_d=',gij_d(kli,klj),', gij=',gij(kli,klj)
+!                          endif
+!                       enddo
+!                    enddo 
+!                    =================================================
+!                    -------------------------------------------------
+                     gij => getGij(kappa,rij,lmaxi,lmaxj)
+!                    -------------------------------------------------
+!
+!                    =================================================
+                     if (Relativity > 1) then
+!                       ----------------------------------------------
+                        call convertGijToRel(gij, gijrel, kkri, kkrj, energy)
+!                       ----------------------------------------------
+                        gij => gijrel
+!                       -----------------------------------------------
+                        call push_submatrix_gpu(3,iri,irj,gij,kkri*2)
+!                       -----------------------------------------------
+                     else
+!                       -----------------------------------------------
+                        call push_gij_matrix_gpu(n_spin_cant,iri,irj,gij,kkri)
+!                       -----------------------------------------------
+                     endif
+                  endif
                enddo
             enddo
-         else
-            store_sine = CZERO
+            if (MyPE == 0) then
+               write(6,'(a,f10.5)')'Timing for calculatig Gij on CPU:',getTime()-t0
+            endif
+!           -----------------------------------------------------------
+            call commit_to_gpu(3)
+!           -----------------------------------------------------------
          endif
+!        --------------------------------------------------------------
+         call construct_bigmatrix_gpu(kappa)
+!        --------------------------------------------------------------
+      endif
+#endif
+      if (.not.GPU_Offloading) then
+         jig => wsStoreA
 !        =============================================================
-         nbi = 0
-         do iri=0,Neighbor%NumAtoms
-            if (iri == 0) then
-               lid_i = my_atom
-               pei = MyPEinGroup
-               posi(1:3) = Position(1:3,my_atom)
-               lmaxi = lmax_kkr(my_atom)
+!        initialize BigMatrix so that it is a unit matrix to begin with..
+!        =============================================================
+         call setupUnitMatrix(dsize,BigMatrix)
+!        =============================================================
+!        loop over cluster neighbors to build BigMatrix [1-Jinv*G*S]
+!
+!        NOTE: The following code may fail if the 
+!              number of neighbors associated with each atom is different.
+!        =============================================================
+         nbj=0
+         do irj=0,Neighbor%NumAtoms
+!           ==========================================================
+!           get the Jinv-matrix and Sine-matrix and store the data in
+!           the following way:
+!                jinvi(nbr_kkrj_ns,nbr_kkrj_ns)
+!                sinej(nbr_kkrj_ns,nbr_kkrj_ns)
+!
+!           Note: nbr_kkri and nbr_kkri are the actual kmax of the neighboring
+!                 atom, while kkri and kkrj are the reduced kmax of the neighboring 
+!                 atom which decreases as the distance from the center atom further
+!                 away.
+!           ==========================================================
+            if (irj == 0) then
+               lid_j = my_atom
+               pej = MyPEinGroup
+               posj(1:3) = Position(1:3,my_atom)
+               lmaxj = lmax_kkr(my_atom)
             else
-               lid_i = Neighbor%LocalIndex(iri)
-               pei = Neighbor%ProcIndex(iri)
-               posi(1:3) = Neighbor%Position(1:3,iri)
-               lmaxi = Neighbor%Lmax(iri)
+               lid_j = Neighbor%LocalIndex(irj)
+               pej = Neighbor%ProcIndex(irj)
+               posj(1:3) = Neighbor%Position(1:3,irj)
+               lmaxj = Neighbor%Lmax(irj)
             endif
 !
-            kkri = (lmaxi+1)*(lmaxi+1)
-            if (pei == MyPEinGroup) then
-               nbr_kkri = kmax_kkr(lid_i)
-               p_jinvi => local_jsmtx(2:tsize+1,lid_i)
+            if (pej == MyPEinGroup) then
+               nbr_kkrj = kmax_kkr(lid_j)
+               p_jinvi => local_jsmtx(2:tsize+1,lid_j)
+               p_sinej => local_jsmtx(tsize+2:2*tsize+1,lid_j)
             else
-               iid = mapping_jsmtx(iri,my_atom)
-               nbr_kkri = remote_kmax(iid)
-               p_jinvi => remote_jsmtx(1:tsize,iid)
+               jid = mapping_jsmtx(irj,my_atom)
+               nbr_kkrj = remote_kmax(jid)
+               p_jinvi => remote_jsmtx(1:tsize,jid)
+               p_sinej => remote_jsmtx(tsize+1:2*tsize,jid)
             endif
+!
+            kkrj  = (lmaxj+1)*(lmaxj+1)
 !           ===========================================================
-!           nbr_kkri = kmax of the remote atom
-!           kkri = kmax to be used in the construction of the "big matrix"
-!                <= nbr_kkri
+!           nbr_kkrj = kmax of the remote atom
+!           kkrj = kmax to be used in the construction of the "big matrix"
+!                <= nbr_kkrj
 !           ===========================================================
-            if (nbr_kkri < kkri) then
+            if (nbr_kkrj < kkrj) then
 !              --------------------------------------------------------
-               call ErrorHandler('calTauMatrix','remote atom kmax < kmaxi',nbr_kkri,kkri)
+               call ErrorHandler('calTauMatrix','remote atom kmax < kmaxj',nbr_kkrj,kkrj)
 !              --------------------------------------------------------
             endif
-            kkri_ns = kkri*n_spin_cant
-            nbr_kkri_ns = nbr_kkri*n_spin_cant
+            kkrj_ns  = kkrj*n_spin_cant
+            nbr_kkrj_ns  = nbr_kkrj*n_spin_cant
 !
-            if ( irj /= iri ) then
-!              =======================================================
-!              g(Rij) calculation
-!              The data is stored as gij(kkri,kmax_phi_j)
-!
-!                       s,s"     ij'      s",s'
-!              form Jinv  (e) * g  (e) * S   (e) for current Rij and
-!                   ----i       -s"      -j'
-!
-!              store the result into BigMatrix => 1 - Jinv*G*S/kappa
-!              =======================================================
-!08/28/14      rij(1:3) = posi(1:3)-posj(1:3)
-               rij = posj - posi
-               gij => getGij(kappa,rij,lmaxi,lmaxj)
-#ifdef ACCEL
-               if (Relativity > 1) then
-!                 ----------------------------------------------------
-                  call convertGijToRel(gij, gijrel, kkri, kkrj, energy)
-!                 ----------------------------------------------------
-                  gij => gijrel
-!                 -----------------------------------------------------
-                  call push_submatrix_gpu(3,iri,irj,gij,kkri_ns)
-!                 -----------------------------------------------------
-               else
-!                 -----------------------------------------------------
-                  call push_gij_matrix_gpu(n_spin_cant,iri,irj,gij,kkri)
-!                 -----------------------------------------------------
-               endif
-#else
-!
-               if (Relativity > 1) then
-!                 ----------------------------------------------------
-                  call convertGijToRel(gij, gijrel, kkri, kkrj, energy)
-!                 ----------------------------------------------------
-                  gij => gijrel
-!                 ----------------------------------------------------
-                  call zgemm('n', 'n', kkri_ns, kkrj_ns, kkri_ns, CONE,&
-                             p_jinvi, nbr_kkri_ns, gij, kkri_ns, CZERO, jig, kkri_ns)
-!                 ----------------------------------------------------
-               else
-                  do js = 1, n_spin_cant
+!           ==========================================================
+!           Rearrange the sine matrix storage if needed..................
+            if (n_spin_cant == 2 .and. kkrj_ns /= nbr_kkrj_ns) then
+               do js = 1, n_spin_cant
+                  sbi = (js-1)*nbr_kkrj_ns*nbr_kkrj
+                  sbj = (js-1)*kkrj_ns*kkrj
+                  do klj = 1, kkrj
                      do is = 1, n_spin_cant
-!                       ----------------------------------------------
-                        call zgemm('n', 'n', kkri, kkrj, kkri, CONE,                      &
-                                   p_jinvi((js-1)*nbr_kkri_ns*nbr_kkri+(is-1)*nbr_kkri+1),&
-                                   nbr_kkri_ns, gij, kkri, CZERO,                         &
-                                   jig((js-1)*kkri_ns*kkrj+(is-1)*kkri+1), kkri_ns)
-!                       ----------------------------------------------
+                        do kli = 1, kkrj
+                           store_sine(sbj+kli)=p_sinej(sbi+kli)
+                        enddo
+                        sbi = sbi + nbr_kkrj
+                        sbj = sbj + kkrj
                      enddo
                   enddo
-               endif
-               if (n_spin_cant == 2 .and. kkrj_ns /= nbr_kkrj_ns) then
-                  ! In this case, p_sinej data have been rearranged and copied
-                  ! to store_sine
-!                 ----------------------------------------------------
-                  call zgemm('n', 'n', kkri_ns, kkrj_ns, kkrj_ns, -CONE/kappa, &
-                             jig, kkri_ns, store_sine, kkrj_ns, CZERO,         &
-                             BigMatrix(dsize*nbj+nbi+1), dsize)
-!                 ----------------------------------------------------
-               else
-!                 ----------------------------------------------------
-                  call zgemm('n', 'n', kkri_ns, kkrj_ns, kkrj_ns, -CONE/kappa, &
-                             jig, kkri_ns, p_sinej, nbr_kkrj_ns, CZERO,        &
-                             BigMatrix(dsize*nbj+nbi+1), dsize)
-!                 ----------------------------------------------------
-                 !call writeMatrix('BigMatrixIteration', BigMatrix, dsize*dsize)
-               endif
-#endif
+               enddo
+            else
+               store_sine = CZERO
             endif
-            nbi = nbi + kkri_ns
-         enddo
-         nbj = nbj + kkrj_ns
-      enddo
-#ifdef ACCEL
-!     ----------------------------------------------------------------
-      call commit_to_gpu(1)
-      call commit_to_gpu(2)
-      call commit_to_gpu(3)
-      call construct_bigmatrix_gpu(-CONE/kappa)
-!     ----------------------------------------------------------------
-#endif
+!           ==========================================================
+            nbi = 0
+            do iri=0,Neighbor%NumAtoms
+               if (iri == 0) then
+                  lid_i = my_atom
+                  pei = MyPEinGroup
+                  posi(1:3) = Position(1:3,my_atom)
+                  lmaxi = lmax_kkr(my_atom)
+               else
+                  lid_i = Neighbor%LocalIndex(iri)
+                  pei = Neighbor%ProcIndex(iri)
+                  posi(1:3) = Neighbor%Position(1:3,iri)
+                  lmaxi = Neighbor%Lmax(iri)
+               endif
 !
-      if ( nbi /= nbj ) then
-!        -------------------------------------------------------------
-         call ErrorHandler(' calTauMatrix ::', 'nbi /= nbj', nbi, nbj)
-!        -------------------------------------------------------------
-      else if ( nbi /= dsize ) then
-!        -------------------------------------------------------------
-         call ErrorHandler(' calTauMatrix ::', 'nbi /= dsize', dsize)
-!        -------------------------------------------------------------
+               kkri = (lmaxi+1)*(lmaxi+1)
+               if (pei == MyPEinGroup) then
+                  nbr_kkri = kmax_kkr(lid_i)
+                  p_jinvi => local_jsmtx(2:tsize+1,lid_i)
+               else
+                  iid = mapping_jsmtx(iri,my_atom)
+                  nbr_kkri = remote_kmax(iid)
+                  p_jinvi => remote_jsmtx(1:tsize,iid)
+               endif
+!              ========================================================
+!              nbr_kkri = kmax of the remote atom
+!              kkri = kmax to be used in the construction of the "big matrix"
+!                   <= nbr_kkri
+!              ========================================================
+               if (nbr_kkri < kkri) then
+!                 -----------------------------------------------------
+                  call ErrorHandler('calTauMatrix','remote atom kmax < kmaxi',nbr_kkri,kkri)
+!                 -----------------------------------------------------
+               endif
+               kkri_ns = kkri*n_spin_cant
+               nbr_kkri_ns = nbr_kkri*n_spin_cant
+!
+               if ( irj /= iri ) then
+!                 ====================================================
+!                 g(Rij) calculation
+!                 The data is stored as gij(kkri,kmax_phi_j)
+!
+!                          s,s"     ij'      s",s'
+!                 form Jinv  (e) * g  (e) * S   (e) for current Rij and
+!                      ----i       -s"      -j'
+!
+!                 store the result into BigMatrix => 1 - Jinv*G*S/kappa
+!                 ====================================================
+!08/28/14         rij(1:3) = posi(1:3)-posj(1:3)
+                  rij = posj - posi
+                  gij => getGij(kappa,rij,lmaxi,lmaxj)
+!
+                  if (Relativity > 1) then
+!                    -------------------------------------------------
+                     call convertGijToRel(gij, gijrel, kkri, kkrj, energy)
+!                    -------------------------------------------------
+                     gij => gijrel
+!                    =================================================
+!                    This needs to be checked since in this case,
+!                        nbr_kkri_ns should be nbr_kkri*2
+!                        kkri_ns and kkrj_ns should be kkri*2 and kkrj*2, 
+!                        respectively
+!                    -------------------------------------------------
+                     call zgemm('n', 'n', kkri_ns, kkrj_ns, kkri_ns, CONE,&
+                                p_jinvi, nbr_kkri_ns, gij, kkri_ns, CZERO, jig, kkri_ns)
+!                    -------------------------------------------------
+                  else
+                     do js = 1, n_spin_cant
+                        do is = 1, n_spin_cant
+!                          -------------------------------------------
+                           call zgemm('n', 'n', kkri, kkrj, kkri, CONE,                      &
+                                      p_jinvi((js-1)*nbr_kkri_ns*nbr_kkri+(is-1)*nbr_kkri+1),&
+                                      nbr_kkri_ns, gij, kkri, CZERO,                         &
+                                      jig((js-1)*kkri_ns*kkrj+(is-1)*kkri+1), kkri_ns)
+!                          -------------------------------------------
+                        enddo
+                     enddo
+                  endif
+                  if (n_spin_cant == 2 .and. kkrj_ns /= nbr_kkrj_ns) then
+                     ! In this case, p_sinej data have been rearranged and copied
+                     ! to store_sine
+!                    -------------------------------------------------
+                     call zgemm('n', 'n', kkri_ns, kkrj_ns, kkrj_ns, -CONE/kappa, &
+                                jig, kkri_ns, store_sine, kkrj_ns, CZERO,         &
+                                BigMatrix(dsize*nbj+nbi+1), dsize)
+!                    -------------------------------------------------
+                  else
+!                    -------------------------------------------------
+                     call zgemm('n', 'n', kkri_ns, kkrj_ns, kkrj_ns, -CONE/kappa, &
+                                jig, kkri_ns, p_sinej, nbr_kkrj_ns, CZERO,        &
+                                BigMatrix(dsize*nbj+nbi+1), dsize)
+!                    -------------------------------------------------
+                    !call writeMatrix('BigMatrixIteration', BigMatrix, dsize*dsize)
+                  endif
+               endif
+               nbi = nbi + kkri_ns
+            enddo
+            nbj = nbj + kkrj_ns
+         enddo
+         if ( nbi /= nbj ) then
+!           ----------------------------------------------------------
+            call ErrorHandler(' calTauMatrix ::', 'nbi /= nbj', nbi, nbj)
+!           ----------------------------------------------------------
+         else if ( nbi /= dsize ) then
+!           ----------------------------------------------------------
+            call ErrorHandler(' calTauMatrix ::', 'nbi /= dsize', dsize)
+!           ----------------------------------------------------------
+         endif
       endif
 !
       Tau00(my_atom)%kau_l = CZERO
@@ -1278,38 +1504,43 @@ use MPPModule, only : MyPE, syncAllPEs
 !        -------------------------------------------------------------
          wau_g => aliasArray2_c(wsStoreA, kkrsz_ns, kkrsz_ns)
 #ifdef ACCEL
-         call invert_bigmatrix_gpu(pBlockMatrix,kkrsz_ns)
-!**      pBigMatrix => aliasArray2_c(BigMatrix, dsize, dsize)
-!**      call invert_lsms_matrix(pBlockMatrix, kkrsz_ns, pBigMatrix, dsize )
-         wau_g = pBlockMatrix - ubmat
-!!!      call invertMatrixLSMS_CUDA(my_atom, pBlockMatrix, kkrsz_ns,  &
-!!!                              pBigMatrix, dsize )
-#else
-!        call writeMatrix('BigMatrix',BigMatrix,dsize_max*dsize_max)
-!        -------------------------------------------------------------
-         call invertMatrixBlock( my_atom, pBlockMatrix, kkrsz_ns, kkrsz_ns,  &
-                                 BigMatrix, dsize, dsize )
-!        -------------------------------------------------------------
-!
-!        =============================================================
-!        store [1 - BlockMatrix] in ubmat, which uses wsTau00L as temporary space
-!        =============================================================
-         ubmat = ubmat - pBlockMatrix
-!
-!        =============================================================
-!        Calculate wau_g = {[1-Jinv*G*S]**(-1)-1} : for central site only
-!        solve the eigenvectors of the following linear equations:
-!              [1 - pBlockMatrix]*wau_g = pBlockMatrix
-!        to obtain wau_g
-!        -------------------------------------------------------------
-         call zcopy(kkrsz_ns*kkrsz_ns,pBlockMatrix,1,wau_g,1)
-!        -------------------------------------------------------------
-         call zgetrf(kkrsz_ns, kkrsz_ns, ubmat, kkrsz_ns, ipvt, info)
-!        -------------------------------------------------------------
-         call zgetrs( 'n', kkrsz_ns, kkrsz_ns, ubmat, kkrsz_ns, ipvt, &
-                      wau_g, kkrsz_ns, info )
-!        -------------------------------------------------------------
+         if (GPU_Offloading) then
+!           ----------------------------------------------------------
+            call invert_bigmatrix_gpu(pBlockMatrix,kkrsz_ns)
+!           ----------------------------------------------------------
+!**         pBigMatrix => aliasArray2_c(BigMatrix, dsize, dsize)
+!**         call invert_lsms_matrix(pBlockMatrix, kkrsz_ns, pBigMatrix, dsize )
+            wau_g = pBlockMatrix - ubmat
+!!!         call invertMatrixLSMS_CUDA(my_atom, pBlockMatrix, kkrsz_ns,  &
+!!!                                    pBigMatrix, dsize )
+         endif
 #endif
+         if (.not.GPU_Offloading) then
+!           call writeMatrix('BigMatrix',BigMatrix,dsize_max*dsize_max)
+!           ----------------------------------------------------------
+            call invertMatrixBlock( my_atom, pBlockMatrix, kkrsz_ns, kkrsz_ns,  &
+                                    BigMatrix, dsize, dsize )
+!           ----------------------------------------------------------
+!
+!           ==========================================================
+!           store [1 - BlockMatrix] in ubmat, which uses wsTau00L as temporary space
+!           ==========================================================
+            ubmat = ubmat - pBlockMatrix
+!
+!           ==========================================================
+!           Calculate wau_g = {[1-Jinv*G*S]**(-1)-1} : for central site only
+!           solve the eigenvectors of the following linear equations:
+!              [1 - pBlockMatrix]*wau_g = pBlockMatrix
+!           to obtain wau_g
+!           ----------------------------------------------------------
+            call zcopy(kkrsz_ns*kkrsz_ns,pBlockMatrix,1,wau_g,1)
+!           ----------------------------------------------------------
+            call zgetrf(kkrsz_ns, kkrsz_ns, ubmat, kkrsz_ns, ipvt, info)
+!           ----------------------------------------------------------
+            call zgetrs( 'n', kkrsz_ns, kkrsz_ns, ubmat, kkrsz_ns, ipvt, &
+                         wau_g, kkrsz_ns, info )
+!           ----------------------------------------------------------
+         endif
          nullify( pBlockMatrix )
          nullify( pBigMatrix )
 !        -------------------------------------------------------------

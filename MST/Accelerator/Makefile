@@ -57,22 +57,11 @@ else
 endif
 
 OBJ0 = \
-initialize_matinv_accel.o \
-finalize_matinv_accel.o \
-initialize_matinv_cuda.o \
-finalize_matinv_cuda.o \
-zblock_lu_accel.o \
-zblock_lu_cuda_c.o \
-cusolver_LSMS_c.o \
-invertMatrixLSMS_CUDA.o \
+acclib.o \
+util_mat.o \
+LSMS_Accel.o \
 cusolver_KKR_c.o \
-invertMatrixKKR_CUDA.o \
-zblock_lu_CPU.o \
-inverse.o \
-DeviceStorage.o \
-interface_dstore.o \
-invert_lsms_matrix.o \
-LSMS_CUDA_Acceleration.o
+invertMatrixKKR_CUDA.o
 
 $(ACCLIB): $(OBJ0)
 	$(ARCHV) $@ $(OBJ0)

@@ -1,0 +1,80 @@
+#  module purge
+#  module load openmpi/4.0.5-nvhpc22.9 intel-mkl/2023.2.0
+#  Currently Loaded Modules:
+#    1) intel-tbb/2021.10.0   2) intel-compiler-rt/2023.2.1   3) intel-mkl/2023.2.0   4) openmpi/4.0.5-nvhpc22.9
+#=====================================================================
+# Acceleration = 1: enable GPU acceleration
+# Acceleration = 0: otherwise
+#=====================================================================
+Acceleration = 1
+
+#=====================================================================
+# Library paths and elements, e.g.,
+#    HDF5_PATH   = /opt/packages/HDF5/hdf5-1.10.5
+#    LIBXC_PATH  = /opt/packages/LibXC/libxc-4.3.4/INTEL
+#    ACCEL_PATH  = /usr/local/cuda
+#    FFTW_PATH   = /usr/local/FFTW/fftw-3.3.8/INTEL
+#    P3DFFT_PATH = /opt/packages/P3DFFT/p3dfft-2.7.9/INTEL
+#    LUA_PATH    = /opt/packages/Lua/lua-5.3.5
+#  
+# If LUA_PATH, LIBXC_PATH, FFTW_PATH, and/or P3DFFT_PATH are empty, the
+# corresponding packages will be installed under $(EXTERN_LIB_PATH)
+#=====================================================================
+HDF5_PATH   = 
+ACCEL       = CUDA
+ACCEL_PATH  = ${NVHPC_ROOT}/cuda
+ACCEL_LIBS = ${NVHPC_ROOT}/math_libs
+LIBXC_PATH  = 
+FFTW_PATH   =
+P3DFFT_PATH =
+LUA_PATH    =
+# LIBS       += -L$(NVHPC_ROOT)/compilers/lib -lblas_lp64 -llapack_lp64 -lscalapack
+LIBS       += -Mmkl
+# ADD_LIBS   += -lm -lstdc++ -pgf90libs
+ADD_LIBS   += -L$(ACCEL_PATH)/lib64 -lcudart \
+              -L$(ACCEL_LIBS)/lib64 -lcublas -lstdc++ -lcusolver
+
+#=====================================================================
+# Compiler tools
+#=====================================================================
+CC          = mpicc
+CXX         = mpicxx
+F77         = mpifort
+FC          = mpifort
+MPICC       = mpicc
+# For bridges2 GPU nodes
+# ACCEL_CXX   = nvcc -arch=sm_35
+# For a001 GPU nodes
+ACCEL_CXX   = nvcc -arch=sm_80
+ARCHV       = ar -r
+
+#=====================================================================
+# Preprocessor/Compiler/Linker flags, e.g.,
+#    FFLAGS = -I. -O3 -CB -CU -traceback -ftrapuv -fpe0 -ftz -fp-stack-check
+# Note: "FPPFLAGS = -DMPI" enables MPI parallel processing.
+#=====================================================================
+FPPDEFS     = -cpp
+CPPDEFS     = -cpp
+# FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK -DNVHPC
+FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DNVHPC
+
+CFLAGS      = -O3
+CXXFLAGS    = -O3 -std=c++14
+FFLAGS      = -O3 -I.
+FFLAGS_ALT  = -O1 -I.
+# FFLAGS      = -I. -O3 -CB -CU -traceback -ftrapuv -fpe0 -ftz -fp-stack-check
+F77FLAGS    = $(FFLAGS)
+OPT_OPENMP  = -fopenmp -mp=gpu -Minfo=mp,accel
+
+LD_FLAGS    =
+LD          = $(FC) $(LD_FLAGS)
+
+#=====================================================================
+# LIBXC_CONFIG_FLAGS, P3DFFT_CONFIG_FLAGS and FFTW_CONFIG_FLAGS are 
+# ./configure flags for hdf5, libxc, p3dfft, and fftw package, respectively.
+# Note: for hdf5, "--enable-parallel" might be needed in the future.
+#=====================================================================
+HDF5_CONFIG_FLAGS   = --enable-fortran --enable-static-exec CC=$(CC) CXX=$(CXX) FC=$(FC)
+LIBXC_CONFIG_FLAGS  = CC=$(CC) CFLAGS="$(CFLAGS)" FC=$(FC) FFLAGS="$(FFLAGS)" LIBS=""
+P3DFFT_CONFIG_FLAGS = --enable-pgi --enable-openmpi --enable-estimate FC=$(FC) CC=$(CC) FCFLAGS="$(FFLAGS)" CCLD=$(FC) LIBS="$(LIBS)"
+FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS)" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)" LIBS="$(ADD_LIBS)"
