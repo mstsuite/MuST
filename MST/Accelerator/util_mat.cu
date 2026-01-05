@@ -6,10 +6,12 @@
 // CUDA kernel to create a unit matrix
 __global__ void createUnitMatrixKernel(cuDoubleComplex *matrix_d, int n) {
     // Calculate the unique thread index
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    // int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
     // Boundary check to ensure the thread does not go out of bounds
-    if (idx < n * n) {
+    // if (idx < n * n) {
+    for (size_t idx = tid; idx < n*n; idx += blockDim.x*gridDim.x) {
         // Calculate the row and column from the linear index
         int row = idx / n;
         int col = idx % n;
@@ -28,12 +30,17 @@ __global__ void createUnitMatrixKernel(cuDoubleComplex *matrix_d, int n) {
 
 // CUDA kernel to copy the upper-left nB x nB block of matrix A of size nA x nA into matrix B
 __global__ void copyBlockKernel(cuDoubleComplex *A, int nA, cuDoubleComplex *B, int nB) {
-   int row = blockIdx.y * blockDim.y + threadIdx.y;
-   int col = blockIdx.x * blockDim.x + threadIdx.x;
+   // int row = blockIdx.y * blockDim.y + threadIdx.y;
+   // int col = blockIdx.x * blockDim.x + threadIdx.x;
+   int tid_row = blockIdx.y * blockDim.y + threadIdx.y;
+   int tid_col = blockIdx.x * blockDim.x + threadIdx.x;
 
    // Check if the current thread is within the n x n block
-   if (row < nB && col < nB) {
-      B[row * nB + col] = A[row * nA + col];
+   // if (row < nB && col < nB) {
+   for (size_t row = tid_row; row < nB; row += blockDim.y*gridDim.y) {
+      for (size_t col = tid_col; col < nB; col += blockDim.x*gridDim.x) {
+         B[row * nB + col] = A[row * nA + col];
+      }
    }
 }
 

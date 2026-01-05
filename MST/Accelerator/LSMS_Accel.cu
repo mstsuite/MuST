@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <time.h>
 #include <cmath>
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
@@ -36,9 +37,13 @@ __global__ void computeSphericalHarmonicsKernel(int liz_max,
 // double *Plm = (double*)malloc(jmax * sizeof(double));
    cuDoubleComplex czero = make_cuDoubleComplex(0.0, 0.0);
 
-   int idx = blockIdx.x * blockDim.x + threadIdx.x;
+   // int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-   if (idx < N_size) {
+   // if (idx < N_size) {
+   int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+   // dsize = big matrix size
+   for (size_t idx = tid; idx < N_size; idx += blockDim.x*gridDim.x) {
       int ida = 0;
       int ip = 0;
       int jp = 0;
@@ -123,10 +128,10 @@ __global__ void computeGijKernel(cuDoubleComplex kappa_d, int liz_max,
       i2l[l] = cuCmul(sqrtm1,i2l[l-1]);
    }
 
-   int idx = blockIdx.x * blockDim.x + threadIdx.x;
+   int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
    // dsize = big matrix size
-   if (idx < dsize*dsize) {
+   for (size_t idx = tid; idx < dsize*dsize; idx += blockDim.x*gridDim.x) {
       int kmax = (lmax+1)*(lmax+1);
       int NK = dsize*kmax;
       int jp = idx/NK;         // jp = column-wise atom index (starts from 0)
@@ -287,10 +292,13 @@ __global__ void calculateGijKernel(cuDoubleComplex kappa_d, int liz_max,
       i2l[l] = cuCmul(sqrtm1,i2l[l-1]);
    }
 
-   int idx = blockIdx.x * blockDim.x + threadIdx.x;
+   // int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+   int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
    // dsize = big matrix size
-   if (idx < dsize*dsize) {
+   for (size_t idx = tid; idx < dsize*dsize; idx += blockDim.x*gridDim.x) {
+   // if (idx < dsize*dsize) {
       int kmax    = (lmax+1)*(lmax+1);
       int kmax_ns = kmax*cant;
       int NK      = dsize*kmax_ns;
@@ -406,9 +414,28 @@ __global__ void calculateGijKernel(cuDoubleComplex kappa_d, int liz_max,
    __syncthreads();
 }
 
+bool BigMat_allocated = false;
+bool SJG_allocated = false;
 bool Ylm_allocated = false;
 bool param_pushed = false;
 bool initialized = false;
+
+int tau_size = 0;
+int mmat_size = 0;
+int num_cpu_tasks = 0;
+int my_rank = -1;
+
+double _Complex  *sine_h;  // mat_id = 1
+double _Complex  *jinv_h;  // mat_id = 2
+double _Complex  *gij_h;   // mat_id = 3
+
+cuDoubleComplex  *sine_d;
+cuDoubleComplex  *jinv_d;
+cuDoubleComplex  *BigMat_d;
+cuDoubleComplex  *BigMatInv_d;
+cuDoubleComplex  *block_d;
+int *pivotArray;
+int *infoArray;
 
 int kj3_MaxJ3 = 0;
 int kj3_kmax = 0;
@@ -424,12 +451,14 @@ int *num_nbs_d;
 double *posi_d;
 cuDoubleComplex  *gij_d;
 
+cudaStream_t stream;
+
 void runYlmOverLIZ(int na, int liz_max, int l_max) {
 
       // Define kernel launch parameters
       int N_size = na*liz_max*liz_max;
       int threadsPerBlock = 256;
-      int numBlocks = (N_size + threadsPerBlock - 1) / threadsPerBlock;
+      int numBlocks = min((N_size + threadsPerBlock - 1) / threadsPerBlock / num_cpu_tasks, 512);
 
 //    testKernel<<<numBlocks, threadsPerBlock>>>(N_size,lofk_d,posi_d);
 //    checkCudaErrors(cudaDeviceSynchronize());
@@ -441,30 +470,15 @@ void runYlmOverLIZ(int na, int liz_max, int l_max) {
                                                                       posi_d, 
                                                                       Clm_d, 
                                                                       Ylm_d);
-      checkCudaErrors(cudaDeviceSynchronize());
-      checkCudaErrors(cudaGetLastError()); // Check for launch errors
+   // checkCudaErrors(cudaDeviceSynchronize());
+   // checkCudaErrors(cudaGetLastError()); // Check for launch errors
 }
-
-int tau_size = 0;
-int mmat_size = 0;
-
-double _Complex  *sine_h;  // mat_id = 1
-double _Complex  *jinv_h;  // mat_id = 2
-double _Complex  *gij_h;   // mat_id = 3
-
-cuDoubleComplex  *sine_d;
-cuDoubleComplex  *jinv_d;
-cuDoubleComplex  *BigMat_d;
-cuDoubleComplex  *BigMatInv_d;
-cuDoubleComplex  *block_d;
-int *pivotArray;
-int *infoArray;
 
 extern "C"
 void calculate_gij_gpu_(double _Complex *kappa, int *n_spin_cant, int *numnb_max, 
                         int *ia, int *num_nbs, int *lmax_kkr) {
-   if (!initialized) {
-      fprintf(stderr, "\nError in calculate_gij_gpu: Needs to call init_lsms_gpu first.\n");
+   if (!SJG_allocated) {
+      fprintf(stderr, "\nError in calculate_gij_gpu: Needs to call allocate_gijmatrix_gpu first.\n");
       exit(EXIT_FAILURE);
    }
    
@@ -484,9 +498,11 @@ void calculate_gij_gpu_(double _Complex *kappa, int *n_spin_cant, int *numnb_max
    int dsize = liz_size*(lmax+1)*(lmax+1); // = big matrix rank/cant
    // Define kernel launch parameters
    int threadsPerBlock = 256;
-   int numBlocks = (dsize*dsize + threadsPerBlock - 1) / threadsPerBlock;
+   int numBlocks = min((dsize*dsize + threadsPerBlock - 1) / threadsPerBlock / num_cpu_tasks,512);
    // Launch the kernel
-   computeGijKernel<<<numBlocks,threadsPerBlock>>>(kappa_d,liz_max,aid,liz_size,dsize,lmax,cant,kj3_MaxJ3,kj3_kmax,
+//computeGijKernel<<<numBlocks,threadsPerBlock>>>(kappa_d,liz_max,aid,liz_size,dsize,lmax,cant,kj3_MaxJ3,kj3_kmax,
+   computeGijKernel<<<numBlocks,threadsPerBlock,0,stream>>>
+                    (kappa_d,liz_max,aid,liz_size,dsize,lmax,cant,kj3_MaxJ3,kj3_kmax,
                                                    posi_d,lofk_d,nj3_d,kj3_d,cgnt_d,Ylm_d,gij_d);
 
 /*
@@ -500,7 +516,10 @@ void calculate_gij_gpu_(double _Complex *kappa, int *n_spin_cant, int *numnb_max
 */
 
    checkCudaErrors(cudaDeviceSynchronize());
-   checkCudaErrors(cudaGetLastError()); // Check for launch errors
+// checkCudaErrors(cudaGetLastError()); // Check for launch errors
+
+   // Cleanup stream
+   // checkCudaErrors(cudaStreamDestroy(stream));
 }
 
 extern "C"
@@ -528,17 +547,44 @@ void get_gij_from_gpu_(int *ip, int *jp, int *lmax, double _Complex *gij) {
 }
 
 extern "C"
-void init_lsms_gpu_(int *lmax, int *dsize, int *block_size, int *my_pe) {
+void init_lsms_gpu_(int *dsize, int *block_size, int *ntasks, int *my_pe) {
    if (!initialized) {
       mmat_size = *dsize;
       tau_size = *block_size;
+      num_cpu_tasks = *ntasks;
+      my_rank = *my_pe;
+ 
+      if (mmat_size <= 1) {
+         fprintf(stderr,"\nError: mmat_size <= 1, %d\n",mmat_size);
+         exit(EXIT_FAILURE);
+      }
+      else if (tau_size > mmat_size) {
+         fprintf(stderr,"\nError: tau_size > mmat_size, %d,%d\n",tau_size,mmat_size);
+         exit(EXIT_FAILURE);
+      }
+      else if (num_cpu_tasks < 1) {
+         fprintf(stderr,"\nError: num_cpu_tasks < 1, %d\n",num_cpu_tasks);
+         exit(EXIT_FAILURE);
+      }
+      else if (my_rank < 0) {
+         fprintf(stderr,"\nError: my_rank < 0, %d\n",my_rank);
+         exit(EXIT_FAILURE);
+      }
 
       // This code assumes that each atom in the LIZ has the same scattering matrix size
       // ==============================================================
 
-      if (*my_pe == 0) printf("CUDA memory assigned \n");
+      if (my_rank == 0) printf("CUDA memory assigned \n");
 
-      // cudaError_t error;
+      checkCudaErrors(cudaSetDevice(0));  // This line needs to be re-examined for multiple GPUs
+
+      initialized = true;
+   }
+}
+
+extern "C"
+void allocate_bigmatrix_gpu_() {
+   if (initialized) {
       size_t size_block = tau_size * tau_size * sizeof(cuDoubleComplex);
       size_t size_bigmat = mmat_size * mmat_size * sizeof(cuDoubleComplex);
 
@@ -551,6 +597,19 @@ void init_lsms_gpu_(int *lmax, int *dsize, int *block_size, int *my_pe) {
       checkCudaErrors(cudaMalloc((void**)&BigMatInv_d, size_bigmat));
 
       checkCudaErrors(cudaMalloc((void**)&block_d, size_block));
+      
+      BigMat_allocated = true;
+   }
+   else {
+      printf("\nIt needs to call init_lsms_gpu first.\n");
+      exit(EXIT_FAILURE);
+   }
+}
+
+extern "C"
+void allocate_sjgmatrix_gpu_() {
+   if (initialized) {
+      size_t size_bigmat = mmat_size * mmat_size * sizeof(cuDoubleComplex);
 
       checkCudaErrors(cudaMalloc((void**)&sine_d, size_bigmat));
 
@@ -567,10 +626,15 @@ void init_lsms_gpu_(int *lmax, int *dsize, int *block_size, int *my_pe) {
 
       checkCudaErrors(cudaMalloc((void**)&gij_d, size_bigmat));
       cudaMemset(gij_d, 0, size_bigmat); // set the device array to 0
-
-      initialized = true;
+      
+      SJG_allocated = true;
+   }
+   else {
+      printf("\nIt needs to call init_lsms_gpu first.\n");
+      exit(EXIT_FAILURE);
    }
 }
+
 extern "C"
 void compute_ylm_gpu_(int *lmax, int *local_atoms, int *numnb_max, 
                      int *num_nbs, double *posi, int *my_pe) {
@@ -643,19 +707,24 @@ void push_parameters_gpu_(int *lmax, int *lofk, int *kj3_size_1, int *kj3_size_2
 
 extern "C"
 void finalize_lsms_gpu_() {
-   if (initialized) {
+   if (SJG_allocated) {
+      cudaFree(sine_d);
+      cudaFree(jinv_d);
+      cudaFree(gij_d);
       free(sine_h);
       free(jinv_h);
       free(gij_h);
+   }
+   if (BigMat_allocated) {
       cudaFree(BigMat_d);
       cudaFree(pivotArray);
       cudaFree(infoArray);
       cudaFree(BigMatInv_d);
       cudaFree(block_d);
-      cudaFree(sine_d);
-      cudaFree(jinv_d);
-      cudaFree(gij_d);
    }
+   my_rank = -1;
+   SJG_allocated = false;
+   BigMat_allocated = false;
    initialized = false;
 }
 
@@ -688,6 +757,10 @@ void init_bigmatrix_gpu_(int *b_size) {
       fprintf(stderr,"\nError: b_size <> mmat_size, %d,%d\n",*b_size,mmat_size);
       exit(EXIT_FAILURE);
    }
+
+   // Stream per process for isolation; MPS will merge contexts for concurrency
+   checkCudaErrors(cudaStreamCreate(&stream));
+
    // Define kernel launch parameters and set BigMat_d to be a unit matrix
    // ========================================
    int threads_per_block = 512;
@@ -703,13 +776,31 @@ void push_submatrix_gpu_(int *mat_id, int *row, int *col, double _Complex *mat, 
       exit(EXIT_FAILURE);
    }
    else if (*mat_id == 1) {
-      copySubBlockToMatrix(mat,msize,row,col,sine_h,&mmat_size);
+      if (SJG_allocated) {
+         copySubBlockToMatrix(mat,msize,row,col,sine_h,&mmat_size);
+      }
+      else {
+         fprintf(stderr,"\nError: sine matrix is not allocated on CPU/GPU\n");
+         exit(EXIT_FAILURE);
+      }
    }
    else if (*mat_id == 2) {
-      copySubBlockToMatrix(mat,msize,row,col,jinv_h,&mmat_size);
+      if (SJG_allocated) {
+         copySubBlockToMatrix(mat,msize,row,col,jinv_h,&mmat_size);
+      }
+      else {
+         fprintf(stderr,"\nError: jost matrix is not allocated on CPU/GPU\n");
+         exit(EXIT_FAILURE);
+      }
    }
    else if (*mat_id == 3) {
-      copySubBlockToMatrix(mat,msize,row,col,gij_h,&mmat_size);
+      if (SJG_allocated) {
+         copySubBlockToMatrix(mat,msize,row,col,gij_h,&mmat_size);
+      }
+      else {
+         fprintf(stderr,"\nError: gij matrix is not allocated on CPU/GPU\n");
+         exit(EXIT_FAILURE);
+      }
    }
    else {
       fprintf(stderr,"\nError: invalid matrix ID, %d\n",*mat_id);
@@ -745,16 +836,44 @@ void push_gij_matrix_gpu_(int *cant, int *row, int *col, double _Complex *gij, i
 }
 
 extern "C"
+void push_bigmatrix_gpu_(double _Complex *bm, int *b_size) {
+   if (*b_size != mmat_size) {
+      fprintf(stderr,"\nError: b_size <> mmat_size, %d,%d\n",*b_size,mmat_size);
+      exit(EXIT_FAILURE);
+   }
+   size_t size = sizeof(cuDoubleComplex)*mmat_size*mmat_size;
+   checkCudaErrors(cudaMemcpy(BigMat_d, bm, size, cudaMemcpyHostToDevice));
+}
+
+extern "C"
 void commit_to_gpu_(int *mat_id) {
    size_t size = sizeof(cuDoubleComplex)*mmat_size*mmat_size;
    if (*mat_id == 1) {
-      checkCudaErrors(cudaMemcpy(sine_d, sine_h, size, cudaMemcpyHostToDevice));
+      if (SJG_allocated) {
+         checkCudaErrors(cudaMemcpyAsync(sine_d, sine_h, size, cudaMemcpyHostToDevice, stream));
+      }
+      else {
+         fprintf(stderr,"\nError: sine matrix is not allocated on CPU/GPU\n");
+         exit(EXIT_FAILURE);
+      }
    }
    else if (*mat_id == 2) {
-      checkCudaErrors(cudaMemcpy(jinv_d, jinv_h, size, cudaMemcpyHostToDevice));
+      if (SJG_allocated) {
+         checkCudaErrors(cudaMemcpyAsync(jinv_d, jinv_h, size, cudaMemcpyHostToDevice, stream));
+      }
+      else {
+         fprintf(stderr,"\nError: jost matrix is not allocated on CPU/GPU\n");
+         exit(EXIT_FAILURE);
+      }
    }
    else if (*mat_id == 3) {
-      checkCudaErrors(cudaMemcpy(gij_d, gij_h, size, cudaMemcpyHostToDevice));
+      if (SJG_allocated) {
+         checkCudaErrors(cudaMemcpyAsync(gij_d, gij_h, size, cudaMemcpyHostToDevice, stream));
+      }
+      else {
+         fprintf(stderr,"\nError: gij matrix is not allocated on GPU\n");
+         exit(EXIT_FAILURE);
+      }
    }
    else {
       fprintf(stderr,"\nError: invalid matrix ID, %d\n",*mat_id);
@@ -781,6 +900,7 @@ void construct_bigmatrix_gpu_(double _Complex *kappa) {
     // Create cuBLAS handle
     cublasHandle_t handle;
     checkCublasErrors(cublasCreate(&handle));
+    checkCublasErrors(cublasSetStream(handle, stream));  // assign rank-specific CUDA stream
 
     // Compute jig = jinv * gij
     checkCublasErrors(cublasZgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N,
@@ -796,9 +916,12 @@ void construct_bigmatrix_gpu_(double _Complex *kappa) {
                                   sine_d, mmat_size,
                                   &one, BigMat_d, mmat_size));
 
+    checkCudaErrors(cudaStreamSynchronize(stream));
+
     // Cleanup
     cudaFree(jig_d);
     cublasDestroy(handle);
+    checkCudaErrors(cudaStreamDestroy(stream));
 }
 
 extern "C"
@@ -811,53 +934,81 @@ void invert_bigmatrix_gpu_(double _Complex *block, int *block_size) {
       exit(EXIT_FAILURE);
    }
 
+   clock_t t0;
+   double cpu_time;
+
+   cudaStream_t stream_loc;
+   checkCudaErrors(cudaStreamCreate(&stream_loc));
+
    cusolverDnHandle_t cusolverHandle;
    cusolverStatus_t cusolverStatus;
    cusolverDnCreate(&cusolverHandle);
+   cusolverDnSetStream(cusolverHandle, stream_loc);  // assign rank-specific stream
    cusolverDnZgetrf_bufferSize(cusolverHandle, mmat_size, mmat_size, BigMat_d, mmat_size, &Lwork);
-
-   // Create a working array on the device
-   // ========================================
-   cuDoubleComplex  *workArray;
-   checkCudaErrors(cudaMalloc((void**)&workArray, Lwork*sizeof(cuDoubleComplex)));
 
    // Define kernel launch parameters and create a unit matrix on device
    // ========================================
+   t0 = clock();
    int threads_per_block = 512;
-   int num_blocks = (mmat_size*mmat_size + threads_per_block - 1) / threads_per_block;
-   createUnitMatrixKernel<<<num_blocks, threads_per_block>>>(BigMatInv_d, mmat_size);
+   int num_blocks = min((mmat_size*mmat_size + threads_per_block - 1)/threads_per_block/num_cpu_tasks,1024);
+   createUnitMatrixKernel<<<num_blocks, threads_per_block, 0, stream_loc>>>(BigMatInv_d, mmat_size);
    checkCudaErrors(cudaPeekAtLastError());
+
+   cpu_time = ((double)(clock()-t0))/CLOCKS_PER_SEC;
+   if (my_rank == -1) {
+      fprintf(stdout,"\ncpu time for setting up unit matrix = %f sec\n",cpu_time);
+   }
+
+   // Create a working array on the device
+   // ========================================
+   t0 = clock();
+   cuDoubleComplex  *workArray;
+   checkCudaErrors(cudaMalloc((void**)&workArray, Lwork*sizeof(cuDoubleComplex)));
 
    // Perform matrix inverse on the device
    // ============================================
    cusolverStatus = cusolverDnZgetrf(cusolverHandle, mmat_size, mmat_size, BigMat_d, mmat_size, 
                                      workArray, pivotArray, infoArray);
    if (cusolverStatus != CUSOLVER_STATUS_SUCCESS) {
-      fprintf(stderr,"\nError: cuSOLVER ZGETRF UNSUCCESSFUL! \n");
+      fprintf(stdout,"\nError: cuSOLVER ZGETRF UNSUCCESSFUL! \n");
    }
+   cudaFree(workArray);
    cusolverStatus = cusolverDnZgetrs(cusolverHandle, CUBLAS_OP_N, mmat_size, mmat_size, BigMat_d, mmat_size, 
                                      pivotArray, BigMatInv_d, mmat_size, infoArray); 
    if (cusolverStatus != CUSOLVER_STATUS_SUCCESS) {
       fprintf(stderr,"\nError: cuSOLVER ZGETRS UNSUCCESSFUL! \n");
    }
 
+   cpu_time = ((double)(clock()-t0))/CLOCKS_PER_SEC;
+   if (my_rank == -1) {
+      fprintf(stdout,"\ncpu time for performing inverse = %f sec\n",cpu_time);
+   }
+
    // --------------------------------------------
    // Aggregate the data into block_d array and then make one cudaMemcpy call
    // --------------------------------------------
    // Define grid and block dimensions for the kernel
+   t0 = clock();
    dim3 threadsPerBlock(32, 32); // Using a 32x32 block
-   dim3 blocksPerGrid((tau_size + threadsPerBlock.x - 1) / threadsPerBlock.x,
-                      (tau_size + threadsPerBlock.y - 1) / threadsPerBlock.y);
+// dim3 blocksPerGrid(min((tau_size + threadsPerBlock.x - 1)/threadsPerBlock.x/num_cpu_tasks,32),
+//                    min((tau_size + threadsPerBlock.y - 1)/threadsPerBlock.y/num_cpu_tasks,32));
+   dim3 blocksPerGrid(1,1);
 
    // Launch the kernel
    // ============================================
-   copyBlockKernel<<<blocksPerGrid, threadsPerBlock>>>(BigMatInv_d, mmat_size, block_d, tau_size);
+   copyBlockKernel<<<blocksPerGrid, threadsPerBlock,0,stream_loc>>>(BigMatInv_d, mmat_size, block_d, tau_size);
    checkCudaErrors(cudaPeekAtLastError());
-   checkCudaErrors(cudaMemcpy(block, block_d, sizeof(cuDoubleComplex)*tau_size*tau_size, 
-                              cudaMemcpyDeviceToHost));
+   checkCudaErrors(cudaMemcpyAsync(block, block_d, sizeof(cuDoubleComplex)*tau_size*tau_size, 
+                                   cudaMemcpyDeviceToHost,stream_loc));
 
    // clean up
    // ============================================
+   checkCudaErrors(cudaStreamSynchronize(stream_loc));
+   checkCudaErrors(cudaStreamDestroy(stream_loc));
    cusolverDnDestroy(cusolverHandle);
-   cudaFree(workArray);
+
+   cpu_time = ((double)(clock()-t0))/CLOCKS_PER_SEC;
+   if (my_rank == -1) {
+      fprintf(stdout,"cpu time for copying matrix block back to cpu = %f sec\n",cpu_time);
+   }
 }

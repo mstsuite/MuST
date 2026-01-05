@@ -95,6 +95,8 @@ private
    logical :: Initialized = .false.
    logical :: InitializedFactors = .false.
    logical :: GPU_Offloading = .false.
+   logical :: ComputeBigMatrixOnGPU = .false.
+   logical :: ComputeGijMatrixOnGPU = .false.
 !
    logical :: ExchSSSmatAllocated = .false.
    logical :: istauij_needed = .false.
@@ -170,7 +172,12 @@ contains
    integer (kind=IntKind) :: wsTau00_size, pos_tau
    integer (kind=IntKind), allocatable :: nblck(:),kblocks(:,:)
 !
-   integer (kind=IntKind), parameter :: MaxProcsPerGPU = 8
+   integer (kind=IntKind), parameter :: MaxProcsPerGPU = 16
+!
+   integer (kind=IntKind), parameter :: MaxGijOffloading = 4  ! This is the maximum number of MPI
+                                                              ! tasks that share 1 GPU for calculating
+                                                              ! the Gij matrix.
+   integer (kind=IntKind) :: NumCPUTasksPerGPU
 !
    complex (kind=CmplxKind), pointer :: p1(:)
 !
@@ -336,6 +343,9 @@ contains
    endif
 !
    GPU_Offloading = .false.
+   ComputeBigMatrixOnGPU = .false.
+   ComputeGijMatrixOnGPU = .false.
+   NumCPUTasksPerGPU = 0
 !
 #ifdef ACCEL
    call get_node_resources(NumCoresOnNode,NumGPUsOnNode)
@@ -345,7 +355,8 @@ contains
       write(6,'(a,i5)')'Num GPUs on Node      = ',NumGPUsOnNode
    endif
    if (NumGPUsOnNode > 0) then
-      if (NumPEsOnNode/NumGPUsOnNode <= MaxProcsPerGPU) then
+      NumCPUTasksPerGPU = NumPEsOnNode/NumGPUsOnNode
+      if (NumCPUTasksPerGPU  <= MaxProcsPerGPU) then
          GPU_Offloading = .true.
       else ! Disable GPU offloading if the number of MPI processes per GPU > MaxProcsPerGPU
          GPU_Offloading = .false.
@@ -370,6 +381,50 @@ contains
             endif
          enddo
       endif
+!     ================================================================
+!     If GPU offloading is enabled, determine if the BigMatrix is 
+!     calculated on GPU.
+!     ================================================================
+      if (GPU_Offloading) then
+         if (MaxPrintLevel >= 0) then
+            write(6,'(/)')
+            write(6,'(80(''*''))')
+         endif
+!!!      if (NumCPUTasksPerGPU <= 8) then
+         if (NumCPUTasksPerGPU <= MaxGijOffloading) then
+            ComputeBigMatrixOnGPU = .true.
+            if (MaxPrintLevel >= 0) then
+               write(6,'(a)')'!!!                     The Big Matrix is computed on GPU                    !!!'
+            endif
+         else
+            if (MaxPrintLevel >= 0) then
+               write(6,'(a)')'!!!         The Big Matrix is computed on CPU and then copied to GPU         !!!'
+            endif
+         endif
+!        =============================================================
+!        If the BigMatrix will be calculated on GPU, determine if the gij
+!        matrix is calculated on GPU.
+!        =============================================================
+         if (ComputeBigMatrixOnGPU) then
+            if (MaxPrintLevel >= 0) then
+               write(6,'(a)')'!!!                                                                          !!!'
+            endif
+            if (NumCPUTasksPerGPU <= MaxGijOffloading) then
+               ComputeGijMatrixOnGPU = .true.
+               if (MaxPrintLevel >= 0) then
+                  write(6,'(a)')'!!!                     The Gij Matrix is computed on GPU                    !!!'
+               endif
+            else
+               if (MaxPrintLevel >= 0) then
+                  write(6,'(a)')'!!!         The Gij Matrix is computed on CPU and then copied to GPU         !!!'
+               endif
+            endif
+         endif
+         if (MaxPrintLevel >= 0) then
+            write(6,'(80(''*''))')
+            write(6,'(/)')
+         endif
+      endif
    else
       if (MaxPrintLevel >= 0) then
          write(6,'(/)')
@@ -379,57 +434,69 @@ contains
          write(6,'(/)')
       endif
    endif
-#endif
 !
-#ifdef ACCEL
    if (GPU_Offloading) then
-      allocate(position_array(3*(numnb_max+1)*LocalNumAtoms))
-      allocate(numnb_array(LocalNumAtoms))
-      position_array = ZERO
-      n = 0
-      do i = 1,LocalNumAtoms
-!        In the acceleration case, we require that lmax_kkr is the same for all atoms in the LIZ
-!        This makes coding much simpler.
-         if (lmax_max /= lmax_kkr(i)) then
-            call ErrorHandler('initClusterMatrix','lmax_kkr is not kept the same for all atoms', &
-                              lmax_max,lmax_kkr(i))
+!     ----------------------------------------------------------------
+      call init_lsms_gpu(dsize_max,isize_max,NumCPUTasksPerGPU,MyPEinGroup)
+      call allocate_bigmatrix_gpu()
+!     ----------------------------------------------------------------
+      if (ComputeBigMatrixOnGPU) then
+!        -------------------------------------------------------------
+         call allocate_sjgmatrix_gpu()
+!        -------------------------------------------------------------
+         if (ComputeGijMatrixOnGPU) then
+            allocate(position_array(3*(numnb_max+1)*LocalNumAtoms))
+            allocate(numnb_array(LocalNumAtoms))
+            position_array = ZERO
+            n = 0
+            do i = 1,LocalNumAtoms
+!              In the acceleration case, we require that lmax_kkr is the same for all atoms in the LIZ
+!              This makes coding much simpler.
+               if (lmax_max /= lmax_kkr(i)) then
+                  call ErrorHandler('initClusterMatrix','lmax_kkr is not kept the same for all atoms', &
+                                    lmax_max,lmax_kkr(i))
+               endif
+               Neighbor => getNeighbor(i)
+               numnb_array(i) = Neighbor%NumAtoms
+               do j = 0, Neighbor%NumAtoms
+                  if (j == 0) then
+                     position_array(n+j*3+1) = Position(1,i)
+                     position_array(n+j*3+2) = Position(2,i)
+                     position_array(n+j*3+3) = Position(3,i)
+                  else
+                     position_array(n+j*3+1) = Neighbor%Position(1,j)
+                     position_array(n+j*3+2) = Neighbor%Position(2,j)
+                     position_array(n+j*3+3) = Neighbor%Position(3,j)
+                  endif
+               enddo
+               n = n + 3*(numnb_max+1)
+            enddo
+            clm => getClm(2*lmax_max)
+            nj3 => getNumK3()
+            kj3 => getK3()
+            cgnt => getGauntFactor()
+            kj3_size_1 = size(kj3,1)
+            kj3_size_2 = size(kj3,2)
+!           ----------------------------------------------------------
+            call push_parameters_gpu(2*lmax_max,lofk,kj3_size_1,kj3_size_2,nj3,kj3,cgnt,clm)
+            call compute_ylm_gpu(lmax_max,LocalNumAtoms,numnb_max,numnb_array, &
+                                 position_array,MyPEinGroup)
+!           ----------------------------------------------------------
          endif
-         Neighbor => getNeighbor(i)
-         numnb_array(i) = Neighbor%NumAtoms
-         do j = 0, Neighbor%NumAtoms
-            if (j == 0) then
-               position_array(n+j*3+1) = Position(1,i)
-               position_array(n+j*3+2) = Position(2,i)
-               position_array(n+j*3+3) = Position(3,i)
-            else
-               position_array(n+j*3+1) = Neighbor%Position(1,j)
-               position_array(n+j*3+2) = Neighbor%Position(2,j)
-               position_array(n+j*3+3) = Neighbor%Position(3,j)
-            endif
-         enddo
-         n = n + 3*(numnb_max+1)
-      enddo
-      clm => getClm(2*lmax_max)
-      nj3 => getNumK3()
-      kj3 => getK3()
-      cgnt => getGauntFactor()
-      kj3_size_1 = size(kj3,1)
-      kj3_size_2 = size(kj3,2)
-!     ----------------------------------------------------------------
-      call push_parameters_gpu(2*lmax_max,lofk,kj3_size_1,kj3_size_2,nj3,kj3,cgnt,clm)
-      call compute_ylm_gpu(lmax_max,LocalNumAtoms,numnb_max,numnb_array, &
-                           position_array,MyPEinGroup)
-!     ----------------------------------------------------------------
-      call init_lsms_gpu(lmax_max,dsize_max,isize_max,MyPEinGroup)
-!*    call cu_init_lsms_gpu(dsize_max,isize_max)
-!     ----------------------------------------------------------------
+!     else
+!        -------------------------------------------------------------
+!        call cu_init_lsms_gpu(dsize_max,isize_max)
+!        -------------------------------------------------------------
+      endif
    endif
 #endif
 !
-!  -------------------------------------------------------------------
-   call initMatrixBlockInv( Minv_alg, LocalNumAtoms, NumEs, nblck,    &
-                           max_nblck, kblocks, print_level ) 
-!  -------------------------------------------------------------------
+   if (.not.GPU_Offloading) then
+!     ----------------------------------------------------------------
+      call initMatrixBlockInv( Minv_alg, LocalNumAtoms, NumEs, nblck, &
+                              max_nblck, kblocks, print_level ) 
+!     ----------------------------------------------------------------
+   endif
 !
    allocate( ipvt(isize_max) )
    allocate( BlockMatrix(isize_max*isize_max) )
@@ -484,7 +551,10 @@ contains
       istauij_needed = .false.
    endif
 !
-   call endMatrixBlockInv()
+   if (.not.GPU_Offloading) then
+      call endMatrixBlockInv()
+   endif
+!
    nullify( Neighbor )
 !
    if ( InitializedFactors ) then
@@ -506,9 +576,14 @@ contains
 #ifdef ACCEL
    if (GPU_Offloading) then
       call finalize_lsms_gpu()
-      deallocate(position_array, numnb_array)
+      if (ComputeGijMatrixOnGPU) then
+         deallocate(position_array, numnb_array)
+      endif
 !     call free_parameters_gpu()
    endif
+   GPU_Offloading = .false.
+   ComputeBigMatrixonGPU = .false.
+   ComputeGijMatrixonGPU = .false.
 #endif
 !
    Initialized = .false.
@@ -1115,21 +1190,26 @@ contains
       dsize = dsize_l(my_atom)  ! This is the number of rows of BigMatrix
 !
 #ifdef ACCEL
-      if (GPU_Offloading) then
+      if (ComputeBigMatrixOnGPU) then
+!        t0 = getTime()
 !        -------------------------------------------------------------
          call init_bigmatrix_gpu(dsize)
 !        -------------------------------------------------------------
+!        if (MyPE == 0) then
+!           write(6,'(/,a,1i5,f8.3)')'Timing for init bigmatrix on GPU:',my_atom,getTime()-t0
+!        endif
+!        t0 = getTime()
          do irj=0,Neighbor%NumAtoms
             if (irj == 0) then
-               position_array(irj*3+1) = Position(1,my_atom)
-               position_array(irj*3+2) = Position(2,my_atom)
-               position_array(irj*3+3) = Position(3,my_atom)
+!              position_array(irj*3+1) = Position(1,my_atom)
+!              position_array(irj*3+2) = Position(2,my_atom)
+!              position_array(irj*3+3) = Position(3,my_atom)
                lid_j = my_atom
                pej = MyPEinGroup
             else
-               position_array(irj*3+1) = Neighbor%Position(1,irj)
-               position_array(irj*3+2) = Neighbor%Position(2,irj)
-               position_array(irj*3+3) = Neighbor%Position(3,irj)
+!              position_array(irj*3+1) = Neighbor%Position(1,irj)
+!              position_array(irj*3+2) = Neighbor%Position(2,irj)
+!              position_array(irj*3+3) = Neighbor%Position(3,irj)
                lid_j = Neighbor%LocalIndex(irj)
                pej = Neighbor%ProcIndex(irj)
             endif
@@ -1149,18 +1229,25 @@ contains
             call push_submatrix_gpu(2,irj,irj,p_jinvi,nbr_kkrj_ns)
 !           -----------------------------------------------------------
          enddo
+!        if (MyPE == 0) then
+!           write(6,'(a,1i5,f8.3)')'Timing for pushing sj matrix:',my_atom,getTime()-t0
+!        endif
 !        --------------------------------------------------------------
+         t0 = getTime()
          call commit_to_gpu(1)
          call commit_to_gpu(2)
+         if (MyPE == 0) then
+            write(6,'(a,1i5,f8.3)')'Timing for copying sj matrix to GPU:',my_atom,getTime()-t0
+         endif
 !        --------------------------------------------------------------
-         if (NumPEsOnNode <= 4) then
+         if (ComputeGijMatrixOnGPU) then
             t0 = getTime()
 !           -----------------------------------------------------------
             call calculate_gij_gpu(kappa,n_spin_cant,numnb_max,my_atom,      &
                                    Neighbor%NumAtoms,lmax_kkr(my_atom))
 !           -----------------------------------------------------------
             if (MyPE == 0) then
-               write(6,'(a,f10.5)')'Timing for calculatig Gij on GPU:',getTime()-t0
+               write(6,'(a,1i5,f8.3)')'Timing for calculatig Gij on GPU:',my_atom,getTime()-t0
             endif
 !======================================================================
 !           iri=1; irj=3
@@ -1178,23 +1265,27 @@ contains
          else
             t0 = getTime()
             do irj=0,Neighbor%NumAtoms
-               posj(1) = position_array(irj*3+1)
-               posj(2) = position_array(irj*3+2)
-               posj(3) = position_array(irj*3+3)
+!              posj(1) = position_array(irj*3+1)
+!              posj(2) = position_array(irj*3+2)
+!              posj(3) = position_array(irj*3+3)
                if (irj == 0) then
+                  posj(1:3) = Position(1:3,my_atom)
                   lmaxj = lmax_kkr(my_atom)
                else
+                  posj(1:3) = Neighbor%Position(1:3,irj)
                   lmaxj = Neighbor%Lmax(irj)
                endif
                kkrj  = (lmaxj+1)*(lmaxj+1)
 !
                do iri=0,Neighbor%NumAtoms
-                  posi(1) = position_array(iri*3+1)
-                  posi(2) = position_array(iri*3+2)
-                  posi(3) = position_array(iri*3+3)
+!                 posi(1) = position_array(iri*3+1)
+!                 posi(2) = position_array(iri*3+2)
+!                 posi(3) = position_array(iri*3+3)
                   if (iri == 0) then
+                     posi(1:3) = Position(1:3,my_atom)
                      lmaxi = lmax_kkr(my_atom)
                   else
+                     posi(1:3) = Neighbor%Position(1:3,iri)
                      lmaxi = Neighbor%Lmax(iri)
                   endif
                   kkri = (lmaxi+1)*(lmaxi+1)
@@ -1244,19 +1335,23 @@ contains
                   endif
                enddo
             enddo
-            if (MyPE == 0) then
-               write(6,'(a,f10.5)')'Timing for calculatig Gij on CPU:',getTime()-t0
-            endif
 !           -----------------------------------------------------------
             call commit_to_gpu(3)
 !           -----------------------------------------------------------
+            if (MyPE == 0) then
+               write(6,'(a,f10.5)')'Timing for calculatig Gij on CPU and copy to GPU:',getTime()-t0
+            endif
          endif
 !        --------------------------------------------------------------
+         t0 = getTime()
          call construct_bigmatrix_gpu(kappa)
+         if (MyPE == 0) then
+            write(6,'(a,1i5,f8.3)')'Timing for construct_bigmatrix_gpu:',my_atom,getTime()-t0
+         endif
 !        --------------------------------------------------------------
       endif
 #endif
-      if (.not.GPU_Offloading) then
+      if (.not.ComputeBigMatrixOnGPU) then
          jig => wsStoreA
 !        =============================================================
 !        initialize BigMatrix so that it is a unit matrix to begin with..
@@ -1503,27 +1598,58 @@ contains
          call setupUnitMatrix(kkrsz_ns,ubmat)
 !        -------------------------------------------------------------
          wau_g => aliasArray2_c(wsStoreA, kkrsz_ns, kkrsz_ns)
-#ifdef ACCEL
          if (GPU_Offloading) then
+!           ==========================================================
+!           The big (KKR) matrix inverse is performed on GPUs.
+!           ==========================================================
+#ifdef ACCEL
+            if (.not.ComputeBigMatrixOnGPU) then
+!              -------------------------------------------------------
+               t0 = getTime()
+               call push_bigmatrix_gpu(BigMatrix,dsize)
+               if (MyPE == 0) then
+               write(6,'(a,1i5,f8.3)'),'push_bigmatrix_gpu timing:',my_atom,getTime()-t0
+               endif
+!              -------------------------------------------------------
+            endif
 !           ----------------------------------------------------------
-            call invert_bigmatrix_gpu(pBlockMatrix,kkrsz_ns)
+            t0 = getTime()
+            call invert_bigmatrix_gpu(BlockMatrix,kkrsz_ns) 
+            if (MyPE == 0) then
+               write(6,'(a,1i5,f8.3)'),'invert_bigmatrix_gpu timing:',my_atom,getTime()-t0
+            endif
 !           ----------------------------------------------------------
-!**         pBigMatrix => aliasArray2_c(BigMatrix, dsize, dsize)
+            wau_g = pBlockMatrix - ubmat                     
+!           ==========================================================
+!           Calling invertMatrixLSMS_CUDA is from the old version of the
+!           code for performing the matrix inverse and needs to be followed
+!           by those lines shown after "call invertMatrixBlock"!!!
+!           ==========================================================
+!!!         pBigMatrix => aliasArray2_c(BigMatrix, dsize, dsize)
 !**         call invert_lsms_matrix(pBlockMatrix, kkrsz_ns, pBigMatrix, dsize )
-            wau_g = pBlockMatrix - ubmat
-!!!         call invertMatrixLSMS_CUDA(my_atom, pBlockMatrix, kkrsz_ns,  &
+!           ----------------------------------------------------------
+!!!         call invertMatrixLSMS_CUDA(my_atom, pBlockMatrix, kkrsz_ns, &
 !!!                                    pBigMatrix, dsize )
-         endif
+!           ----------------------------------------------------------
+!           nullify( pBigMatrix )
+!           ==========================================================
+#else
+!           ----------------------------------------------------------
+            call ErrorHandler('calTauMatrix','The job ran into a forbidden area')
+!           ----------------------------------------------------------
 #endif
-         if (.not.GPU_Offloading) then
+         else
+!           ==========================================================
+!           The big (KKR) matrix inverse is performed on CPUs.
+!           ==========================================================
 !           call writeMatrix('BigMatrix',BigMatrix,dsize_max*dsize_max)
 !           ----------------------------------------------------------
-            call invertMatrixBlock( my_atom, pBlockMatrix, kkrsz_ns, kkrsz_ns,  &
+            call invertMatrixBlock( my_atom, pBlockMatrix, kkrsz_ns, kkrsz_ns, &
                                     BigMatrix, dsize, dsize )
 !           ----------------------------------------------------------
-!
 !           ==========================================================
-!           store [1 - BlockMatrix] in ubmat, which uses wsTau00L as temporary space
+!           store [1 - BlockMatrix] in ubmat, which uses wsTau00L as 
+!           temporary space
 !           ==========================================================
             ubmat = ubmat - pBlockMatrix
 !
@@ -1542,7 +1668,6 @@ contains
 !           ----------------------------------------------------------
          endif
          nullify( pBlockMatrix )
-         nullify( pBigMatrix )
 !        -------------------------------------------------------------
 !        call writeMatrix('wau_g', wau_g, kkrsz_ns, kkrsz_ns)
 !        =============================================================
@@ -1679,7 +1804,7 @@ contains
      enddo
    endif
 
-   nullify(gij, p_jinvi, p_sinej, jig, wau_g, wau_l, ubmat, pBlockMatrix, pBigMatrix)
+   nullify(gij, p_jinvi, p_sinej, jig, wau_g, wau_l, ubmat, pBlockMatrix)
 !
    end subroutine calClusterMatrix
 !  ===================================================================

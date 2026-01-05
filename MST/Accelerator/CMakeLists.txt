@@ -7,7 +7,11 @@ if (USE_ACCELERATOR_CUDA_C)
               PUBLIC
               acclib.cu
               acclib.hpp
+              accmath.hpp  
+              util_mat.cu
               LSMS_Accel.cu
+              cusolver_KKR_c.cu  
+              invertMatrixKKR_CUDA.F90 
               )
               
 endif()
