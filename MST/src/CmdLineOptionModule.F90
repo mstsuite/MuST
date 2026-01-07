@@ -5,6 +5,7 @@ module CmdLineOptionModule
 !
 public :: initCmdLineOption,  &
           endCmdLineOption,   &
+          getCmdLineOption,   &
           getCmdLineOptionValue
 !
 interface getCmdLineOptionValue
@@ -49,6 +50,52 @@ contains
    NumOptions = 0
 !
    end subroutine endCmdLineOption
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getCmdLineOption(key) result(s)
+!  ===================================================================
+   implicit none
+!
+   character (len=*), intent(in) :: key
+   character (len=50) :: key_t
+!
+   integer (kind=IntKind) :: s, i, k
+!
+   logical :: found
+!
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
+   s = 0
+   found = .false.
+!
+   key_t = trim(adjustl(key))
+   LOOP_i: do i = 1, NumOptions
+      if (nocaseCompare(key_t,OptionKeys(i))) then
+         k = i
+         if (OptionValues(i) == '-1') then
+            found = .false.
+         else
+            found = .true.
+         endif
+         exit LOOP_i
+      endif
+   enddo LOOP_i
+   if (.not.found) then
+      s = 1
+!     ----------------------------------------------------------------
+!     call WarningHandler('getCmdLineOptionValue','Invalid Key',key_t)
+!     ----------------------------------------------------------------
+      return
+   endif
+!
+   end function getCmdLineOption
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc

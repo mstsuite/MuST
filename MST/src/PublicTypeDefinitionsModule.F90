@@ -22,7 +22,7 @@ public
       integer (kind=IntKind) :: NumData
       integer (kind=IntKind) :: UnitNumber
       logical :: Open
-      character (len=50), pointer :: KeyName(:)
+      character (len=80), pointer :: KeyName(:)
       character (len=160), pointer :: KeyValue(:)
       type (InputTableStruct), pointer :: next
    end type InputTableStruct

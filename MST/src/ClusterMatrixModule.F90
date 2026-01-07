@@ -110,7 +110,7 @@ private
    complex (kind=CmplxKind), allocatable :: jsmtx_buf(:,:)
 #endif
 !
-   integer (kind=IntKind) :: NumGPUsOnNode, NumCoresOnNode
+   integer (kind=IntKind) :: NumGPUsOnNode, NumCoresOnNode, MemInGB
 !
    integer (kind=IntKind) :: NumNonLocalNeighbors
    integer (kind=IntKind) :: NumReceives
@@ -137,7 +137,7 @@ contains
 !
    use GroupCommModule, only : getGroupID, getNumPEsInGroup, getMyPEinGroup
 !
-   use ScfDataModule, only : Minv_alg, NumEs, tauij_needed
+   use ScfDataModule, only : Minv_alg, NumEs, tauij_needed, CurrentScfIteration
 !
    use SystemModule, only  : getLmaxPhi
 !
@@ -145,6 +145,10 @@ contains
 !
    use MatrixBlockInversionModule, only : initMatrixBlockInv
    use WriteMatrixModule, only : writeMatrix
+!
+   use InputModule, only : getKeyValue
+!
+   use CmdLineOptionModule, only : getCmdLineOption
 !
 #ifdef ACCEL
    use IntegerFactorsModule, only : lofk
@@ -172,11 +176,16 @@ contains
    integer (kind=IntKind) :: wsTau00_size, pos_tau
    integer (kind=IntKind), allocatable :: nblck(:),kblocks(:,:)
 !
-   integer (kind=IntKind), parameter :: MaxProcsPerGPU = 16
+   integer (kind=IntKind), parameter :: MaxProcsPerGPU_p = 16
+   integer (kind=IntKind) :: MaxProcsPerGPU = MaxProcsPerGPU_p
 !
-   integer (kind=IntKind), parameter :: MaxGijOffloading = 4  ! This is the maximum number of MPI
-                                                              ! tasks that share 1 GPU for calculating
-                                                              ! the Gij matrix.
+   integer (kind=IntKind), parameter :: MaxBigMatAcc_p = 4
+   integer (kind=IntKind) :: MaxBigMatAcc = MaxBigMatAcc_p  ! This is the maximum number of MPI tasks
+                                                            ! that share 1 GPU for calculating the KKR
+                                                            ! matrix on the GPU
+   integer (kind=IntKind) :: MaxGijOffloading = MaxBigMatAcc_p  ! This is the maximum number of MPI
+                                                                ! tasks that share 1 GPU for calculating
+                                                                ! the Gij matrix on the GPU.
    integer (kind=IntKind) :: NumCPUTasksPerGPU
 !
    complex (kind=CmplxKind), pointer :: p1(:)
@@ -348,15 +357,35 @@ contains
    NumCPUTasksPerGPU = 0
 !
 #ifdef ACCEL
-   call get_node_resources(NumCoresOnNode,NumGPUsOnNode)
-   if (MaxPrintLevel >= 0) then
-      write(6,'(a,i5)')'Num CPU Cores on Node = ',NumCoresOnNode
-      write(6,'(a,i5)')'Num Processes on Node = ',NumPEsOnNode
-      write(6,'(a,i5)')'Num GPUs on Node      = ',NumGPUsOnNode
+   if (CurrentScfIteration <= 1) then
+      call get_node_resources(MyPE,NumCoresOnNode,NumGPUsOnNode,MemInGB)
+      if (MaxPrintLevel >= 0) then
+         write(6,'(a,i5)')'Num CPU Cores on Node = ',NumCoresOnNode
+         write(6,'(a,i5)')'Num Processes on Node = ',NumPEsOnNode
+         write(6,'(a,i5)')'Num GPUs on Node      = ',NumGPUsOnNode
+         write(6,'(a,i5,a,/)')'Memory of each GPU    = ',MemInGB,' (GB)'
+      endif
    endif
    if (NumGPUsOnNode > 0) then
+      if (getKeyValue(1,'Maximum MPI tasks per GPU for KKR Matrix Inverse',MaxProcsPerGPU, &
+                      default_param=.false.) /= 0) then
+         MaxProcsPerGPU = MemInGB*16/40  ! For one A100 card with 40GB memory, we found the maximum number
+                                         ! of MPI tasks, allowing for GPU acceleration, is 16.
+      endif
+      if (MaxPrintLevel >= 0) then
+         write(6,'(a,i5)')'Max number of MPI tasks per GPU for Acceleration:',MaxProcsPerGPU
+      endif
       NumCPUTasksPerGPU = NumPEsOnNode/NumGPUsOnNode
-      if (NumCPUTasksPerGPU  <= MaxProcsPerGPU) then
+      if (getCmdLineOption('Run on CPU without Acceleration') == 0) then
+         GPU_Offloading = .false.
+         if (MaxPrintLevel >= 0) then
+            write(6,'(/)')
+            write(6,'(80(''*''))')
+            write(6,'(a)')'!!!    GPU offloading is disabled: -cpu or --cpu-only is in command line     !!!'
+            write(6,'(80(''*''))')
+            write(6,'(/)')
+         endif
+      else if (NumCPUTasksPerGPU  <= MaxProcsPerGPU) then
          GPU_Offloading = .true.
       else ! Disable GPU offloading if the number of MPI processes per GPU > MaxProcsPerGPU
          GPU_Offloading = .false.
@@ -386,19 +415,32 @@ contains
 !     calculated on GPU.
 !     ================================================================
       if (GPU_Offloading) then
+         if (getKeyValue(1,'Maximum MPI tasks per GPU for KKR Matrix Calculation',MaxBigMatAcc) /= 0) then
+            call ErrorHandler('initClusterMatrix','Unable to determine MaxBigMatAcc',MaxBigMatAcc)
+         endif
+         if (MaxPrintLevel >= 0) then
+            write(6,'(a,i5)')'Max number of MPI tasks per GPU for computing KKR Matrix on GPU:',MaxBigMatAcc
+         endif
+         if (getKeyValue(1,'Maximum MPI tasks per GPU for Gij Matrix Calculation',MaxGijOffloading) /= 0) then
+            call ErrorHandler('initClusterMatrix','Unable to determine MaxGijOffloading',MaxGijOffloading)
+         endif
+         if (MaxPrintLevel >= 0) then
+            write(6,'(a,i5)')'Max number of MPI tasks per GPU for computing Gij Matrix on GPU:',MaxGijOffloading
+         endif
          if (MaxPrintLevel >= 0) then
             write(6,'(/)')
             write(6,'(80(''*''))')
          endif
-!!!      if (NumCPUTasksPerGPU <= 8) then
-         if (NumCPUTasksPerGPU <= MaxGijOffloading) then
+         if (NumCPUTasksPerGPU <= MaxBigMatAcc .or.                       &
+             getCmdLineOption('Accelerate KKR Matrix Calculation') == 0) then
             ComputeBigMatrixOnGPU = .true.
             if (MaxPrintLevel >= 0) then
-               write(6,'(a)')'!!!                     The Big Matrix is computed on GPU                    !!!'
+               write(6,'(a)')'!!!                     The KKR Matrix is computed on GPU                    !!!'
             endif
          else
+            ComputeBigMatrixOnGPU = .false.
             if (MaxPrintLevel >= 0) then
-               write(6,'(a)')'!!!         The Big Matrix is computed on CPU and then copied to GPU         !!!'
+               write(6,'(a)')'!!!         The KKR Matrix is computed on CPU and then copied to GPU         !!!'
             endif
          endif
 !        =============================================================
@@ -415,6 +457,7 @@ contains
                   write(6,'(a)')'!!!                     The Gij Matrix is computed on GPU                    !!!'
                endif
             else
+               ComputeGijMatrixOnGPU = .false.
                if (MaxPrintLevel >= 0) then
                   write(6,'(a)')'!!!         The Gij Matrix is computed on CPU and then copied to GPU         !!!'
                endif

@@ -315,7 +315,7 @@
 !                     = 1: Yes
    n = n + 1; Keys(n) = 'mu* (e-e interaction constant)';        Values(n) = '0'
 !                     = 0: Bennemann and Garland formula (Default)
-!                     = 1: Modified BG formula by Papaconstantopoulos
+!                     = 0, A: Modified BG formula by Papaconstantopoulos with factor A
 !                     = A real positive number (< 1.0)
    n = n + 1; Keys(n) = 'Average of phonon frequency (1/sec)';   Values(n) = '0.0'
 !        Note; the input format is a real positive value
@@ -356,6 +356,15 @@
 !                     = 0: the Fermi energy is set to be the average of the Fermi energy data from input potential
 !                     = 1: the Fermi energy is set to be the average of the Max and Min of the Fermi energy data
 !                     = A real number as the initial Fermi energy
+   n = n + 1; Keys(n) = 'Maximum MPI tasks per GPU for KKR Matrix Inverse';             Values(n) = '28'
+!        Note: If the number of MPI tasks is greater than this number, the GPU acceleration of the KKR matrix
+!              inverse is disabled.
+   n = n + 1; Keys(n) = 'Maximum MPI tasks per GPU for KKR Matrix Calculation';         Values(n) = '4'
+!        Note: If the number of MPI tasks is greater than this number, the KKR matrix will be calcualted on 
+!              CPU and will be copied to GPU for taking inverse.
+   n = n + 1; Keys(n) = 'Maximum MPI tasks per GPU for Gij Matrix Calculation';         Values(n) = '4'
+!        Note: If the number of MPI tasks is greater than this number, the KKR matrix will be calcualted on 
+!              CPU and will be copied to GPU for taking inverse.
 !  =============================================================================
 !  Additional input parameters can be added to this table using the 
 !  following format:

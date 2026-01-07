@@ -12,3 +12,11 @@
    n = n + 1; Options(1,n)='-app';  Options(2,n)='--atoms-per-proc'; Options(3,n)='--atoms_per_proc'
               OptionKeys(n)='Number of Atoms Per Process'
               OptionValues(n) = '0'
+!
+   n = n + 1; Options(1,n)='-cpu';  Options(2,n)='--cpu-only'; Options(3,n)='--cpu_only'
+              OptionKeys(n)='Run on CPU without Acceleration'
+              OptionValues(n) = '-1'
+!
+   n = n + 1; Options(1,n)='-abm';  Options(2,n)='--acc-bigmat'; Options(3,n)='--acc_bigmat'
+              OptionKeys(n)='Accelerate KKR Matrix Calculation'
+              OptionValues(n) = '-1'

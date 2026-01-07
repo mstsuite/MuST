@@ -129,3 +129,15 @@ Default Evec Mix Param.    ::  0.0000
 Energy (Ryd) Tol (> 0)     ::  0.000005
 Potential Tol (> 0)        ::  0.0000001
 ================================================================================
+Maximum MPI tasks per GPU for KKR Matrix Inverse ::  16
+   Note: If the number of MPI tasks is greater than this number, the GPU acceleration
+         of the KKR matrix inverse is disabled
+   Default value: 28
+Maximum MPI tasks per GPU for KKR Matrix Calculation :: 4
+   Note: If the number of MPI tasks is greater than this number, the KKR matrix will be calcualted on
+         CPU and will be copied to GPU for taking inverse.
+   Default value: 4
+Maximum MPI tasks per GPU for Gij Matrix Calculation :: 4
+   Note: If the number of MPI tasks is greater than this number, the Gij matrix will be calcualted on
+         CPU and will be copied to GPU for taking inverse.
+   Default value: 4
