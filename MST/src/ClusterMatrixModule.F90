@@ -357,13 +357,34 @@ contains
    NumCPUTasksPerGPU = 0
 !
 #ifdef ACCEL
-   if (CurrentScfIteration <= 1) then
-      call get_node_resources(MyPE,NumCoresOnNode,NumGPUsOnNode,MemInGB)
+   if (getCmdLineOption('Run on CPU without Acceleration') == 0) then
+      NumGPUsOnNode = 0
+      GPU_Offloading = .false.
       if (MaxPrintLevel >= 0) then
-         write(6,'(a,i5)')'Num CPU Cores on Node = ',NumCoresOnNode
-         write(6,'(a,i5)')'Num Processes on Node = ',NumPEsOnNode
-         write(6,'(a,i5)')'Num GPUs on Node      = ',NumGPUsOnNode
-         write(6,'(a,i5,a,/)')'Memory of each GPU    = ',MemInGB,' (GB)'
+         write(6,'(/)')
+         write(6,'(80(''*''))')
+         write(6,'(a)')'!!!    GPU offloading is disabled: -cpu or --cpu-only is in command line     !!!'
+         write(6,'(80(''*''))')
+         write(6,'(/)')
+      endif
+   else 
+      if (CurrentScfIteration <= 1) then
+!        -----------------------------------------------------------------------
+         call get_node_resources(MyPE,NumCoresOnNode,NumGPUsOnNode,MemInGB)
+!        -----------------------------------------------------------------------
+         if (MaxPrintLevel >= 0) then
+            write(6,'(a,i5)')'Num CPU Cores on Node = ',NumCoresOnNode
+            write(6,'(a,i5)')'Num Processes on Node = ',NumPEsOnNode
+            write(6,'(a,i5)')'Num GPUs on Node      = ',NumGPUsOnNode
+            write(6,'(a,i5,a,/)')'Memory of each GPU    = ',MemInGB,' (GB)'
+         endif
+         if (NumGPUsOnNode == 0 .and. MaxPrintLevel >= 0) then
+            write(6,'(/)')
+            write(6,'(80(''*''))')
+            write(6,'(a)')'!!!         GPU offloading is disabled: No GPU is found available            !!!'
+            write(6,'(80(''*''))')
+            write(6,'(/)')
+         endif
       endif
    endif
    if (NumGPUsOnNode > 0) then
@@ -376,16 +397,7 @@ contains
          write(6,'(a,i5)')'Max number of MPI tasks per GPU for Acceleration:',MaxProcsPerGPU
       endif
       NumCPUTasksPerGPU = NumPEsOnNode/NumGPUsOnNode
-      if (getCmdLineOption('Run on CPU without Acceleration') == 0) then
-         GPU_Offloading = .false.
-         if (MaxPrintLevel >= 0) then
-            write(6,'(/)')
-            write(6,'(80(''*''))')
-            write(6,'(a)')'!!!    GPU offloading is disabled: -cpu or --cpu-only is in command line     !!!'
-            write(6,'(80(''*''))')
-            write(6,'(/)')
-         endif
-      else if (NumCPUTasksPerGPU  <= MaxProcsPerGPU) then
+      if (NumCPUTasksPerGPU  <= MaxProcsPerGPU) then
          GPU_Offloading = .true.
       else ! Disable GPU offloading if the number of MPI processes per GPU > MaxProcsPerGPU
          GPU_Offloading = .false.
@@ -467,14 +479,6 @@ contains
             write(6,'(80(''*''))')
             write(6,'(/)')
          endif
-      endif
-   else
-      if (MaxPrintLevel >= 0) then
-         write(6,'(/)')
-         write(6,'(80(''*''))')
-         write(6,'(a)')'!!!         GPU offloading is disabled: No GPU is found available            !!!'
-         write(6,'(80(''*''))')
-         write(6,'(/)')
       endif
    endif
 !
