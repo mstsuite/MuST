@@ -14,8 +14,7 @@ CmdLineOptionModule.o \
 LatticeModule.o \
 IBZRotationModule.o \
 CheckPointModule.o \
-XMLDataModule.o \
-OrthoNormModule.o
+XMLDataModule.o
 
 BasicRoutines = \
 readPositionData.o \
@@ -53,6 +52,7 @@ NeighborModule.o \
 SendRecvTmatModule.o \
 AtomModule.o \
 StepFunctionModule.o \
+OrthoNormModule.o \
 MadelungModule.o \
 SystemSymmetryModule.o \
 LdaCorrectionModule.o \

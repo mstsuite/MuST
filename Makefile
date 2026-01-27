@@ -40,8 +40,8 @@ endif
 %:
 	@if [ ! -e ./architecture/$(ArchName) ]; then echo "Architecture file" \"$(ArchName)\" "does not exist under ./architecture directory"; \
 exit 1; fi
-	@if [ ! -d bin ]; then @echo "bin folder does not exist and I am creating one ..."; mkdir bin; fi
-	@if [ "${SUFFIX_d}" ] && [ ! -d bin/$(SUFFIX_d) ]; then @echo "creating subdirectory $(SUFFIX_d) under bin ..."; mkdir bin/$(SUFFIX_d); fi
+	@if [ ! -d bin ]; then echo "bin folder does not exist and I am creating one ..."; mkdir bin; fi
+	@if [ "${SUFFIX_d}" ] && [ ! -d bin/$(SUFFIX_d) ]; then echo "creating subdirectory $(SUFFIX_d) under bin ..."; mkdir bin/$(SUFFIX_d); fi
 	@if [ "${SUFFIX_d}" ]; then echo $(SUFFIX_d) | tee bin/.SUFFIX; else echo "." | tee bin/.SUFFIX; fi
 	@cd external; ln -fs ../architecture/$(ArchName) architecture.h; make "EXTERNAL=1" "SUFFIX=$(SUFFIX)"
 	@cd MST; ln -fs ../architecture/$(ArchName) architecture.h; make "MST=1" "EXTERN_LIB_PATH=$(MuST_PATH)/external" "ArchName=$(ArchName)" \
