@@ -13,7 +13,8 @@ $(MST_ODIR)/DefaultParamModule.o \
 $(MST_ODIR)/CmdLineOptionModule.o \
 $(MST_ODIR)/LatticeModule.o \
 $(MST_ODIR)/IBZRotationModule.o \
-$(MST_ODIR)/CheckPointModule.o
+$(MST_ODIR)/CheckPointModule.o \
+$(MST_ODIR)/OrthoNormModule.o
 
 BasicRoutines = \
 $(MST_ODIR)/readPositionData.o \
@@ -176,7 +177,7 @@ $(MST_ODIR)/adjustEnergy.o
 all: $(ODIR)/preproc print_version $(ODIR)/$(EXEC_NAME)
 
 print_version:
-	cd $(TOP_DIR) && ../MST/src/get_svn.sh ./src/print_version_include.h
+	cd $(TOP_DIR) && ../MST/src/get_svn.sh $(ODIR)/print_version_include.h
 	rm -f $(ODIR)/print_version.o
 
 $(ODIR)/preproc: preproc.o

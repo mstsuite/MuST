@@ -14,7 +14,8 @@ CmdLineOptionModule.o \
 LatticeModule.o \
 IBZRotationModule.o \
 CheckPointModule.o \
-XMLDataModule.o
+XMLDataModule.o \
+OrthoNormModule.o
 
 BasicRoutines = \
 readPositionData.o \

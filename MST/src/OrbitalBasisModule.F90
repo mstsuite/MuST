@@ -10,8 +10,13 @@ public :: initOrbitalBasis,    &
           getLFlag,            &
           getBasisType
 !
+   interface getOrbitalBasis
+      module procedure getOrbitalBasis_mt, getOrbitalBasis_fp
+   end interface getOrbitalBasis
+!
 private
    integer (kind=IntKind) :: NumLocalAtoms
+   integer (kind=IntKind) :: lmax_kkr
    integer (kind=IntKind) :: kmax_kkr
    integer (kind=IntKind) :: n_spin_pola
    integer (kind=IntKind) :: n_spin_cant
@@ -26,11 +31,19 @@ private
       integer (kind=IntKind) :: NumOrbitals
       integer (kind=IntKind) :: NumRs
       integer (kind=IntKind) :: r_power
-      integer (kind=IntKind), pointer :: lm_flag(:,:)
-      integer (kind=IntKind), pointer :: orb2kl(:)
+      integer (kind=IntKind), pointer :: lm_flag(:,:) ! For a given orbital (2nd dimension index), it is
+                                                      ! 1 if the kl index (1st dimension index) of the 
+                                                      ! corresponding orbital in spherical harmonics
+                                                      ! expansion has non-zero component, and is 0 if
+                                                      ! the expansion has zero component due to symmetry
+      integer (kind=IntKind), pointer :: orb2kl(:)    ! It relates each orbital to a kl index
 !     complex (kind=CmplxKind), pointer :: orbital_star(:,:,:) ! for real energy, orbital_star is just
                                                                ! the complex conjugate of orbital
-      complex (kind=CmplxKind), pointer :: orbital(:,:,:)
+      complex (kind=CmplxKind), pointer :: orbital_mt(:,:)     ! If the orbital has spherical symmetry, obtained
+                                                               ! from the single site solution of a muffin-tin
+                                                               ! potential
+      complex (kind=CmplxKind), pointer :: orbital_fp(:,:,:)   ! If the orbital is based on the single site
+                                                               ! solution obtained from a full-potential
    end type LocalOrbitalStruct
 !
    type (LocalOrbitalStruct), allocatable :: LocalOrbitals(:,:,:)
@@ -42,6 +55,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine initOrbitalBasis(na,lmax,pola,cant,rel,btype,num_ls,orb_l)
 !  ===================================================================
+   use OrthoNormModule, only : initOrthoNorm
    use AtomModule, only : getLocalNumSpecies
    use RadialGridModule, only : getNumRmesh
    use PotentialTypeModule, only : isFullPotential
@@ -54,11 +68,13 @@ contains
    integer (kind=IntKind) :: orb2kl(25)
 !
    NumLocalAtoms = na
+   lmax_kkr = lmax
    kmax_kkr = (lmax+1)**2
    n_spin_pola = pola
    n_spin_cant = cant
    Relativity = rel
-   BasisType = btype
+   BasisType = btype ! = 0, Using the local regular solution as the basis function.
+                     ! = else, to be determined.
 !
    if (btype /= 0) then ! Using the local regular solution as the basis function.
       call ErrorHandler('initOrbitalBasis','Invalid basis function type',btype)
@@ -97,7 +113,13 @@ contains
             endif
             allocate(LocalOrbitals(js,ia,id)%lm_flag(kmax_kkr,norbs))
             LocalOrbitals(js,ia,id)%lm_flag = 0
-            allocate(LocalOrbitals(js,ia,id)%orbital(NumRs,kmax_kkr,norbs))
+            if (isFullPotential()) then
+               allocate(LocalOrbitals(js,ia,id)%orbital_fp(NumRs,kmax_kkr,norbs))
+               nullify(LocalOrbitals(js,ia,id)%orbital_mt)
+            else
+               allocate(LocalOrbitals(js,ia,id)%orbital_mt(NumRs,norbs))
+               nullify(LocalOrbitals(js,ia,id)%orbital_fp)
+            endif
 !           allocate(LocalOrbitals(js,ia,id)%orbital_star(NumRs,kmax_kkr,norbs))
             if (btype == 0) then
                allocate(LocalOrbitals(js,ia,id)%orb2kl(norbs))
@@ -109,12 +131,18 @@ contains
       enddo
    enddo
 !
+!  -------------------------------------------------------------------
+   call initOrthoNorm(MaxNumRs,lmax_kkr,isFullPotential())
+!  -------------------------------------------------------------------
+!
    end subroutine initOrbitalBasis
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine endOrbitalBasis()
 !  ===================================================================
+   use OrthoNormModule, only : endOrthoNorm
+   use PotentialTypeModule, only : isFullPotential
    use AtomModule, only : getLocalNumSpecies
 !
    implicit none
@@ -132,10 +160,17 @@ contains
                deallocate(LocalOrbitals(js,ia,id)%orb2kl)
             endif
             nullify(LocalOrbitals(js,ia,id)%orb2kl)
-            if (associated(LocalOrbitals(js,ia,id)%orbital)) then
-               deallocate(LocalOrbitals(js,ia,id)%orbital)
+            if (isFullPotential()) then
+               if (associated(LocalOrbitals(js,ia,id)%orbital_fp)) then
+                  deallocate(LocalOrbitals(js,ia,id)%orbital_fp)
+               endif
+               nullify(LocalOrbitals(js,ia,id)%orbital_fp)
+            else
+               if (associated(LocalOrbitals(js,ia,id)%orbital_mt)) then
+                  deallocate(LocalOrbitals(js,ia,id)%orbital_mt)
+               endif
+               nullify(LocalOrbitals(js,ia,id)%orbital_mt)
             endif
-            nullify(LocalOrbitals(js,ia,id)%orbital)
 !           if (associated(LocalOrbitals(js,ia,id)%orbital_star)) then
 !              deallocate(LocalOrbitals(js,ia,id)%orbital_star)
 !           endif
@@ -143,7 +178,16 @@ contains
          enddo
       enddo
    enddo
-   deallocate(LocalOrbitals)
+!
+   if (isFullPotential()) then
+      deallocate(LocalOrbitals)
+   else
+      deallocate(LocalOrbitals)
+   endif
+!
+!  -------------------------------------------------------------------
+   call endOrthoNorm()
+!  -------------------------------------------------------------------
 !
    end subroutine endOrbitalBasis
 !  ===================================================================
@@ -155,9 +199,11 @@ contains
 !  Note: spin = 1 or n_spin_pola/n_spin_cant
 !
 !  *******************************************************************
-   use MathParamModule, only : CZERO, ZERO, ONE, TWO, PI, CONE
+   use MathParamModule, only : CZERO, ZERO, ONE, TWO, PI, CONE, TEN2m8
 !
    use IntegerFactorsModule, only : m1m, mofk
+!
+   use OrthoNormModule, only : orthogonalize, normalize
 !
    use PotentialTypeModule, only : isFullPotential
 !
@@ -173,11 +219,11 @@ contains
    integer (kind=IntKind), intent(in) :: spin,site,atom
    integer (kind=IntKind) :: kl, klp, ir
 !  integer (kind=IntKind) :: m, mp, kl_bar, klp_bar
-   integer (kind=IntKind) :: js, ns, NumRs, iorb, norbs, npow
+   integer (kind=IntKind) :: js, ns, NumRs, iorb, norbs
+   integer (kind=IntKind) :: info(2)
 !
    real (kind=RealKind), intent(in), optional :: e0
    real (kind=RealKind) :: fnorm, fnorm_ws, fnorm_mt
-   real (kind=RealKind), allocatable :: f2(:)
    real (kind=RealKind), pointer :: r_mesh(:)
 !
    complex (kind=CmplxKind), pointer :: f(:,:,:)
@@ -217,7 +263,6 @@ contains
       endif
    enddo
 !
-   allocate(f2(MaxNumRs))
    r_mesh => getRmesh(site)
 !
    if (BasisType == 0) then ! Using the local regular solution as the basis function.
@@ -251,17 +296,27 @@ contains
          NumRs = LocalOrbitals(js,atom,site)%NumRs
          f => getRegSolution(spin=js,site=site,atom=atom)
 !
-         LocalOrbitals(js,atom,site)%orbital = CZERO
+         if (isFullPotential()) then
+            LocalOrbitals(js,atom,site)%orbital_fp = CZERO
+         else
+            LocalOrbitals(js,atom,site)%orbital_mt = CZERO
+         endif
 !        LocalOrbitals(js,atom,site)%orbital_star = CZERO
          do iorb = 1, norbs
             kl = LocalOrbitals(js,atom,site)%orb2kl(iorb)
-            do klp = 1, kmax_kkr
-               if (LocalOrbitals(js,atom,site)%lm_flag(klp,iorb) > 0) then
-                  do ir = 1, NumRs
-                      LocalOrbitals(js,atom,site)%orbital(ir,klp,iorb) = f(ir,klp,kl)
-                  enddo
-               endif
-            enddo
+            if (isFullPotential()) then
+               do klp = 1, kmax_kkr
+                  if (LocalOrbitals(js,atom,site)%lm_flag(klp,iorb) > 0) then
+                     do ir = 1, NumRs
+                         LocalOrbitals(js,atom,site)%orbital_fp(ir,klp,iorb) = f(ir,klp,kl)
+                     enddo
+                  endif
+               enddo
+            else
+               do ir = 1, NumRs
+                  LocalOrbitals(js,atom,site)%orbital_mt(ir,iorb) = f(ir,kl,kl)
+               enddo
+            endif
 !
 !           m = mofk(kl)
 !           kl_bar = kl - 2*m
@@ -275,54 +330,46 @@ contains
 !                 enddo
 !              endif
 !           enddo
-!           ==========================================================
-!           Normalize the orbital
-!           ==========================================================
-            npow = 2*LocalOrbitals(js,atom,site)%r_power
-            f2 = ZERO
-            if (npow == 0) then
-               do klp = 1, kmax_kkr
-                  do ir = 1, NumRs
-                     f2(ir) = f2(ir) + abs(LocalOrbitals(js,atom,site)%orbital(ir,klp,iorb))**2
-                  enddo
-               enddo
-            else
-               do klp = 1, kmax_kkr
-                  do ir = 1, NumRs
-                     f2(ir) = f2(ir) + abs(LocalOrbitals(js,atom,site)%orbital(ir,klp,iorb))**2/r_mesh(ir)**npow
-                  enddo
-               enddo
-            endif
-!           ----------------------------------------------------------
-            fnorm_ws = getVolumeIntegration(site,NumRs,r_mesh,0,f2,fnorm_mt)
-!           ----------------------------------------------------------
-            if (isFullPotential()) then
-               fnorm = ONE/sqrt(fnorm_ws)
-            else
-               fnorm = ONE/sqrt(fnorm_mt)
-            endif
-            do klp = 1, kmax_kkr
-               do ir = 1, NumRs
-                  LocalOrbitals(js,atom,site)%orbital(ir,klp,iorb)    &
-                     = fnorm*LocalOrbitals(js,atom,site)%orbital(ir,klp,iorb)
-               enddo
-            enddo
          enddo
+!        =============================================================
+!        Orthogonalize and normalize the orbitals
+!        =============================================================
+         info(1) = site; info(2) = 2*LocalOrbitals(js,atom,site)%r_power
+         if (isFullPotential()) then
+!           ----------------------------------------------------------
+            call orthogonalize(info,NumRs,lmax_kkr,norbs,r_mesh, &
+                               LocalOrbitals(js,atom,site)%orbital_fp)
+!           ----------------------------------------------------------
+            do iorb = 1, norbs
+!              -------------------------------------------------------
+               call normalize(info,NumRs,lmax_kkr,r_mesh,LocalOrbitals(js,atom,site)%orbital_fp(:,:,iorb))
+!              -------------------------------------------------------
+            enddo
+!           ----------------------------------------------------------
+         else ! In the muffin-tin, case, the orbital is already orthogonalized due to spherical harmonics.
+              ! We only need to normalize the orbitals
+            do iorb = 1, norbs
+!              -------------------------------------------------------
+               call normalize(info,NumRs,r_mesh,LocalOrbitals(js,atom,site)%orbital_mt(:,iorb))
+!              -------------------------------------------------------
+            enddo
+         endif
       enddo
    else
+!     ----------------------------------------------------------------
       call ErrorHandler('computeOrbitalBasis','Invalid basis function type',BasisType)
+!     ----------------------------------------------------------------
       BasisFactor = CONE
    endif
 !
    nullify(f)
-   deallocate(f2)
 !
    end subroutine computeOrbitalBasis
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !  function getOrbitalBasis(spin,site,atom,orb,rpow,star,bfac) result(f)
-   function getOrbitalBasis(spin,site,atom,orb,rpow,bfac) result(f)
+   function getOrbitalBasis_fp(spin,site,atom,orb,rpow,bfac) result(f)
 !  ===================================================================
 !
 !  Note: spin = 1 or n_spin_cant
@@ -342,7 +389,7 @@ contains
       call ErrorHandler('getOrbitalBasis','The orbital basis functions are not available')
    endif
 !
-   f => LocalOrbitals(spin,atom,site)%orbital(:,:,orb)
+   f => LocalOrbitals(spin,atom,site)%orbital_fp(:,:,orb)
 !
 !  if (star) then
 !     f => LocalOrbitals(spin,atom,site)%orbital_star(:,:,orb)
@@ -352,7 +399,44 @@ contains
 !
    bfac = BasisFactor
 !
-   end function getOrbitalBasis
+   end function getOrbitalBasis_fp
+!  ===================================================================
+!
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!  function getOrbitalBasis(spin,site,atom,orb,rpow,star,bfac) result(f)
+   function getOrbitalBasis_mt(spin,site,atom,orb,kl,rpow,bfac) result(f)
+!  ===================================================================
+!
+!  Note: spin = 1 or n_spin_cant
+!
+!  *******************************************************************
+   implicit none
+!
+   integer (kind=IntKind), intent(in) :: spin, site, atom, orb
+   integer (kind=IntKind), intent(out) :: kl, rpow
+!
+!  logical, intent(in) :: star
+!
+   complex (kind=CmplxKind), intent(out) :: bfac
+   complex (kind=CmplxKind), pointer :: f(:) ! returns the basis function multiplied by r^rpow
+!
+   if (LocalOrbitals(spin,atom,site)%NumOrbitals == 0) then
+      call ErrorHandler('getOrbitalBasis','The orbital basis functions are not available')
+   endif
+!
+   f => LocalOrbitals(spin,atom,site)%orbital_mt(:,orb)
+!
+!  if (star) then
+!     f => LocalOrbitals(spin,atom,site)%orbital_star(:,orb)
+!  endif
+!
+   kl = LocalOrbitals(spin,atom,site)%orb2kl(orb)
+   rpow = LocalOrbitals(spin,atom,site)%r_power
+!
+   bfac = BasisFactor
+!
+   end function getOrbitalBasis_mt
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc

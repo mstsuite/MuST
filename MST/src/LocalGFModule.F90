@@ -287,13 +287,17 @@ contains
    use RadialGridModule, only : getRmesh, getRadialIntegration, getNumRmesh
 !
    use ClusterMatrixModule, only : getClusterKau => getKau
+   use ClusterMatrixModule, only : getClusterTau => getTau
 !
    use CrystalMatrixModule, only : getCrystalKau => getKau
+   use CrystalMatrixModule, only : getCrystalTau => getTau
 !
    use CPAMediumModule, only : getImpurityMatrix
 !
    use OrbitalBasisModule, only : getOrbitalBasis
    use OrbitalBasisModule, only : getLFlag
+!
+   use WriteMatrixModule,  only : writeMatrix
 !
    implicit none
 !
@@ -311,6 +315,7 @@ contains
    complex (kind=CmplxKind), pointer :: PhiLr(:,:,:), HLr(:,:,:)
    complex (kind=CmplxKind), pointer :: bf(:,:), bf_bar(:,:)
    complex (kind=CmplxKind), pointer :: kau00(:,:,:), p_kau00(:,:)
+   complex (kind=CmplxKind), pointer :: tau00(:,:,:), p_tau00(:,:)
    complex (kind=CmplxKind), pointer :: gfe(:,:,:), gf(:,:,:)
    complex (kind=CmplxKind), pointer :: JostInv(:,:)
    complex (kind=CmplxKind), pointer :: xfun(:), sfun(:), pfun(:)
@@ -376,7 +381,7 @@ contains
       enddo
    enddo
 !  -------------------------------------------------------------------
-   call computeMSTMatrix(spin,e)
+   call computeMSTMatrix(spin,e,tau_needed=.true.)
 !  -------------------------------------------------------------------
 !
    do site = 1, NumLocalAtoms
@@ -413,12 +418,14 @@ contains
             HLr => getIrrSolution(spin=js,site=site,atom=atom)
             do iorb = 1, norbs
 !              bf => getOrbitalBasis(spin=js,site=site,atom=atom,orb=iorb,rpow=rpow,star=.false.,bfac=bfac)
-               bf => getOrbitalBasis(spin=js,site=site,atom=atom,orb=iorb,rpow=rpow,bfac=bfac)
                i_Lflag => getLFlag(js,site,atom,iorb)
-               if (rpow < 0 .or. rpow > 1) then
-                  call ErrorHandler('computeLocalGF','rpow < 0 or rpow > 1',rpow)
-               endif
                if (isFullPotential()) then  ! The following code for the full-potential case needs some work ...
+                  bf => getOrbitalBasis(spin=js,site=site,atom=atom,orb=iorb,rpow=rpow,bfac=bfac)
+                  if (rpow < 0 .or. rpow > 1) then
+                     call ErrorHandler('computeLocalGF','rpow < 0 or rpow > 1',rpow)
+                  else
+                     call ErrorHandler('computeLocalGF','The full-potential case needs to be implemented.')
+                  endif
 !                 ==========================! ******************************************************************
 !                 bf_bar => getOrbitalBasis(spin=js,site=site,atom=atom,orb=iorb,rpow=rpow,star=.true.,bfac=bfac_bar)
 !!!               do kl = 1, kmax_kkr
@@ -444,44 +451,43 @@ contains
 !                 ====================================================
 !                 In the muffin-tin case
 !                 ====================================================
-                  do kl = 1, kmax_kkr
-                     if (i_Lflag(kl) > 0) then
-                        xfun => bf(:,kl)
+                  xfun => getOrbitalBasis(spin=js,site=site,atom=atom,orb=iorb,kl=kl,rpow=rpow,bfac=bfac)
+                  if (rpow < 0 .or. rpow > 1) then
+                     call ErrorHandler('computeLocalGF','rpow < 0 or rpow > 1',rpow)
+                  endif
 !
-!                       ==============================================
-!                       calculate Phi function
-!                       ==============================================
-                        sfun => PhiLr(:,kl,kl)
-                        pfun => PhiFunc(:,kl,iorb,js)
-!                       ----------------------------------------------
-                        call integrateFuncProduct(nr=iend,r=r_mesh,f=xfun,g=sfun,rpow=1-rpow,p=pfun)
-!                       ----------------------------------------------
+!                 ====================================================
+!                 calculate Phi function
+!                 ====================================================
+                  sfun => PhiLr(:,kl,kl)
+                  pfun => PhiFunc(:,kl,iorb,js)
+!                 ----------------------------------------------------
+                  call integrateFuncProduct(nr=iend,r=r_mesh,f=xfun,g=sfun,rpow=1-rpow,p=pfun)
+!                 ----------------------------------------------------
 !
-!                       ==============================================
-!                       calculate Lambda function
-!                       ==============================================
-                        sfun => HLr(:,kl,kl)
-                        pfun => LambdaFunc(:,kl,iorb,js)
-!                       ----------------------------------------------
-                        call integrateFuncProduct(nr=iend,r=r_mesh,f=xfun,g=sfun,rpow=1-rpow,p=pfun)
-!                       ----------------------------------------------
+!                 ====================================================
+!                 calculate Lambda function
+!                 ====================================================
+                  sfun => HLr(:,kl,kl)
+                  pfun => LambdaFunc(:,kl,iorb,js)
+!                 ----------------------------------------------------
+                  call integrateFuncProduct(nr=iend,r=r_mesh,f=xfun,g=sfun,rpow=1-rpow,p=pfun)
+!                 ----------------------------------------------------
 !
-!                       ==============================================
-!                       calculate Orbital function times Regular solution
-!                       ==============================================
-                        prod => XiPhiLr(:,kl,iorb,js)
-                        do ir = 1, iend 
-                           prod(ir) = PhiLr(ir,kl,kl)*xfun(ir)
-                        enddo
+!                 ====================================================
+!                 calculate Orbital function times Regular solution
+!                 ====================================================
+                  prod => XiPhiLr(:,kl,iorb,js)
+                  do ir = 1, iend 
+                     prod(ir) = PhiLr(ir,kl,kl)*xfun(ir)
+                  enddo
 !
-!                       ==============================================
-!                       calculate Orbital function times Irregular solution
-!                       ==============================================
-                        prod => XiHLr(:,kl,iorb,js)
-                        do ir = 1, iend 
-                           prod(ir) = HLr(ir,kl,kl)*xfun(ir)
-                        enddo
-                     endif
+!                 ====================================================
+!                 calculate Orbital function times Irregular solution
+!                 ====================================================
+                  prod => XiHLr(:,kl,iorb,js)
+                  do ir = 1, iend 
+                     prod(ir) = HLr(ir,kl,kl)*xfun(ir)
                   enddo
                endif
             enddo
@@ -489,10 +495,13 @@ contains
 !
          if (isLSMS()) then
             kau00 => getClusterKau(local_id=site) ! Kau00 = energy * S^{-1} * [Tau00 - t_matrix] * S^{-1*}
+            tau00 => getClusterTau(local_id=site)
          else if (isKKR()) then
             kau00 => getCrystalKau(local_id=site) ! Kau00 = energy * S^{-1} * [Tau00 - t_matrix] * S^{-1*}
+            tau00 => getCrystalTau(local_id=site)
          else if ( isKKRCPA()) then
             kau00 => getImpurityMatrix('Kau_a',site=site,atom=atom)
+            tau00 => getImpurityMatrix('Tau_a',site=site,atom=atom)
          endif
 !
          ns = 0
@@ -502,6 +511,14 @@ contains
             do jsl = 1, n_spin_cant
                ns = ns + 1
                p_kau00 => kau00(:,:,ns)
+!
+               if (MyPE == 0) then
+                  p_tau00 => tau00(:,:,ns)
+!                 -------------------------------------------------------
+                  call writeMatrix('Tau00',p_tau00,kmax_kkr,kmax_kkr,TEN2m6)
+!                 -------------------------------------------------------
+               endif
+!
                if (jsr == jsl) then
                   cfac = -SQRTm1*sqrt(e)
                else
@@ -564,6 +581,7 @@ contains
 !
    nullify(prod, prod_fp, PhiLr, HLr, bf, bf_bar, i_Lflag, j_Lflag)
    nullify(kau00, p_kau00, gfe, gf, sfun, xfun, XiPhiLr, XiHLr, JostInv)
+   nullify(tau00, p_tau00)
 !
    end subroutine computeLocalGF
 !  ===================================================================
