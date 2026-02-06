@@ -2,6 +2,14 @@ export TOP_DIR = $(shell pwd)
 export INC_PATH =
 export LIBS =
 
+# Default to 1 job if JOBS is not defined or is empty
+JOBS ?= 1
+
+# Optional: Ensure JOBS is at least 1 even if someone passes JOBS=0
+ifeq ($(JOBS),0)
+  JOBS := 1
+endif
+
 ifneq (,$(wildcard ./architecture.h))
 include architecture.h 
 else
@@ -68,8 +76,22 @@ libxc:
 	if [ ! -d libxc/LibXC ]; then \
 DIR_NAME="$(shell tar -tzf libxc/libxc.tar.gz | head -1 | cut -f1 -d"/")" && cd libxc && rm -f LibXC && tar xfz libxc.tar.gz && \
 ln -fs $$DIR_NAME LibXC; fi
+ifdef LIBXC_CMAKE_FLAGS
+	@echo "Detected LIBXC_CMAKE_FLAGS: Building libxc with CMake..."
+	@echo "Number of processes to perform make... " $(JOBS)
 	if [ ! -e libxc/LibXC/$(SUFFIX)/lib/libxc.a ]; then \
-cd libxc/LibXC && echo $$PWD && ./configure --prefix=$$PWD/$(SUFFIX) $(LIBXC_CONFIG_FLAGS) && make clean && make && make install; fi
+mkdir -p libxc/LibXC/$(SUFFIX) && cd libxc/LibXC/$(SUFFIX) && echo $$PWD && \
+cmake ../ $(LIBXC_CMAKE_FLAGS) -DCMAKE_INSTALL_PREFIX=$(abspath $(LIBXC_PATH)) && make clean && make -j$(JOBS) && make install; fi
+else ifdef LIBXC_CONFIG_FLAGS
+	@echo "LIBXC_CMAKE_FLAGS not defined: Building libxc with Configure..."
+	if [ ! -e libxc/LibXC/$(SUFFIX)/lib/libxc.a ]; then \
+cd libxc/LibXC && echo $$PWD && ./configure --prefix=$$PWD/$(SUFFIX) $(LIBXC_CONFIG_FLAGS) && make clean && make -j$(JOBS) && \
+make install; fi
+else
+	@echo "ERROR: Neither LIBXC_CMAKE_FLAGS nor LIBXC_CONFIG_FLAGS is defined."
+	@echo "Please define one in your architecture file or command line."
+	@exit 1
+endif
 
 fftw:
 	if [ ! -d fftw/FFTW ]; then \
