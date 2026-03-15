@@ -20,3 +20,11 @@
    n = n + 1; Options(1,n)='-abm';  Options(2,n)='--acc-bigmat'; Options(3,n)='--acc_bigmat'
               OptionKeys(n)='Accelerate KKR Matrix Calculation'
               OptionValues(n) = '-1'
+!
+   n = n + 1; Options(1,n)='-pb';  Options(2,n)='--print-blocking'; Options(3,n)='--print_blocking'
+              OptionKeys(n)='Print Blocking Details in LSMS Matrix Inverse'
+              OptionValues(n) = '-1'
+!
+   n = n + 1; Options(1,n)='-nb';  Options(2,n)='--no-blocking'; Options(3,n)='--no_blocking'
+              OptionKeys(n)='The LSMS Matrix Inverse is Performed without Blocking'
+              OptionValues(n) = '-1'

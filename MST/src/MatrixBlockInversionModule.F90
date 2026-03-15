@@ -311,7 +311,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine invertMatrixBlock( id_in, b, ldb, nb, a, lda, na )
+   subroutine invertMatrixBlock( id_in, b, ldb, nb, a, lda, na, pr )
 !  ===================================================================
 !
 !  *******************************************************************
@@ -320,7 +320,7 @@ contains
 !
 !  INPUT:     a,      the complex matrix to be inverted
 !                    [ a11, a12 ]                [ b11, b12 ]
-!                a = [          ], b = a**{-1} = [          ]       
+!                a = [          ],     a**{-1} = [          ]       
 !                    [ a21, a22 ]                [ b21, b22 ]
 !
 !             alg,        the algorithm of the invertion
@@ -338,6 +338,8 @@ contains
 !
    integer (kind=IntKind), intent(in) :: id_in
    integer (kind=IntKind), intent(in) :: lda, na, ldb, nb
+   integer (kind=IntKind), intent(in), optional :: pr
+   integer (kind=IntKind) :: local_print
 !
    complex (kind=CmplxKind), target :: a(lda,na)
    complex (kind=CmplxKind), target :: b(ldb,nb)
@@ -372,6 +374,12 @@ contains
    timeNew    = timeDirect
    blockDir  = Block_Dir(id)
    blockSize = Block_Size(id)
+!
+   if (present(pr)) then
+      local_print = pr
+   else
+      local_print = 0
+   endif
 !   
    time = getTime()
 !  ===================================================================
@@ -414,8 +422,11 @@ contains
 !                            MaxNumBlocks, NumBlocks(id), p_idcol, blk1, ipvt, mp, k)
 !     ----------------------------------------------------------------
 !#else
+      if (local_print > 0) then
+         write(6,'(4(a,i5))')'LU: alg, lda, na, blk1 = ',alg,', ',lda,', ',na,', ',blk1
+      endif
 !     ----------------------------------------------------------------
-      call zblock_lu1( id, a, lda, na, k)
+      call zblock_lu1( id, a, lda, na, k, local_print)
 !     ----------------------------------------------------------------
 !#endif
    else if ( alg>=3 .and. alg<=6 ) then
@@ -424,8 +435,11 @@ contains
 !     ================================================================
 !     Use the QMR algorithm
 !     ================================================================
+      if (local_print > 0) then
+         write(6,'(4(a,i5))')'non-LU: alg, lda, blk1, na = ',alg,', ',lda,', ',blk1,', ',na
+      endif
       isLU = .false.
-      call zblock_lu1( id, a, lda, na, k )
+      call zblock_lu1( id, a, lda, na, k, local_print )
       vecs => gettarget_2c(na-blk1,blk1*6+6,vecspace)
       pvecs => vecs(1:na-blk1,blk1*6+1:blk1*6+6)
 !     ----------------------------------------------------------------
@@ -438,7 +452,7 @@ contains
 !     ================================================================
       if ( iqmr>0 ) then
          isLU = .true.
-         call zblock_lu1( id, a, lda, na, k )
+         call zblock_lu1( id, a, lda, na, k, local_print )
       else
          call zgemm( 'n', 'n', blk1, k, na-blk1, -cone, a(1,blk1+1),   &
                       lda, a(blk1+1,blk1-k+1), lda, czero, a, lda )
@@ -583,7 +597,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine zblock_lu1( id, a, lda, na, k )
+   subroutine zblock_lu1( id, a, lda, na, k, pr )
 !  ===================================================================
 !  does a partitioning of a matrix and a partial inversion to
 !  get the upper subblock of the inverse
@@ -605,10 +619,11 @@ contains
 !
 !  k      -- returns actual number of columns in the calculated inverse
 !  ===================================================================
+   use TimerModule, only : getTime
 !
    implicit none
 !
-   integer (kind=IntKind), intent(in) ::  id, lda, na
+   integer (kind=IntKind), intent(in) ::  id, lda, na, pr
    integer (kind=IntKind), intent(out) :: k
 !
    complex (kind=CmplxKind), target :: a(lda,na)
@@ -618,7 +633,12 @@ contains
    integer (kind=IntKind), pointer :: p_ipvt(:)
    integer (kind=IntKind), pointer :: p_idcol(:)
 !
-!  print *, "start zblock_lu1"
+   real (kind=RealKind) :: t0, t1
+!
+   if (pr > 0) then
+      write(6,'(a)')'.................... Starting zblock_lu1 ........................'
+      t0= getTime()
+   endif
 !  ===================================================================
 !  eliminate columns that are equiv due to symmetry
 !  ===================================================================
@@ -627,7 +647,10 @@ contains
    nblk = NumBlocks(id)
    p_idcol => idcol(1:blk1,id)
    k = blk1+1
-!  print *,'k = ',k,', blk1 = ',blk1,', lda = ',lda,', na = ',na,', nblk = ',nblk
+   if (pr > 0) then
+      write(6,'(a,t40,a,i5)')'The final upper-left block size','=',blk1
+      write(6,'(a,t40,a,i5)')'The number of blocks in the diagonal','=',nblk
+   endif
    do i = blk1,1,-1
       if ( p_idcol(1)==0 .or. p_idcol(i)==i ) then
          k = k-1
@@ -637,7 +660,9 @@ contains
       endif
    enddo
 !
-!  print *, 'nblk = ',nblk
+!  if (pr > 0) then
+!     write(6,'(a,i5)') 'Update: k = ',k
+!  endif
    if ( isLU ) then
 !     ================================================================
 !     Do block LU
@@ -653,40 +678,90 @@ contains
 !        invert the diagonal blk_sz(iblk) x blk_sz(iblk) block
 !        =============================================================
          p_ipvt => ipvt(1:m)
+         if (pr > 0) then
+            write(6,'(a,t40,a,i5,a)')'Recursive blocking step','=',nblk-iblk+1,' ...................'
+            write(6,'(a,t40,a,i5)')'Bottom-right block size','=',m
+            write(6,'(a,t40,a,i5)')'Upper-left block size','=',ioff
+            write(6,'(a,t40,a,i5)')'In ZGETRF(M,M,A ...):          M','=',m
+            t1= getTime()
+         endif
 !        -------------------------------------------------------------
          call zgetrf( m,m,a(ioff+1,ioff+1),lda,p_ipvt,info )
+!        -------------------------------------------------------------
          if (info /= 0) then
             call ErrorHandler('BinvMatrix','zgetrf failed', info)
          endif
-!        -------------------------------------------------------------
+         if (pr > 0) then
+            write(6,'(a,t40,a,f6.3,a)')'Time for the ZGETRF call','=',getTime()-t1,' sec'
+            write(6,'(a,t40,a,i5)')'In ZGETRS(TRANS,N,NRHS,A ...): N','=',m
+            write(6,'(a,t40,a,i5)')'                               NRHS','=',ioff
+            t1= getTime()
+         endif
 !        =============================================================
 !        calculate the inverse of above multiplying the row block
 !        blk_sz(iblk) x ioff
-!        =============================================================
 !        -------------------------------------------------------------
          call zgetrs( 'n',m,ioff,a(ioff+1,ioff+1),lda,p_ipvt,          &
                        a(ioff+1,1),lda,info )
+!        -------------------------------------------------------------
+         if (pr > 0) then
+            write(6,'(a,t40,a,f6.3,a)')'Time for the ZGETRS call','=',getTime()-t1,' sec'
+         endif
          if (info /= 0) then
             call ErrorHandler('BinvMatrix','zgetrs failed', info)
          endif
          if (iblk.gt.2) then
+            if (pr > 0) then
+               write(6,'(a)')'Calling ZGEMM-1'
+               write(6,'(a,t40,a,i5)')'In ZGEMM(TA,TB,M,N,K ...):     M','=',n
+               write(6,'(a,t40,a,i5)')'                               N','=',ioff-k+1
+               write(6,'(a,t40,a,i5)')'                               K','=',na-ioff
+               t1= getTime()
+            endif
 !           ----------------------------------------------------------
             call zgemm( 'n','n',n,ioff-k+1,na-ioff,-cone,              &
                         a(joff+1,ioff+1),lda,a(ioff+1,k),lda,          &
                         cone,a(joff+1,k),lda )
 !           ----------------------------------------------------------
+            if (pr > 0) then
+               write(6,'(a,t40,a,f6.3,a)')'Time for the ZGEMM-1 calls','=',getTime()-t1,' sec'
+               write(6,'(a)')'Calling ZGEMM-2'
+               write(6,'(a,t40,a,i5)')'In ZGEMM(TA,TB,M,N,K ...):     M','=',joff
+               write(6,'(a,t40,a,i5)')'                               N','=',n
+               write(6,'(a,t40,a,i5)')'                               K','=',na-ioff
+               t1= getTime()
+            endif
+!           ----------------------------------------------------------
             call zgemm( 'n','n',joff,n,na-ioff,-cone,a(1,ioff+1),lda,  &
                         a(ioff+1,joff+1),lda,cone,a(1,joff+1),lda )
 !           ----------------------------------------------------------
+            if (pr > 0) then
+               write(6,'(a,t40,a,f6.3,a)')'Time for the ZGEMM-2 calls','=',getTime()-t1,' sec'
+            endif
          endif
       enddo
+      if (pr > 0) then
+         write(6,'(a)')'The recursive blocking process has ended ........................'
+         write(6,'(a)')'Calling ZGEMM to process the final upperr-left block ............'
+         write(6,'(a,t40,a,i5)')'In ZGEMM(TA,TB,M,N,K ...):     M','=',blk1
+         write(6,'(a,t40,a,i5)')'                               N','=',blk1-k+1
+         write(6,'(a,t40,a,i5)')'                               K','=',na-blk1
+         t1= getTime()
+      endif
 !     ----------------------------------------------------------------
       call zgemm( 'n', 'n', blk1, blk1-k+1, na-blk1, -cone,            &
                 a(1,blk1+1), lda, a(blk1+1,k), lda, cone, a, lda )
 !     ----------------------------------------------------------------
+      if (pr > 0) then
+         write(6,'(a,t40,a,f6.3,a)')'Time for the final ZGEMM call','=',getTime()-t1,' sec'
+      endif
    endif
 !
    k = blk1-k+1
+   if (pr > 0) then
+      write(6,'(a)')'....................  Ending zblock_lu1  ........................'
+      write(6,'(a,t40,a,f6.3,a)')'Timing for the zblock_lu1 call','=',getTime()-t0,' sec'
+   endif
 !
    end subroutine zblock_lu1
 !  ===================================================================

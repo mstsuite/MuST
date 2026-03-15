@@ -1160,6 +1160,8 @@ contains
    use MatrixInverseModule, only : MtxInv_LU
    use WriteMatrixModule, only : writeMatrix
 !
+   use CmdLineOptionModule, only : getCmdLineOption
+!
    implicit none
 !
    complex (kind=CmplxKind), intent(in) :: energy
@@ -1174,6 +1176,7 @@ contains
    integer (kind=IntKind) :: tsize, kmax_max_ns, dsize, kkrsz_ns
 !
    integer (kind=IntKind) :: lid_i, lid_j, pei, pej, jid, info, iid
+   integer (kind=IntKind) :: block_print
 !
    real (kind=RealKind) :: rij(3), posi(3), posj(3)
    real (kind=RealKind) :: t0
@@ -1690,9 +1693,15 @@ contains
 !           The big (KKR) matrix inverse is performed on CPUs.
 !           ==========================================================
 !           call writeMatrix('BigMatrix',BigMatrix,dsize_max*dsize_max)
+            if (getCmdLineOption('Print Blocking Details in LSMS Matrix Inverse') == 0 &
+                .and. MyPE == 0) then
+               block_print = 1
+            else
+               block_print = 0
+            endif
 !           ----------------------------------------------------------
             call invertMatrixBlock( my_atom, pBlockMatrix, kkrsz_ns, kkrsz_ns, &
-                                    BigMatrix, dsize, dsize )
+                                    BigMatrix, dsize, dsize, block_print )
 !           ----------------------------------------------------------
 !           ==========================================================
 !           store [1 - BlockMatrix] in ubmat, which uses wsTau00L as 
