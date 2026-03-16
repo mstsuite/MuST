@@ -567,7 +567,7 @@ contains
    rstatus = getKeyLabelIndexValue(info_id,'Lmax-Charge Den',nt,atname,             &
                                    GlobalNumAtoms,atype,ind_lmax_rho,lmax_rho(1:GlobalNumAtoms))
 !
-   if (.not.isKKRCPASRO()) then
+!  if (.not.isKKRCPASRO()) then
       if (getKeyValue(info_id,'Default LIZ # Neighbors',nmax_liz(0)) /= 0) then
          call ErrorHandler('initAtom','Default LIZ # Neighbors is missing from input')
       endif
@@ -609,20 +609,20 @@ contains
 !                                ind_cutoff_r,cutoff_r(1:GlobalNumAtoms),GlobalNumAtoms)
       rstatus = getKeyLabelIndexValue(info_id,'LIZ Cutoff Radius',nt,atname,        &
                                       GlobalNumAtoms,atype,ind_cutoff_r,cutoff_r(1:GlobalNumAtoms))
-   else ! In the case of CA-KKR-CPA calculations, we setup local cluster with the following parameters
-      nmax_liz(0) = 90 
-      ind_nmax_liz = 0
-      num_shells(0) = 8
-      ind_num_shells = 0
-      write(s2,'(i2)')lmax_kkr(0)
-      lmax_shell(0) = s2
-      do i = 2, num_shells(0)
-         lmax_shell(0) = trim(lmax_shell(0))//' '//s2
-      enddo
-      ind_lmax_shell = 0
-      cutoff_r(0) = 20.0d0
-      ind_cutoff_r = 0
-   endif
+!  else ! In the case of CA-KKR-CPA calculations, we setup local cluster with the following parameters
+!     nmax_liz(0) = 90 
+!     ind_nmax_liz = 0
+!     num_shells(0) = 8
+!     ind_num_shells = 0
+!     write(s2,'(i2)')lmax_kkr(0)
+!     lmax_shell(0) = s2
+!     do i = 2, num_shells(0)
+!       lmax_shell(0) = trim(lmax_shell(0))//' '//s2
+!     enddo
+!     ind_lmax_shell = 0
+!     cutoff_r(0) = 20.0d0
+!     ind_cutoff_r = 0
+!  endif
 !
    rstatus = getKeyValue(info_id,'Default Rcut-Screen',cutoff_r_s(0))
    ind_cutoff_r_s = 0
