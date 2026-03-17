@@ -100,6 +100,7 @@ private
 !
    logical :: ExchSSSmatAllocated = .false.
    logical :: istauij_needed = .false.
+   logical :: TimingLSMS = .false.
 !
    complex (kind=CmplxKind), allocatable, target :: remote_jsmtx(:,:)
    complex (kind=CmplxKind), allocatable, target :: local_jsmtx(:,:)
@@ -355,6 +356,12 @@ contains
    ComputeBigMatrixOnGPU = .false.
    ComputeGijMatrixOnGPU = .false.
    NumCPUTasksPerGPU = 0
+!
+   if (getCmdLineOption('Timing the LSMS Matrix Calculations') == 0) then
+      TimingLSMS = .true.
+   else
+      TimingLSMS = .false.
+   endif
 !
 #ifdef ACCEL
    if (getCmdLineOption('Run on CPU without Acceleration') == 0) then
@@ -1168,6 +1175,8 @@ contains
    complex (kind=CmplxKind), intent(in), optional :: kp
 !
    logical, intent(in), optional :: tau_needed
+   logical :: zgemm1_print = .false.
+   logical :: zgemm2_print = .false.
 !
    integer (kind=IntKind) :: my_atom, iri, irj, kli, klj, is, js, ns
    integer (kind=IntKind) :: lmaxi, lmaxj, kkri, kkrj, kkri_ns, kkrj_ns
@@ -1179,7 +1188,7 @@ contains
    integer (kind=IntKind) :: block_print
 !
    real (kind=RealKind) :: rij(3), posi(3), posj(3)
-   real (kind=RealKind) :: t0
+   real (kind=RealKind) :: t0, t1, t_gij, t_zgemm1, t_zgemm2
 !
    complex (kind=CmplxKind), pointer :: gij(:,:), gij_d(:,:)
    complex (kind=CmplxKind), pointer :: p_jinvi(:)
@@ -1413,6 +1422,20 @@ contains
 !        NOTE: The following code may fail if the 
 !              number of neighbors associated with each atom is different.
 !        =============================================================
+         if (TimingLSMS) then
+            t0 = getTime()
+            t_gij = ZERO
+            t_zgemm1 = ZERO
+            t_zgemm2 = ZERO
+            if (MyPE == 0) then
+               write(6,'(a,i2,a)')'In calClusterMatrix, start constructing the KKR matrix on CPU for the LIZ of atom ',my_atom,' --------------'
+               zgemm1_print = .true.
+               zgemm2_print = .true.
+            else
+               zgemm1_print = .false.
+               zgemm2_print = .false.
+            endif
+         endif
          nbj=0
          do irj=0,Neighbor%NumAtoms
 !           ==========================================================
@@ -1532,13 +1555,30 @@ contains
 !                 ====================================================
 !08/28/14         rij(1:3) = posi(1:3)-posj(1:3)
                   rij = posj - posi
+                  if (TimingLSMS) then
+                     t1 = getTime()
+                  endif
+!                 ----------------------------------------------------
                   gij => getGij(kappa,rij,lmaxi,lmaxj)
+!                 ----------------------------------------------------
+                  if (TimingLSMS) then
+                     t_gij = t_gij + getTime() - t1
+                  endif
 !
                   if (Relativity > 1) then
 !                    -------------------------------------------------
                      call convertGijToRel(gij, gijrel, kkri, kkrj, energy)
 !                    -------------------------------------------------
                      gij => gijrel
+                     if (TimingLSMS) then
+                        if (zgemm1_print) then
+                           write(6,'(a)')'Calling ZGEMM(TA,TB,M,N,K,cone,A,LDA,B,LDB,czero,C,LDC) to calculate Jinv*Gij'
+                           write(6,'(6(a,i5))')'       in which M, N, K, LDA. LDB, LDC = ', &
+                                               kkri_ns,', ',kkrj_ns,', ',kkri_ns,', ',nbr_kkri_ns,', ',kkri_ns,', ',kkri,kkri_ns
+                           zgemm1_print = .false.
+                        endif
+                        t1 = getTime()
+                     endif
 !                    =================================================
 !                    This needs to be checked since in this case,
 !                        nbr_kkri_ns should be nbr_kkri*2
@@ -1548,7 +1588,19 @@ contains
                      call zgemm('n', 'n', kkri_ns, kkrj_ns, kkri_ns, CONE,&
                                 p_jinvi, nbr_kkri_ns, gij, kkri_ns, CZERO, jig, kkri_ns)
 !                    -------------------------------------------------
+                     if (TimingLSMS) then
+                        t_zgemm1 = t_zgemm1 + getTime()-t1
+                     endif
                   else
+                     if (TimingLSMS) then
+                        if (zgemm1_print) then
+                           write(6,'(a)')'Calling ZGEMM(TA,TB,M,N,K,cone,A,LDA,B,LDB,czero,C,LDC) to calculate Jinv*Gij -> JiG'
+                           write(6,'(6(a,i5))')'       in which M, N, K, LDA. LDB, LDC = ', &
+                                               kkri,', ',kkrj,', ',kkri,', ',nbr_kkri_ns,', ',kkri,', ',kkri_ns
+                           zgemm1_print = .false.
+                        endif
+                        t1 = getTime()
+                     endif
                      do js = 1, n_spin_cant
                         do is = 1, n_spin_cant
 !                          -------------------------------------------
@@ -1559,6 +1611,23 @@ contains
 !                          -------------------------------------------
                         enddo
                      enddo
+                     if (TimingLSMS) then
+                        t_zgemm1 = t_zgemm1 + getTime()-t1
+                     endif
+                  endif
+                  if (TimingLSMS) then
+                     if (zgemm2_print) then
+                        write(6,'(a)')'Calling ZGEMM(TA,TB,M,N,K,-cone/kappa,A,LDA,B,LDB,czero,C,LDC) to calculate JiG*Sine -> KKR Matrix'
+                        if (n_spin_cant == 2 .and. kkrj_ns /= nbr_kkrj_ns) then
+                            write(6,'(6(a,i5))')'       in which M, N, K, LDA. LDB, LDC = ', &
+                                                kkri_ns,', ',kkrj_ns,', ',kkrj_ns,', ',kkri_ns,', ',kkrj_ns,', ',dsize
+                        else
+                            write(6,'(6(a,i5))')'       in which M, N, K, LDA. LDB, LDC = ', &
+                                                kkri_ns,', ',kkrj_ns,', ',kkrj_ns,', ',kkri_ns,', ',nbr_kkrj_ns,', ',dsize
+                        endif
+                        zgemm2_print = .false.
+                     endif
+                     t1 = getTime()
                   endif
                   if (n_spin_cant == 2 .and. kkrj_ns /= nbr_kkrj_ns) then
                      ! In this case, p_sinej data have been rearranged and copied
@@ -1576,6 +1645,9 @@ contains
 !                    -------------------------------------------------
                     !call writeMatrix('BigMatrixIteration', BigMatrix, dsize*dsize)
                   endif
+                  if (TimingLSMS) then
+                     t_zgemm2 = t_zgemm2 + getTime()-t1
+                  endif
                endif
                nbi = nbi + kkri_ns
             enddo
@@ -1589,6 +1661,14 @@ contains
 !           ----------------------------------------------------------
             call ErrorHandler(' calTauMatrix ::', 'nbi /= dsize', dsize)
 !           ----------------------------------------------------------
+         endif
+!
+         if (TimingLSMS .and. MyPE == 0) then
+            write(6,'(a,i2,a)')'For the LIZ centered at atom ',my_atom,', the timing data on CPU are:  --------------'
+            write(6,'(a,f8.3,a)')'Cumulative time for the calculation of all Gij matrices       = ',t_gij,' sec'
+            write(6,'(a,f8.3,a)')'Cumulative time for all the zgemm calls to calculate Jinv*Gij = ',t_zgemm1,' sec'
+            write(6,'(a,f8.3,a)')'Cumulative time for all the zgemm calls to calculate JiG*Sine = ',t_zgemm2,' sec'
+            write(6,'(a,f8.3,a)')'Total time for constructing the KKR matrix before inverse     = ',getTime()-t0,' sec'
          endif
       endif
 !
@@ -1699,10 +1779,16 @@ contains
             else
                block_print = 0
             endif
+            if (TimingLSMS) then
+               t0 = getTime()
+            endif
 !           ----------------------------------------------------------
             call invertMatrixBlock( my_atom, pBlockMatrix, kkrsz_ns, kkrsz_ns, &
                                     BigMatrix, dsize, dsize, block_print )
 !           ----------------------------------------------------------
+            if (TimingLSMS .and. MyPE == 0) then
+               write(6,'(a,f8.3,a)')'Total time for inverting the KKR matrix of the LIZ on CPU     = ',getTime()-t0,' sec'
+            endif
 !           ==========================================================
 !           store [1 - BlockMatrix] in ubmat, which uses wsTau00L as 
 !           temporary space

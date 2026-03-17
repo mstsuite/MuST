@@ -423,7 +423,7 @@ contains
 !     ----------------------------------------------------------------
 !#else
       if (local_print > 0) then
-         write(6,'(4(a,i5))')'LU: alg, lda, na, blk1 = ',alg,', ',lda,', ',na,', ',blk1
+         write(6,'(4(a,i5))')'In invertMatrixBlock, LU: alg, lda, na, blk1 = ',alg,', ',lda,', ',na,', ',blk1
       endif
 !     ----------------------------------------------------------------
       call zblock_lu1( id, a, lda, na, k, local_print)
@@ -436,7 +436,7 @@ contains
 !     Use the QMR algorithm
 !     ================================================================
       if (local_print > 0) then
-         write(6,'(4(a,i5))')'non-LU: alg, lda, blk1, na = ',alg,', ',lda,', ',blk1,', ',na
+         write(6,'(4(a,i5))')'In invertMatrixBlock, non-LU: alg, lda, blk1, na = ',alg,', ',lda,', ',blk1,', ',na
       endif
       isLU = .false.
       call zblock_lu1( id, a, lda, na, k, local_print )
@@ -528,9 +528,9 @@ contains
    endif
 
    if ( print_level(id) >= 0 .and. nblk > 1) then
-      write( 6,'(/,a,a,a,i6,a7,f12.6,a4)') &
+      write( 6,'(/,a,a,a,i6,a7,f9.3,a4)') &
         'invertBlockMatrix     :: Using ',alg_name,': Block size = ', &
-        MatrixBlockSizes(2,id),', Time=',time,' Sec' 
+        MatrixBlockSizes(2,id),', Time =',time,' Sec' 
       call FlushFile(6)
    endif
 !
@@ -682,7 +682,8 @@ contains
             write(6,'(a,t40,a,i5,a)')'Recursive blocking step','=',nblk-iblk+1,' ...................'
             write(6,'(a,t40,a,i5)')'Bottom-right block size','=',m
             write(6,'(a,t40,a,i5)')'Upper-left block size','=',ioff
-            write(6,'(a,t40,a,i5)')'In ZGETRF(M,M,A ...):          M','=',m
+            write(6,'(a)')'Calling ZGETRF(M,M,A,LDA,IPVT,INFO)'
+            write(6,'(a,t40,a,i5,a,i5)')'   in which M, LDA','=',m,', ',lda
             t1= getTime()
          endif
 !        -------------------------------------------------------------
@@ -693,8 +694,10 @@ contains
          endif
          if (pr > 0) then
             write(6,'(a,t40,a,f6.3,a)')'Time for the ZGETRF call','=',getTime()-t1,' sec'
-            write(6,'(a,t40,a,i5)')'In ZGETRS(TRANS,N,NRHS,A ...): N','=',m
-            write(6,'(a,t40,a,i5)')'                               NRHS','=',ioff
+            write(6,'(a)')'Calling ZGETRS(''N'',N,NRHS,A,LDA,IPVT,B,LDB,INFO)'
+            write(6,'(a,t40,4(a,i5))')'   in which N, NRHS, LDA, LDB','=',m,', ',ioff,', ',lda,', ',lda
+!           write(6,'(a,t40,a,i5)')'In ZGETRS(TRANS,N,NRHS,A ...): N','=',m
+!           write(6,'(a,t40,a,i5)')'                               NRHS','=',ioff
             t1= getTime()
          endif
 !        =============================================================
@@ -712,10 +715,12 @@ contains
          endif
          if (iblk.gt.2) then
             if (pr > 0) then
-               write(6,'(a)')'Calling ZGEMM-1'
-               write(6,'(a,t40,a,i5)')'In ZGEMM(TA,TB,M,N,K ...):     M','=',n
-               write(6,'(a,t40,a,i5)')'                               N','=',ioff-k+1
-               write(6,'(a,t40,a,i5)')'                               K','=',na-ioff
+               write(6,'(a)')'Calling ZGEMM-1: ZGEMM(TA,TB,M,N,K,-cone,A,LDA,B,LDB,cone,C,LDC)'
+               write(6,'(6(a,i5))')'       in which M, N, K, LDA. LDB, LDC = ', &
+                                                n,', ',ioff-k+1,', ',na-ioff,', ',lda,', ',lda,', ',lda
+!              write(6,'(a,t40,a,i5)')'In ZGEMM(TA,TB,M,N,K ...):     M','=',n
+!              write(6,'(a,t40,a,i5)')'                               N','=',ioff-k+1
+!              write(6,'(a,t40,a,i5)')'                               K','=',na-ioff
                t1= getTime()
             endif
 !           ----------------------------------------------------------
@@ -725,10 +730,12 @@ contains
 !           ----------------------------------------------------------
             if (pr > 0) then
                write(6,'(a,t40,a,f6.3,a)')'Time for the ZGEMM-1 calls','=',getTime()-t1,' sec'
-               write(6,'(a)')'Calling ZGEMM-2'
-               write(6,'(a,t40,a,i5)')'In ZGEMM(TA,TB,M,N,K ...):     M','=',joff
-               write(6,'(a,t40,a,i5)')'                               N','=',n
-               write(6,'(a,t40,a,i5)')'                               K','=',na-ioff
+               write(6,'(a)')'Calling ZGEMM-2: ZGEMM(TA,TB,M,N,K,-cone,A,LDA,B,LDB,cone,C,LDC)'
+               write(6,'(6(a,i5))')'       in which M, N, K, LDA. LDB, LDC = ', &
+                                                joff,', ',n,', ',na-ioff,', ',lda,', ',lda,', ',lda
+!              write(6,'(a,t40,a,i5)')'In ZGEMM(TA,TB,M,N,K ...):     M','=',joff
+!              write(6,'(a,t40,a,i5)')'                               N','=',n
+!              write(6,'(a,t40,a,i5)')'                               K','=',na-ioff
                t1= getTime()
             endif
 !           ----------------------------------------------------------
@@ -742,10 +749,12 @@ contains
       enddo
       if (pr > 0) then
          write(6,'(a)')'The recursive blocking process has ended ........................'
-         write(6,'(a)')'Calling ZGEMM to process the final upperr-left block ............'
-         write(6,'(a,t40,a,i5)')'In ZGEMM(TA,TB,M,N,K ...):     M','=',blk1
-         write(6,'(a,t40,a,i5)')'                               N','=',blk1-k+1
-         write(6,'(a,t40,a,i5)')'                               K','=',na-blk1
+         write(6,'(a)')'Calling ZGEMM(TA,TB,M,N,K,-cone,A,LDA,B,LDB,cone,C,LDC) to process the final upperr-left block ............'
+         write(6,'(6(a,i5))')'        in which M, N, K, LDA. LDB, LDC = ', &
+                                                blk1,', ',blk1-k+1,', ',na-blk1,', ',lda,', ',lda,', ',lda
+!        write(6,'(a,t40,a,i5)')'In ZGEMM(TA,TB,M,N,K ...):     M','=',blk1
+!        write(6,'(a,t40,a,i5)')'                               N','=',blk1-k+1
+!        write(6,'(a,t40,a,i5)')'                               K','=',na-blk1
          t1= getTime()
       endif
 !     ----------------------------------------------------------------

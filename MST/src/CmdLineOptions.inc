@@ -21,6 +21,10 @@
               OptionKeys(n)='Accelerate KKR Matrix Calculation'
               OptionValues(n) = '-1'
 !
+   n = n + 1; Options(1,n)='-tl';  Options(2,n)='--timing-lsms'; Options(3,n)='--timing_lsms'
+              OptionKeys(n)='Timing the LSMS Matrix Calculations'
+              OptionValues(n) = '-1'
+!
    n = n + 1; Options(1,n)='-pb';  Options(2,n)='--print-blocking'; Options(3,n)='--print_blocking'
               OptionKeys(n)='Print Blocking Details in LSMS Matrix Inverse'
               OptionValues(n) = '-1'
