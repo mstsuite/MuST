@@ -737,10 +737,12 @@
 !  Output the head lines of the position data
 !  ===================================================================
    if (ftype==2) then
-      open(unit=14,file='POSCAR',status='unknown',form='formatted')
+      write(6,'(/,a,/)')'The position data is written in POSCAR.dat'
+      open(unit=14,file='POSCAR.dat',status='unknown',form='formatted')
       write(14,'(a)') '#POSCAR file'
       write(14,'(f12.8)') a0*au2anstr
    else
+      write(6,'(/,a,/)')'The position data is written in position.dat'
       open(unit=14,file='position.dat',status='unknown',form='formatted')
       write(14,'(a)') '# Units:: atomic units'
       write(14,'(f12.8)')a0
