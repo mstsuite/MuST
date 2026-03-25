@@ -80,8 +80,13 @@ ifdef LIBXC_CMAKE_FLAGS
 	@echo "Detected LIBXC_CMAKE_FLAGS: Building libxc with CMake..."
 	@echo "Number of processes to perform make... " $(JOBS)
 	if [ ! -e libxc/LibXC/$(SUFFIX)/lib/libxc.a ]; then \
-mkdir -p libxc/LibXC/$(SUFFIX) && cd libxc/LibXC/$(SUFFIX) && echo $$PWD && \
-cmake ../ $(LIBXC_CMAKE_FLAGS) -DCMAKE_INSTALL_PREFIX=$(abspath $(LIBXC_PATH)) && make clean && make -j$(JOBS) && make install; fi
+		mkdir -p libxc/LibXC/$(SUFFIX) && cd libxc/LibXC/$(SUFFIX) && \
+		if [ "$(SUFFIX)" = "." ]; then \
+			mkdir -p build_tmp && cd build_tmp; \
+		fi && echo $$PWD && \
+		cmake .. -Wno-dev $(LIBXC_CMAKE_FLAGS) -DCMAKE_INSTALL_PREFIX=$(abspath $(LIBXC_PATH)) && \
+		make clean && make -j$(JOBS) && make install; \
+	fi
 else ifdef LIBXC_CONFIG_FLAGS
 	@echo "LIBXC_CMAKE_FLAGS not defined: Building libxc with Configure..."
 	if [ ! -e libxc/LibXC/$(SUFFIX)/lib/libxc.a ]; then \

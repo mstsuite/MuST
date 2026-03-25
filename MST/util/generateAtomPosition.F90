@@ -79,8 +79,9 @@
    real (kind=RealKind), pointer :: x_medium(:), y_medium(:), z_medium(:)
    real (kind=RealKind), allocatable :: x_cluster(:), y_cluster(:), z_cluster(:)
 !
-   real (kind=RealKind), parameter :: anstr2au = 1.88973000d0
+!  real (kind=RealKind), parameter :: anstr2au = 1.88973000d0
    real (kind=RealKind), parameter :: au2anstr = 0.52917000d0
+   real (kind=RealKind), parameter :: anstr2au = ONE/au2anstr
    real (kind=RealKind) :: uconv, fact, a0, b0, c0, x, y, z
 ! GDS   
    real (kind=RealKind) :: work(3)
@@ -383,9 +384,6 @@
          small_box(3,3) = ONE
       endif
       a0 = a0*uconv
-      small_box(1,1) = small_box(1,1)*uconv
-      small_box(2,2) = small_box(2,2)*uconv
-      small_box(3,3) = small_box(3,3)*uconv
       if (str_type == 1) then ! NaCl
          nbasis = 0
          do i = 1, 4
@@ -530,14 +528,16 @@
          if (str_type == 0) then
             do i = 1, nbasis
                write(6,'(/,2x,a,3f10.5,a,$)')'Enter Atom Name Located at',   &
-                                             bv(1:3,i)*uconv,' : '
+                                             bv(1:3,i),' : '
+!                                            bv(1:3,i)*uconv,' : '
                read(5,'(a)')MediumBasis(i)
                write(6,'(a)')trim(adjustl(MediumBasis(i)))
             enddo
          else ! This works for NaCl and ZnS or Diadmond structures
             do i = 1, 2
                write(6,'(/,2x,a,3f10.5,a,$)')'Enter Atom Name Located at',   &
-                                             bv(1:3,i)*uconv,' : '
+                                             bv(1:3,i),' : '
+!                                            bv(1:3,i)*uconv,' : '
                read(5,'(a)')MediumBasis(i)
                write(6,'(a)')trim(adjustl(MediumBasis(i)))
             enddo
@@ -736,22 +736,21 @@
 !  ===================================================================
 !  Output the head lines of the position data
 !  ===================================================================
-   open(unit=14,file='position.dat',status='unknown',form='formatted')
-   fact = ONE
    if (ftype==2) then
+      open(unit=14,file='POSCAR',status='unknown',form='formatted')
       write(14,'(a)') '#POSCAR file'
-      write(14,*) a0*au2anstr
-      fact = au2anstr
+      write(14,'(f12.8)') a0*au2anstr
    else
+      open(unit=14,file='position.dat',status='unknown',form='formatted')
       write(14,'(a)') '# Units:: atomic units'
       write(14,'(f12.8)')a0
       write(14,'(a)') '# If Angsrtroms is needed, comment out the line above and uncomment the following line'
       write(14,'(a,f12.8)')'# ', au2anstr*a0
       write(14,'(a)')      '# =============================================================='
    endif
-   write(14,'(2x,3f19.11)')fact*box(1:3,1)
-   write(14,'(2x,3f19.11)')fact*box(1:3,2)
-   write(14,'(2x,3f19.11)')fact*box(1:3,3)
+   write(14,'(2x,3f19.11)')box(1:3,1)
+   write(14,'(2x,3f19.11)')box(1:3,2)
+   write(14,'(2x,3f19.11)')box(1:3,3)
    if (ftype/=2) then
       write(14,'(a)')      '# =============================================================='
       write(14,'(a,i8)')   '# Number of clusters: ',NumClusters
@@ -870,7 +869,8 @@
                             box_inv(j,2)*y_medium(k) +                &
                             box_inv(j,3)*z_medium(k)
                   enddo
-               write(14,'(2x,a3,2x,3f19.11)')AtomName_medium(k), rpos(1:3)
+!              write(14,'(2x,a3,2x,3f19.11)')AtomName_medium(k), rpos(1:3)
+               write(14,'(2x,3f19.11)')rpos(1:3)
             else
                write(14,'(2x,a3,2x,3f19.11)') AtomName_medium(k),     &
                                    x_medium(k),y_medium(k),z_medium(k)
@@ -900,8 +900,8 @@
                          box_inv(j,2)*y_medium(k) +                &
                          box_inv(j,3)*z_medium(k)
             enddo
-            write(14,'(2x,a3,2x,3f19.11)')AtomName_medium(k), rpos(1:3)
-            !write(14,'(2x,3f19.11)') rpos(1:3)
+!           write(14,'(2x,a3,2x,3f19.11)')AtomName_medium(k), rpos(1:3)
+            write(14,'(2x,3f19.11)') rpos(1:3)
 !            print *, box_inv(1,1), box_inv(1,2), box_inv(1,3)
 !            print *, box_inv(2,1), box_inv(2,2), box_inv(2,3)
 !            print *, box_inv(3,1), box_inv(3,2), box_inv(3,3)
