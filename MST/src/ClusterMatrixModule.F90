@@ -382,7 +382,9 @@ contains
       if (CurrentScfIteration <= 1) then
 !        -----------------------------------------------------------------------
          call get_node_resources(MyPE,NumCoresOnNode,NumGPUsOnNode,MemInGB)
+#ifdef ENERGY_REPORT
          call initialize_energy_benchmark()
+#endif
          cumulative_gpu_energy = ZERO
 !        -----------------------------------------------------------------------
          if (MaxPrintLevel >= 0) then
@@ -635,9 +637,11 @@ contains
 !
 #ifdef ACCEL
    if (GPU_Offloading) then
+#ifdef ENERGY_REPORT
 !     ----------------------------------------------------------------
       !  call finalize_energy_benchmark()
 !     ----------------------------------------------------------------
+#endif
 !     cumulative_gpu_energy = ZERO
       call finalize_lsms_gpu()
       if (ComputeGijMatrixOnGPU) then
@@ -1777,6 +1781,7 @@ contains
 !           ----------------------------------------------------------
 !           nullify( pBigMatrix )
 !           ==========================================================
+#ifdef ENERGY_REPORT
             if (MyPE == 0) then
 !              -------------------------------------------------------
                call measure_energy_benchmark(gpu_energy,cumulative_gpu_energy)
@@ -1784,6 +1789,7 @@ contains
                write(6,'(a,f14.5,a)')'Current    GPU energy consumption =',gpu_energy,' (J)'
                write(6,'(a,f14.5,a)')'Cumulative GPU energy consumption =',cumulative_gpu_energy,' (J)'
             endif
+#endif
 #else
 !           ----------------------------------------------------------
             call ErrorHandler('calTauMatrix','The job ran into a forbidden area')
