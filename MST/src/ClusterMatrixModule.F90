@@ -126,6 +126,10 @@ private
 !
    character (len=15) :: stop_routine
 !
+#ifdef ACCEL
+   real (kind=RealKind) :: cumulative_gpu_energy = ZERO
+#endif
+!
 contains
 !
    include '../lib/arrayTools.F90'
@@ -378,6 +382,8 @@ contains
       if (CurrentScfIteration <= 1) then
 !        -----------------------------------------------------------------------
          call get_node_resources(MyPE,NumCoresOnNode,NumGPUsOnNode,MemInGB)
+         call initialize_energy_benchmark()
+         cumulative_gpu_energy = ZERO
 !        -----------------------------------------------------------------------
          if (MaxPrintLevel >= 0) then
             write(6,'(a,i5)')'Num CPU Cores on Node = ',NumCoresOnNode
@@ -629,6 +635,10 @@ contains
 !
 #ifdef ACCEL
    if (GPU_Offloading) then
+!     ----------------------------------------------------------------
+      !  call finalize_energy_benchmark()
+!     ----------------------------------------------------------------
+!     cumulative_gpu_energy = ZERO
       call finalize_lsms_gpu()
       if (ComputeGijMatrixOnGPU) then
          deallocate(position_array, numnb_array)
@@ -1203,6 +1213,10 @@ contains
    complex (kind=CmplxKind), pointer :: smi(:,:), smj(:,:)
    complex (kind=CmplxKind), pointer :: kau_l(:,:), tau_l(:,:)
 !
+#ifdef ACCEL
+   real (kind=RealKind) :: gpu_energy
+#endif
+!
    interface
       function getSingleScatteringMatrix(smt,spin,site,atom,dsize) result(sm)
          use KindParamModule, only : IntKind, CmplxKind
@@ -1738,7 +1752,7 @@ contains
                t0 = getTime()
                call push_bigmatrix_gpu(BigMatrix,dsize)
                if (MyPE == 0) then
-               write(6,'(a,1i5,f8.3)'),'push_bigmatrix_gpu timing:',my_atom,getTime()-t0
+                  write(6,'(a,1i5,f8.3)'),'push_bigmatrix_gpu timing:',my_atom,getTime()-t0
                endif
 !              -------------------------------------------------------
             endif
@@ -1763,6 +1777,13 @@ contains
 !           ----------------------------------------------------------
 !           nullify( pBigMatrix )
 !           ==========================================================
+            if (MyPE == 0) then
+!              -------------------------------------------------------
+               call measure_energy_benchmark(gpu_energy,cumulative_gpu_energy)
+!              -------------------------------------------------------
+               write(6,'(a,f14.5,a)')'Current    GPU energy consumption =',gpu_energy,' (J)'
+               write(6,'(a,f14.5,a)')'Cumulative GPU energy consumption =',cumulative_gpu_energy,' (J)'
+            endif
 #else
 !           ----------------------------------------------------------
             call ErrorHandler('calTauMatrix','The job ran into a forbidden area')
