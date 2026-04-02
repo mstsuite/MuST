@@ -34,7 +34,7 @@ LUA_PATH    =
 MATH_PATH   =
 LIBS       += -Mscalapack \
               -L$(ACCEL_PATH)/lib64 -lcudart \
-              -L$(ACCEL_LIBS)/lib64 -lcublas -lstdc++ -lcusolver
+              -L$(ACCEL_LIBS)/lib64 -lcublas -lstdc++ -lcusolver -L$(NVHPC_ROOT)/cuda/13.1/lib64/stubs/ -lnvidia-ml
 #=====================================================================
 # Compiler tools
 #=====================================================================
