@@ -32,3 +32,7 @@
    n = n + 1; Options(1,n)='-nb';  Options(2,n)='--no-blocking'; Options(3,n)='--no_blocking'
               OptionKeys(n)='The LSMS Matrix Inverse is Performed without Blocking'
               OptionValues(n) = '-1'
+!
+   n = n + 1; Options(1,n)='-re';  Options(2,n)='--report-energy'; Options(3,n)='--report_energy'
+              OptionKeys(n)='Report GPU Energy Consuption'
+              OptionValues(n) = '-1'

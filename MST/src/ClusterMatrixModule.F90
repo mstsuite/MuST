@@ -101,6 +101,7 @@ private
    logical :: ExchSSSmatAllocated = .false.
    logical :: istauij_needed = .false.
    logical :: TimingLSMS = .false.
+   logical :: ReportGPUEnergy = .false.
 !
    complex (kind=CmplxKind), allocatable, target :: remote_jsmtx(:,:)
    complex (kind=CmplxKind), allocatable, target :: local_jsmtx(:,:)
@@ -367,6 +368,12 @@ contains
       TimingLSMS = .false.
    endif
 !
+   if (getCmdLineOption('Report GPU Energy Consuption') == 0) then
+      reportGPUEnergy = .true.
+   else
+      reportGPUEnergy = .false.
+   endif
+!
 #ifdef ACCEL
    if (getCmdLineOption('Run on CPU without Acceleration') == 0) then
       NumGPUsOnNode = 0
@@ -382,9 +389,12 @@ contains
       if (CurrentScfIteration <= 1) then
 !        -----------------------------------------------------------------------
          call get_node_resources(MyPE,NumCoresOnNode,NumGPUsOnNode,MemInGB)
-#ifdef ENERGY_REPORT
-         call initialize_energy_benchmark()
-#endif
+!        -----------------------------------------------------------------------
+         if (ReportGPUEnergy) then
+!           --------------------------------------------------------------------
+            call initialize_energy_benchmark()
+!           --------------------------------------------------------------------
+         endif
          cumulative_gpu_energy = ZERO
 !        -----------------------------------------------------------------------
          if (MaxPrintLevel >= 0) then
@@ -637,11 +647,11 @@ contains
 !
 #ifdef ACCEL
    if (GPU_Offloading) then
-#ifdef ENERGY_REPORT
-!     ----------------------------------------------------------------
+      if (ReportGPUEnergy) then
+!        -------------------------------------------------------------
       !  call finalize_energy_benchmark()
-!     ----------------------------------------------------------------
-#endif
+!        -------------------------------------------------------------
+      endif
 !     cumulative_gpu_energy = ZERO
       call finalize_lsms_gpu()
       if (ComputeGijMatrixOnGPU) then
@@ -1781,15 +1791,13 @@ contains
 !           ----------------------------------------------------------
 !           nullify( pBigMatrix )
 !           ==========================================================
-#ifdef ENERGY_REPORT
-            if (MyPE == 0) then
+            if (ReportGPUEnergy .and. MyPE == 0) then
 !              -------------------------------------------------------
                call measure_energy_benchmark(gpu_energy,cumulative_gpu_energy)
 !              -------------------------------------------------------
                write(6,'(a,f14.5,a)')'Current    GPU energy consumption =',gpu_energy,' (J)'
                write(6,'(a,f14.5,a)')'Cumulative GPU energy consumption =',cumulative_gpu_energy,' (J)'
             endif
-#endif
 #else
 !           ----------------------------------------------------------
             call ErrorHandler('calTauMatrix','The job ran into a forbidden area')

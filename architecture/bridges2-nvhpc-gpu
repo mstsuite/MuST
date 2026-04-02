@@ -56,7 +56,7 @@ ARCHV       = ar -r
 FPPDEFS     = -cpp
 CPPDEFS     = -cpp
 # FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK -DNVHPC
-FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DNVHPC -DENERGY_REPORT
+FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DNVHPC
 
 CFLAGS      = -O3
 CXXFLAGS    = -O3 -std=c++14
