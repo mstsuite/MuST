@@ -1,0 +1,719 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Package Description &#8212; MuST  documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=3c74b3bc" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'usage';</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Theory" href="theory.html" />
+    <link rel="prev" title="Architecture File Structure" href="architec.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">MuST  documentation</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        
+        <ul class="nav bd-sidenav bd-sidenav__home-link">
+            <li class="toctree-l1">
+                <a class="reference internal" href="index.html">
+                    Welcome to the MuST Documentation!
+                </a>
+            </li>
+        </ul>
+        <ul class="current nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="installation.html">Installation</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="architec.html">Architecture File Structure</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Package Description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="theory.html">Theory</a></li>
+
+<li class="toctree-l1"><a class="reference internal" href="input.html">Input Parameters</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="tutorials.html">Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="tutorial1.html">Equation of State using Birch-Murnaghan EOS</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="contrib.html">Project Team</a></li>
+<li class="toctree-l1"><a class="reference internal" href="acknowledge.html">ACKNOWLEDGEMENT</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cite.html">Citations</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/mstsuite/MuST" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/mstsuite/MuST/edit/main/usage.rst" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="_sources/usage.rst" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.rst</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button pst-navbar-icon"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Package Description</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#available-scientific-packages">Available Scientific Packages</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#user-support-folders">User Support Folders</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#executables-under-bin">Executables under <code class="docutils literal notranslate"><span class="pre">bin/</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#mst">1. <code class="docutils literal notranslate"><span class="pre">mst</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#lsms">2. <code class="docutils literal notranslate"><span class="pre">lsms</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#wl-lsms">3. <code class="docutils literal notranslate"><span class="pre">wl-lsms</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#genap">4. <code class="docutils literal notranslate"><span class="pre">genap</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#measurevoronoi">5. <code class="docutils literal notranslate"><span class="pre">measureVoronoi</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#murn">6. <code class="docutils literal notranslate"><span class="pre">murn</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#newa">7. <code class="docutils literal notranslate"><span class="pre">newa</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#newss">8. <code class="docutils literal notranslate"><span class="pre">newss</span></code></a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="package-description">
+<h1>Package Description<a class="headerlink" href="#package-description" title="Link to this heading">#</a></h1>
+<section id="available-scientific-packages">
+<h2>Available Scientific Packages<a class="headerlink" href="#available-scientific-packages" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>MST</strong>: Perform KKR, LSMS, single-site, and Cluster Averaged KKR-CPA.</p></li>
+<li><p><strong>lsms</strong>: Perform LSMS and Wang-Landau LSMS. This package is optimized for extreme performance on petascale and exascale systems.</p></li>
+<li><p><strong>KUBO</strong>: Perform first-principles electrical conductivity calculations.</p></li>
+</ul>
+</section>
+<section id="user-support-folders">
+<h2>User Support Folders<a class="headerlink" href="#user-support-folders" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>potentials</strong>: Contains the starting potential for selected elements.</p></li>
+<li><p><strong>architecture</strong>: Contains preset makefile parameters (“architecture files”) for a wide variety of computer systems.</p></li>
+<li><p><strong>docs</strong>: Contains installation instructions, license information, and user guides.</p></li>
+<li><p><strong>external</strong>: Contains external libraries required or optionally required by MuST, e.g., FFTW, Lua, P3DFFT, and LibXC.</p></li>
+<li><p><strong>tutorials</strong>: Contains hands-on exercises and training materials.</p></li>
+<li><p><strong>ase_must</strong>: Provides Atomic Simulation Environment (ASE) support for MuST.</p></li>
+</ul>
+<section id="executables-under-bin">
+<h3>Executables under <code class="docutils literal notranslate"><span class="pre">bin/</span></code><a class="headerlink" href="#executables-under-bin" title="Link to this heading">#</a></h3>
+</section>
+</section>
+<section id="mst">
+<h2>1. <code class="docutils literal notranslate"><span class="pre">mst</span></code><a class="headerlink" href="#mst" title="Link to this heading">#</a></h2>
+<p>The corresponding main source code is <code class="docutils literal notranslate"><span class="pre">MST/src/mst2.F90</span></code>. It performs <em>ab initio</em>
+electronic structure calculations for 3-D structures.</p>
+<p><strong>Main features:</strong></p>
+<ul class="simple">
+<li><p>Linear scaling calculation based on LSMS method</p></li>
+<li><p>Calculations based on KKR, KKR-CPA, or LSMS method</p></li>
+<li><p>Muffin-tin potential or full-potential</p></li>
+<li><p>Non-relativistic, scalar-relativistic, or relativistic</p></li>
+<li><p>Non-spin polarized, spin-polarized, or spin-canted</p></li>
+<li><p>Special k-points method for Brillouin zone integration</p></li>
+<li><p>LDA or GGA exchange-correlation potentials</p></li>
+</ul>
+<p><strong>Input files:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">i_*</span></code>: Main input file containing control parameters for SCF calculations,
+system definition, atomic positions, and potential file names</p></li>
+<li><p>Position data file: File name specified in <code class="docutils literal notranslate"><span class="pre">i_*</span></code></p></li>
+<li><p>Potential file(s): File name and format specified in input</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">info_*</span></code> (obsolete): Atom-based control parameters (specified in <code class="docutils literal notranslate"><span class="pre">i_*</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">kmeshs.inp</span></code> (optional): Used for testing purposes</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">emeshs.inp</span></code> (optional): Used for testing purposes</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Evec_*</span></code> (optional): Used for spin-canted calculations</p></li>
+</ul>
+<p><strong>Output files:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">o_n*</span></code>: Main output file (may not be created if output is redirected to screen)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">k_n*</span></code>: Contains total energy and Fermi energy for each SCF iteration</p></li>
+<li><p>New potential file: Name and format defined in <code class="docutils literal notranslate"><span class="pre">i_*</span></code> or <code class="docutils literal notranslate"><span class="pre">info_*</span></code></p></li>
+</ul>
+<p><strong>Execution:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>mpirun<span class="w"> </span>-np<span class="w"> </span>&lt;num_cores&gt;<span class="w"> </span><span class="k">$(</span>MuST_PATH<span class="k">)</span>/bin/mst2<span class="w"> </span>&lt;<span class="w"> </span>i_file
+</pre></div>
+</div>
+<p>Example input files are available under <code class="docutils literal notranslate"><span class="pre">MST/sample/</span></code>.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Unless modified in the architecture file, the executable name is <code class="docutils literal notranslate"><span class="pre">mst2</span></code>.</p>
+</div>
+<p><strong>Command Line Options:</strong></p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Short Option</p></th>
+<th class="head"><p>Long Option(s)</p></th>
+<th class="head"><p>Description</p></th>
+<th class="head"><p>Default Value</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>-wp</p></td>
+<td><p>–write-procs, –write_procs</p></td>
+<td><p>Number of Writing Processes</p></td>
+<td><p>0</p></td>
+</tr>
+<tr class="row-odd"><td><p>-rp</p></td>
+<td><p>–read-procs, –read_procs</p></td>
+<td><p>Number of Reading Processes</p></td>
+<td><p>0</p></td>
+</tr>
+<tr class="row-even"><td><p>-app</p></td>
+<td><p>–atoms-per-proc, –atoms_per_proc</p></td>
+<td><p>Number of Atoms Per Process</p></td>
+<td><p>0</p></td>
+</tr>
+<tr class="row-odd"><td><p>-cpu</p></td>
+<td><p>–cpu-only, –cpu_only</p></td>
+<td><p>Run on CPU without Acceleration</p></td>
+<td><p>-1</p></td>
+</tr>
+<tr class="row-even"><td><p>-abm</p></td>
+<td><p>–acc-bigmat, –acc_bigmat</p></td>
+<td><p>Accelerate KKR Matrix Calculation</p></td>
+<td><p>-1</p></td>
+</tr>
+<tr class="row-odd"><td><p>-tl</p></td>
+<td><p>–timing-lsms, –timing_lsms</p></td>
+<td><p>Timing the LSMS Matrix Calculations</p></td>
+<td><p>-1</p></td>
+</tr>
+<tr class="row-even"><td><p>-pb</p></td>
+<td><p>–print-blocking, –print_blocking</p></td>
+<td><p>Print Blocking Details in LSMS Matrix Inverse</p></td>
+<td><p>-1</p></td>
+</tr>
+<tr class="row-odd"><td><p>-nb</p></td>
+<td><p>–no-blocking, –no_blocking</p></td>
+<td><p>Perform LSMS Matrix Inverse without Blocking</p></td>
+<td><p>-1</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>—</p>
+</section>
+<section id="lsms">
+<h2>2. <code class="docutils literal notranslate"><span class="pre">lsms</span></code><a class="headerlink" href="#lsms" title="Link to this heading">#</a></h2>
+<p>Main source: <code class="docutils literal notranslate"><span class="pre">lsms/src/Main/lsms.cpp</span></code>. Performs <em>ab initio</em>, linear-scaling
+electronic structure calculations for 3-D systems.</p>
+<p><strong>Main features:</strong></p>
+<ul class="simple">
+<li><p>Linear scaling based on LSMS method</p></li>
+<li><p>Muffin-tin potential</p></li>
+<li><p>Non-relativistic or scalar-relativistic</p></li>
+<li><p>Non-spin polarized, spin-polarized, or spin-canted</p></li>
+<li><p>LDA or GGA exchange-correlation</p></li>
+</ul>
+<p><strong>Execution:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>mpirun<span class="w"> </span>-np<span class="w"> </span>&lt;num_cores&gt;<span class="w"> </span><span class="k">$(</span>MuST_PATH<span class="k">)</span>/bin/lsms<span class="w"> </span>&lt;<span class="w"> </span>i_file
+</pre></div>
+</div>
+<p>Example inputs: <code class="docutils literal notranslate"><span class="pre">lsms/Test/</span></code></p>
+<p>—</p>
+</section>
+<section id="wl-lsms">
+<h2>3. <code class="docutils literal notranslate"><span class="pre">wl-lsms</span></code><a class="headerlink" href="#wl-lsms" title="Link to this heading">#</a></h2>
+<p>Main source: <code class="docutils literal notranslate"><span class="pre">lsms/src/Main/wl_lsms.cpp</span></code>. Performs Wang–Landau Monte Carlo
+simulations using LSMS-generated energy data.</p>
+<p><strong>Main features:</strong></p>
+<ul class="simple">
+<li><p>Wang–Landau Monte Carlo method</p></li>
+<li><p>Drives linear-scaling <em>ab initio</em> energy calculations</p></li>
+</ul>
+<p><strong>Execution:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>mpirun<span class="w"> </span>-np<span class="w"> </span>&lt;num_cores&gt;<span class="w"> </span><span class="k">$(</span>MuST_PATH<span class="k">)</span>/bin/wl-lsms<span class="w"> </span>&lt;<span class="w"> </span>i_file
+</pre></div>
+</div>
+<p>Example inputs: <code class="docutils literal notranslate"><span class="pre">lsms/Test/</span></code></p>
+<p>—</p>
+</section>
+<section id="genap">
+<h2>4. <code class="docutils literal notranslate"><span class="pre">genap</span></code><a class="headerlink" href="#genap" title="Link to this heading">#</a></h2>
+<p>Utility code (<code class="docutils literal notranslate"><span class="pre">MST/util/generateAtomPosition.F90</span></code>) for generating unit cell
+samples of ordered compounds or disordered alloys.</p>
+<p><strong>Execution:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="k">$(</span>MuST_PATH<span class="k">)</span>/bin/genap
+</pre></div>
+</div>
+<p>Input is provided interactively via the terminal.</p>
+<p>—</p>
+</section>
+<section id="measurevoronoi">
+<h2>5. <code class="docutils literal notranslate"><span class="pre">measureVoronoi</span></code><a class="headerlink" href="#measurevoronoi" title="Link to this heading">#</a></h2>
+<p>Utility (<code class="docutils literal notranslate"><span class="pre">MST/util/measureVoronoi.F90</span></code>) for computing geometric properties
+of Voronoi polyhedra for atoms in a unit cell.</p>
+<p><strong>Execution:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>mpirun<span class="w"> </span>-np<span class="w"> </span>&lt;num_cores&gt;<span class="w"> </span><span class="k">$(</span>MuST_PATH<span class="k">)</span>/bin/measureVoronoi<span class="w"> </span>&lt;<span class="w"> </span>i_file
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The input file is the same as used for <code class="docutils literal notranslate"><span class="pre">mst2</span></code>.</p>
+</div>
+<p>—</p>
+</section>
+<section id="murn">
+<h2>6. <code class="docutils literal notranslate"><span class="pre">murn</span></code><a class="headerlink" href="#murn" title="Link to this heading">#</a></h2>
+<p>Utility (<code class="docutils literal notranslate"><span class="pre">MST/util/murn_new.F90</span></code>) for determining ground-state properties
+(lattice constant, volume, bulk modulus) from energy vs. volume data.</p>
+<p><strong>Execution:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="k">$(</span>MuST_PATH<span class="k">)</span>/bin/murn<span class="w"> </span>&lt;<span class="w"> </span>input_file
+</pre></div>
+</div>
+<p>Example input: <code class="docutils literal notranslate"><span class="pre">MST/sample/Co/a0/inp_murn</span></code></p>
+<p>—</p>
+</section>
+<section id="newa">
+<h2>7. <code class="docutils literal notranslate"><span class="pre">newa</span></code><a class="headerlink" href="#newa" title="Link to this heading">#</a></h2>
+<p>Utility (<code class="docutils literal notranslate"><span class="pre">MST/util/newa.F</span></code>) for generating initial atomic potentials.</p>
+<p><strong>Input file:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">*_a_in</span></code>: Specifies atom type, spin, output names, etc.</p></li>
+</ul>
+<p><strong>Output files:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">*_a_out</span></code>: Standard output file</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">*_a_pot</span></code>: Generated potential file</p></li>
+</ul>
+<p><strong>Execution:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="k">$(</span>MuST_PATH<span class="k">)</span>/bin/newa<span class="w"> </span>&lt;<span class="w"> </span>input_file
+</pre></div>
+</div>
+<p>Example: <code class="docutils literal notranslate"><span class="pre">MST/sample/Mg/Atom/Mg_a_in</span></code></p>
+<p>—</p>
+</section>
+<section id="newss">
+<h2>8. <code class="docutils literal notranslate"><span class="pre">newss</span></code><a class="headerlink" href="#newss" title="Link to this heading">#</a></h2>
+<p>Utility (<code class="docutils literal notranslate"><span class="pre">MST/util/newss.F</span></code>) for generating starting potentials for
+KKR/KKR-CPA/LSMS calculations.</p>
+<p><strong>Input files:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">*_ss_in</span></code>: Defines lattice, structure, and potential parameters</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">*_a_pot</span></code>: Generated using <code class="docutils literal notranslate"><span class="pre">newa</span></code></p></li>
+</ul>
+<p><strong>Output files:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">*_ss_out</span></code>: Main output data</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">*_ss_k</span></code>: Energy and RMS per SCF iteration</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">*_ss_pot</span></code>: Generated starting potential</p></li>
+</ul>
+<p><strong>Execution:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="k">$(</span>MuST_PATH<span class="k">)</span>/bin/newss<span class="w"> </span>&lt;<span class="w"> </span>input_file
+</pre></div>
+</div>
+<p>Example: <code class="docutils literal notranslate"><span class="pre">MST/sample/Mg/Atom/Mg_ss_in</span></code></p>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="architec.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Architecture File Structure</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="theory.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Theory</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#available-scientific-packages">Available Scientific Packages</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#user-support-folders">User Support Folders</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#executables-under-bin">Executables under <code class="docutils literal notranslate"><span class="pre">bin/</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#mst">1. <code class="docutils literal notranslate"><span class="pre">mst</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#lsms">2. <code class="docutils literal notranslate"><span class="pre">lsms</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#wl-lsms">3. <code class="docutils literal notranslate"><span class="pre">wl-lsms</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#genap">4. <code class="docutils literal notranslate"><span class="pre">genap</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#measurevoronoi">5. <code class="docutils literal notranslate"><span class="pre">measureVoronoi</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#murn">6. <code class="docutils literal notranslate"><span class="pre">murn</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#newa">7. <code class="docutils literal notranslate"><span class="pre">newa</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#newss">8. <code class="docutils literal notranslate"><span class="pre">newss</span></code></a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Author name not set
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

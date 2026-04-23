@@ -1,0 +1,1696 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Input Parameters &#8212; MuST  documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=3c74b3bc" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'input';</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Tutorials" href="tutorials.html" />
+    <link rel="prev" title="Theory" href="theory.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">MuST  documentation</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        
+        <ul class="nav bd-sidenav bd-sidenav__home-link">
+            <li class="toctree-l1">
+                <a class="reference internal" href="index.html">
+                    Welcome to the MuST Documentation!
+                </a>
+            </li>
+        </ul>
+        <ul class="current nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="installation.html">Installation</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="architec.html">Architecture File Structure</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Package Description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="theory.html">Theory</a></li>
+
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Input Parameters</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="tutorials.html">Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="tutorial1.html">Equation of State using Birch-Murnaghan EOS</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="contrib.html">Project Team</a></li>
+<li class="toctree-l1"><a class="reference internal" href="acknowledge.html">ACKNOWLEDGEMENT</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cite.html">Citations</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/mstsuite/MuST" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/mstsuite/MuST/edit/main/input.rst" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="_sources/input.rst" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.rst</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button pst-navbar-icon"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Input Parameters</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#general-execution-file-i-o">General Execution &amp; File I/O</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#scf-calculations">SCF Calculations</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#tolerance-parameters">Tolerance Parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#system">System</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#full-potential-method-parameters">Full-potential Method Parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#electronic-structure-potential">Electronic Structure &amp; Potential</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#spin-and-magnetic-moment-parameters">Spin and Magnetic-Moment Parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#energy-contour-parameters">Energy Contour Parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#scf-mixing-schemes-and-parameters">SCF Mixing Schemes and Parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#kpoint-parameters-required-only-for-kkr-and-kkr-cpa">Kpoint Parameters (Required only for KKR and KKR-CPA)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#potential-and-lmax-parameters">Potential and LMAX Parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#local-interaction-zone-liz-parameters-required-only-for-lsms">Local Interaction Zone (LIZ) Parameters (Required only for LSMS)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#radial-grid-parameters">Radial Grid Parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#core-states-solver-parameters">Core States Solver Parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#effective-medium-parameters">Effective Medium Parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#mpi-gpu-parameters">MPI-GPU Parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#under-development-methods">Under development Methods</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#spin-dynamics-parameters">Spin Dynamics Parameters</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#screened-kkr-parameters">Screened KKR Parameters</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dft-dmft-parameters">DFT+DMFT Parameters</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#beyond-dft">Beyond DFT</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#visualization-parameters">Visualization Parameters</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#under-development-parameters">Under development Parameters</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#atomic-position-file-position-dat">Atomic Position File (position.dat)</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#structure-definition">Structure Definition</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#crystal-structure-cuzn-bcc">Crystal Structure: CuZn (BCC)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#crystal-structure-cu-zn-random-alloy-fcc-cpa">Crystal Structure: Cu-Zn Random Alloy (FCC, CPA)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#notes">Notes</a></li>
+</ul>
+</li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="input-parameters">
+<h1><a class="toc-backref" href="#id1" role="doc-backlink">Input Parameters</a><a class="headerlink" href="#input-parameters" title="Link to this heading">#</a></h1>
+<p>This document provides a comprehensive list of input parameters for the MuST code.
+It includes default values, allowed ranges, and technical logic extracted from
+the source input files.</p>
+<p>Each parameter is defined in the main input file (typically start with <code class="docutils literal notranslate"><span class="pre">i_</span></code>, for example, <code class="docutils literal notranslate"><span class="pre">i_mst</span></code>) using the format:</p>
+<blockquote>
+<div><p><code class="docutils literal notranslate"><span class="pre">Key</span> <span class="pre">::</span> <span class="pre">Value</span></code></p>
+</div></blockquote>
+<nav class="contents" id="table-of-contents">
+<p class="topic-title">Table of Contents</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#input-parameters" id="id1">Input Parameters</a></p>
+<ul>
+<li><p><a class="reference internal" href="#general-execution-file-i-o" id="id2">General Execution &amp; File I/O</a></p></li>
+<li><p><a class="reference internal" href="#scf-calculations" id="id3">SCF Calculations</a></p></li>
+<li><p><a class="reference internal" href="#tolerance-parameters" id="id4">Tolerance Parameters</a></p></li>
+<li><p><a class="reference internal" href="#system" id="id5">System</a></p></li>
+<li><p><a class="reference internal" href="#full-potential-method-parameters" id="id6">Full-potential Method Parameters</a></p></li>
+<li><p><a class="reference internal" href="#electronic-structure-potential" id="id7">Electronic Structure &amp; Potential</a></p></li>
+<li><p><a class="reference internal" href="#spin-and-magnetic-moment-parameters" id="id8">Spin and Magnetic-Moment Parameters</a></p></li>
+<li><p><a class="reference internal" href="#energy-contour-parameters" id="id9">Energy Contour Parameters</a></p></li>
+<li><p><a class="reference internal" href="#scf-mixing-schemes-and-parameters" id="id10">SCF Mixing Schemes and Parameters</a></p></li>
+<li><p><a class="reference internal" href="#kpoint-parameters-required-only-for-kkr-and-kkr-cpa" id="id11">Kpoint Parameters (Required only for KKR and KKR-CPA)</a></p></li>
+<li><p><a class="reference internal" href="#potential-and-lmax-parameters" id="id12">Potential and LMAX Parameters</a></p></li>
+<li><p><a class="reference internal" href="#local-interaction-zone-liz-parameters-required-only-for-lsms" id="id13">Local Interaction Zone (LIZ) Parameters (Required only for LSMS)</a></p></li>
+<li><p><a class="reference internal" href="#radial-grid-parameters" id="id14">Radial Grid Parameters</a></p></li>
+<li><p><a class="reference internal" href="#core-states-solver-parameters" id="id15">Core States Solver Parameters</a></p></li>
+<li><p><a class="reference internal" href="#effective-medium-parameters" id="id16">Effective Medium Parameters</a></p></li>
+<li><p><a class="reference internal" href="#mpi-gpu-parameters" id="id17">MPI-GPU Parameters</a></p></li>
+<li><p><a class="reference internal" href="#under-development-methods" id="id18">Under development Methods</a></p></li>
+<li><p><a class="reference internal" href="#atomic-position-file-position-dat" id="id19">Atomic Position File (position.dat)</a></p></li>
+</ul>
+</li>
+</ul>
+</nav>
+<section id="general-execution-file-i-o">
+<h2><a class="toc-backref" href="#id2" role="doc-backlink">General Execution &amp; File I/O</a><a class="headerlink" href="#general-execution-file-i-o" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Key</p></th>
+<th class="head"><p>Default Value</p></th>
+<th class="head"><p>Options / Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Current File Path</p></td>
+<td><p>./</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>Output to Screen (y/n)</p></td>
+<td><p>n</p></td>
+<td><p>y or n</p></td>
+</tr>
+<tr class="row-even"><td><p>Output Level (&gt;= -1)</p></td>
+<td><p>0</p></td>
+<td><p>Must be ≥ -1</p></td>
+</tr>
+<tr class="row-odd"><td><p>Output Proc. ID (&gt;= -1)</p></td>
+<td><p>0</p></td>
+<td><p>-1: All processors write to individual output files; ≥ 0: logical processor indices (space/comma separated) that write to unit 6</p></td>
+</tr>
+<tr class="row-even"><td><p>Output Atom ID (&gt;= -1)</p></td>
+<td><p>0</p></td>
+<td><p>-1: Output all atoms in unit cell; 0: Output atoms mapped to output processor; ≥ 1: global atom indices (space/comma separated)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="scf-calculations">
+<h2><a class="toc-backref" href="#id3" role="doc-backlink">SCF Calculations</a><a class="headerlink" href="#scf-calculations" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Key</p></th>
+<th class="head"><p>Default Value</p></th>
+<th class="head"><p>Options / Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>No. Iterations (&gt; 0)</p></td>
+<td><p>60</p></td>
+<td><p>Must be &gt; 0</p></td>
+</tr>
+<tr class="row-odd"><td><p>Method of SCF Calculation</p></td>
+<td><p>2</p></td>
+<td><p>1: LSMS; 2: KKR; 3: KKR-CPA</p></td>
+</tr>
+<tr class="row-even"><td><p>No. Gauss Pts. along r</p></td>
+<td><p>80</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>No. Gauss Pts. along theta</p></td>
+<td><p>60</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Valence Band Bottom Est.</p></td>
+<td><p>-0.5</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>Temperature Parameter (K)</p></td>
+<td><p>0.000</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>DOS Run ID</p></td>
+<td><p>0</p></td>
+<td><p>0: DOS along real energy axis will not be calculated; &gt;0: integer representing global atom index for DOS calculation; -1: DOS calculated for all atoms</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ewald parameter for KKR</p></td>
+<td><p>0.5d0</p></td>
+<td><p>Only needed in KKR/KKR-CPA calculations</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="tolerance-parameters">
+<h2><a class="toc-backref" href="#id4" role="doc-backlink">Tolerance Parameters</a><a class="headerlink" href="#tolerance-parameters" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Key</p></th>
+<th class="head"><p>Default Value</p></th>
+<th class="head"><p>Options / Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Energy (Ryd) Tol (&gt; 0)</p></td>
+<td><p>0.000001</p></td>
+<td><p>Must be &gt; 0</p></td>
+</tr>
+<tr class="row-odd"><td><p>Potential Tol (&gt; 0)</p></td>
+<td><p>0.0000001</p></td>
+<td><p>Must be &gt; 0</p></td>
+</tr>
+<tr class="row-even"><td><p>Fermi Energy Tol (&gt; 0)</p></td>
+<td><p>0.0000001</p></td>
+<td><p>Must be &gt; 0</p></td>
+</tr>
+<tr class="row-odd"><td><p>Other RMS Tol (&gt; 0)</p></td>
+<td><p>0.0000001</p></td>
+<td><p>Must be &gt; 0</p></td>
+</tr>
+<tr class="row-even"><td><p>Tolerance for setting up polyhedra</p></td>
+<td><p>0.0000005d0</p></td>
+<td><p>Note: Adjust if errors occur when determining corners/edges of polyhedra</p></td>
+</tr>
+<tr class="row-odd"><td><p>Negative charge density tolerance</p></td>
+<td><p>0.00001</p></td>
+<td><p>Note: If -tol &lt; rho(r) &lt; 0, set rho(r) = 0</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="system">
+<h2><a class="toc-backref" href="#id5" role="doc-backlink">System</a><a class="headerlink" href="#system" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Key</p></th>
+<th class="head"><p>Default Value</p></th>
+<th class="head"><p>Options / Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>No. Atoms in System (&gt; 0)</p></td>
+<td><p>1</p></td>
+<td><p>Must be &gt; 0</p></td>
+</tr>
+<tr class="row-odd"><td><p>Atomic Position File Name</p></td>
+<td><p>position.dat</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Text Identification</p></td>
+<td><p>D</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>Alloy System Description</p></td>
+<td><p>D, Default structure</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Default Radical Plane Ratio</p></td>
+<td><p>1.000</p></td>
+<td><p>Note: Ratio of radical plane distance relative to universal value applied to system</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="full-potential-method-parameters">
+<h2><a class="toc-backref" href="#id6" role="doc-backlink">Full-potential Method Parameters</a><a class="headerlink" href="#full-potential-method-parameters" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Key</p></th>
+<th class="head"><p>Default Value</p></th>
+<th class="head"><p>Options / Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Single Site Solver (&gt;= 0)</p></td>
+<td><p>2</p></td>
+<td><p>0: Spherical Schrodinger; 1: Spherical Dirac; 2: Full Schrodinger; 3: Full Dirac</p></td>
+</tr>
+<tr class="row-odd"><td><p>Single Site Solution Method (&gt;= -1)</p></td>
+<td><p>2</p></td>
+<td><p>-1: Untruncated potential in solver, surface integration; 0: Untruncated potential in solver, Untruncated potential in volume integration; 1: Untruncated potential in solver, Truncated potential in volume integration; 2: Truncated potential in solver. Note: Defines how site potential is used in the iterative coupled integral solver; truncated potential is enforced if irregular solutions are used; default = 0</p></td>
+</tr>
+<tr class="row-even"><td><p>Irregular Solutions (&gt;=0)</p></td>
+<td><p>1</p></td>
+<td><p>0: Solver does NOT use the Irregular Solutions; 1: Solver does use the Irregular Solutions</p></td>
+</tr>
+<tr class="row-odd"><td><p>Pole Search Step (&gt;0.0)</p></td>
+<td><p>0.010</p></td>
+<td><p>Note: Defaults to 0.01 for unspecified value; valid range &lt;=0.0 or &gt;0.4</p></td>
+</tr>
+<tr class="row-even"><td><p>Bound State Contour Integration Radius (&gt;0.0)</p></td>
+<td><p>0.001</p></td>
+<td><p>Note: Radius of the semi-circle contour around the bound state energy for density integration</p></td>
+</tr>
+<tr class="row-odd"><td><p>Resonance State Max Width (&gt;0.0)</p></td>
+<td><p>0.050</p></td>
+<td><p>Note: If a pole in 4th quadrant has distance from real axis &lt; this value, considered as a resonance; imaginary part is width</p></td>
+</tr>
+<tr class="row-even"><td><p>Resonance State Contour Integration Radius (&gt;0.0)</p></td>
+<td><p>0.002</p></td>
+<td><p>Note: Radius of semi-circle contour around resonance energy if its width &lt; this value</p></td>
+</tr>
+<tr class="row-odd"><td><p>No. Gauss Pts. along Resonance State Contour</p></td>
+<td><p>5</p></td>
+<td><p>Note: Number of Gaussian quadrature points for integration along semi-circle contour around resonance energy</p></td>
+</tr>
+<tr class="row-even"><td><p>No. Gauss Pts. along Bound State Contour</p></td>
+<td><p>5</p></td>
+<td><p>Note: Number of Gaussian quadrature points for integration along semi-circle contour around bound energy</p></td>
+</tr>
+<tr class="row-odd"><td><p>Solutions Lmax Cutoff</p></td>
+<td><p>-1</p></td>
+<td><p>l&lt;0: uses lmax of wave functions in info_table; l≥0: coupled integral solver used up to this l, beyond it only radial solutions used</p></td>
+</tr>
+<tr class="row-even"><td><p>Compute Phase Shifts (&gt;=0)</p></td>
+<td><p>0</p></td>
+<td><p>0: Does not print phase shifts; 1: generates phase shifts and stops code</p></td>
+</tr>
+<tr class="row-odd"><td><p>SS Lmax Potential Solver</p></td>
+<td><p>-1</p></td>
+<td><p>Note: Defines potential lmax in single site solver; if &lt;0, defaults to info_table lmax; otherwise minimum of this lmax and potential lmax is used</p></td>
+</tr>
+<tr class="row-even"><td><p>Uniform Grid Parameters</p></td>
+<td><p>64 64 64</p></td>
+<td><p>&gt;0: Three integers defining grid numbers along Bravais lattice vectors; must be powers of 2; affects Poisson solver accuracy</p></td>
+</tr>
+<tr class="row-odd"><td><p>Default Lmax-Wave Func</p></td>
+<td><p>4</p></td>
+<td><p>Note: Expansion of solutions of Schrödinger equation; internally computed if &lt;0, otherwise takes specified value ≥ Lmax_T</p></td>
+</tr>
+<tr class="row-even"><td><p>Default Lmax-Potential</p></td>
+<td><p>8</p></td>
+<td><p>Note: Expansion of LDA potential used in SCF (0 ≤ Lmax-Pot ≤ 2*Lmax-T)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Default Lmax-Trunc Pot</p></td>
+<td><p>12</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Default Lmax-Charge Den</p></td>
+<td><p>8</p></td>
+<td><p>Note: Expansion of charge density (0 ≤ Lmax-Charge ≤ 2*Lmax-T)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Default Pseudo Charge Radius</p></td>
+<td><p>0.9</p></td>
+<td><p>Note: Ratio of pseudo charge radius to muffin-tin radius</p></td>
+</tr>
+<tr class="row-even"><td><p>Uniform Grid Origin</p></td>
+<td><p>0</p></td>
+<td><p>0: unit cell corner; 1: unit cell center</p></td>
+</tr>
+<tr class="row-odd"><td><p>Uniform Grid Origin Vector</p></td>
+<td><p>0.0 0.0 0.0</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Full-potential Semi-core</p></td>
+<td><p>0</p></td>
+<td><p>0: do NOT treat semi-core with full-potential; 1: treat semi-core with full-potential</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="electronic-structure-potential">
+<h2><a class="toc-backref" href="#id7" role="doc-backlink">Electronic Structure &amp; Potential</a><a class="headerlink" href="#electronic-structure-potential" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Key</p></th>
+<th class="head"><p>Default Value</p></th>
+<th class="head"><p>Options / Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Val. Electron Rel (&gt;= 0)</p></td>
+<td><p>0</p></td>
+<td><p>0: Non-relativistic; 1: Scalar-relativistic; 2: Full-relativistic</p></td>
+</tr>
+<tr class="row-odd"><td><p>Charge Symmetry (&gt;=0)</p></td>
+<td><p>1</p></td>
+<td><p>0: No symmetry imposed; 1: Symmetry imposed from spherical scattering calculation</p></td>
+</tr>
+<tr class="row-even"><td><p>Potential Type (&gt;= 0)</p></td>
+<td><p>0</p></td>
+<td><p>0: Muffin-tin; 1: ASA; 2: Muffin-tin ASA; 3: Full; 4: Muffin-Tin Test; 5: Empty Lattice; 6: Mathieu Potential</p></td>
+</tr>
+<tr class="row-odd"><td><p>Exch-Corr. LDA Type (&gt;= 0)</p></td>
+<td><p>0</p></td>
+<td><p>0: Barth-Hedin; 1: Vosk-Wilk-Nusair; 2: Perdew-Zunger; 3: Perdew-Wang GGA; 4: PBE
+Note: Can also use LibXC-style functional names like LDA_X+LDA_C_HL or GGA_X_PBE+GGA_C_PBE</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="spin-and-magnetic-moment-parameters">
+<h2><a class="toc-backref" href="#id8" role="doc-backlink">Spin and Magnetic-Moment Parameters</a><a class="headerlink" href="#spin-and-magnetic-moment-parameters" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Key</p></th>
+<th class="head"><p>Default Value</p></th>
+<th class="head"><p>Options / Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Moment Direction File Name</p></td>
+<td><p>Evec_input.dat</p></td>
+<td><p>Require only for spin-canted case</p></td>
+</tr>
+<tr class="row-odd"><td><p>Spin Index Param (&gt;= 1)</p></td>
+<td><p>1</p></td>
+<td><p>1: No Spin; 2: Spin-polarized; 3: Spin-canted</p></td>
+</tr>
+<tr class="row-even"><td><p>Interstitial Electron Spin</p></td>
+<td><p>1</p></td>
+<td><p>1: No Spin; 2: Spin-polarized</p></td>
+</tr>
+<tr class="row-odd"><td><p>Default Moment Direction</p></td>
+<td><p>0.00 0.00 1.00</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Default Constrain Field</p></td>
+<td><p>0.00 0.00 0.00</p></td>
+<td><p>—</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="energy-contour-parameters">
+<h2><a class="toc-backref" href="#id9" role="doc-backlink">Energy Contour Parameters</a><a class="headerlink" href="#energy-contour-parameters" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Key</p></th>
+<th class="head"><p>Default Value</p></th>
+<th class="head"><p>Options / Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Read E-mesh from emeshs.inp</p></td>
+<td><p>0</p></td>
+<td><p>0: No; 1: Yes. If yes, following parameters for energy contour have no effect</p></td>
+</tr>
+<tr class="row-odd"><td><p>Contour Type (&gt;= 0)</p></td>
+<td><p>0</p></td>
+<td><p>0: Semi-circle; 1: Rectangle Box; 2: Horizontal Line; 3: Vertical Line</p></td>
+</tr>
+<tr class="row-even"><td><p>Number of Contours (&gt; 0)</p></td>
+<td><p>1</p></td>
+<td><p>Must be &gt; 0</p></td>
+</tr>
+<tr class="row-odd"><td><p>Energy Grid Type (&gt;= 0)</p></td>
+<td><p>1</p></td>
+<td><p>0: Equal Interval; 1: Gaussian Points; 2: Log Interval; 3: Nicholson Points</p></td>
+</tr>
+<tr class="row-even"><td><p>No. Energy Grids</p></td>
+<td><p>30</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>No. Extra Energy Points</p></td>
+<td><p>5</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Offset Energy Point</p></td>
+<td><p>0</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>Real Axis Bottom, erbot</p></td>
+<td><p>-0.40</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Real Axis Top, ertop</p></td>
+<td><p>0.00</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>Imag Axis Bottom, eibot</p></td>
+<td><p>0.001</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Imag Axis Top, eitop</p></td>
+<td><p>1.000</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>Iterate Fermi energy</p></td>
+<td><p>0</p></td>
+<td><p>0: Off; 1: On</p></td>
+</tr>
+<tr class="row-even"><td><p>SS Real Axis Int. Method</p></td>
+<td><p>0</p></td>
+<td><p>0: Unimesh; 1: Adaptive; 2: Uniform; 3: Gaussian Quadrature; 4: Romberg Method</p></td>
+</tr>
+<tr class="row-odd"><td><p>SS Real Axis Int. Points</p></td>
+<td><p>300</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Imaginary energy shift</p></td>
+<td><p>0.001</p></td>
+<td><p>Note: If -tol &lt; rho(r) &lt; 0, set rho(r) = 0 (DOS calculation)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="scf-mixing-schemes-and-parameters">
+<h2><a class="toc-backref" href="#id10" role="doc-backlink">SCF Mixing Schemes and Parameters</a><a class="headerlink" href="#scf-mixing-schemes-and-parameters" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Key</p></th>
+<th class="head"><p>Default Value</p></th>
+<th class="head"><p>Options / Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Mixing quantity type</p></td>
+<td><p>1</p></td>
+<td><p>0: Charge mixing; 1: Potential mixing</p></td>
+</tr>
+<tr class="row-odd"><td><p>Mixing algorithm</p></td>
+<td><p>2</p></td>
+<td><p>0: Simple mixing; 1: DGA mixing; 2: Broyden mixing</p></td>
+</tr>
+<tr class="row-even"><td><p>Lloyd correction</p></td>
+<td><p>0</p></td>
+<td><p>0: Off; 1: On</p></td>
+</tr>
+<tr class="row-odd"><td><p>Lloyd mode</p></td>
+<td><p>1</p></td>
+<td><p>1: first method (to be defined by Markus); 2: second method (to be defined by Markus)</p></td>
+</tr>
+<tr class="row-even"><td><p>Default Rho Mix Param.</p></td>
+<td><p>0.1000</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>Default Pot Mix Param.</p></td>
+<td><p>0.1000</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Default Mom Mix Param.</p></td>
+<td><p>0.1500</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>Default Chg Mix Param.</p></td>
+<td><p>1.0000</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Default Evec Mix Param.</p></td>
+<td><p>0.0000</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>Default Mixing Parameter</p></td>
+<td><p>0.1000</p></td>
+<td><p>Note: Default value for mixing</p></td>
+</tr>
+<tr class="row-even"><td><p>Mixing Parameter for Finding Ef</p></td>
+<td><p>0.5</p></td>
+<td><p>Note: New Fermi energy = mixing of calculated and old Fermi energies at each SCF step</p></td>
+</tr>
+<tr class="row-odd"><td><p>Mixing Switch for Finding Ef</p></td>
+<td><p>0.01</p></td>
+<td><p>Note: If difference &gt; switch value, mixing is applied; 0 disables Fermi energy mixing</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="kpoint-parameters-required-only-for-kkr-and-kkr-cpa">
+<h2><a class="toc-backref" href="#id11" role="doc-backlink">Kpoint Parameters (Required only for KKR and KKR-CPA)</a><a class="headerlink" href="#kpoint-parameters-required-only-for-kkr-and-kkr-cpa" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Key</p></th>
+<th class="head"><p>Default Value</p></th>
+<th class="head"><p>Options / Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>K-space Solver Method</p></td>
+<td><p>0</p></td>
+<td><p>0: SuperLU; 1: SuperLU with direct solve checking; 2: Direct (1 CPU only)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Read K-mesh from kmeshs.inp</p></td>
+<td><p>0</p></td>
+<td><p>0: No; 1: Yes. If yes, following parameters for k-points generation have no effect</p></td>
+</tr>
+<tr class="row-even"><td><p>Scheme to Generate K (&gt;=0)</p></td>
+<td><p>0</p></td>
+<td><p>0: Special K-points; 1: Tetrahedron; 2: Direction</p></td>
+</tr>
+<tr class="row-odd"><td><p>No. K Meshs in IBZ (&gt; 0)</p></td>
+<td><p>1</p></td>
+<td><p>Note: Number of sets of k-points, not total k-points</p></td>
+</tr>
+<tr class="row-even"><td><p>Kx, Ky, Kz Division (&gt; 0)</p></td>
+<td><p>16 16 16</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>Symmetrize BZ Integration</p></td>
+<td><p>1</p></td>
+<td><p>0: No; 1: Yes; 2: Yes (Equivalent points)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="potential-and-lmax-parameters">
+<h2><a class="toc-backref" href="#id12" role="doc-backlink">Potential and LMAX Parameters</a><a class="headerlink" href="#potential-and-lmax-parameters" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Key</p></th>
+<th class="head"><p>Default Value</p></th>
+<th class="head"><p>Options / Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Large sphere radius (a.u.)</p></td>
+<td><p>1000.0</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>Default Potential Input File Name</p></td>
+<td><p>D_fp_v</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Default Potential Input File Form</p></td>
+<td><p>1</p></td>
+<td><p>0: ASCII Format; 1: XDR Format; 2: HDF Format; 3: Machine Dependent Binary</p></td>
+</tr>
+<tr class="row-odd"><td><p>Default Potential Output File Name</p></td>
+<td><p>D_fp_w</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Default Potential Output File Form</p></td>
+<td><p>1</p></td>
+<td><p>0: ASCII Format; 1: XDR Format; 2: HDF Format; 3: Machine Dependent Binary</p></td>
+</tr>
+<tr class="row-odd"><td><p>Default Lmax-T matrix</p></td>
+<td><p>4</p></td>
+<td><p>Note: Controls KKR size</p></td>
+</tr>
+<tr class="row-even"><td><p>Default Lmax-Step Func</p></td>
+<td><p>16</p></td>
+<td><p>Note: Step function expansion used for volume integration in single site solver (0 ≤ Lmax-Step &lt; Infinity)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="local-interaction-zone-liz-parameters-required-only-for-lsms">
+<h2><a class="toc-backref" href="#id13" role="doc-backlink">Local Interaction Zone (LIZ) Parameters (Required only for LSMS)</a><a class="headerlink" href="#local-interaction-zone-liz-parameters-required-only-for-lsms" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Key</p></th>
+<th class="head"><p>Default Value</p></th>
+<th class="head"><p>Options / Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Default LIZ # Neighbors</p></td>
+<td><p>350</p></td>
+<td><p>Note: Maximum number of neighbors of a site; actual number may be less if the next shell exceeds maximum</p></td>
+</tr>
+<tr class="row-odd"><td><p>Default LIZ # NN Shells</p></td>
+<td><p>16</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Default LIZ Shell Lmax</p></td>
+<td><p>4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>Default LIZ Cutoff Radius</p></td>
+<td><p>25.0</p></td>
+<td><p>—</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="radial-grid-parameters">
+<h2><a class="toc-backref" href="#id14" role="doc-backlink">Radial Grid Parameters</a><a class="headerlink" href="#radial-grid-parameters" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Key</p></th>
+<th class="head"><p>Default Value</p></th>
+<th class="head"><p>Options / Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Default No. Rad Points ndivin</p></td>
+<td><p>1001</p></td>
+<td><p>0: Not specified; &gt;0: Specified. Note: 0 &lt; r(j)=exp(j*hin) ≤ rmt, j=1,2,…,ndivin</p></td>
+</tr>
+<tr class="row-odd"><td><p>Default No. Rad Points ndivout</p></td>
+<td><p>0</p></td>
+<td><p>0: Not specified; &gt;0: Specified. Note: rmt &lt; r(j)=exp(j*hout) ≤ rmax, j=1,2,…,ndivout</p></td>
+</tr>
+<tr class="row-even"><td><p>Default Integer Factor nmult</p></td>
+<td><p>1</p></td>
+<td><p>0: Not specified; &gt;0: Specified. Note: r(j)=exp(j*hin), hin = nmult*hout</p></td>
+</tr>
+<tr class="row-odd"><td><p>Default Radial Grid Exponential Step</p></td>
+<td><p>0.01</p></td>
+<td><p>0.0: Not specified; &gt;0.0: recommended 0.005–0.02. Note: r(j)=exp(j*hin), hin = exponential step</p></td>
+</tr>
+<tr class="row-even"><td><p>Default Muffin-tin Radius</p></td>
+<td><p>0</p></td>
+<td><p>0: inscribed sphere radius; 1: implicit muffin-tin radius; &gt;0: specific value in a.u.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="core-states-solver-parameters">
+<h2><a class="toc-backref" href="#id15" role="doc-backlink">Core States Solver Parameters</a><a class="headerlink" href="#core-states-solver-parameters" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Key</p></th>
+<th class="head"><p>Default Value</p></th>
+<th class="head"><p>Options / Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Frozen-Core Calculation</p></td>
+<td><p>0</p></td>
+<td><p>Note: 0: Not a frozen core calculation; &gt;0: SCF iteration beyond which frozen core applies</p></td>
+</tr>
+<tr class="row-odd"><td><p>Frozen-Core File Name</p></td>
+<td><p>‘ ‘</p></td>
+<td><p>Note: File to read if a frozen-core file name is given</p></td>
+</tr>
+<tr class="row-even"><td><p>Core Electron Rel (&gt;= 0)</p></td>
+<td><p>0</p></td>
+<td><p>0: Non-relativistic; 1: Full-relativistic</p></td>
+</tr>
+<tr class="row-odd"><td><p>Default Maximum Core Radius</p></td>
+<td><p>0.0d0</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Default Core Radius</p></td>
+<td><p>0</p></td>
+<td><p>-1: circumscribed sphere radius; 0: inscribed sphere / muffin-tin / ASA radius; 1: implicit core radius; &gt;0: specific value in a.u.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Core States Normalization Range</p></td>
+<td><p>0</p></td>
+<td><p>0: up to bounding sphere radius; 1: up to infinity</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="effective-medium-parameters">
+<h2><a class="toc-backref" href="#id16" role="doc-backlink">Effective Medium Parameters</a><a class="headerlink" href="#effective-medium-parameters" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Key</p></th>
+<th class="head"><p>Default Value</p></th>
+<th class="head"><p>Options / Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Maximum Effective Medium Iterations</p></td>
+<td><p>40</p></td>
+<td><p>Note: 0 → ATA (instead of CPA) calculation will be performed</p></td>
+</tr>
+<tr class="row-odd"><td><p>Effective Medium Mixing Scheme</p></td>
+<td><p>2</p></td>
+<td><p>0: Simple mixing; 1: Anderson mixing; 2: Broyden mixing; 3: Anderson Mixing by Messina group</p></td>
+</tr>
+<tr class="row-even"><td><p>Effective Medium Mixing Parameters</p></td>
+<td><p>0.1000 0.01</p></td>
+<td><p>Note: First value = energy points in standard mixing; second value = energy points in conservative mode</p></td>
+</tr>
+<tr class="row-odd"><td><p>Effective Medium Mixing eSwitch Value</p></td>
+<td><p>0.003</p></td>
+<td><p>Note: If Re[E] &gt; 0 and Im[E] &lt; eSwitch, iteration switches to conservative mode</p></td>
+</tr>
+<tr class="row-even"><td><p>Number of iterations with aggressive mixing</p></td>
+<td><p>25</p></td>
+<td><p>Note: Number of CPA iterations per aggressive mixing scheme</p></td>
+</tr>
+<tr class="row-odd"><td><p>Maximum number of mixing scheme changes</p></td>
+<td><p>10</p></td>
+<td><p>Note: Maximum number of mixing scheme changes</p></td>
+</tr>
+<tr class="row-even"><td><p>Effective Medium T-matrix Tol (&gt;0)</p></td>
+<td><p>0.0000001</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>Include CPA/SRO Charge Correction</p></td>
+<td><p>0</p></td>
+<td><p>0: do NOT include correction; 1: include correction term in potential/energy for CPA</p></td>
+</tr>
+<tr class="row-even"><td><p>Use Linear Relation</p></td>
+<td><p>0</p></td>
+<td><p>0: do NOT use linear q-V relation; 1: use linear q-V relation for charge correction</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="mpi-gpu-parameters">
+<h2><a class="toc-backref" href="#id17" role="doc-backlink">MPI-GPU Parameters</a><a class="headerlink" href="#mpi-gpu-parameters" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Key</p></th>
+<th class="head"><p>Default Value</p></th>
+<th class="head"><p>Options / Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Maximum MPI tasks per GPU for KKR Matrix Inverse</p></td>
+<td><p>28</p></td>
+<td><p>Note: If the number of MPI tasks exceeds this, GPU acceleration of KKR matrix inverse is disabled</p></td>
+</tr>
+<tr class="row-odd"><td><p>Maximum MPI tasks per GPU for KKR Matrix Calculation</p></td>
+<td><p>4</p></td>
+<td><p>Note: If MPI tasks exceed this, KKR matrix is calculated on CPU and copied to GPU for inversion</p></td>
+</tr>
+<tr class="row-even"><td><p>Maximum MPI tasks per GPU for Gij Matrix Calculation</p></td>
+<td><p>4</p></td>
+<td><p>Note: If MPI tasks exceed this, Gij matrix is calculated on CPU and copied to GPU for inversion</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="under-development-methods">
+<h2><a class="toc-backref" href="#id18" role="doc-backlink">Under development Methods</a><a class="headerlink" href="#under-development-methods" title="Link to this heading">#</a></h2>
+<section id="spin-dynamics-parameters">
+<h3>Spin Dynamics Parameters<a class="headerlink" href="#spin-dynamics-parameters" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Canted Moment Torque Coef.</p></th>
+<th class="head"><p>0.0</p></th>
+<th class="head"><p>—</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Calculate J_ij (y/n)</p></td>
+<td><p>n</p></td>
+<td><p>y or n</p></td>
+</tr>
+<tr class="row-odd"><td><p>No. Spin-dynamics Time Steps (&gt;= 0)</p></td>
+<td><p>1</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Spin-dynamics Time Step</p></td>
+<td><p>1.000</p></td>
+<td><p>—</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="screened-kkr-parameters">
+<h3>Screened KKR Parameters<a class="headerlink" href="#screened-kkr-parameters" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>SuperLU Tol (&gt; 0)</p></th>
+<th class="head"><p>0.0000001</p></th>
+<th class="head"><p>Must be &gt; 0</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>K-space Check Tol (&gt; 0)</p></td>
+<td><p>0.0000001</p></td>
+<td><p>Must be &gt; 0</p></td>
+</tr>
+<tr class="row-odd"><td><p>Default Screen Pot.</p></td>
+<td><p>3.0</p></td>
+<td><p>Note: Default value of the screened potential</p></td>
+</tr>
+<tr class="row-even"><td><p>Default Lmax-Screen</p></td>
+<td><p>3</p></td>
+<td><p>Note: Maximum angular momentum for screening</p></td>
+</tr>
+<tr class="row-odd"><td><p>Default Rcut-Screen</p></td>
+<td><p>4.8</p></td>
+<td><p>Note: Cutoff radius for screening (a.u.)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="dft-dmft-parameters">
+<h3>DFT+DMFT Parameters<a class="headerlink" href="#dft-dmft-parameters" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Key</p></th>
+<th class="head"><p>Default Value</p></th>
+<th class="head"><p>Options / Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Perform DFT+DMFT Calculation</p></td>
+<td><p>0</p></td>
+<td><p>0: No; 1: Yes</p></td>
+</tr>
+<tr class="row-odd"><td><p>Default Local Orbital Labels</p></td>
+<td><p>d</p></td>
+<td><p>Note: Allowed values are s, p, d, f, separated by ‘ ‘(space), ‘,’(comma), or ‘;’(semicolon)</p></td>
+</tr>
+<tr class="row-even"><td><p>Default Local s-Orbital Energy</p></td>
+<td><p>0.2</p></td>
+<td><p>Note: Real value in Rydberg units</p></td>
+</tr>
+<tr class="row-odd"><td><p>Default Local p-Orbital Energy</p></td>
+<td><p>0.3</p></td>
+<td><p>Note: Real value in Rydberg units</p></td>
+</tr>
+<tr class="row-even"><td><p>Default Local d-Orbital Energy</p></td>
+<td><p>0.5</p></td>
+<td><p>Note: Real value in Rydberg units</p></td>
+</tr>
+<tr class="row-odd"><td><p>Default Local f-Orbital Energy</p></td>
+<td><p>0.4</p></td>
+<td><p>Note: Real value in Rydberg units</p></td>
+</tr>
+<tr class="row-even"><td><p>Default Local Orbital Energy</p></td>
+<td><p>0.5</p></td>
+<td><p>Note: Real value in Rydberg units</p></td>
+</tr>
+<tr class="row-odd"><td><p>Initial Fermi Energy Setting</p></td>
+<td><p>0</p></td>
+<td><p>0: Set to average of Fermi energy from input potential
+1: Set to average of Max and Min of Fermi energy from input potential
+&gt;0: User-specified real number as initial Fermi energy</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="beyond-dft">
+<h3>Beyond DFT<a class="headerlink" href="#beyond-dft" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Key</p></th>
+<th class="head"><p>Default Value</p></th>
+<th class="head"><p>Options / Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Calculate Superconducting Tc</p></td>
+<td><p>0</p></td>
+<td><p>0: No (Default); 1: Yes</p></td>
+</tr>
+<tr class="row-odd"><td><p>mu* (e-e interaction constant)</p></td>
+<td><p>0</p></td>
+<td><p>0: Bennemann and Garland formula (Default); 0,A: Modified BG formula with factor A (&lt;1.0)</p></td>
+</tr>
+<tr class="row-even"><td><p>Average of phonon frequency (1/sec)</p></td>
+<td><p>0.0</p></td>
+<td><p>Note: Input format is a real positive value</p></td>
+</tr>
+<tr class="row-odd"><td><p>Average of phonon frequency (K)</p></td>
+<td><p>0.0</p></td>
+<td><p>Note: Input format is a real positive value</p></td>
+</tr>
+<tr class="row-even"><td><p>Average of phonon frequency squared (1/sec^2)</p></td>
+<td><p>0.0</p></td>
+<td><p>Note: Input format: atomic index or chemical element symbol, followed by a real positive value</p></td>
+</tr>
+<tr class="row-odd"><td><p>Average of phonon frequency squared (K^2)</p></td>
+<td><p>0.0</p></td>
+<td><p>Note: Input format: atomic index or chemical element symbol, followed by a real positive value</p></td>
+</tr>
+<tr class="row-even"><td><p>Atomic mass times &lt;omega^2&gt; (eV/Anst^2)</p></td>
+<td><p>0.0</p></td>
+<td><p>Note: Input format: atomic index or chemical element symbol, followed by a real positive value</p></td>
+</tr>
+<tr class="row-odd"><td><p>Atomic mass times &lt;omega^2&gt; (Ryd/BohrRad^2)</p></td>
+<td><p>0.0</p></td>
+<td><p>Note: Input format: atomic index or chemical element symbol, followed by a real positive value</p></td>
+</tr>
+<tr class="row-even"><td><p>Debye Temperature (K)</p></td>
+<td><p>0</p></td>
+<td><p>0: get from internal database; &gt;0: user-provided real positive value</p></td>
+</tr>
+<tr class="row-odd"><td><p>LDA Improvement Scheme</p></td>
+<td><p>0</p></td>
+<td><p>0: No improvement; 1: LDA + U; 2: LDA + SIC; 3: LDA + DFMT</p></td>
+</tr>
+<tr class="row-even"><td><p>LDA+U Parameter File Name</p></td>
+<td><p>UJ.dat</p></td>
+<td><p>Note: If name is ‘None’, data will be obtained by other methods</p></td>
+</tr>
+<tr class="row-odd"><td><p>Local SIC</p></td>
+<td><p>0</p></td>
+<td><p>Note: 0: Off; 1: On (local self-interaction correction)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="visualization-parameters">
+<h3>Visualization Parameters<a class="headerlink" href="#visualization-parameters" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Generate System Movie</p></th>
+<th class="head"><p>0</p></th>
+<th class="head"><p>0: No system movie output (default); 1: generate movie</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Stop-at Routine Name</p></td>
+<td><p>main</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>No. Iter for Each Pot. Write</p></td>
+<td><p>5</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>No. Iter for Each Movie</p></td>
+<td><p>0</p></td>
+<td><p>0: No system movie output (default); ≥ 1: a system movie is written at the end of every this number of SCF iterations</p></td>
+</tr>
+<tr class="row-odd"><td><p>Visual Grid Type (0&lt;D&lt;4)</p></td>
+<td><p>3</p></td>
+<td><p>1: Define a line (1D); 2: Define a plane (2D); 3: Define a rectilinear region (3D)</p></td>
+</tr>
+<tr class="row-even"><td><p>Visual Grid Scale</p></td>
+<td><p>1.00</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>Visual Grid Origin Vector</p></td>
+<td><p>0.0 0.0 0.0</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Visual Grid Vector 1</p></td>
+<td><p>10.00 0.00 0.00</p></td>
+<td><p>Note: Vector defining grid boundaries</p></td>
+</tr>
+<tr class="row-odd"><td><p>Visual Grid Vector 2</p></td>
+<td><p>0.00 10.00 0.00</p></td>
+<td><p>Note: Vector defining grid boundaries</p></td>
+</tr>
+<tr class="row-even"><td><p>Visual Grid Vector 3</p></td>
+<td><p>0.00 0.00 10.00</p></td>
+<td><p>Note: Vector defining grid boundaries</p></td>
+</tr>
+<tr class="row-odd"><td><p>Visual Grid Points</p></td>
+<td><p>10 10 10</p></td>
+<td><p>Note: Only first D parameters are used for Grid Vectors and Grid Points</p></td>
+</tr>
+<tr class="row-even"><td><p>Visual Line Vector</p></td>
+<td><p>1.00 0.00 0.00</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>Visual Line Points</p></td>
+<td><p>10</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Output Electron Density ID (&gt;= -1)</p></td>
+<td><p>-1</p></td>
+<td><p>-1: do not print; 0: print brief data; 1: print data on visual grid</p></td>
+</tr>
+<tr class="row-odd"><td><p>Output Density Format</p></td>
+<td><p>2</p></td>
+<td><p>0: x y z rho format; 1: Legacy “.vtk” format for ParaView; 2: “.xsf” format for VESTA</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="under-development-parameters">
+<h3>Under development Parameters<a class="headerlink" href="#under-development-parameters" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 15.0%" />
+<col style="width: 55.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Calc. Harris Energy (H.E.)</p></th>
+<th class="head"><p>0</p></th>
+<th class="head"><p>0: Do not calculate H.E.; 1: H.E. at Updated μ; 2: H.E. at Fixed μ</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Additional Electrons</p></td>
+<td><p>0.0</p></td>
+<td><p>Note: Additional number of electrons in a unit cell; can be &lt;, =, or &gt; 0; mainly for testing; default = 0</p></td>
+</tr>
+<tr class="row-odd"><td><p>T-matrix inversion (&gt;= 0)</p></td>
+<td><p>2</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>M-matrix inversion (&gt;= 0)</p></td>
+<td><p>10</p></td>
+<td><p>0: LU method; 2: QMR method</p></td>
+</tr>
+<tr class="row-odd"><td><p>Renormalize Green function</p></td>
+<td><p>0</p></td>
+<td><p>0: do NOT renormalize; 1: renormalize using integrated DOS from Lloyd/Krein formula</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+<section id="atomic-position-file-position-dat">
+<h2><a class="toc-backref" href="#id19" role="doc-backlink">Atomic Position File (position.dat)</a><a class="headerlink" href="#atomic-position-file-position-dat" title="Link to this heading">#</a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">position.dat</span></code> file defines the structural framework and chemical composition of the system.</p>
+<section id="structure-definition">
+<h3>Structure Definition<a class="headerlink" href="#structure-definition" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>Lattice Constant</strong>: The first line defines the global scaling factor (e.g., 5.53).</p></li>
+<li><p><strong>Bravais Vectors</strong>: Three lines defining the primitive lattice vectors.</p></li>
+<li><p><strong>Site Position</strong>: Cartesian coordinates (x, y, z) for each atom in the cell.</p></li>
+</ul>
+</section>
+<section id="crystal-structure-cuzn-bcc">
+<h3>Crystal Structure: CuZn (BCC)<a class="headerlink" href="#crystal-structure-cuzn-bcc" title="Link to this heading">#</a></h3>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>5.53
+# Bravais lattice
+    1.00000000000    0.00000000000    0.0000000000
+    0.00000000000    1.00000000000    0.0000000000
+    0.00000000000    0.00000000000    1.0000000000
+# Atomic position
+Cu  0.00000000000    0.00000000000    0.00000000000
+Zn  0.50000000000    0.50000000000    0.50000000000
+</pre></div>
+</div>
+</section>
+<section id="crystal-structure-cu-zn-random-alloy-fcc-cpa">
+<h3>Crystal Structure: Cu-Zn Random Alloy (FCC, CPA)<a class="headerlink" href="#crystal-structure-cu-zn-random-alloy-fcc-cpa" title="Link to this heading">#</a></h3>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>5.53
+# Bravais lattice
+     0.50000000000    0.50000000000   -0.50000000000
+     0.50000000000   -0.50000000000    0.50000000000
+    -0.50000000000    0.50000000000    0.50000000000
+# Atomic position
+CPA  0.00000000000    0.00000000000    0.00000000000  Cu  0.50000  Zn  0.50000
+</pre></div>
+</div>
+</section>
+<section id="notes">
+<h3>Notes<a class="headerlink" href="#notes" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>For random alloy calculations, use ‘CPA’ as the virtual atom name.</p></li>
+<li><p>Coordinates are Cartesian (x, y, z) of the virtual atom.</p></li>
+<li><p>The atomic species and their site concentrations follow the coordinates.</p></li>
+</ul>
+</section>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="theory.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Theory</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="tutorials.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Tutorials</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#general-execution-file-i-o">General Execution &amp; File I/O</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#scf-calculations">SCF Calculations</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#tolerance-parameters">Tolerance Parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#system">System</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#full-potential-method-parameters">Full-potential Method Parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#electronic-structure-potential">Electronic Structure &amp; Potential</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#spin-and-magnetic-moment-parameters">Spin and Magnetic-Moment Parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#energy-contour-parameters">Energy Contour Parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#scf-mixing-schemes-and-parameters">SCF Mixing Schemes and Parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#kpoint-parameters-required-only-for-kkr-and-kkr-cpa">Kpoint Parameters (Required only for KKR and KKR-CPA)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#potential-and-lmax-parameters">Potential and LMAX Parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#local-interaction-zone-liz-parameters-required-only-for-lsms">Local Interaction Zone (LIZ) Parameters (Required only for LSMS)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#radial-grid-parameters">Radial Grid Parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#core-states-solver-parameters">Core States Solver Parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#effective-medium-parameters">Effective Medium Parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#mpi-gpu-parameters">MPI-GPU Parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#under-development-methods">Under development Methods</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#spin-dynamics-parameters">Spin Dynamics Parameters</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#screened-kkr-parameters">Screened KKR Parameters</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dft-dmft-parameters">DFT+DMFT Parameters</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#beyond-dft">Beyond DFT</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#visualization-parameters">Visualization Parameters</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#under-development-parameters">Under development Parameters</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#atomic-position-file-position-dat">Atomic Position File (position.dat)</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#structure-definition">Structure Definition</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#crystal-structure-cuzn-bcc">Crystal Structure: CuZn (BCC)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#crystal-structure-cu-zn-random-alloy-fcc-cpa">Crystal Structure: Cu-Zn Random Alloy (FCC, CPA)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#notes">Notes</a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Author name not set
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>
