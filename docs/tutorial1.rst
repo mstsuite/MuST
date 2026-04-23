@@ -38,10 +38,10 @@ Required Files
      - Moment direction data
      - 
    * - Fe_mt_v
-     - Fe pseudopotential
+     - Fe potential
      - 
    * - Ni_mt_v
-     - Ni pseudopotential
+     - Ni potential
      - 
    * - position.dat
      - Structure file
@@ -93,7 +93,7 @@ Step 3: Configure Input File
 
 Edit ``i_mst``:
 
-- Set pseudopotentials
+- Set potentials
 - Ensure SCF calculation
 - Use tight convergence
 
