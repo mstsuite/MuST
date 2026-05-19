@@ -488,7 +488,8 @@ contains
             if (MaxPrintLevel >= 0) then
                write(6,'(a)')'!!!                                                                          !!!'
             endif
-            if (NumCPUTasksPerGPU <= MaxGijOffloading) then
+            if (NumCPUTasksPerGPU <= MaxGijOffloading .or.                &
+                getCmdLineOption('Accelerate Gij Matrix Calculation') == 0) then
                ComputeGijMatrixOnGPU = .true.
                if (MaxPrintLevel >= 0) then
                   write(6,'(a)')'!!!                     The Gij Matrix is computed on GPU                    !!!'
