@@ -1,3 +1,6 @@
+# ml purge
+# ml use /home1/apps/nvidia/modulefiles
+# ml nvhpc-hpcx-cuda13/26.3
 #=====================================================================
 # Acceleration = 1: enable GPU acceleration
 # Acceleration = 0: otherwise
@@ -47,7 +50,7 @@ MATH_PATH   =
 #LIBS       += -L$(COMPILER_LIBS) -lnvpl_blas_lp64_gomp -lnvpl_lapack_lp64_gomp  
 LIBS       += -Mnvpl -Mscalapack \
               -L$(ACCEL_PATH)/lib64 -lcudart \
-              -L$(ACCEL_LIBS)/lib64 -lcublas -lstdc++ -lcusolver
+              -L$(ACCEL_LIBS)/lib64 -lcublas -lstdc++ -lcusolver -L$(NVHPC_ROOT)/cuda/13.1/lib64/stubs -lnvidia-ml
 #=====================================================================
 # Compiler tools
 #=====================================================================
