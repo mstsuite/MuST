@@ -1,6 +1,3 @@
-# ml purge
-# ml use /home1/apps/nvidia/modulefiles
-# ml nvhpc-hpcx-cuda13/26.3
 #=====================================================================
 # Acceleration = 1: enable GPU acceleration
 # Acceleration = 0: otherwise
@@ -85,7 +82,7 @@ LD          = $(FC) $(LD_FLAGS)
 # ./configure flags for hdf5, libxc, p3dfft, and fftw package, respectively.
 # Note: for hdf5, "--enable-parallel" might be needed in the future.
 #=====================================================================
-HDF5_CONFIG_FLAGS   = --enable-fortran --enable-static-exec CC=$(CC) CXX=$(CXX) FC=$(FC)
-LIBXC_CONFIG_FLAGS  = CC=$(CC) CFLAGS="$(CFLAGS)" FC=$(FC) FFLAGS="$(FFLAGS)"
-P3DFFT_CONFIG_FLAGS = --enable-pgi --enable-estimate FC=$(FC) CC=$(CC) --enable-openmpi
-FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS)" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)"
+HDF5_CONFIG_FLAGS   = --enable-fortran --enable-static-exec CC=$(CC) CXX=$(CXX) FC=$(FC) LIBS=""
+LIBXC_CONFIG_FLAGS  = CC=$(CC) CFLAGS="$(CFLAGS)" FC=$(FC) FFLAGS="$(FFLAGS)" LIBS=""
+P3DFFT_CONFIG_FLAGS = --enable-pgi --enable-estimate FC=$(FC) CC=$(CC) --enable-openmpi LIBS=""
+FFTW_CONFIG_FLAGS   = --enable-mpi --enable-openmp --enable-threads CC=$(CC) CFLAGS="$(CFLAGS)" MPICC=$(MPICC) F77=$(F77) FFLAGS="$(FFLAGS)" LIBS=""
