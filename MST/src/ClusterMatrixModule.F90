@@ -452,34 +452,51 @@ contains
 !     calculated on GPU.
 !     ================================================================
       if (GPU_Offloading) then
-         if (getKeyValue(1,'Maximum MPI tasks per GPU for KKR Matrix Calculation',MaxBigMatAcc) /= 0) then
-            call ErrorHandler('initClusterMatrix','Unable to determine MaxBigMatAcc',MaxBigMatAcc)
-         endif
-         if (MaxPrintLevel >= 0) then
-            write(6,'(a,i5)')'Max number of MPI tasks per GPU for computing KKR Matrix on GPU:',MaxBigMatAcc
-         endif
-         if (getKeyValue(1,'Maximum MPI tasks per GPU for Gij Matrix Calculation',MaxGijOffloading) /= 0) then
-            call ErrorHandler('initClusterMatrix','Unable to determine MaxGijOffloading',MaxGijOffloading)
-         endif
-         if (MaxPrintLevel >= 0) then
-            write(6,'(a,i5)')'Max number of MPI tasks per GPU for computing Gij Matrix on GPU:',MaxGijOffloading
-         endif
+!        =============================================================
+!!!!!!!! Begin: The following lines of the code are commented out ... 5/20/26
+!        =============================================================
+!!!!!    if (getKeyValue(1,'Maximum MPI tasks per GPU for KKR Matrix Calculation',MaxBigMatAcc) /= 0) then
+!!!!!       call ErrorHandler('initClusterMatrix','Unable to determine MaxBigMatAcc',MaxBigMatAcc)
+!!!!!    endif
+!!!!!    if (MaxPrintLevel >= 0) then
+!!!!!       write(6,'(a,i5)')'Max number of MPI tasks per GPU for computing KKR Matrix on GPU:',MaxBigMatAcc
+!!!!!    endif
+!!!!!    if (getKeyValue(1,'Maximum MPI tasks per GPU for Gij Matrix Calculation',MaxGijOffloading) /= 0) then
+!!!!!       call ErrorHandler('initClusterMatrix','Unable to determine MaxGijOffloading',MaxGijOffloading)
+!!!!!    endif
+!!!!!    if (MaxPrintLevel >= 0) then
+!!!!!       write(6,'(a,i5)')'Max number of MPI tasks per GPU for computing Gij Matrix on GPU:',MaxGijOffloading
+!!!!!    endif
+!        =============================================================
+!!!!!!!! End:   The above lines of the code are commented out ... 5/20/26
+!        =============================================================
          if (MaxPrintLevel >= 0) then
             write(6,'(/)')
             write(6,'(80(''*''))')
          endif
-         if (NumCPUTasksPerGPU <= MaxBigMatAcc .or.                       &
-             getCmdLineOption('Accelerate KKR Matrix Calculation') == 0) then
-            ComputeBigMatrixOnGPU = .true.
-            if (MaxPrintLevel >= 0) then
-               write(6,'(a)')'!!!                     The KKR Matrix is computed on GPU                    !!!'
-            endif
-         else
+!        =============================================================
+!!!!!!!! Begin: The following lines of the code are modified ... 5/20/26
+!        =============================================================
+         if (getCmdLineOption('KKR Matrix Calculation on CPU') == 0) then
             ComputeBigMatrixOnGPU = .false.
             if (MaxPrintLevel >= 0) then
                write(6,'(a)')'!!!         The KKR Matrix is computed on CPU and then copied to GPU         !!!'
             endif
+         else
+!!!!!!!! if (NumCPUTasksPerGPU <= MaxBigMatAcc .or.                       &
+!!!!!!!!     getCmdLineOption('Accelerate KKR Matrix Calculation') == 0) then
+            ComputeBigMatrixOnGPU = .true.
+            if (MaxPrintLevel >= 0) then
+               write(6,'(a)')'!!!                     The KKR Matrix is computed on GPU                    !!!'
+            endif
+!!!!!!!! else
+!!!!!!!!    ComputeBigMatrixOnGPU = .false.
+!!!!!!!!    if (MaxPrintLevel >= 0) then
+!!!!!!!!       write(6,'(a)')'!!!         The KKR Matrix is computed on CPU and then copied to GPU         !!!'
+!!!!!!!!    endif
          endif
+!        =============================================================
+!!!!!!!! End:   The above lines of the code are modified ... 5/20/26
 !        =============================================================
 !        If the BigMatrix will be calculated on GPU, determine if the gij
 !        matrix is calculated on GPU.
@@ -488,19 +505,31 @@ contains
             if (MaxPrintLevel >= 0) then
                write(6,'(a)')'!!!                                                                          !!!'
             endif
-            if (NumCPUTasksPerGPU <= MaxGijOffloading .or.                &
-                getCmdLineOption('Accelerate Gij Matrix Calculation') == 0) then
-               ComputeGijMatrixOnGPU = .true.
-               if (MaxPrintLevel >= 0) then
-                  write(6,'(a)')'!!!                     The Gij Matrix is computed on GPU                    !!!'
-               endif
-            else
+!        =============================================================
+!!!!!!!! Begin: The following lines of the code are modified ... 5/20/26
+!        =============================================================
+            if (getCmdLineOption('Gij Matrix Calculation on CPU') == 0) then
                ComputeGijMatrixOnGPU = .false.
                if (MaxPrintLevel >= 0) then
                   write(6,'(a)')'!!!         The Gij Matrix is computed on CPU and then copied to GPU         !!!'
                endif
+            else
+!!!!!!!!    if (NumCPUTasksPerGPU <= MaxGijOffloading .or.                &
+!!!!!!!!        getCmdLineOption('Accelerate Gij Matrix Calculation') == 0) then
+               ComputeGijMatrixOnGPU = .true.
+               if (MaxPrintLevel >= 0) then
+                  write(6,'(a)')'!!!                     The Gij Matrix is computed on GPU                    !!!'
+               endif
+!!!!!!!!    else
+!!!!!!!!       ComputeGijMatrixOnGPU = .false.
+!!!!!!!!       if (MaxPrintLevel >= 0) then
+!!!!!!!!          write(6,'(a)')'!!!         The Gij Matrix is computed on CPU and then copied to GPU         !!!'
+!!!!!!!!       endif
             endif
          endif
+!        =============================================================
+!!!!!!!! End:   The above lines of the code are modified ... 5/20/26
+!        =============================================================
          if (MaxPrintLevel >= 0) then
             write(6,'(80(''*''))')
             write(6,'(/)')
