@@ -21,7 +21,7 @@
               OptionKeys(n)='Accelerate KKR Matrix Calculation'
               OptionValues(n) = '-1'
 !
-   n = n + 1; Options(1,n)='-abm';  Options(2,n)='--cpu-bigmat'; Options(3,n)='--acc_bigmat'
+   n = n + 1; Options(1,n)='-cbm';  Options(2,n)='--cpu-bigmat'; Options(3,n)='--cpu_bigmat'
               OptionKeys(n)='KKR Matrix Calculation on CPU'
               OptionValues(n) = '-1'
 !
@@ -29,7 +29,7 @@
               OptionKeys(n)='Accelerate Gij Matrix Calculation'
               OptionValues(n) = '-1'
 !
-   n = n + 1; Options(1,n)='-agm';  Options(2,n)='--cpu-gijmat'; Options(3,n)='--acc_gijmat'
+   n = n + 1; Options(1,n)='-cgm';  Options(2,n)='--cpu-gijmat'; Options(3,n)='--cpu_gijmat'
               OptionKeys(n)='Gij Matrix Calculation on CPU'
               OptionValues(n) = '-1'
 !
