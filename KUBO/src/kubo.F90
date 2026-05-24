@@ -271,7 +271,7 @@ program kubo
    call initPotentialType(getPotentialTypeParam())
    call initSystem(def_id)
 
-   t_inp = t_inp + fetchStoredTime()
+   t_inp = t_inp + fetchStoredTime(tag='Stage 1')
 
    allocate(final_sigma(3,3,n_spin_pola))
    final_sigma = 0
