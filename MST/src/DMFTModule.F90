@@ -5,7 +5,7 @@ module DMFTModule
    use ErrorHandlerModule, only : StopHandler, ErrorHandler, WarningHandler
    use IntegerFactorsModule, only : lofk, lofj, mofj, m1m, mofk, jofk
    use PublicTypeDefinitionsModule, only : GridStruct, LloydStruct
-   use TimerModule, only : getTime, getRoutineCallTiming
+   use TimerModule, only : getTime, getAccumelatedTiming
    use MPPModule, only : MyPE, syncAllPEs
 !
 public :: initDMFT,          &
@@ -27,7 +27,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine initDMFT(lmax_kkr,lmax_gf,na,ne,emesh)
 !  ===================================================================
-   use localGFModule, only : initLocalGF
+   use LocalGFModule, only : initLocalGF
 !
    implicit none
 !
@@ -52,7 +52,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine endDMFT()
 !  ===================================================================
-   use localGFModule, only : endLocalGF
+   use LocalGFModule, only : endLocalGF
 !
    implicit none
 !

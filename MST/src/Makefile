@@ -142,7 +142,9 @@ printScfResults.o \
 adjustEnergy.o \
 printxml_code_info.o \
 printxml_scf_param.o \
-printxml_scf_results.o
+printxml_scf_results.o \
+registerTiming.o \
+printTiming.o
 
 .SUFFIXES:	.o .f .c .f90 .F90
 

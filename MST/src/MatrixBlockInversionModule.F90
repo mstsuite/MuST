@@ -528,9 +528,9 @@ contains
    endif
 
    if ( print_level(id) >= 0 .and. nblk > 1) then
-      write( 6,'(/,a,a,a,i6,a7,f9.3,a4)') &
+      write( 6,'(/,a,a,a,i6,a,f9.3,a4)') &
         'invertBlockMatrix     :: Using ',alg_name,': Block size = ', &
-        MatrixBlockSizes(2,id),', Time =',time,' Sec' 
+        MatrixBlockSizes(2,id),',  Time =',time,' Sec' 
       call FlushFile(6)
    endif
 !

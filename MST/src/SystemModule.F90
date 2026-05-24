@@ -878,7 +878,7 @@ contains
    LmaxMax = max(LmaxPotMax, LmaxKKRMax, LmaxRhoMax, LmaxPhiMax)
 !
 !  -------------------------------------------------------------------
-   call storeTime(t_inp)
+   call storeTime(tag='Stage 1',t=t_inp)
 !  -------------------------------------------------------------------
 !
    end subroutine initSystem

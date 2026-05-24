@@ -14,6 +14,7 @@ module ClusterMatrixModule
 !
    use ErrorHandlerModule, only : ErrorHandler, WarningHandler, StopHandler
    use WriteMatrixModule,  only : writeMatrix
+   use OutputModule, only : getStandardOutputLevel
 !
 public :: initClusterMatrix, &
           endClusterMatrix,  &
@@ -35,6 +36,7 @@ private
    integer (kind=IntKind) :: isize_max = 0
    integer (kind=IntKind) :: numnb_max = 0
    integer (kind=IntKind) :: MaxPrintLevel = -1
+   integer (kind=IntKind) :: node_print_level
 !
    integer (kind=IntKind) ::  lmax_max
    integer (kind=IntKind) ::  kmax_max
@@ -229,6 +231,7 @@ contains
    if (MaxPrintLevel >= 0) then
       write(6,'(/,80("="))')
    endif
+   node_print_level = getStandardOutputLevel()
 !
 !  ===================================================================
 !  Initialize the structure constant module.
@@ -1208,7 +1211,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine calClusterMatrix(energy,getSingleScatteringMatrix,tau_needed,kp)
 !  ===================================================================
-   use TimerModule, only : getTime
+   use TimerModule, only : getTime, checkinTiming
    use MPPModule, only : MyPE, NumPEsOnNode, syncAllPEs
 !
    use SpinRotationModule, only : rotateGtoL
@@ -1312,7 +1315,7 @@ contains
 !        -------------------------------------------------------------
          call init_bigmatrix_gpu(dsize)
 !        -------------------------------------------------------------
-!        if (MyPE == 0) then
+!        if (node_print_level >= 0) then
 !           write(6,'(/,a,1i5,f8.3)')'Timing for init bigmatrix on GPU:',my_atom,getTime()-t0
 !        endif
 !        t0 = getTime()
@@ -1346,16 +1349,16 @@ contains
             call push_submatrix_gpu(2,irj,irj,p_jinvi,nbr_kkrj_ns)
 !           -----------------------------------------------------------
          enddo
-!        if (MyPE == 0) then
+!        if (node_print_level >= 0) then
 !           write(6,'(a,1i5,f8.3)')'Timing for pushing sj matrix:',my_atom,getTime()-t0
 !        endif
 !        --------------------------------------------------------------
          t0 = getTime()
          call commit_to_gpu(1)
          call commit_to_gpu(2)
-         if (MyPE == 0) then
-            write(6,'(a,1i5,f8.3)')'Timing for copying sj matrix to GPU:',my_atom,getTime()-t0
-         endif
+!        if (node_print_level >= 0) then
+!           write(6,'(a,1i5,f8.3)')'Timing for copying sj matrix to GPU:',my_atom,getTime()-t0
+!        endif
 !        --------------------------------------------------------------
          if (ComputeGijMatrixOnGPU) then
             t0 = getTime()
@@ -1363,8 +1366,19 @@ contains
             call calculate_gij_gpu(kappa,n_spin_cant,numnb_max,my_atom,      &
                                    Neighbor%NumAtoms,lmax_kkr(my_atom))
 !           -----------------------------------------------------------
-            if (MyPE == 0) then
-               write(6,'(a,1i5,f8.3)')'Timing for calculatig Gij on GPU:',my_atom,getTime()-t0
+            if (TimingLSMS) then
+               t1 = getTime() - t0
+!              --------------------------------------------------------
+               call checkinTiming('Calculate the Gij matrix',t1)
+!              --------------------------------------------------------
+               if (node_print_level >= 0) then
+                  if (LocalNumAtoms == 1) then
+                     write(6,'(a,t64,''='',f8.3)')'Time for calculatig Gij on GPU',t1
+                  else
+                     write(6,'(a,1i2,a,t64,''='',f8.3,a)') &
+                        'For atom : ',my_atom,', time for calculatig Gij on GPU',t1,' sec'
+                  endif
+               endif
             endif
 !======================================================================
 !           iri=1; irj=3
@@ -1455,17 +1469,42 @@ contains
 !           -----------------------------------------------------------
             call commit_to_gpu(3)
 !           -----------------------------------------------------------
-            if (MyPE == 0) then
-               write(6,'(a,f10.5)')'Timing for calculatig Gij on CPU and copy to GPU:',getTime()-t0
+            if (TimingLSMS) then
+               t1 = getTime()-t0
+!              --------------------------------------------------------
+               call checkinTiming('Calculate the Gij matrix',t1)
+!              --------------------------------------------------------
+               if (node_print_level >= 0) then
+                  if (LocalNumAtoms == 1) then
+                     write(6,'(a,t64,''='',f8.3,a)') &
+                        'Time for calculatig Gij on CPU and copy to GPU',t1, 'sec'
+                  else
+                     write(6,'(a,i2,a,t64,''='',f8.3,a)')'For atom : ',my_atom, &
+                                          ', time for calculatig Gij on CPU and copy to GPU',t1,' sec'
+                  endif
+               endif
             endif
          endif
 !        --------------------------------------------------------------
          t0 = getTime()
-         call construct_bigmatrix_gpu(kappa)
-         if (MyPE == 0) then
-            write(6,'(a,1i5,f8.3)')'Timing for construct_bigmatrix_gpu:',my_atom,getTime()-t0
-         endif
 !        --------------------------------------------------------------
+         call construct_bigmatrix_gpu(kappa)
+!        --------------------------------------------------------------
+         if (TimingLSMS) then
+            t1 = getTime()-t0
+!           -----------------------------------------------------------
+            call checkinTiming('Construct the LIZ KKR matrix',t1)
+!           -----------------------------------------------------------
+            if (node_print_level >= 0) then
+               if (LocalNumAtoms == 1) then
+                  write(6,'(a,t64,''='',f8.3,a)')'Time for constructing the KKR matrix on GPU',t1,' sec'
+               else
+                  write(6,'(a,i2,a,t64,''='',f8.3,a)')'For atom : ',my_atom, &
+                                              ', time for constructing the KKR matrix on GPU',t1,' sec'
+               endif
+            endif
+!           -----------------------------------------------------------
+         endif
       endif
 #endif
       if (.not.ComputeBigMatrixOnGPU) then
@@ -1485,8 +1524,10 @@ contains
             t_gij = ZERO
             t_zgemm1 = ZERO
             t_zgemm2 = ZERO
-            if (MyPE == 0) then
-               write(6,'(a,i2,a)')'In calClusterMatrix, start constructing the KKR matrix on CPU for the LIZ of atom ',my_atom,' --------------'
+            if (node_print_level >= 0) then
+               write(6,'(a,i2,a)') &
+                  'In calClusterMatrix, start constructing the KKR matrix on CPU for the LIZ of atom ', &
+                  my_atom,'========'
                zgemm1_print = .true.
                zgemm2_print = .true.
             else
@@ -1632,7 +1673,7 @@ contains
                         if (zgemm1_print) then
                            write(6,'(a)')'Calling ZGEMM(TA,TB,M,N,K,cone,A,LDA,B,LDB,czero,C,LDC) to calculate Jinv*Gij'
                            write(6,'(6(a,i5))')'       in which M, N, K, LDA. LDB, LDC = ', &
-                                               kkri_ns,', ',kkrj_ns,', ',kkri_ns,', ',nbr_kkri_ns,', ',kkri_ns,', ',kkri,kkri_ns
+                                  kkri_ns,', ',kkrj_ns,', ',kkri_ns,', ',nbr_kkri_ns,', ',kkri_ns,', ',kkri,kkri_ns
                            zgemm1_print = .false.
                         endif
                         t1 = getTime()
@@ -1652,9 +1693,10 @@ contains
                   else
                      if (TimingLSMS) then
                         if (zgemm1_print) then
-                           write(6,'(a)')'Calling ZGEMM(TA,TB,M,N,K,cone,A,LDA,B,LDB,czero,C,LDC) to calculate Jinv*Gij -> JiG'
+                           write(6,'(4x,a)') &
+      'Calling ZGEMM(TA,TB,M,N,K,cone,A,LDA,B,LDB,czero,C,LDC) to calculate Jinv*Gij -> JiG'
                            write(6,'(6(a,i5))')'       in which M, N, K, LDA. LDB, LDC = ', &
-                                               kkri,', ',kkrj,', ',kkri,', ',nbr_kkri_ns,', ',kkri,', ',kkri_ns
+                                     kkri,', ',kkrj,', ',kkri,', ',nbr_kkri_ns,', ',kkri,', ',kkri_ns
                            zgemm1_print = .false.
                         endif
                         t1 = getTime()
@@ -1675,13 +1717,14 @@ contains
                   endif
                   if (TimingLSMS) then
                      if (zgemm2_print) then
-                        write(6,'(a)')'Calling ZGEMM(TA,TB,M,N,K,-cone/kappa,A,LDA,B,LDB,czero,C,LDC) to calculate JiG*Sine -> KKR Matrix'
+                        write(6,'(4x,a)') &
+     'Calling ZGEMM(TA,TB,M,N,K,-cone/kappa,A,LDA,B,LDB,czero,C,LDC) to calculate JiG*Sine -> KKR Matrix'
                         if (n_spin_cant == 2 .and. kkrj_ns /= nbr_kkrj_ns) then
                             write(6,'(6(a,i5))')'       in which M, N, K, LDA. LDB, LDC = ', &
-                                                kkri_ns,', ',kkrj_ns,', ',kkrj_ns,', ',kkri_ns,', ',kkrj_ns,', ',dsize
+                                kkri_ns,', ',kkrj_ns,', ',kkrj_ns,', ',kkri_ns,', ',kkrj_ns,', ',dsize
                         else
                             write(6,'(6(a,i5))')'       in which M, N, K, LDA. LDB, LDC = ', &
-                                                kkri_ns,', ',kkrj_ns,', ',kkrj_ns,', ',kkri_ns,', ',nbr_kkrj_ns,', ',dsize
+                                kkri_ns,', ',kkrj_ns,', ',kkrj_ns,', ',kkri_ns,', ',nbr_kkrj_ns,', ',dsize
                         endif
                         zgemm2_print = .false.
                      endif
@@ -1721,12 +1764,23 @@ contains
 !           ----------------------------------------------------------
          endif
 !
-         if (TimingLSMS .and. MyPE == 0) then
-            write(6,'(a,i2,a)')'For the LIZ centered at atom ',my_atom,', the timing data on CPU are:  --------------'
-            write(6,'(a,f8.3,a)')'Cumulative time for the calculation of all Gij matrices       = ',t_gij,' sec'
-            write(6,'(a,f8.3,a)')'Cumulative time for all the zgemm calls to calculate Jinv*Gij = ',t_zgemm1,' sec'
-            write(6,'(a,f8.3,a)')'Cumulative time for all the zgemm calls to calculate JiG*Sine = ',t_zgemm2,' sec'
-            write(6,'(a,f8.3,a)')'Total time for constructing the KKR matrix before inverse     = ',getTime()-t0,' sec'
+         if (TimingLSMS) then
+            t1 = getTime() - t0 - t_gij
+!           -----------------------------------------------------------
+            call checkinTiming('Calculate the Gij matrix',t_gij)
+            call checkinTiming('Construct the LIZ KKR matrix',t1)
+!           -----------------------------------------------------------
+            if (node_print_level >= 0) then
+               write(6,'(a)') 'The timing data on *CPU* are:'
+               write(6,'(a,t64,''='',f8.3,a)') &
+                  'Cumulative time for the calculation of all Gij matrices',t_gij,' sec'
+               write(6,'(a,t64,''='',f8.3,a)') &
+                  'Cumulative time for all the zgemm calls to calculate Jinv*Gij',t_zgemm1,' sec'
+               write(6,'(a,t64,''='',f8.3,a)') &
+                  'Cumulative time for all the zgemm calls to calculate JiG*Sine',t_zgemm2,' sec'
+               write(6,'(a,t64,''='',f8.3,a)') &
+                  'Time for constructing the KKR matrix, excludes calculating Gij',t1,' sec'
+            endif
          endif
       endif
 !
@@ -1792,19 +1846,33 @@ contains
 !           ==========================================================
 #ifdef ACCEL
             if (.not.ComputeBigMatrixOnGPU) then
-!              -------------------------------------------------------
                t0 = getTime()
-               call push_bigmatrix_gpu(BigMatrix,dsize)
-               if (MyPE == 0) then
-                  write(6,'(a,1i5,f8.3)'),'push_bigmatrix_gpu timing:',my_atom,getTime()-t0
-               endif
 !              -------------------------------------------------------
+               call push_bigmatrix_gpu(BigMatrix,dsize)
+!              -------------------------------------------------------
+               if (TimingLSMS) then
+                  t1 = getTime() - t0
+!                 ----------------------------------------------------
+                  call checkinTiming('Copy the LIZ KKR matrix to GPU',t1)
+!                 ----------------------------------------------------
+                  if (node_print_level >= 0) then
+                     write(6,'(a,t64,''='',f8.3,a)')'Time for copying the KKR matrix to GPU',t1,' sec'
+                  endif
+               endif
             endif
-!           ----------------------------------------------------------
             t0 = getTime()
+!           ----------------------------------------------------------
             call invert_bigmatrix_gpu(BlockMatrix,kkrsz_ns) 
-            if (MyPE == 0) then
-               write(6,'(a,1i5,f8.3)'),'invert_bigmatrix_gpu timing:',my_atom,getTime()-t0
+!           ----------------------------------------------------------
+            if (TimingLSMS) then
+               t1 = getTime() - t0
+!              -------------------------------------------------------
+               call checkinTiming('Invert the LIZ KKR matrix',t1)
+!              -------------------------------------------------------
+               if (node_print_level >= 0) then
+                  write(6,'(a,t64,''='',f8.3,a)')'Time for inverting the KKR matrix on GPU',t1,' sec'
+                  if (my_atom < LocalNumAtoms) write(6,'(4(''-''))')
+               endif
             endif
 !           ----------------------------------------------------------
             wau_g = pBlockMatrix - ubmat                     
@@ -1821,7 +1889,7 @@ contains
 !           ----------------------------------------------------------
 !           nullify( pBigMatrix )
 !           ==========================================================
-            if (ReportGPUEnergy .and. MyPE == 0) then
+            if (ReportGPUEnergy .and. node_print_level >= 0) then
 !              -------------------------------------------------------
                call measure_energy_benchmark(gpu_energy,cumulative_gpu_energy)
 !              -------------------------------------------------------
@@ -1839,20 +1907,25 @@ contains
 !           ==========================================================
 !           call writeMatrix('BigMatrix',BigMatrix,dsize_max*dsize_max)
             if (getCmdLineOption('Print Blocking Details in LSMS Matrix Inverse') == 0 &
-                .and. MyPE == 0) then
+                .and. node_print_level >= 0) then
                block_print = 1
             else
                block_print = 0
             endif
-            if (TimingLSMS) then
-               t0 = getTime()
-            endif
+            t0 = getTime()
 !           ----------------------------------------------------------
             call invertMatrixBlock( my_atom, pBlockMatrix, kkrsz_ns, kkrsz_ns, &
                                     BigMatrix, dsize, dsize, block_print )
 !           ----------------------------------------------------------
-            if (TimingLSMS .and. MyPE == 0) then
-               write(6,'(a,f8.3,a)')'Total time for inverting the KKR matrix of the LIZ on CPU     = ',getTime()-t0,' sec'
+            if (TimingLSMS) then
+               t1 = getTime() - t0
+!              -------------------------------------------------------
+               call checkinTiming('Invert the LIZ KKR matrix',t1)
+!              -------------------------------------------------------
+               if (node_print_level >= 0) then
+                  write(6,'(a,t64,''='',f8.3,a,/)') &
+                      'Time for inverting the KKR matrix of the LIZ on *CPU*',t1,' sec'
+               endif
             endif
 !           ==========================================================
 !           store [1 - BlockMatrix] in ubmat, which uses wsTau00L as 

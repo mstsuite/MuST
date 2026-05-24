@@ -4,7 +4,7 @@ module LocalGFModule
                                CZERO, CONE, TWO, HALF, SQRTm1, Y0, TEN2m6
    use ErrorHandlerModule, only : StopHandler, ErrorHandler, WarningHandler
    use IntegerFactorsModule, only : lofk, lofj, mofj, m1m, mofk, jofk
-   use TimerModule, only : getTime, getRoutineCallTiming
+   use TimerModule, only : getTime, getAccumelatedTiming
    use MPPModule, only : MyPE, syncAllPEs
 !
 public :: initLocalGF,          &

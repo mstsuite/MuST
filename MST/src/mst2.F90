@@ -8,7 +8,6 @@ program mst2
    use ChemElementModule, only : getZval
 !
    use TimerModule, only : initTimer, endTimer, getTime, fetchStoredTime
-   use TimerModule, only : registerRoutine 
 !
    use ErrorHandlerModule, only : setErrorOutput, ErrorHandler, WarningHandler
 !
@@ -546,7 +545,7 @@ program mst2
 !  ===================================================================
    call initSystem(def_id)
 !  -------------------------------------------------------------------
-   t_inp = t_inp + fetchStoredTime()
+   t_inp = t_inp + fetchStoredTime(tag='Stage 1')
 !
 !  ===================================================================
 !  Check data consistency
@@ -870,12 +869,8 @@ program mst2
 !  -------------------------------------------------------------------
    call initAtom(info_id,istop,node_print_level)
 !  -------------------------------------------------------------------
-!
-   if (isRelativisticValence()) then
-      call registerRoutine('SingleDiracScattering')
-   else
-      call registerRoutine('solveSingleScattering')
-   endif
+   call registerTiming()
+!  -------------------------------------------------------------------
 !
    do i = 1,LocalNumAtoms
       rmt   = getMuffinTinRadius(i)
@@ -2119,10 +2114,13 @@ stop 'Under construction...'
 !        -------------------------------------------------------------
       endif
       write(6,'(/,80(''=''))')
+!     ----------------------------------------------------------------
+      call printTiming()
+!     ----------------------------------------------------------------
       t3 = getTime()-t0
       t2 = t_inp + t_outp
-      write(6,'(''Time:: Job total including IO :'',f12.5,''Sec'')') t3
-      write(6,'(''       Job total excluding IO :'',f12.5,''Sec'')') t3 - t2
+      write(6,'(''Time:: Job total including IO :'',f12.3,'' Sec'')') t3
+      write(6,'(''       Job total excluding IO :'',f12.3,'' Sec'')') t3 - t2
       write(6,'(80(''-''))')
    endif
 !

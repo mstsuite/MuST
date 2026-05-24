@@ -7,7 +7,7 @@ module GFMethodModule
    use ErrorHandlerModule, only : StopHandler, ErrorHandler, WarningHandler
    use IntegerFactorsModule, only : lofk, lofj, mofj, m1m, mofk, jofk
    use PublicTypeDefinitionsModule, only : GridStruct, LloydStruct
-   use TimerModule, only : getTime, getRoutineCallTiming
+   use TimerModule, only : getTime, getAccumelatedTiming, checkinTiming
    use MPPModule, only : MyPE, syncAllPEs
 !
 public :: initGFMethod,              &
@@ -1169,15 +1169,15 @@ contains
 !
 !  ===================================================================
    if (RelativisticFlag == 2) then
-      Timing_SS = getRoutineCallTiming('SingleDiracScattering',NumCalls_SS)
+      Timing_SS = getAccumelatedTiming(tag='SingleDiracScattering',nc=NumCalls_SS)
    else
-      Timing_SS = getRoutineCallTiming('solveSingleScattering',NumCalls_SS)
+      Timing_SS = getAccumelatedTiming(tag='solveSingleScattering',nc=NumCalls_SS)
    endif
 !
-   if (node_print_level >= 0) then
-      write(6,'(/,a,i5)')'Number of single site scattering solver calls:', &
+   if (node_print_level >= 0 .and. NumCalls_SS > 0) then
+      write(6,'(/,a,i5)')'Accumulated number of single site scattering solver calls:', &
                          NumCalls_SS
-      write(6,'(a,f12.3,a,/)')'Total of single site scattering solver timing:', &
+      write(6,'(a,f12.3,a,/)')'Accumulated single site scattering solver timing:', &
                          Timing_SS,' (sec)'
    endif
 !
@@ -1708,9 +1708,9 @@ contains
    endif
 !
    if (RelativisticFlag == 2) then
-      Timing_SS = getRoutineCallTiming('SingleDiracScattering',NumCalls_SS)
+      Timing_SS = getAccumelatedTiming(tag='SingleDiracScattering',nc=NumCalls_SS)
    else
-      Timing_SS = getRoutineCallTiming('solveSingleScattering',NumCalls_SS)
+      Timing_SS = getAccumelatedTiming(tag='solveSingleScattering',nc=NumCalls_SS)
    endif
 !
    if (node_print_level >= 0) then
@@ -2127,7 +2127,7 @@ contains
 !          LastValue(id)%dos = is the MST part of the DOS at (chempot,eib) for atom id
 !     ===============================================================
       if ( node_print_level >= 0) then
-         write(6,'(/,a,2d15.8)')'M.S. Term DOS at the last energy: ',eLast
+         write(6,'(/,a,2d15.8,/)')'M.S. Term DOS at the last energy: ',eLast
       endif
       do id =  1,LocalNumAtoms
 !        -------------------------------------------------------------
@@ -2717,9 +2717,9 @@ contains
    endif
 !
    if (RelativisticFlag == 2) then
-      Timing_SS = getRoutineCallTiming('SingleDiracScattering',NumCalls_SS)
+      Timing_SS = getAccumelatedTiming(tag='SingleDiracScattering',nc=NumCalls_SS)
    else
-      Timing_SS = getRoutineCallTiming('solveSingleScattering',NumCalls_SS)
+      Timing_SS = getAccumelatedTiming(tag='solveSingleScattering',nc=NumCalls_SS)
    endif
 !
    if (node_print_level >= 0) then
@@ -4284,6 +4284,9 @@ contains
                write(6,'(92(''-''),/)')
             endif
             call FlushFile(6)
+!           ----------------------------------------------------------
+            call checkinTiming(tag='Calculate MS DOS',t=time_ie)
+!           ----------------------------------------------------------
          enddo   ! Loop over energy parameter
 !        ================================================================
 !        Sum over the processors to get the integrated DOS
@@ -4437,6 +4440,9 @@ contains
                write(6,'(92(''-''),/)')
             endif
             call FlushFile(6)
+!           ----------------------------------------------------------
+            call checkinTiming(tag='Calculate MS DOS',t=time_ie)
+!           ----------------------------------------------------------
          enddo   ! Loop over energy parameter
 !        -------------------------------------------------------------
 !        call GlobalSumInGroup(eGID,test_result,LocalNumAtoms)
@@ -7208,7 +7214,7 @@ contains
    !          LastValue(id)%dos = is the MST part of the DOS at (chempot,eib) for atom id
    !     ===============================================================
       if ( node_print_level >= 0) then
-         write(6,'(/,a,2d15.8)')'M.S. Term DOS at the last energy: ',eLast
+         write(6,'(/,a,2d15.8,/)')'M.S. Term DOS at the last energy: ',eLast
       endif
       do id =  1,LocalNumAtoms
    !        -------------------------------------------------------------
