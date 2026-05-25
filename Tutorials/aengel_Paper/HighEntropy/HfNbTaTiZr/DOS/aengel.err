@@ -1,0 +1,2 @@
+[mpiexec@r445.ib.bridges2.psc.edu] check_downstream_work_complition (../../../../../src/pm/i_hydra/mpiexec/mpiexec.c:1303): downstream from host r445 exited abnormally
+[mpiexec@r445.ib.bridges2.psc.edu] check_downstream_work_complition (../../../../../src/pm/i_hydra/mpiexec/mpiexec.c:1307): trying to close other downstreams

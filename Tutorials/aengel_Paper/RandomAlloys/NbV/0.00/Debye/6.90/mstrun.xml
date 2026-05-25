@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mst_run>
+   <code_info>
+      <i name="program" type="string">MuST </i>
+      <i name="version" type="string">v1.9.4.2 </i>
+      <i name="date" type="string">02-09-2025 </i>
+      <i name="time" type="string">20:07:10 </i>
+   </code_info>
+   <scf_param>
+      <separator name="electronic exchange-correlation">
+         <i name="LDA" type="string"> </i>
+      </separator>
+   </scf_param>

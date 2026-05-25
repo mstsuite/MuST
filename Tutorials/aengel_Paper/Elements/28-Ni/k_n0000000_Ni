@@ -1,0 +1,22 @@
+***************************************************************************************
+*  Note:                                                                              *
+*     In the MuST version 1.8.2 and prior, the total energy value includes the zero-  *
+*     point lattice energy. Starting from version v1.8.3, the zero point lattice      *
+*     energy is removed from the total energy value and is explicitly printed out in  *
+*     one of the following lines. If needed, one will have to add the zero-point      *
+*     lattice energy to the total energy by hand.                                     *
+***************************************************************************************
+Source Code Version                  : v1.8.8.3                                          
+System Description                   : Ni, FCC structure                                 
+Number of Atoms in Unit Cell         : 1                                                 
+Number of Atomic Species             : 1                                                 
+Number of Atoms in Each Type         : 1(Ni)                                             
+Unit Cell Volume (au^3)              : 0.70252844D+02                                    
+Average Atomic Volume (au^3)         : 70.25284                                          
+Zero Point Lattice Energy/Atom (Ryd) : 0.00349                                           
+Zero Point Lattice PV3/Atom (Ryd)    : 0.01966                                           
+Energy Offset                        : -3011                                             
+=======================================================================================
+    Iter    Energy      3PV     Efermi   Rms_rho    Rms_pot   Mix Alg   Alpha 
+---------------------------------------------------------------------------------------
+**     1  -0.653279  -0.11908  0.66936  0.634E-05  0.437E-04  pot  B   0.10000

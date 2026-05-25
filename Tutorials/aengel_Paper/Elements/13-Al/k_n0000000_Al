@@ -1,0 +1,22 @@
+***************************************************************************************
+*  Note:                                                                              *
+*     In the MuST version 1.8.2 and prior, the total energy value includes the zero-  *
+*     point lattice energy. Starting from version v1.8.3, the zero point lattice      *
+*     energy is removed from the total energy value and is explicitly printed out in  *
+*     one of the following lines. If needed, one will have to add the zero-point      *
+*     lattice energy to the total energy by hand.                                     *
+***************************************************************************************
+Source Code Version                  : v1.8.8.3                                          
+System Description                   : Al, FCC structure                                 
+Number of Atoms in Unit Cell         : 1                                                 
+Number of Atomic Species             : 1                                                 
+Number of Atoms in Each Type         : 1(Al)                                             
+Unit Cell Volume (au^3)              : 0.10974400D+03                                    
+Average Atomic Volume (au^3)         : 109.74400                                         
+Zero Point Lattice Energy/Atom (Ryd) : 0.00306                                           
+Zero Point Lattice PV3/Atom (Ryd)    : 0.02011                                           
+Energy Offset                        : -482                                              
+=======================================================================================
+    Iter    Energy      3PV     Efermi   Rms_rho    Rms_pot   Mix Alg   Alpha 
+---------------------------------------------------------------------------------------
+**     1  -0.936090  -0.10094  0.61297  0.175E-05  0.102E-04  pot  B   0.10000

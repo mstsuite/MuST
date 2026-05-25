@@ -1,0 +1,29 @@
+# Name of the system
+System: NbTi
+
+# Different parameters used in calculations of the same system
+Variation: 
+
+# Elements in the system (separated by spaces)
+Elements: Nb Ti
+
+# Number of atoms in the unit cell corresponding to the elements (separated by spaces)
+Numbers: 0.25 0.75
+
+# Energy and volume per atom data (one data point per line)
+-3146.938649 78.73200000000001
+-3146.957164 83.1875
+-3146.972321 87.80799999999998
+-3146.984213 92.5965
+-3146.992998 97.556
+-3146.998858 102.68950000000001
+-3147.002001 108.0
+-3147.002653 113.49049999999997
+-3147.001046 119.16400000000002
+-3146.997414 125.02349999999998
+-3146.99198 131.07200000000003
+-3146.984961 137.3125
+-3146.976562 143.748
+-3146.966973 150.38150000000002
+-3146.956372 157.21599999999998
+-3146.944922 164.25450000000004
