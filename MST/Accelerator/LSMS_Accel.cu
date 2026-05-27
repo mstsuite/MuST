@@ -449,7 +449,8 @@ cuDoubleComplex *Ylm_d;
 
 int *num_nbs_d;
 double *posi_d;
-cuDoubleComplex  *gij_d;
+cuDoubleComplex *gij_d;
+cuDoubleComplex *jig_d;
 
 cudaStream_t stream;
 
@@ -626,6 +627,9 @@ void allocate_sjgmatrix_gpu_() {
 
       checkCudaErrors(cudaMalloc((void**)&gij_d, size_bigmat));
       cudaMemset(gij_d, 0, size_bigmat); // set the device array to 0
+
+      checkCudaErrors(cudaMalloc((void**)&jig_d, size_bigmat));
+      cudaMemset(jig_d, 0, size_bigmat); // set the device array to 0
       
       SJG_allocated = true;
    }
@@ -711,6 +715,7 @@ void finalize_lsms_gpu_() {
       cudaFree(sine_d);
       cudaFree(jinv_d);
       cudaFree(gij_d);
+      cudaFree(jig_d);
       free(sine_h);
       free(jinv_h);
       free(gij_h);
@@ -883,7 +888,7 @@ void commit_to_gpu_(int *mat_id) {
 
 extern "C"
 void construct_bigmatrix_gpu_(double _Complex *kappa) {
-    cuDoubleComplex *jig_d;
+//  cuDoubleComplex *jig_d;
     cuDoubleComplex minus_one = make_cuDoubleComplex(-1.0, 0.0);
     cuDoubleComplex one = make_cuDoubleComplex(1.0, 0.0);
     cuDoubleComplex zero = make_cuDoubleComplex(0.0, 0.0);
@@ -895,7 +900,7 @@ void construct_bigmatrix_gpu_(double _Complex *kappa) {
     size_t size = mmat_size * mmat_size * sizeof(cuDoubleComplex);
 
     // Allocate device memory
-    checkCudaErrors(cudaMalloc((void**)&jig_d, size));
+    // checkCudaErrors(cudaMalloc((void**)&jig_d, size));
 
     // Create cuBLAS handle
     cublasHandle_t handle;
@@ -919,7 +924,7 @@ void construct_bigmatrix_gpu_(double _Complex *kappa) {
     checkCudaErrors(cudaStreamSynchronize(stream));
 
     // Cleanup
-    cudaFree(jig_d);
+    // cudaFree(jig_d);
     cublasDestroy(handle);
     checkCudaErrors(cudaStreamDestroy(stream));
 }
