@@ -434,6 +434,7 @@ cuDoubleComplex  *jinv_d;
 cuDoubleComplex  *BigMat_d;
 cuDoubleComplex  *BigMatInv_d;
 cuDoubleComplex  *block_d;
+cuDoubleComplex  *workArray;
 int *pivotArray;
 int *infoArray;
 
@@ -453,6 +454,7 @@ cuDoubleComplex *gij_d;
 cuDoubleComplex *jig_d;
 
 cudaStream_t stream;
+cusolverDnHandle_t cusolverHandle;
 
 void runYlmOverLIZ(int na, int liz_max, int l_max) {
 
@@ -577,7 +579,19 @@ void init_lsms_gpu_(int *dsize, int *block_size, int *ntasks, int *my_pe) {
 
       if (my_rank == 0) printf("CUDA memory assigned \n");
 
-      checkCudaErrors(cudaSetDevice(0));  // This line needs to be re-examined for multiple GPUs
+      // Assign GPU based on rank (safe for MPI)
+      int ngpus = 0;
+      checkCudaErrors(cudaGetDeviceCount(&ngpus));
+      int dev = my_rank % ngpus;
+      checkCudaErrors(cudaSetDevice(dev));
+      // checkCudaErrors(cudaSetDevice(0));  // This line needs to be re-examined for multiple GPUs
+
+      // Create stream
+      checkCudaErrors(cudaStreamCreate(&stream));
+
+      // Create cuSOLVER handle and attach stream
+      checkCusolverErrors(cusolverDnCreate(&cusolverHandle));
+      checkCusolverErrors(cusolverDnSetStream(cusolverHandle, stream));
 
       initialized = true;
    }
@@ -585,26 +599,31 @@ void init_lsms_gpu_(int *dsize, int *block_size, int *ntasks, int *my_pe) {
 
 extern "C"
 void allocate_bigmatrix_gpu_() {
-   if (initialized) {
-      size_t size_block = tau_size * tau_size * sizeof(cuDoubleComplex);
-      size_t size_bigmat = mmat_size * mmat_size * sizeof(cuDoubleComplex);
-
-      checkCudaErrors(cudaMalloc((void**)&BigMat_d, size_bigmat));
-
-      checkCudaErrors(cudaMalloc((void**)&pivotArray, sizeof(int)*mmat_size));
-
-      checkCudaErrors(cudaMalloc((void**)&infoArray, sizeof(int)));
-
-      checkCudaErrors(cudaMalloc((void**)&BigMatInv_d, size_bigmat));
-
-      checkCudaErrors(cudaMalloc((void**)&block_d, size_block));
-      
-      BigMat_allocated = true;
-   }
-   else {
+   if (!initialized) {
       printf("\nIt needs to call init_lsms_gpu first.\n");
       exit(EXIT_FAILURE);
    }
+
+   size_t size_block = tau_size * tau_size * sizeof(cuDoubleComplex);
+   size_t size_bigmat = mmat_size * mmat_size * sizeof(cuDoubleComplex);
+
+   checkCudaErrors(cudaMallocAsync((void**)&BigMat_d, size_bigmat, stream));
+   cudaMemsetAsync(BigMat_d, 0, size_bigmat, stream); // set the device array to 0
+
+   checkCudaErrors(cudaMallocAsync((void**)&pivotArray, sizeof(int)*mmat_size, stream));
+
+   checkCudaErrors(cudaMallocAsync((void**)&infoArray, sizeof(int), stream));
+
+   checkCudaErrors(cudaMallocAsync((void**)&BigMatInv_d, size_bigmat, stream));
+
+   checkCudaErrors(cudaMallocAsync((void**)&block_d, size_block, stream));
+
+   int Lwork = 0;
+   checkCusolverErrors(cusolverDnZgetrf_bufferSize(cusolverHandle, mmat_size, mmat_size, nullptr, 
+                                                   mmat_size, &Lwork));
+   checkCudaErrors(cudaMallocAsync((void**)&workArray, Lwork*sizeof(cuDoubleComplex), stream));
+      
+   BigMat_allocated = true;
 }
 
 extern "C"
@@ -612,9 +631,9 @@ void allocate_sjgmatrix_gpu_() {
    if (initialized) {
       size_t size_bigmat = mmat_size * mmat_size * sizeof(cuDoubleComplex);
 
-      checkCudaErrors(cudaMalloc((void**)&sine_d, size_bigmat));
+      checkCudaErrors(cudaMallocAsync((void**)&sine_d, size_bigmat,stream));
 
-      checkCudaErrors(cudaMalloc((void**)&jinv_d, size_bigmat));
+      checkCudaErrors(cudaMallocAsync((void**)&jinv_d, size_bigmat,stream));
 
       sine_h = (double _Complex *) malloc(size_bigmat);
       memset(sine_h, 0, size_bigmat);    // set the host array to 0
@@ -625,11 +644,11 @@ void allocate_sjgmatrix_gpu_() {
       gij_h = (double _Complex *) malloc(size_bigmat);
       memset(gij_h, 0, size_bigmat);     // set the host array to 0
 
-      checkCudaErrors(cudaMalloc((void**)&gij_d, size_bigmat));
-      cudaMemset(gij_d, 0, size_bigmat); // set the device array to 0
+      checkCudaErrors(cudaMallocAsync((void**)&gij_d, size_bigmat,stream));
+      cudaMemsetAsync(gij_d, 0, size_bigmat, stream); // set the device array to 0
 
-      checkCudaErrors(cudaMalloc((void**)&jig_d, size_bigmat));
-      cudaMemset(jig_d, 0, size_bigmat); // set the device array to 0
+      checkCudaErrors(cudaMallocAsync((void**)&jig_d, size_bigmat,stream));
+      cudaMemsetAsync(jig_d, 0, size_bigmat, stream); // set the device array to 0
       
       SJG_allocated = true;
    }
@@ -711,22 +730,30 @@ void push_parameters_gpu_(int *lmax, int *lofk, int *kj3_size_1, int *kj3_size_2
 
 extern "C"
 void finalize_lsms_gpu_() {
+   if (!initialized) return; // FIXED: Prevent destroying uninitialized handles
+
    if (SJG_allocated) {
-      cudaFree(sine_d);
-      cudaFree(jinv_d);
-      cudaFree(gij_d);
-      cudaFree(jig_d);
+      checkCudaErrors(cudaFreeAsync(sine_d, stream));
+      checkCudaErrors(cudaFreeAsync(jinv_d, stream));
+      checkCudaErrors(cudaFreeAsync(gij_d, stream));
+      checkCudaErrors(cudaFreeAsync(jig_d, stream));
       free(sine_h);
       free(jinv_h);
       free(gij_h);
    }
    if (BigMat_allocated) {
-      cudaFree(BigMat_d);
-      cudaFree(pivotArray);
-      cudaFree(infoArray);
-      cudaFree(BigMatInv_d);
-      cudaFree(block_d);
+      checkCudaErrors(cudaFreeAsync(BigMat_d, stream));
+      checkCudaErrors(cudaFreeAsync(pivotArray, stream));
+      checkCudaErrors(cudaFreeAsync(infoArray, stream));
+      checkCudaErrors(cudaFreeAsync(BigMatInv_d, stream));
+      checkCudaErrors(cudaFreeAsync(block_d, stream));
+      checkCudaErrors(cudaFreeAsync(workArray, stream));
    }
+   // Ensure all frees complete before destroying stream
+   checkCudaErrors(cudaStreamSynchronize(stream));
+   checkCudaErrors(cudaStreamDestroy(stream));
+   checkCusolverErrors(cusolverDnDestroy(cusolverHandle));
+
    my_rank = -1;
    SJG_allocated = false;
    BigMat_allocated = false;
@@ -764,7 +791,7 @@ void init_bigmatrix_gpu_(int *b_size) {
    }
 
    // Stream per process for isolation; MPS will merge contexts for concurrency
-   checkCudaErrors(cudaStreamCreate(&stream));
+   // checkCudaErrors(cudaStreamCreate(&stream));
 
    // Define kernel launch parameters and set BigMat_d to be a unit matrix
    // ========================================
@@ -888,19 +915,10 @@ void commit_to_gpu_(int *mat_id) {
 
 extern "C"
 void construct_bigmatrix_gpu_(double _Complex *kappa) {
-//  cuDoubleComplex *jig_d;
-    cuDoubleComplex minus_one = make_cuDoubleComplex(-1.0, 0.0);
-    cuDoubleComplex one = make_cuDoubleComplex(1.0, 0.0);
-    cuDoubleComplex zero = make_cuDoubleComplex(0.0, 0.0);
+    const cuDoubleComplex one = make_cuDoubleComplex(1.0, 0.0);
+    const cuDoubleComplex zero = make_cuDoubleComplex(0.0, 0.0);
     double _Complex neg_kappa_inv = -1.0/(*kappa);
     cuDoubleComplex alpha = make_cuDoubleComplex(creal(neg_kappa_inv),cimag(neg_kappa_inv));
-    // std::complex<double> neg_kappa_inv = -1.0/(*kappa);
-    // cuDoubleComplex alpha = make_cuDoubleComplex(neg_kappa_inv.real(),neg_kappa_inv.imag());
-
-    size_t size = mmat_size * mmat_size * sizeof(cuDoubleComplex);
-
-    // Allocate device memory
-    // checkCudaErrors(cudaMalloc((void**)&jig_d, size));
 
     // Create cuBLAS handle
     cublasHandle_t handle;
@@ -921,79 +939,72 @@ void construct_bigmatrix_gpu_(double _Complex *kappa) {
                                   sine_d, mmat_size,
                                   &one, BigMat_d, mmat_size));
 
-    checkCudaErrors(cudaStreamSynchronize(stream));
+    // checkCudaErrors(cudaStreamSynchronize(stream));
 
     // Cleanup
-    // cudaFree(jig_d);
-    cublasDestroy(handle);
-    checkCudaErrors(cudaStreamDestroy(stream));
+    checkCublasErrors(cublasDestroy(handle));
+    // checkCudaErrors(cudaStreamDestroy(stream));
 }
 
 extern "C"
 void invert_bigmatrix_gpu_(double _Complex *block, int *block_size) {
-   // static cudaError_t error;
-   static int Lwork;
+   // static int Lwork;
 
    if (tau_size != *block_size) {
       fprintf(stderr,"\nError: tau_size <> block_size, %d,%d\n",tau_size,*block_size);
       exit(EXIT_FAILURE);
    }
 
-   clock_t t0;
-   double cpu_time;
-
-   cudaStream_t stream_loc;
-   checkCudaErrors(cudaStreamCreate(&stream_loc));
-
-   cusolverDnHandle_t cusolverHandle;
-   cusolverStatus_t cusolverStatus;
-   cusolverDnCreate(&cusolverHandle);
-   cusolverDnSetStream(cusolverHandle, stream_loc);  // assign rank-specific stream
-   cusolverDnZgetrf_bufferSize(cusolverHandle, mmat_size, mmat_size, BigMat_d, mmat_size, &Lwork);
+   // clock_t t0;
+   // double cpu_time;
 
    // Define kernel launch parameters and create a unit matrix on device
    // ========================================
-   t0 = clock();
+   // t0 = clock();
    int threads_per_block = 512;
-   int num_blocks = min((mmat_size*mmat_size + threads_per_block - 1)/threads_per_block/num_cpu_tasks,1024);
-   createUnitMatrixKernel<<<num_blocks, threads_per_block, 0, stream_loc>>>(BigMatInv_d, mmat_size);
+   int num_blocks = min((mmat_size*mmat_size + threads_per_block - 1)
+                        /threads_per_block/num_cpu_tasks,1024);
+   createUnitMatrixKernel<<<num_blocks, threads_per_block, 0, stream>>>(BigMatInv_d, mmat_size);
    checkCudaErrors(cudaPeekAtLastError());
 
-   cpu_time = ((double)(clock()-t0))/CLOCKS_PER_SEC;
-   if (my_rank == -1) {
-      fprintf(stdout,"\ncpu time for setting up unit matrix = %f sec\n",cpu_time);
-   }
+   // checkCudaErrors(cudaStreamSynchronize(stream));
+   // cpu_time = ((double)(clock()-t0))/CLOCKS_PER_SEC;
+   // if (my_rank == -1) {
+   //    fprintf(stdout,"\ncpu time for setting up unit matrix = %f sec\n",cpu_time);
+   // }
 
    // Create a working array on the device
    // ========================================
-   t0 = clock();
-   cuDoubleComplex  *workArray;
-   checkCudaErrors(cudaMalloc((void**)&workArray, Lwork*sizeof(cuDoubleComplex)));
+   // t0 = clock();
 
    // Perform matrix inverse on the device
    // ============================================
-   cusolverStatus = cusolverDnZgetrf(cusolverHandle, mmat_size, mmat_size, BigMat_d, mmat_size, 
-                                     workArray, pivotArray, infoArray);
-   if (cusolverStatus != CUSOLVER_STATUS_SUCCESS) {
-      fprintf(stdout,"\nError: cuSOLVER ZGETRF UNSUCCESSFUL! \n");
-   }
-   cudaFree(workArray);
-   cusolverStatus = cusolverDnZgetrs(cusolverHandle, CUBLAS_OP_N, mmat_size, mmat_size, BigMat_d, mmat_size, 
-                                     pivotArray, BigMatInv_d, mmat_size, infoArray); 
-   if (cusolverStatus != CUSOLVER_STATUS_SUCCESS) {
-      fprintf(stderr,"\nError: cuSOLVER ZGETRS UNSUCCESSFUL! \n");
-   }
+   // cusolverStatus_t cusolverStatus;
+   // cusolverStatus = cusolverDnZgetrf(cusolverHandle, mmat_size, mmat_size, BigMat_d, mmat_size, 
+   //                                   workArray, pivotArray, infoArray);
+   // if (cusolverStatus != CUSOLVER_STATUS_SUCCESS) {
+   //    fprintf(stdout,"\nError: cuSOLVER ZGETRF UNSUCCESSFUL! \n");
+   // }
+   checkCusolverErrors(cusolverDnZgetrf(cusolverHandle, mmat_size, mmat_size, BigMat_d, mmat_size, 
+                                        workArray, pivotArray, infoArray));
+   // cusolverStatus = cusolverDnZgetrs(cusolverHandle, CUBLAS_OP_N, mmat_size, mmat_size, BigMat_d, 
+   //                                   mmat_size, pivotArray, BigMatInv_d, mmat_size, infoArray); 
+   // if (cusolverStatus != CUSOLVER_STATUS_SUCCESS) {
+   //    fprintf(stderr,"\nError: cuSOLVER ZGETRS UNSUCCESSFUL! \n");
+   // }
+   checkCusolverErrors(cusolverDnZgetrs(cusolverHandle, CUBLAS_OP_N, mmat_size, mmat_size, BigMat_d, 
+                                        mmat_size, pivotArray, BigMatInv_d, mmat_size, infoArray)); 
 
-   cpu_time = ((double)(clock()-t0))/CLOCKS_PER_SEC;
-   if (my_rank == -1) {
-      fprintf(stdout,"\ncpu time for performing inverse = %f sec\n",cpu_time);
-   }
+   // cpu_time = ((double)(clock()-t0))/CLOCKS_PER_SEC;
+   // if (my_rank == -1) {
+   //    fprintf(stdout,"\ncpu time for performing inverse = %f sec\n",cpu_time);
+   // }
 
    // --------------------------------------------
    // Aggregate the data into block_d array and then make one cudaMemcpy call
    // --------------------------------------------
    // Define grid and block dimensions for the kernel
-   t0 = clock();
+   // t0 = clock();
    dim3 threadsPerBlock(32, 32); // Using a 32x32 block
 // dim3 blocksPerGrid(min((tau_size + threadsPerBlock.x - 1)/threadsPerBlock.x/num_cpu_tasks,32),
 //                    min((tau_size + threadsPerBlock.y - 1)/threadsPerBlock.y/num_cpu_tasks,32));
@@ -1001,19 +1012,20 @@ void invert_bigmatrix_gpu_(double _Complex *block, int *block_size) {
 
    // Launch the kernel
    // ============================================
-   copyBlockKernel<<<blocksPerGrid, threadsPerBlock,0,stream_loc>>>(BigMatInv_d, mmat_size, block_d, tau_size);
+   copyBlockKernel<<<blocksPerGrid, threadsPerBlock,0,stream>>>(BigMatInv_d, mmat_size, block_d, 
+                                                                tau_size);
    checkCudaErrors(cudaPeekAtLastError());
    checkCudaErrors(cudaMemcpyAsync(block, block_d, sizeof(cuDoubleComplex)*tau_size*tau_size, 
-                                   cudaMemcpyDeviceToHost,stream_loc));
+                                   cudaMemcpyDeviceToHost,stream));
 
    // clean up
    // ============================================
-   checkCudaErrors(cudaStreamSynchronize(stream_loc));
-   checkCudaErrors(cudaStreamDestroy(stream_loc));
-   cusolverDnDestroy(cusolverHandle);
+   checkCudaErrors(cudaStreamSynchronize(stream));
+   // checkCudaErrors(cudaStreamDestroy(stream_loc));
+   // cusolverDnDestroy(cusolverHandle);
 
-   cpu_time = ((double)(clock()-t0))/CLOCKS_PER_SEC;
-   if (my_rank == -1) {
-      fprintf(stdout,"cpu time for copying matrix block back to cpu = %f sec\n",cpu_time);
-   }
+   // cpu_time = ((double)(clock()-t0))/CLOCKS_PER_SEC;
+   // if (my_rank == -1) {
+   //    fprintf(stdout,"cpu time for copying matrix block back to cpu = %f sec\n",cpu_time);
+   // }
 }

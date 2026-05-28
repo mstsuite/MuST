@@ -6,22 +6,6 @@
 #include "acclib.hpp"
 #include "math.h"
 
-void check_cuda_error(cudaError_t result, char const *const func, const char *const file, int const line) {
-   if (result != cudaSuccess) {
-      fprintf(stderr, "\nCUDA Runtime Error at %s:%d code=%d(%s) \"%s\"\n", file, line,
-                      static_cast<unsigned int>(result), cudaGetErrorName(result), func);
-      exit(EXIT_FAILURE);
-   }
-}
-
-void check_cublas_error(cublasStatus_t status, char const *const func, const char *const file, int const line) {
-    if (status != CUBLAS_STATUS_SUCCESS) {
-       fprintf(stderr, "\ncuBLAS Runtime Error at %s:%d code=%d(%s) \"%s\"\n", file, line,
-                       static_cast<unsigned int>(status), cublasGetStatusString(status), func);
-       exit(EXIT_FAILURE);
-    }
-}
-
 extern "C"
 void get_node_resources_(int *my_pe, int *num_cpu_cores, int *num_gpu_cards, int *mem_gb){
     *num_cpu_cores = sysconf(_SC_NPROCESSORS_ONLN);    // available cores
