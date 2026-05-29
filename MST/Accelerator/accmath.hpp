@@ -103,4 +103,15 @@ __global__ void copySubBlockKernel(cuDoubleComplex *A, int nA, int i, int j, cuD
 
 void copySubBlockToMatrix(double _Complex *a, int *size_a, int *row, int *col, double _Complex *b, int *size_b);
 
+extern "C" void zcopy_(const int* n, const void* x, const int* incx, void* y, const int* incy);
+
+#ifndef cblas_zcopy
+#define cblas_zcopy(N, X, incX, Y, incY) do { \
+    int _n = (N); \
+    int _incx = (incX); \
+    int _incy = (incY); \
+    zcopy_(&_n, (X), &_incx, (Y), &_incy); \
+} while(0)
+#endif
+
 #endif

@@ -100,6 +100,8 @@ private
    logical :: ComputeBigMatrixOnGPU = .false.
    logical :: ComputeGijMatrixOnGPU = .false.
 !
+   integer (kind=IntKind) :: ConstructionMode = 0
+!
    logical :: ExchSSSmatAllocated = .false.
    logical :: istauij_needed = .false.
    logical :: TimingLSMS = .false.
@@ -158,6 +160,8 @@ contains
 !
    use CmdLineOptionModule, only : getCmdLineOption
 !
+   use TimerModule, only : getTime
+!
 #ifdef ACCEL
    use IntegerFactorsModule, only : lofk
    use GauntFactorsModule, only : getK3
@@ -179,6 +183,8 @@ contains
    character (len=*), intent(in) :: istop
 !
    real (kind=RealKind), intent(in) :: posi(3,num_latoms)
+!
+   real (kind=RealKind) :: t0
 !
    integer (kind=IntKind) :: lmax, i, j, max_nblck, kmaxns, bsz, n
    integer (kind=IntKind) :: wsTau00_size, pos_tau
@@ -541,14 +547,40 @@ contains
    endif
 !
    if (GPU_Offloading) then
+      if (getCmdLineOption('Constructing the LSMS Matrix without using blocks') == 0) then
+         ConstructionMode = 1
+         if (node_print_level >= 0) then
+            write(6,'(/,a,/)')'The construction of the LSMS matrix on GPU is performed without uing blocks.....'
+         endif
+      else
+         ConstructionMode = 0
+         if (node_print_level >= 0) then
+            write(6,'(/,a,/)')'The construction of the LSMS matrix on GPU is performed with block-by-block.....'
+         endif
+      endif
 !     ----------------------------------------------------------------
-      call init_lsms_gpu(dsize_max,isize_max,NumCPUTasksPerGPU,MyPEinGroup)
+      call init_lsms_gpu(n_spin_cant,dsize_max,isize_max,             &
+                         NumCPUTasksPerGPU,ConstructionMode,MyPEinGroup)
+      t0 = getTime()
       call allocate_bigmatrix_gpu()
+      if (TimingLSMS) then
+         if (node_print_level >= 0) then
+            write(6,'(a,t64,''='',f8.3,a)') &
+                     'Time for allocating KKR Matrix space on GPU',getTime()-t0,' sec'
+         endif
+      endif
 !     ----------------------------------------------------------------
       if (ComputeBigMatrixOnGPU) then
+         t0 = getTime()
 !        -------------------------------------------------------------
          call allocate_sjgmatrix_gpu()
 !        -------------------------------------------------------------
+         if (TimingLSMS) then
+            if (node_print_level >= 0) then
+               write(6,'(a,t64,''='',f8.3,a)') &
+                        'Time for allocating Sine, Jinv, and JG space on GPU',getTime()-t0,' sec'
+            endif
+         endif
          if (ComputeGijMatrixOnGPU) then
             allocate(position_array(3*(numnb_max+1)*LocalNumAtoms))
             allocate(numnb_array(LocalNumAtoms))
@@ -628,9 +660,13 @@ contains
 !
    use RSpaceStrConstModule, only : endRSpaceStrConst
 !
+   use TimerModule, only : getTime
+!
    implicit none
 !
    integer (kind=IntKind) :: i, j
+!
+   real (kind=RealKind) :: t0
 !
    if (.not.Initialized) then
       call ErrorHandler('endTauLSMS','Module not initialized')
@@ -686,7 +722,16 @@ contains
 !        -------------------------------------------------------------
       endif
 !     cumulative_gpu_energy = ZERO
+      t0 = getTime()
+!     ----------------------------------------------------------------
       call finalize_lsms_gpu()
+!     ----------------------------------------------------------------
+      if (TimingLSMS) then
+         if (node_print_level >= 0) then
+            write(6,'(a,t64,''='',f8.3,a,/)') &
+                     'Time for deallocating KKR Matrix space on GPU',getTime()-t0,' sec'
+         endif
+      endif
       if (ComputeGijMatrixOnGPU) then
          deallocate(position_array, numnb_array)
       endif
@@ -1361,22 +1406,24 @@ contains
 !        endif
 !        --------------------------------------------------------------
          if (ComputeGijMatrixOnGPU) then
-            t0 = getTime()
-!           -----------------------------------------------------------
-            call calculate_gij_gpu(kappa,n_spin_cant,numnb_max,my_atom,      &
-                                   Neighbor%NumAtoms,lmax_kkr(my_atom))
-!           -----------------------------------------------------------
-            if (TimingLSMS) then
-               t1 = getTime() - t0
+            if (ConstructionMode == 1) then
+               t0 = getTime()
 !              --------------------------------------------------------
-               call checkinTiming('Calculate the Gij matrix',t1)
+               call calculate_gij_gpu(kappa,numnb_max,my_atom,            &
+                                      Neighbor%NumAtoms,lmax_kkr(my_atom))
 !              --------------------------------------------------------
-               if (node_print_level >= 0) then
-                  if (LocalNumAtoms == 1) then
-                     write(6,'(a,t64,''='',f8.3)')'Time for calculatig Gij on GPU',t1
-                  else
-                     write(6,'(a,1i2,a,t64,''='',f8.3,a)') &
-                        'For atom : ',my_atom,', time for calculatig Gij on GPU',t1,' sec'
+               if (TimingLSMS) then
+                  t1 = getTime() - t0
+!                 -----------------------------------------------------
+                  call checkinTiming('Calculate the Gij matrix',t1)
+!                 -----------------------------------------------------
+                  if (node_print_level >= 0) then
+                     if (LocalNumAtoms == 1) then
+                        write(6,'(a,t64,''='',f8.3)')'Time for calculatig Gij on GPU',t1
+                     else
+                        write(6,'(a,1i2,a,t64,''='',f8.3,a)') &
+                           'For atom : ',my_atom,', time for calculatig Gij on GPU',t1,' sec'
+                     endif
                   endif
                endif
             endif
@@ -1460,7 +1507,7 @@ contains
 !                       -----------------------------------------------
                      else
 !                       -----------------------------------------------
-                        call push_gij_matrix_gpu(n_spin_cant,iri,irj,gij,kkri)
+                        call push_gij_matrix_gpu(iri,irj,gij,kkri)
 !                       -----------------------------------------------
                      endif
                   endif
@@ -1488,7 +1535,8 @@ contains
 !        --------------------------------------------------------------
          t0 = getTime()
 !        --------------------------------------------------------------
-         call construct_bigmatrix_gpu(kappa)
+         call construct_bigmatrix_gpu(kappa,numnb_max,my_atom,         &
+                                      Neighbor%NumAtoms,lmax_kkr(my_atom))
 !        --------------------------------------------------------------
          if (TimingLSMS) then
             t1 = getTime()-t0

@@ -37,11 +37,15 @@
               OptionKeys(n)='Timing the LSMS Matrix Calculations'
               OptionValues(n) = '-1'
 !
+   n = n + 1; Options(1,n)='-nbc';  Options(2,n)='--no-blocking-constr'; Options(3,n)='--no_blocking_constr'
+              OptionKeys(n)='Constructing the LSMS Matrix without using blocks'
+              OptionValues(n) = '-1'
+!
    n = n + 1; Options(1,n)='-pb';  Options(2,n)='--print-blocking'; Options(3,n)='--print_blocking'
               OptionKeys(n)='Print Blocking Details in LSMS Matrix Inverse'
               OptionValues(n) = '-1'
 !
-   n = n + 1; Options(1,n)='-nb';  Options(2,n)='--no-blocking'; Options(3,n)='--no_blocking'
+   n = n + 1; Options(1,n)='-nbi';  Options(2,n)='--no-blocking-inverse'; Options(3,n)='--no_blocking_inverse'
               OptionKeys(n)='The LSMS Matrix Inverse is Performed without Blocking'
               OptionValues(n) = '-1'
 !

@@ -102,6 +102,123 @@ __global__ void computeSphericalHarmonicsKernel(int liz_max,
 // free(Plm);
 }
 
+__device__ cuDoubleComplex get_gij_d(int ip, int jp, int ki, int kj,
+                                     cuDoubleComplex kappa_d, int liz_max,
+                                     int aid, int lmax,
+                                     int MaxJ3, int cgnt_kmax,
+                                     const double *p_posi_d, 
+                                     const int* p_lofk_d, 
+                                     const int* p_nj3_d, 
+                                     const int* p_kj3_d, 
+                                     const double* p_cgnt_d,
+                                     const cuDoubleComplex* p_Ylm_d) {
+    const double pi4=3.14159265358979*4.0;
+    cuDoubleComplex ylmcc[289]; // (lmax_max+1)**2=289
+    cuDoubleComplex dlm[289];
+    cuDoubleComplex hfn[17]; // lmax_max+1=17
+    cuDoubleComplex i2l[17]; // lmax_max+1=17
+    cuDoubleComplex pi4c = make_cuDoubleComplex(pi4, 0.0);
+    cuDoubleComplex czero = make_cuDoubleComplex(0.0, 0.0);
+    cuDoubleComplex cone = make_cuDoubleComplex(1.0, 0.0);
+    cuDoubleComplex sqrtm1 = make_cuDoubleComplex(0.0, 1.0);
+    cuDoubleComplex neg_sqrtm1 = make_cuDoubleComplex(0.0, -1.0);
+
+    i2l[0] = cone;
+    for (int l=1; l<=lmax_max; l++) {
+       i2l[l] = cuCmul(sqrtm1,i2l[l-1]);
+    }
+
+    cuDoubleComplex gij = czero; 
+
+    int ni = (aid - 1) * liz_max * 3 + 3 * ip;
+    int nj = (aid - 1) * liz_max * 3 + 3 * jp;
+    double x = p_posi_d[nj]     - p_posi_d[ni];
+    double y = p_posi_d[nj + 1] - p_posi_d[ni + 1];
+    double z = p_posi_d[nj + 2] - p_posi_d[ni + 2];
+    cuDoubleComplex rmag = make_cuDoubleComplex(sqrt(x * x + y * y + z * z), 0.0);
+
+    cuDoubleComplex kr = cuCmul(kappa_d, rmag);
+    int lmax_dlm = 2 * lmax;
+    int kmax_dlm = (lmax_dlm + 1) * (lmax_dlm + 1);
+
+    int num_pairs = liz_max * liz_max;
+    int n = (aid - 1) * num_pairs * kmax_dlm + jp * liz_max * kmax_dlm + ip * kmax_dlm;
+    for (int kl = 0; kl < kmax_dlm; kl++) {
+        ylmcc[kl] = cuConj(p_Ylm_d[n + kl]);
+    }
+
+    hfn[0] = neg_sqrtm1;
+    if (lmax_dlm > 0) {
+        hfn[1] = cuCsub(czero, cuCadd(cone, cuCdiv(sqrtm1, kr)));
+        for (int l = 2; l <= lmax_dlm; l++) {
+            cuDoubleComplex cfac = make_cuDoubleComplex(2.0 * l - 1.0, 0.0);
+            hfn[l] = cuCsub(cuCdiv(cuCmul(cfac, hfn[l - 1]), kr), hfn[l - 2]);
+        }
+    }
+
+    // ==========================================================
+    // generate the KKR real space lattice structure matrix for
+    // the energy and store result in gij
+    // ==========================================================
+    cuDoubleComplex cz = cuCdiv(cuCexp(cuCmul(sqrtm1, kr)), rmag);
+    for (int kl = 0; kl < kmax_dlm; kl++) {
+        int l = p_lofk_d[kl];
+        cuDoubleComplex ilp1 = cuCmul(i2l[l], sqrtm1);
+        cuDoubleComplex cfac = cuCdiv(cuCmul(hfn[l], cz), ilp1);
+        dlm[kl] = cuCmul(cfac, ylmcc[kl]);
+    }
+
+    n = ki * cgnt_kmax + kj;
+    int nnj3 = p_nj3_d[n];
+    int nc = ki * MaxJ3 * cgnt_kmax + kj * MaxJ3;
+    cuDoubleComplex gij_llp = czero;
+    for (int j = 0; j < nnj3; j++) {
+        int pkj3 = p_kj3_d[nc + j] - 1;
+        cuDoubleComplex c = make_cuDoubleComplex(p_cgnt_d[nc + j], 0.0);
+        gij_llp = cuCadd(gij_llp, cuCmul(c, dlm[pkj3]));
+    }
+    int lp = p_lofk_d[kj];
+    int l  = p_lofk_d[ki];
+    cuDoubleComplex c = cuCdiv(i2l[l], i2l[lp]);
+    gij = cuCmul(cuCmul(pi4c, c), gij_llp);
+
+    return gij;
+}
+
+
+__global__ void computeGijBlockKernel(int ip, int jp, 
+                                      cuDoubleComplex kappa_d, int liz_max,
+                                      int aid, int bsize, int lmax,
+                                      int MaxJ3, int cgnt_kmax,
+                                      double *p_posi_d, 
+                                      int *p_lofk_d, 
+                                      int *p_nj3_d, 
+                                      int *p_kj3_d,
+                                      double *p_cgnt_d,
+                                      cuDoubleComplex *p_Ylm_d,
+                                      cuDoubleComplex *p_gij_d) {
+   int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+   // bsize = block matrix size
+   for (size_t idx = tid; idx < bsize*bsize; idx += blockDim.x*gridDim.x) {
+      int kj = idx/bsize;    // kj = column-wise kl index - 1
+      int ki = idx%bsize;    // ki = row-wise kl index - 1
+      cuDoubleComplex gij = get_gij_d(ip, jp, ki, kj,
+                                      kappa_d, liz_max,
+                                      aid, lmax,
+                                      MaxJ3, cgnt_kmax,
+                                      p_posi_d, 
+                                      p_lofk_d, 
+                                      p_nj3_d, 
+                                      p_kj3_d, 
+                                      p_cgnt_d,
+                                      p_Ylm_d);
+      p_gij_d[idx] = gij;
+   }
+   __syncthreads();
+}
+
+
 __global__ void computeGijKernel(cuDoubleComplex kappa_d, int liz_max,
                                  int aid, int liz_size, int dsize, int lmax, int cant,
                                  int MaxJ3, int cgnt_kmax,
@@ -112,21 +229,21 @@ __global__ void computeGijKernel(cuDoubleComplex kappa_d, int liz_max,
                                  double *p_cgnt_d,
                                  cuDoubleComplex *p_Ylm_d,
                                  cuDoubleComplex *p_gij_d) {
-   const double pi4=3.14159265358979*4.0;
-   cuDoubleComplex ylmcc[289]; // (lmax_max+1)**2=289
-   cuDoubleComplex dlm[289];
-   cuDoubleComplex hfn[17]; // lmax_max+1=17
-   cuDoubleComplex i2l[17]; // lmax_max+1=17
-   cuDoubleComplex pi4c = make_cuDoubleComplex(pi4, 0.0);
-   cuDoubleComplex czero = make_cuDoubleComplex(0.0, 0.0);
-   cuDoubleComplex cone = make_cuDoubleComplex(1.0, 0.0);
-   cuDoubleComplex sqrtm1 = make_cuDoubleComplex(0.0, 1.0);
-   cuDoubleComplex neg_sqrtm1 = make_cuDoubleComplex(0.0, -1.0);
+// const double pi4=3.14159265358979*4.0;
+// cuDoubleComplex ylmcc[289]; // (lmax_max+1)**2=289
+// cuDoubleComplex dlm[289];
+// cuDoubleComplex hfn[17]; // lmax_max+1=17
+// cuDoubleComplex i2l[17]; // lmax_max+1=17
+// cuDoubleComplex pi4c = make_cuDoubleComplex(pi4, 0.0);
+// cuDoubleComplex czero = make_cuDoubleComplex(0.0, 0.0);
+// cuDoubleComplex cone = make_cuDoubleComplex(1.0, 0.0);
+// cuDoubleComplex sqrtm1 = make_cuDoubleComplex(0.0, 1.0);
+// cuDoubleComplex neg_sqrtm1 = make_cuDoubleComplex(0.0, -1.0);
 
-   i2l[0] = cone;
-   for (int l=1; l<=lmax_max; l++) {
-      i2l[l] = cuCmul(sqrtm1,i2l[l-1]);
-   }
+// i2l[0] = cone;
+// for (int l=1; l<=lmax_max; l++) {
+//    i2l[l] = cuCmul(sqrtm1,i2l[l-1]);
+// }
 
    int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -141,6 +258,7 @@ __global__ void computeGijKernel(cuDoubleComplex kappa_d, int liz_max,
       int ki = (m%dsize)%kmax; // ki = row-wise kl index - 1
 
       if (ip != jp && ip < liz_size && jp < liz_size) {
+/* ===================================================================
          int ni = (aid-1)*liz_max*3 + 3*ip;
          int nj = (aid-1)*liz_max*3 + 3*jp;
          double x = p_posi_d[nj]   - p_posi_d[ni];
@@ -158,14 +276,6 @@ __global__ void computeGijKernel(cuDoubleComplex kappa_d, int liz_max,
             ylmcc[kl] = cuConj(p_Ylm_d[n+kl]);
          }
 
-         // z=kappa*rmag
-         // hfn(0)=-sqrtm1
-         // if ( lmax_dlm > 0 ) then
-         //    hfn(1)=-(cone+sqrtm1/z)
-         //    do l=2,lmax_dlm
-         //       hfn(l)=(2*l-1)*hfn(l-1)/z - hfn(l-2)
-         //    enddo
-         // endif
          hfn[0]=neg_sqrtm1;
          if ( lmax_dlm > 0 ) {
             hfn[1] = cuCsub(czero,cuCadd(cone,cuCdiv(sqrtm1,kr)));
@@ -182,13 +292,6 @@ __global__ void computeGijKernel(cuDoubleComplex kappa_d, int liz_max,
          //    fac = -i   *h (k*R  )*sqrt(E)
          //                 l    ij
          // ==========================================================
-         //   z = exp(sqrtm1*z)/rmag
-         //   do kl = 1,kmax_dlm
-         //      l =lofk(kl)
-         //      fac =  hfn(l)*z/ilp1(l)
-         //      dlm(kl) = fac*ylmcc(kl)
-         //   enddo
-         // ==========================================================
          cuDoubleComplex cz =cuCdiv(cuCexp(cuCmul(sqrtm1,kr)),rmag);
          for (int kl=0; kl<kmax_dlm; kl++) {
             int l = p_lofk_d[kl];
@@ -197,32 +300,6 @@ __global__ void computeGijKernel(cuDoubleComplex kappa_d, int liz_max,
             dlm[kl] = cuCmul(cfac,ylmcc[kl]);
          }
 
-         // ==========================================================
-         // loop over klp.............................................
-         // do klp=1,kmaxj
-         //    lp=lofk(klp)
-         //    =======================================================
-         //    loop over kl...........................................
-         //    =======================================================
-         //    do kl=1,kmaxi
-         //       l=lofk(kl)
-         //       ====================================================
-         //                     l-lp
-         //       illp(l,lp) = i
-         //
-         //       perform sum over j with gaunt # ....................
-         //       ====================================================
-         //       nnj3 = nj3(klp,kl)
-         //       pkj3 => kj3(1:nnj3,klp,kl)
-         //       pcgnt=> cgnt(1:nnj3,klp,kl)
-         //       gij_llp = CZERO
-         //       do j = 1,nnj3
-         //          gij_llp = gij_llp+pcgnt(j)*dlm(pkj3(j))
-         //       enddo
-         //       gij(kl,klp)=pi4*illp(kl,klp)*gij_llp
-         //    enddo
-         // enddo
-         // ==========================================================
          n = ki*cgnt_kmax+kj;
          int nnj3 = p_nj3_d[n];
          int nc = ki*MaxJ3*cgnt_kmax+kj*MaxJ3;
@@ -237,178 +314,25 @@ __global__ void computeGijKernel(cuDoubleComplex kappa_d, int liz_max,
          int l  = p_lofk_d[ki];
          cuDoubleComplex c = cuCdiv(i2l[l],i2l[lp]);
          cuDoubleComplex gij = cuCmul(cuCmul(pi4c,c),gij_llp);
+=======================================================================*/
+         cuDoubleComplex gij = get_gij_d(ip, jp, ki, kj,
+                                         kappa_d, liz_max,
+                                         aid, lmax,
+                                         MaxJ3, cgnt_kmax,
+                                         p_posi_d, 
+                                         p_lofk_d, 
+                                         p_nj3_d, 
+                                         p_kj3_d, 
+                                         p_cgnt_d,
+                                         p_Ylm_d);
          if (cant == 1) {
             p_gij_d[idx] = gij;
          }
          else {
-            n = jp*dsize*cant*kmax*cant+kj*dsize*cant+ip*kmax*cant+ki;
+            int n = jp*dsize*cant*kmax*cant+kj*dsize*cant+ip*kmax*cant+ki;
             p_gij_d[n] = gij;
-         // p_gij_d[n+kmax] = czero;
-         // p_gij_d[n+kmax*dsize*cant] = czero;
             p_gij_d[n+kmax*dsize*cant+kmax] = gij;
          }
-      }
-/*
-      else {
-         if (cant == 1) {
-            p_gij_d[idx] = czero;
-         }
-         else {
-            int n = jp*dsize*cant*kmax*cant+kj*dsize*cant+ip*kmax*cant+ki;
-            p_gij_d[n] = czero;
-            p_gij_d[n+kmax] = czero;
-            p_gij_d[n+kmax*dsize*cant] = czero;
-            p_gij_d[n+kmax*dsize*cant+kmax] = czero;
-         }
-      }
-*/
-   }
-   __syncthreads();
-}
-
-__global__ void calculateGijKernel(cuDoubleComplex kappa_d, int liz_max,
-                                   int aid, int liz_size, int dsize, int lmax, int cant,
-                                   int MaxJ3, int cgnt_kmax,
-                                   double *p_posi_d, 
-                                   int *p_lofk_d, 
-                                   int *p_nj3_d, 
-                                   int *p_kj3_d,
-                                   double *p_cgnt_d,
-                                   cuDoubleComplex *p_Ylm_d,
-                                   cuDoubleComplex *p_gij_d) {
-   const double pi4=3.14159265358979*4.0;
-   cuDoubleComplex ylmcc[289]; // (lmax_max+1)**2=289
-   cuDoubleComplex dlm[289];
-   cuDoubleComplex hfn[17]; // lmax_max+1=17
-   cuDoubleComplex i2l[17]; // lmax_max+1=17
-   cuDoubleComplex pi4c = make_cuDoubleComplex(pi4, 0.0);
-   cuDoubleComplex czero = make_cuDoubleComplex(0.0, 0.0);
-   cuDoubleComplex cone = make_cuDoubleComplex(1.0, 0.0);
-   cuDoubleComplex sqrtm1 = make_cuDoubleComplex(0.0, 1.0);
-   cuDoubleComplex neg_sqrtm1 = make_cuDoubleComplex(0.0, -1.0);
-
-   i2l[0] = cone;
-   for (int l=1; l<=lmax_max; l++) {
-      i2l[l] = cuCmul(sqrtm1,i2l[l-1]);
-   }
-
-   // int idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-   int tid = blockIdx.x * blockDim.x + threadIdx.x;
-
-   // dsize = big matrix size
-   for (size_t idx = tid; idx < dsize*dsize; idx += blockDim.x*gridDim.x) {
-   // if (idx < dsize*dsize) {
-      int kmax    = (lmax+1)*(lmax+1);
-      int kmax_ns = kmax*cant;
-      int NK      = dsize*kmax_ns;
-      int jp      = idx/NK;             // jp = column-wise atom index (starts from 0)
-      int MK      = idx%NK;
-      int m       = MK/dsize;           // kj = column-wise kl index - 1
-      int jcant   = m/kmax;             // jcant = 0, 1
-      int kj      = m%kmax;             // kj = column-wise kl index - 1
-      int ip      = (MK%dsize)/kmax_ns; // ip = row-wise atom index (starts from 0)
-      int n       = (MK%dsize)%kmax_ns; //
-      int icant   = n/kmax;             // icant = 0, 1
-      int ki      = n%kmax;             // ki = row-wise kl index - 1
-
-      if (ip != jp && icant == jcant && ip < liz_size && jp < liz_size) {
-         int ni = (aid-1)*liz_max*3 + 3*ip;
-         int nj = (aid-1)*liz_max*3 + 3*jp;
-         double x = p_posi_d[nj]   - p_posi_d[ni];
-         double y = p_posi_d[nj+1] - p_posi_d[ni+1];
-         double z = p_posi_d[nj+2] - p_posi_d[ni+2];
-         cuDoubleComplex rmag = make_cuDoubleComplex(sqrt(x*x+y*y+z*z),0.0);
-
-         cuDoubleComplex kr = cuCmul(kappa_d,rmag);
-         int lmax_dlm = 2*lmax;
-         int kmax_dlm = (lmax_dlm+1)*(lmax_dlm+1);
-
-         int num_pairs = liz_max*liz_max;
-         n = (aid-1)*num_pairs*kmax_dlm + jp*liz_max*kmax_dlm + ip*kmax_dlm;
-         for (int kl=0; kl<kmax_dlm; kl++) {
-            ylmcc[kl] = cuConj(p_Ylm_d[n+kl]);
-         }
-
-         // z=kappa*rmag
-         // hfn(0)=-sqrtm1
-         // if ( lmax_dlm > 0 ) then
-         //    hfn(1)=-(cone+sqrtm1/z)
-         //    do l=2,lmax_dlm
-         //       hfn(l)=(2*l-1)*hfn(l-1)/z - hfn(l-2)
-         //    enddo
-         // endif
-         hfn[0]=neg_sqrtm1;
-         if ( lmax_dlm > 0 ) {
-            hfn[1] = cuCsub(czero,cuCadd(cone,cuCdiv(sqrtm1,kr)));
-            for (int l=2; l <= lmax_dlm; l++) {
-               cuDoubleComplex cfac = make_cuDoubleComplex(2.0*l-1.0,0.0);
-               hfn[l] = cuCsub(cuCdiv(cuCmul(cfac,hfn[l-1]),kr),hfn[l-2]);
-            }
-         }
-         // ==========================================================
-         // generate the KKR real space lattice structure matrix for
-         // the energy and store result in gij
-         //
-         //            l+1
-         //    fac = -i   *h (k*R  )*sqrt(E)
-         //                 l    ij
-         // ==========================================================
-         //   z = exp(sqrtm1*z)/rmag
-         //   do kl = 1,kmax_dlm
-         //      l =lofk(kl)
-         //      fac =  hfn(l)*z/ilp1(l)
-         //      dlm(kl) = fac*ylmcc(kl)
-         //   enddo
-         // ==========================================================
-         cuDoubleComplex cz =cuCdiv(cuCexp(cuCmul(sqrtm1,kr)),rmag);
-         for (int kl=0; kl<kmax_dlm; kl++) {
-            int l = p_lofk_d[kl];
-            cuDoubleComplex ilp1 = cuCmul(i2l[l],sqrtm1);
-            cuDoubleComplex cfac = cuCdiv(cuCmul(hfn[l],cz),ilp1);
-            dlm[kl] = cuCmul(cfac,ylmcc[kl]);
-         }
-
-         // ==========================================================
-         // loop over klp.............................................
-         // do klp=1,kmaxj
-         //    lp=lofk(klp)
-         //    =======================================================
-         //    loop over kl...........................................
-         //    =======================================================
-         //    do kl=1,kmaxi
-         //       l=lofk(kl)
-         //       ====================================================
-         //                     l-lp
-         //       illp(l,lp) = i
-         //
-         //       perform sum over j with gaunt # ....................
-         //       ====================================================
-         //       nnj3 = nj3(klp,kl)
-         //       pkj3 => kj3(1:nnj3,klp,kl)
-         //       pcgnt=> cgnt(1:nnj3,klp,kl)
-         //       gij_llp = CZERO
-         //       do j = 1,nnj3
-         //          gij_llp = gij_llp+pcgnt(j)*dlm(pkj3(j))
-         //       enddo
-         //       gij(kl,klp)=pi4*illp(kl,klp)*gij_llp
-         //    enddo
-         // enddo
-         // ==========================================================
-         n = ki*cgnt_kmax+kj;
-         int nnj3 = p_nj3_d[n];
-         int nc = ki*MaxJ3*cgnt_kmax+kj*MaxJ3;
-         cuDoubleComplex gij_llp = czero;
-         for (int j=0; j<nnj3; j++) {
-            int pkj3 = p_kj3_d[nc+j]-1;
-            cuDoubleComplex c = make_cuDoubleComplex(p_cgnt_d[nc+j],0.0);
-            gij_llp = cuCadd(gij_llp,cuCmul(c,dlm[pkj3]));
-         }
-         int lp = p_lofk_d[kj];
-         int l  = p_lofk_d[ki];
-         cuDoubleComplex c = cuCdiv(i2l[l],i2l[lp]);
-         cuDoubleComplex gij = cuCmul(cuCmul(pi4c,c),gij_llp);
-         p_gij_d[idx] = gij;
       }
    }
    __syncthreads();
@@ -420,8 +344,11 @@ bool Ylm_allocated = false;
 bool param_pushed = false;
 bool initialized = false;
 
-int tau_size = 0;
-int mmat_size = 0;
+int lsms_construction_mode = 0;
+
+int n_spin_cant = 0;
+int tau_size = 0;  // includes a factor of n_spin_cant
+int mmat_size = 0; // includes a factor of n_spin_cant
 int num_cpu_tasks = 0;
 int my_rank = -1;
 
@@ -461,7 +388,7 @@ void runYlmOverLIZ(int na, int liz_max, int l_max) {
       // Define kernel launch parameters
       int N_size = na*liz_max*liz_max;
       int threadsPerBlock = 256;
-      int numBlocks = min((N_size + threadsPerBlock - 1) / threadsPerBlock / num_cpu_tasks, 512);
+      int numBlocks = max(1,min((N_size + threadsPerBlock - 1) / threadsPerBlock / num_cpu_tasks, 512));
 
 //    testKernel<<<numBlocks, threadsPerBlock>>>(N_size,lofk_d,posi_d);
 //    checkCudaErrors(cudaDeviceSynchronize());
@@ -478,7 +405,7 @@ void runYlmOverLIZ(int na, int liz_max, int l_max) {
 }
 
 extern "C"
-void calculate_gij_gpu_(double _Complex *kappa, int *n_spin_cant, int *numnb_max, 
+void calculate_gij_gpu_(double _Complex *kappa, int *numnb_max, 
                         int *ia, int *num_nbs, int *lmax_kkr) {
    if (!SJG_allocated) {
       fprintf(stderr, "\nError in calculate_gij_gpu: Needs to call allocate_gijmatrix_gpu first.\n");
@@ -494,29 +421,17 @@ void calculate_gij_gpu_(double _Complex *kappa, int *n_spin_cant, int *numnb_max
    int aid = *ia;
    int liz_size = *num_nbs+1;
    int lmax = *lmax_kkr;
-   int cant = *n_spin_cant;
 
    cuDoubleComplex kappa_d = make_cuDoubleComplex(creal(*kappa),cimag(*kappa));
 
-   int dsize = liz_size*(lmax+1)*(lmax+1); // = big matrix rank/cant
+   int dsize = liz_size*(lmax+1)*(lmax+1); // = big matrix rank/n_spin_cant
    // Define kernel launch parameters
    int threadsPerBlock = 256;
-   int numBlocks = min((dsize*dsize + threadsPerBlock - 1) / threadsPerBlock / num_cpu_tasks,512);
+   int numBlocks = max(1,min((dsize*dsize + threadsPerBlock - 1) / threadsPerBlock / num_cpu_tasks,512));
    // Launch the kernel
-//computeGijKernel<<<numBlocks,threadsPerBlock>>>(kappa_d,liz_max,aid,liz_size,dsize,lmax,cant,kj3_MaxJ3,kj3_kmax,
    computeGijKernel<<<numBlocks,threadsPerBlock,0,stream>>>
-                    (kappa_d,liz_max,aid,liz_size,dsize,lmax,cant,kj3_MaxJ3,kj3_kmax,
+                    (kappa_d,liz_max,aid,liz_size,dsize,lmax,n_spin_cant,kj3_MaxJ3,kj3_kmax,
                                                    posi_d,lofk_d,nj3_d,kj3_d,cgnt_d,Ylm_d,gij_d);
-
-/*
-   int dsize = liz_size*(lmax+1)*(lmax+1)*cant; // = big matrix rank
-   // Define kernel launch parameters
-   int threadsPerBlock = 256;
-   int numBlocks = (dsize*dsize + threadsPerBlock - 1) / threadsPerBlock;
-   // Launch the kernel
-   calculateGijKernel<<<numBlocks,threadsPerBlock>>>(kappa_d,liz_max,aid,liz_size,dsize,lmax,cant,kj3_MaxJ3,kj3_kmax,
-                                                     posi_d,lofk_d,nj3_d,kj3_d,cgnt_d,Ylm_d,gij_d);
-*/
 
    checkCudaErrors(cudaDeviceSynchronize());
 // checkCudaErrors(cudaGetLastError()); // Check for launch errors
@@ -550,11 +465,13 @@ void get_gij_from_gpu_(int *ip, int *jp, int *lmax, double _Complex *gij) {
 }
 
 extern "C"
-void init_lsms_gpu_(int *dsize, int *block_size, int *ntasks, int *my_pe) {
+void init_lsms_gpu_(int *cant, int *dsize, int *block_size, int *ntasks, int *cmode, int *my_pe) {
    if (!initialized) {
+      n_spin_cant = *cant;
       mmat_size = *dsize;
       tau_size = *block_size;
       num_cpu_tasks = *ntasks;
+      lsms_construction_mode = *cmode;
       my_rank = *my_pe;
  
       if (mmat_size <= 1) {
@@ -629,7 +546,14 @@ void allocate_bigmatrix_gpu_() {
 extern "C"
 void allocate_sjgmatrix_gpu_() {
    if (initialized) {
-      size_t size_bigmat = mmat_size * mmat_size * sizeof(cuDoubleComplex);
+      size_t size_bigmat;
+      // Note: both mmat_size and tau_size contain a factor of n_spin_cant
+      if (lsms_construction_mode == 0) {
+         size_bigmat = mmat_size * tau_size  * sizeof(cuDoubleComplex);
+      }
+      else {
+         size_bigmat = mmat_size * mmat_size * sizeof(cuDoubleComplex);
+      }
 
       checkCudaErrors(cudaMallocAsync((void**)&sine_d, size_bigmat,stream));
 
@@ -641,14 +565,29 @@ void allocate_sjgmatrix_gpu_() {
       jinv_h = (double _Complex *) malloc(size_bigmat);
       memset(jinv_h, 0, size_bigmat);    // set the host array to 0
 
-      gij_h = (double _Complex *) malloc(size_bigmat);
-      memset(gij_h, 0, size_bigmat);     // set the host array to 0
+      if (lsms_construction_mode == 0) {
+         size_t size_block;
 
-      checkCudaErrors(cudaMallocAsync((void**)&gij_d, size_bigmat,stream));
-      cudaMemsetAsync(gij_d, 0, size_bigmat, stream); // set the device array to 0
+      // int bsize = tau_size / n_spin_cant;
+      // size_block = bsize * bsize * sizeof(cuDoubleComplex);
+      // checkCudaErrors(cudaMallocAsync((void**)&gij_d, size_block,stream));
+      // cudaMemsetAsync(gij_d, 0, size_block, stream); // set the device array to 0
+         gij_d = BigMatInv_d;
 
-      checkCudaErrors(cudaMallocAsync((void**)&jig_d, size_bigmat,stream));
-      cudaMemsetAsync(jig_d, 0, size_bigmat, stream); // set the device array to 0
+         size_block = tau_size * tau_size * sizeof(cuDoubleComplex);
+         checkCudaErrors(cudaMallocAsync((void**)&jig_d, size_block,stream));
+         cudaMemsetAsync(jig_d, 0, size_block, stream); // set the device array to 0
+      }
+      else {
+         gij_h = (double _Complex *) malloc(size_bigmat);
+         memset(gij_h, 0, size_bigmat);     // set the host array to 0
+
+         checkCudaErrors(cudaMallocAsync((void**)&gij_d, size_bigmat,stream));
+         cudaMemsetAsync(gij_d, 0, size_bigmat, stream); // set the device array to 0
+
+         checkCudaErrors(cudaMallocAsync((void**)&jig_d, size_bigmat,stream));
+         cudaMemsetAsync(jig_d, 0, size_bigmat, stream); // set the device array to 0
+      }
       
       SJG_allocated = true;
    }
@@ -735,7 +674,12 @@ void finalize_lsms_gpu_() {
    if (SJG_allocated) {
       checkCudaErrors(cudaFreeAsync(sine_d, stream));
       checkCudaErrors(cudaFreeAsync(jinv_d, stream));
-      checkCudaErrors(cudaFreeAsync(gij_d, stream));
+      if (lsms_construction_mode == 0) {
+         gij_d = nullptr;
+      }
+      else {
+         checkCudaErrors(cudaFreeAsync(gij_d, stream));
+      }
       checkCudaErrors(cudaFreeAsync(jig_d, stream));
       free(sine_h);
       free(jinv_h);
@@ -796,7 +740,7 @@ void init_bigmatrix_gpu_(int *b_size) {
    // Define kernel launch parameters and set BigMat_d to be a unit matrix
    // ========================================
    int threads_per_block = 512;
-   int num_blocks = (mmat_size*mmat_size + threads_per_block - 1) / threads_per_block;
+   int num_blocks = max(1,(mmat_size*mmat_size + threads_per_block - 1) / threads_per_block);
    createUnitMatrixKernel<<<num_blocks, threads_per_block>>>(BigMat_d, mmat_size);
    checkCudaErrors(cudaPeekAtLastError());
 }
@@ -809,7 +753,13 @@ void push_submatrix_gpu_(int *mat_id, int *row, int *col, double _Complex *mat, 
    }
    else if (*mat_id == 1) {
       if (SJG_allocated) {
-         copySubBlockToMatrix(mat,msize,row,col,sine_h,&mmat_size);
+         if (lsms_construction_mode == 0) {
+            double _Complex *p_sine_h = sine_h + tau_size*tau_size * *row;
+            cblas_zcopy(tau_size*tau_size, mat, 1, p_sine_h, 1);
+         }
+         else {
+            copySubBlockToMatrix(mat,msize,row,col,sine_h,&mmat_size);
+         }
       }
       else {
          fprintf(stderr,"\nError: sine matrix is not allocated on CPU/GPU\n");
@@ -818,7 +768,13 @@ void push_submatrix_gpu_(int *mat_id, int *row, int *col, double _Complex *mat, 
    }
    else if (*mat_id == 2) {
       if (SJG_allocated) {
-         copySubBlockToMatrix(mat,msize,row,col,jinv_h,&mmat_size);
+         if (lsms_construction_mode == 0) {
+            double _Complex *p_jinv_h = jinv_h + tau_size*tau_size * *row;
+            cblas_zcopy(tau_size*tau_size, mat, 1, p_jinv_h, 1);
+         }
+         else {
+            copySubBlockToMatrix(mat,msize,row,col,jinv_h,&mmat_size);
+         }
       }
       else {
          fprintf(stderr,"\nError: jost matrix is not allocated on CPU/GPU\n");
@@ -841,17 +797,13 @@ void push_submatrix_gpu_(int *mat_id, int *row, int *col, double _Complex *mat, 
 }
 
 extern "C"
-void push_gij_matrix_gpu_(int *cant, int *row, int *col, double _Complex *gij, int *kkri) {
-   if (*cant != 1 && *cant != 2) {
-      fprintf(stderr,"\nError: cant <> 1 and 2, %d\n",*cant);
-      exit(EXIT_FAILURE);
-   } 
-   else if (*kkri * *cant != tau_size) {
-      fprintf(stderr,"\nError: kkri*cant <> tau_size, %d,%d\n",*kkri * *cant,tau_size);
+void push_gij_matrix_gpu_(int *row, int *col, double _Complex *gij, int *kkri) {
+   if (*kkri*n_spin_cant != tau_size) {
+      fprintf(stderr,"\nError: kkri*n_spin_cant <> tau_size, %d,%d\n",*kkri*n_spin_cant,tau_size);
       exit(EXIT_FAILURE);
    }
 
-   if (*cant == 1) {
+   if (n_spin_cant == 1) {
       copySubBlockToMatrix(gij,kkri,row,col,gij_h,&mmat_size);
    }
    else {
@@ -880,9 +832,17 @@ void push_bigmatrix_gpu_(double _Complex *bm, int *b_size) {
 extern "C"
 void commit_to_gpu_(int *mat_id) {
    size_t size = sizeof(cuDoubleComplex)*mmat_size*mmat_size;
+   size_t size_b;
+   if (lsms_construction_mode == 0) {
+      size_b = sizeof(cuDoubleComplex)*mmat_size*tau_size;
+   }
+   else {
+      size_b = size;
+   }
+   
    if (*mat_id == 1) {
       if (SJG_allocated) {
-         checkCudaErrors(cudaMemcpyAsync(sine_d, sine_h, size, cudaMemcpyHostToDevice, stream));
+         checkCudaErrors(cudaMemcpyAsync(sine_d, sine_h, size_b, cudaMemcpyHostToDevice, stream));
       }
       else {
          fprintf(stderr,"\nError: sine matrix is not allocated on CPU/GPU\n");
@@ -891,7 +851,7 @@ void commit_to_gpu_(int *mat_id) {
    }
    else if (*mat_id == 2) {
       if (SJG_allocated) {
-         checkCudaErrors(cudaMemcpyAsync(jinv_d, jinv_h, size, cudaMemcpyHostToDevice, stream));
+         checkCudaErrors(cudaMemcpyAsync(jinv_d, jinv_h, size_b, cudaMemcpyHostToDevice, stream));
       }
       else {
          fprintf(stderr,"\nError: jost matrix is not allocated on CPU/GPU\n");
@@ -914,7 +874,8 @@ void commit_to_gpu_(int *mat_id) {
 }
 
 extern "C"
-void construct_bigmatrix_gpu_(double _Complex *kappa) {
+void construct_bigmatrix_gpu_(double _Complex *kappa, int *numnb_max, 
+                              int *ia, int *num_nbs, int *lmax_kkr) {
     const cuDoubleComplex one = make_cuDoubleComplex(1.0, 0.0);
     const cuDoubleComplex zero = make_cuDoubleComplex(0.0, 0.0);
     double _Complex neg_kappa_inv = -1.0/(*kappa);
@@ -925,20 +886,72 @@ void construct_bigmatrix_gpu_(double _Complex *kappa) {
     checkCublasErrors(cublasCreate(&handle));
     checkCublasErrors(cublasSetStream(handle, stream));  // assign rank-specific CUDA stream
 
-    // Compute jig = jinv * gij
-    checkCublasErrors(cublasZgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N,
-                                  mmat_size, mmat_size, mmat_size, &one,
-                                  jinv_d, mmat_size,
-                                  gij_d, mmat_size,
-                                  &zero, jig_d, mmat_size));
+    if (lsms_construction_mode == 0) {
+       int liz_max = *numnb_max+1;
+       int aid = *ia;
+       int liz_size = *num_nbs+1;
+       int lmax = *lmax_kkr;
 
-    // Compute BigMat = 1 - jig * sine / kappa
-    checkCublasErrors(cublasZgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N,
-                                  mmat_size, mmat_size, mmat_size, &alpha,
-                                  jig_d, mmat_size,
-                                  sine_d, mmat_size,
-                                  &one, BigMat_d, mmat_size));
+       cuDoubleComplex kappa_d = make_cuDoubleComplex(creal(*kappa),cimag(*kappa));
+       int kkrsz = (lmax+1)*(lmax+1);
+       int kkrsz_ns = kkrsz*n_spin_cant;
+       if (kkrsz_ns != tau_size) {
+          fprintf(stderr,"\nError: kkrsz_ns <> tau_size.%d,%d\n",kkrsz_ns,tau_size);
+          exit(EXIT_FAILURE);
+       }
+       else if (kkrsz_ns*liz_size != mmat_size) {
+          fprintf(stderr,"\nError: kkrsz_ns*liz_size <> mmat_size.%d,%d\n",kkrsz_ns*liz_size,mmat_size);
+          exit(EXIT_FAILURE);
+       }
+       for (int ja=0; ja<liz_size; ja++) {
+          for (int ia=0; ia<liz_size; ia++) {
+             if (ia != ja) {
+                // Define kernel launch parameters
+                int threadsPerBlock = 256;
+                int numBlocks = max(1,min( (kkrsz*kkrsz + threadsPerBlock - 1) / threadsPerBlock, 512));
+                // Launch the kernel
+                computeGijBlockKernel<<<numBlocks,threadsPerBlock,0,stream>>>
+                                     (ia, ja, kappa_d, liz_max, aid, kkrsz, lmax, 
+                                      kj3_MaxJ3, kj3_kmax,
+                                      posi_d, lofk_d, nj3_d, kj3_d, cgnt_d, Ylm_d, gij_d);
+                checkCudaErrors(cudaDeviceSynchronize());
+                for (int js=0; js<n_spin_cant; js++) {
+                   for (int is=0; is<n_spin_cant; is++) {
+                      cuDoubleComplex  *p_jinv_d = jinv_d + ia*kkrsz_ns*kkrsz_ns + js*kkrsz_ns*kkrsz+is*kkrsz;
+                      cuDoubleComplex  *p_jig_d = jig_d + js*kkrsz_ns*kkrsz+is*kkrsz;
+                      checkCublasErrors(cublasZgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N,
+                                                    kkrsz, kkrsz, kkrsz, &one,
+                                                    p_jinv_d, kkrsz_ns,
+                                                    gij_d, kkrsz,
+                                                    &zero, p_jig_d, kkrsz_ns));
+                   }
+                }
+                cuDoubleComplex  *p_sine_d = sine_d + ja*kkrsz_ns*kkrsz_ns;
+                cuDoubleComplex  *p_BigMat_d = BigMat_d + ja*mmat_size*kkrsz_ns + ia*kkrsz_ns;
+                checkCublasErrors(cublasZgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N,
+                                              kkrsz_ns, kkrsz_ns, kkrsz_ns, &alpha,
+                                              jig_d, kkrsz_ns,
+                                              p_sine_d, kkrsz_ns,
+                                              &zero, p_BigMat_d, mmat_size));
+             }
+          }
+       }
+    }
+    else {
+       // Compute jig = jinv * gij
+       checkCublasErrors(cublasZgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N,
+                                     mmat_size, mmat_size, mmat_size, &one,
+                                     jinv_d, mmat_size,
+                                     gij_d, mmat_size,
+                                     &zero, jig_d, mmat_size));
 
+       // Compute BigMat = 1 - jig * sine / kappa
+       checkCublasErrors(cublasZgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N,
+                                     mmat_size, mmat_size, mmat_size, &alpha,
+                                     jig_d, mmat_size,
+                                     sine_d, mmat_size,
+                                     &one, BigMat_d, mmat_size));
+    }
     // checkCudaErrors(cudaStreamSynchronize(stream));
 
     // Cleanup
@@ -962,8 +975,8 @@ void invert_bigmatrix_gpu_(double _Complex *block, int *block_size) {
    // ========================================
    // t0 = clock();
    int threads_per_block = 512;
-   int num_blocks = min((mmat_size*mmat_size + threads_per_block - 1)
-                        /threads_per_block/num_cpu_tasks,1024);
+   int num_blocks = max(1,min((mmat_size*mmat_size + threads_per_block - 1)
+                        /threads_per_block/num_cpu_tasks,1024));
    createUnitMatrixKernel<<<num_blocks, threads_per_block, 0, stream>>>(BigMatInv_d, mmat_size);
    checkCudaErrors(cudaPeekAtLastError());
 
