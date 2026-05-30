@@ -1406,24 +1406,22 @@ contains
 !        endif
 !        --------------------------------------------------------------
          if (ComputeGijMatrixOnGPU) then
-            if (ConstructionMode == 1) then
-               t0 = getTime()
-!              --------------------------------------------------------
-               call calculate_gij_gpu(kappa,numnb_max,my_atom,            &
-                                      Neighbor%NumAtoms,lmax_kkr(my_atom))
-!              --------------------------------------------------------
-               if (TimingLSMS) then
-                  t1 = getTime() - t0
+            t0 = getTime()
+!           -----------------------------------------------------------
+            call calculate_gij_gpu(kappa,numnb_max,my_atom,            &
+                                   Neighbor%NumAtoms,lmax_kkr(my_atom))
+!           -----------------------------------------------------------
+            if (TimingLSMS) then
+               t1 = getTime() - t0
 !                 -----------------------------------------------------
-                  call checkinTiming('Calculate the Gij matrix',t1)
+               call checkinTiming('Calculate the Gij matrix',t1)
 !                 -----------------------------------------------------
-                  if (node_print_level >= 0) then
-                     if (LocalNumAtoms == 1) then
-                        write(6,'(a,t64,''='',f8.3)')'Time for calculatig Gij on GPU',t1
-                     else
-                        write(6,'(a,1i2,a,t64,''='',f8.3,a)') &
-                           'For atom : ',my_atom,', time for calculatig Gij on GPU',t1,' sec'
-                     endif
+               if (node_print_level >= 0) then
+                  if (LocalNumAtoms == 1) then
+                     write(6,'(a,t64,''='',f8.3)')'Time for calculatig Gij on GPU',t1
+                  else
+                     write(6,'(a,1i2,a,t64,''='',f8.3,a)') &
+                        'For atom : ',my_atom,', time for calculatig Gij on GPU',t1,' sec'
                   endif
                endif
             endif
