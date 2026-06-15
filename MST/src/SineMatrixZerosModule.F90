@@ -112,7 +112,7 @@ contains
    eGID = getGroupID('Energy Mesh')
    NumPEsInEGroup = getNumPEsInGroup(eGID)
    MyPEinEGroup = getMyPEinGroup(eGID)
-   if (iprint >= 0) then
+   if (iprint >= 1) then
       write(6,'(a,3i5)')'MyPE, MyPEinEGroup, NumPEsInEGroup = ',MyPE,MyPEinEGroup,NumPEsInEGroup
    endif
 !
@@ -801,7 +801,7 @@ contains
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   function isSineZeroInEnergyRange(id,ia,is,e1,e2) result(y)
+   function isSineZeroInEnergyRange(id,ia,is,e1,e2,yes_print) result(y)
 !  ===================================================================
 !
    implicit none
@@ -812,6 +812,7 @@ contains
    real (kind=RealKind), intent(in) :: e1, e2
    real (kind=RealKind) ::  e_low, e_high
 !
+   logical, optional, intent(in) :: yes_print
    logical :: y
 !
    if (e1 < e2) then
@@ -827,6 +828,11 @@ contains
       if (SineZero(id,is)%ZeroState(ip,ia)%ZeroE <= e_high .and.      &
           e_low <= SineZero(id,is)%ZeroState(ip,ia)%ZeroE) then
          y = .true.
+         if (present(yes_print)) then
+            if (yes_print) then
+               write(6,'(a,f12.8)')'Sine zero at E = ',SineZero(id,is)%ZeroState(ip,ia)%ZeroE
+            endif
+         endif
          exit
       endif
    enddo

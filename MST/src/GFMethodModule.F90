@@ -3621,8 +3621,10 @@ contains
                   endif
                   do ib = 1, getNumResonanceStates(id,ia,is)
                      er = getResonanceStateEnergy(id,ia,is,ib,w)
-                     do while (isSineZeroInEnergyRange(id,ia,is,er-e_delta,er+e_delta))
-                        e_delta = e_delta - 0.0002d0
+!!!!!!!!!            do while (isSineZeroInEnergyRange(id,ia,is,er-e_delta,er+e_delta,yes_print=(node_print_level >= 0)))
+                     do while (isSineZeroInEnergyRange(id,ia,is,er-e_delta,er+e_delta,yes_print=.true.))
+!!!!!!!!!               e_delta = e_delta - 0.0002d0
+                        e_delta = e_delta*HALF
                         if (e_delta < TEN2m6) then
                            call ErrorHandler('calSingleScatteringIDOS', &
                                 'Failed to adjust small contour radius to avoid sine matrix zeros at resonance energy:',er)

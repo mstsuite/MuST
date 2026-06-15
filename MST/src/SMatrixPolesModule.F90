@@ -60,7 +60,8 @@ private
    integer (kind=IntKind), pointer :: nj3(:,:), kj3(:,:,:)
 !
    integer (kind=IntKind), parameter :: MaxNumBoundStates = 10
-   integer (kind=IntKind), parameter :: MaxNumResonanceStates = 5
+   integer (kind=IntKind), parameter :: MaxNumResonanceStates = 7
+!  integer (kind=IntKind), parameter :: MaxNumResonanceStates = 5
 !  integer (kind=IntKind), parameter :: MaxNumResonanceStates = 13
 !
    real (kind=RealKind), pointer :: cgnt(:,:,:)
@@ -150,7 +151,7 @@ contains
 !
 !  NumPEsInEGroup = 1; MyPEinEGroup = 0
 !
-   if (iprint >= 0) then
+   if (iprint >= 1) then
       write(6,'(a,3i5)')'MyPE, MyPEinEGroup, NumPEsInEGroup = ',MyPE,MyPEinEGroup,NumPEsInEGroup
    endif
 !
