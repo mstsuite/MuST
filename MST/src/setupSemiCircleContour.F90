@@ -11,7 +11,7 @@
 !  *******************************************************************
    use KindParamModule, only : IntKind, RealKind, CmplxKind
 !
-   use MathParamModule, only : ZERO, HALF, ONE, TWO, PI, CZERO, SQRTm1, TEN2m6
+   use MathParamModule, only : ZERO, HALF, ONE, TWO, PI, CZERO, SQRTm1, TEN2m6, TEN2m8
 !
    use ErrorHandlerModule, only : ErrorHandler
 !
@@ -37,7 +37,8 @@
       ew(ie) = -ec*es*wg(ie)
       check_wght = check_wght + ew(ie)
    enddo
-   if (abs(check_wght-TWO*er) > TEN2m6) then
+   if (abs(check_wght-TWO*er) > TEN2m8) then
+!  if (abs(check_wght-TWO*er) > TEN2m6) then
       call ErrorHandler('setupSemiCircleContour','Weight check is failed', &
                         check_wght)
    endif

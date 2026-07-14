@@ -621,8 +621,7 @@ contains
 !           the complete green function is not calculated. We need to be 
 !           careful with the pole of the sine matrix.
 !     ----------------------------------------------------------------
-      call solveSingleScattering(spin=is,site=id,atom=atom,e=energy,vshift=CZERO, &
-                                 isSphSolver=.false.)
+      call solveSingleScattering(spin=is,site=id,atom=atom,e=energy,vshift=CZERO)
 !     ----------------------------------------------------------------
       call computeGreenFunction(spin=is,site=id,atom=atom,noIrrTerm=.true.)
 !     ----------------------------------------------------------------
@@ -679,6 +678,7 @@ contains
          endif
 !
          if (atom > 0 .or. ia == 1) then
+!           write(6,'(a,5f14.8)')'e,cmul,dos = ',energy,cmul,real(SQRTm1*greenint/PI,kind=RealKind)
             dos = real(SQRTm1*cmul*greenint/PI,kind=RealKind)
          endif
 !

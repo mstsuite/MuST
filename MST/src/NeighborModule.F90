@@ -415,11 +415,11 @@ contains
    write(6,'(/,25x,a)') ' *****************************'
    write(6,'(25x,a)')   ' * Output from printNeighbor *'
    write(6,'(25x,a,/)') ' *****************************'
-   write(6,'(/,80(''=''))')
+   write(6,'(80(''=''),/)')
    write(6,'(a,i5)')' Local Atom Index = ', id
 !  write(6,*) "IndexMN :: ", Neighbor(id)%IndexMN
    write(6,'(a,i5)')' Number of neighboring atoms in LIZ = ',n
-   write(6,'(a)')   ' Neighboring Atom List:'
+   write(6,'(a)')   ' Neighboring Atom List (where Proc is the MPI rank in the Unit Cell group):'
    write(6,'(a)')   &
 ' ============================================================================'
    write(6,'(a)')   &

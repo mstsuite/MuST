@@ -496,7 +496,7 @@ contains
       endif
 !     ----------------------------------------------------------------
       call initSMatrixPoles(LocalNumAtoms,n_spin_pola,n_spin_cant,LocalNumSpecies,&
-                            min(lmax_kkr,4),lmax_green,iprint_loc)
+                            min(lmax_kkr,4),lmax_green,node_print_level)
 !     ----------------------------------------------------------------
    endif
 !
@@ -508,7 +508,7 @@ contains
       endif
 !     ----------------------------------------------------------------
       call initSineMatrixZeros(LocalNumAtoms,n_spin_pola,LocalNumSpecies,&
-                               min(lmax_kkr,4),lmax_green,iprint_loc)
+                               min(lmax_kkr,4),lmax_green,node_print_level)
 !     ----------------------------------------------------------------
    endif
 !
@@ -3055,8 +3055,8 @@ contains
    real (kind=RealKind) :: ssdos_int, ssdos_int_ia, ssdos_bs, ssdos_bs_ia
    real (kind=RealKind) :: scaling_factor, IDOS_space, IDOS_out, sfac
    real (kind=RealKind) :: resonance_contour_radius, resonance_width
-   real (kind=RealKind) :: ebot, etop, er, ep, ei, e1, e2, e_delta, e_bound, w, rfac, maxd, err
-   real (kind=RealKind) :: qvp_bs, qmt_bs, qmt_ib
+   real (kind=RealKind) :: ebot, etop, er, ep, ei, e1, e2, e_delta, e_bound, w, rfac, maxd, err, eb, de
+   real (kind=RealKind) :: qvp_bs, qmt_bs, qmt_ib, qvp_ib, rcb
    real (kind=RealKind) :: contour_radius(MaxShallowBoundStates)
    real (kind=RealKind), allocatable :: xg(:), wg(:)
 !
@@ -3492,6 +3492,20 @@ contains
       call syncAllPEs()
 !     ----------------------------------------------------------------
 !
+!     ================================================================
+!     The radius of the contour for the bound state is stored in e_bound
+!     ================================================================
+      e_bound = ZERO
+      rstatus = getKeyValue(1,'Bound State Contour Integration Radius (>0.0)',e_bound)
+      if (rstatus /= 0 .or. e_bound < TEN2m6 .or. e_bound > ONE) then
+         call WarningHandler('calSingleScatteringIDOS',   &
+                             'Error in reading Bound State Contour Integration Radius',e_bound)
+         e_bound = 0.002d0
+      endif
+!
+!     ================================================================
+!     The radius of the contour for the resonance state is stored in e_delta
+!     ================================================================
       e_delta = ZERO
       rstatus = getKeyValue(1,'Resonance State Contour Integration Radius (>0.0)',e_delta)
       if (rstatus /= 0 .or. e_delta < TEN2m6 .or. e_delta > ONE) then
@@ -3499,10 +3513,27 @@ contains
                              'Error in reading Resonance State Contour Integration Radius',e_delta)
          e_delta = 0.002d0
       endif
+!
       do id =  1, LocalNumAtoms
          do is = 1, n_spin_pola
             do ia = 1, ssLastValue(id)%NumSpecies
                nz = 0
+!              =======================================================
+!!!            do ib = 1, getNumBoundStates(id,ia,is)
+!                 ----------------------------------------------------
+!!!               eb = getBoundStateEnergy(id,ia,is,ib,sorted =.true.)
+!!!               call findSineMatrixZeros(id,ia,is,eb-e_bound,eb+e_bound,Delta=pole_step,         &
+!!!                                        AccumulationCounts=nz)
+!                 ----------------------------------------------------
+!!!               if (isSineZeroInEnergyRange(id,ia,is,eb-e_bound,eb+e_bound,yes_print=.true.)) then
+!!!                  write(6,'(a,f9.6,a,f9.6,a)')'Sine zero is FOUND in the energy range: (', &
+!!!                                              eb-e_bound,',',eb+e_bound,')'
+!!!               else
+!!!                  write(6,'(a,f9.6,a,f9.6,a)')'Sine zero is NOT found in the energy range: (',  &
+!!!                                              eb-e_bound,',',eb+e_bound,')'
+!!!               endif
+!!!            enddo
+!              =======================================================
                do ib = 1, getNumResonanceStates(id,ia,is)
                   er = getResonanceStateEnergy(id,ia,is,ib,w)
 !                 ----------------------------------------------------
@@ -3529,13 +3560,14 @@ contains
 !     contour integration around the poles associated with thesse
 !     bound state. The radius of the contour is stored in e_bound
 !     ================================================================
-      rstatus = getKeyValue(1,'Bound State Contour Integration Radius (>0.0)',e_bound)
-      if (rstatus /= 0 .or. e_bound < TEN2m6 .or. e_bound > ONE) then
-         call WarningHandler('calSingleScatteringIDOS',   &
-                             'Error in reading Bound State Contour Integration Radius',e_bound)
-         e_bound = 0.002d0
-      endif
+!     rstatus = getKeyValue(1,'Bound State Contour Integration Radius (>0.0)',e_bound)
+!     if (rstatus /= 0 .or. e_bound < TEN2m6 .or. e_bound > ONE) then
+!        call WarningHandler('calSingleScatteringIDOS',   &
+!                            'Error in reading Bound State Contour Integration Radius',e_bound)
+!        e_bound = 0.002d0
+!     endif
       do id =  1, LocalNumAtoms
+!!!      call setSScatteringDOSParam(id,ssLastValue(id)%NumRs,ssLastValue(id)%jmax)
          do is = 1, n_spin_pola
             if (n_spin_cant == 1 .or. is == 1) then
                ns = is
@@ -3567,10 +3599,51 @@ contains
                info(1) = is; info(2) = id; info(3) = ia; info(4) = 1; info(5) = lmax_phi(id) 
                qvp_bs = ZERO; qmt_bs = ZERO; qmt_ib = ZERO
                do ib = 1, getNumBoundStates(id,ia,is)
+!                 ====================================================
+!                 Check the bound state by examining the DOS around the
+!                 bound state energy
+!                 ====================================================
+!!!               eb = getBoundStateEnergy(id,ia,is,ib,sorted =.true.)
+!!!               ne = 100
+!!!               de = 0.001d0
+!!!               do ie = -ne, ne
+!!!                  er = eb + ie*de
+!!!                  ec = cmplx(er,0.001,kind=CmplxKind)
+!                    =================================================
+!                    Solve the single scattering problem ec = (er,ei).
+!                    In this case, the calculated Green function is Z*tau*Z-ZJ
+!                    -------------------------------------------------
+!!!                  ssDOS = sfac*getSScatteringDOSofCmplxE(info,ec,wk_dos)
+!!!                  write(6,'(a,2f10.6,a,2f18.12)')'e = ',ec,', ss_dos = ',ssDOS
+!!!               enddo
+!                 ====================================================
+                  rcb = contour_radius(ib)
+!!!               do
 !                 ----------------------------------------------------
-                  call computeBoundStateDensity(id,ia,is,contour_radius(ib),ib,chempot,wk_dos)
+                  call computeBoundStateDensity(id,ia,is,rcb,ib,chempot,wk_dos)
 !                 ----------------------------------------------------
-                  qvp_bs = qvp_bs + getBoundStateChargeInCell(id,ia,is,ib,qmt_ib)
+                  qvp_ib = getBoundStateChargeInCell(id,ia,is,ib,qmt_ib)
+                  if (qvp_ib < ZERO) then
+                        write(6,'(a,i5)')'My MPI rank: ',MyPE
+                        call WarningHandler('calSingleScatteringIDOS',   &
+               'Serious issue: the amount of electronic states at the bounding energy is negative',qvp_ib)
+                  else if (qvp_ib < 0.1) then
+                        write(6,'(a,i5)')'My MPI rank: ',MyPE
+                        call WarningHandler('calSingleScatteringIDOS',   &
+               'Serious issue: the amount of electronic states at the bounding energy is too small',qvp_ib)
+                  endif
+!!!                  if (qvp_ib > 0.1) then
+!!!                     exit
+!!!                  else if (rcb > 0.2d0) then
+!!!                     call WarningHandler('calSingleScatteringIDOS',   &
+!!!            'Serious issue: the amount of electronic states at the bounding energy is too small',qvp_ib)
+!!!                     exit
+!!!                  endif
+!!!                  rcb = 1.5d0*rcb
+!!!                  call WarningHandler('calSingleScatteringIDOS','The contour radius is increased to...',rcb)
+!!!               enddo
+!                 qvp_bs = qvp_bs + getBoundStateChargeInCell(id,ia,is,ib,qmt_ib)
+                  qvp_bs = qvp_bs + qvp_ib
                   qmt_bs = qmt_bs + qmt_ib
 !                 ====================================================
 !                 The bound state density will be added to ssIntegrValue
@@ -3583,7 +3656,7 @@ contains
 !                 call addElectroStruct(getLocalSpeciesContent(id,ia),ssLastValue(id),ssIntegrValue(id),ns,ia)
 !                 ----------------------------------------------------
                enddo
-               if (node_print_level >= 0) then
+               if (node_print_level >= 0 .and. getNumBoundStates(id,ia,is) > 0) then
                   write(6,'(/,3(a,i4))')'In GFMethodModule: For spin index:',is,', atom id:',id,', species id:',ia
                   write(6,'(a,f18.13)')'Sum of Qmt per spin over the bound states = ',qmt_bs
                   write(6,'(a,f18.13)')'Sum of Qvp per spin over the bound states = ',qvp_bs

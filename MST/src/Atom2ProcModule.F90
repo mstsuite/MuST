@@ -281,12 +281,12 @@ contains
    write(6,'( 20x,a )')'* Output from printAtom2ProcTable *'
    write(6,'(20x,a,/)')'***********************************'
    write(6,'(80(''=''))')
-   write(6,'(a)')' Processor    Global Index'
+   write(6,'(a)')' MPI Rank in Unit Cell Group    Global Index'
    write(6,'(80(''-''))')
    do i=1,NumProcsInGroup
-      write(6,'(2x,i5,5x,13i5)')i-1,(GlobalIndex(j,i),j=1,LocalNumAtoms(i))
+      write(6,'(8x,i5,20x,13i6)')i-1,(GlobalIndex(j,i),j=1,LocalNumAtoms(i))
    enddo
-   write(6,'(80(''=''))')
+   write(6,'(80(''=''),/)')
 
    end subroutine printAtom2ProcTable
 !  ===================================================================

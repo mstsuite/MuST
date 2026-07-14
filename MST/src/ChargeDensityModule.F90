@@ -2231,6 +2231,8 @@ contains
 !  ===================================================================
    use KindParamModule, only : IntKind
 !
+   use MPPModule, only : MyPE
+!
    use GroupCommModule, only : getGroupID, GlobalSumInGroup
 !
    use WriteFunctionModule, only : writeFunction
@@ -2449,7 +2451,9 @@ contains
                if (rho0(ir) > -negchg_tol .or. getLocalAtomicNumber(id,ia) < 2) then
                   rho0(ir) = TEN2m5
                else
-                  write(6,'(a,i5,a,i5,a,f12.8)')'For id = ',id,', ir = ',ir, ', r(ir) = ',r_mesh(ir)
+                  write(6,'(a,i5,a,i5,a,i5,a,f12.8)')'For global index = ',getGlobalIndex(id), &
+                                                     ', MPI rank = ',MyPE,', ir = ',ir,       &
+                                                     ', r(ir) = ',r_mesh(ir)
                   call ErrorHandler('constructChargeDensity','rho0(ir) < 0',rho0(ir),.true.)
                endif
             endif

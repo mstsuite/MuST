@@ -108,7 +108,7 @@ program mst2
    use SystemModule, only : initSystem, endSystem
    use Systemmodule, only : printSystem, getBravaisLattice, getLatticeConstant
    use SystemModule, only : getNumAtoms, getAtomPosition, getAtomicNumber,   &
-                            getNumVacancies
+                            getAtomName, getNumVacancies
    use SystemModule, only : getUniformGridParam
    use SystemModule, only : getSystemID, getNumAtomTypes
    use SystemModule, only : updateSystem
@@ -804,6 +804,9 @@ program mst2
       call print_version(6)
       call printxml_code_info(exec_date,exec_time,code_version)
 !    -----------------------------------------------------------------
+      ig = getGroupID('Unit Cell')
+      write(6,'(12x,a,i5)')'My MPI process rank in the MPI World:           ', MyPE
+      write(6,'(12x,a,i5)')'My MPI process rank in the Unit Cell Group:     ', getMyPEinGroup(ig)
       write(6,'(12x,a,i5)')'Number of atoms on each processor:              ', &
                            LocalNumAtoms
       if ( isLSMS() ) then ! In this case, the k-point parallelization is used to
@@ -928,6 +931,13 @@ program mst2
       call printSystem()
       call printAtom()
 !     ----------------------------------------------------------------
+      if (GlobalNumAtoms <= 128) then
+!        -------------------------------------------------------------
+         call printAtom2ProcTable()
+!        -------------------------------------------------------------
+!        ig = getGlobalIndex(1)
+!        write(6,'(a,3i5,2x,a)')'Global ID, MyPI, PI, Atom =',ig,MyPE,getAtom2ProcInGroup(ig),getAtomName(ig)
+      endif
    endif
 !
    if (getDOSrunID() == PrintDOSswitchOff) then

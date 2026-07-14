@@ -803,6 +803,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    function isSineZeroInEnergyRange(id,ia,is,e1,e2,yes_print) result(y)
 !  ===================================================================
+   use Atom2ProcModule, only : getGlobalIndex
 !
    implicit none
 !
@@ -830,7 +831,9 @@ contains
          y = .true.
          if (present(yes_print)) then
             if (yes_print) then
-               write(6,'(a,f12.8)')'Sine zero at E = ',SineZero(id,is)%ZeroState(ip,ia)%ZeroE
+               write(6,'(a,i5,a,i5,a,f12.8)')'For MPI rank = ',MyPE,               &
+                                             ', Atom Index = ',getGlobalIndex(id), &
+                       ', Sine zero at E = ',SineZero(id,is)%ZeroState(ip,ia)%ZeroE
             endif
          endif
          exit
