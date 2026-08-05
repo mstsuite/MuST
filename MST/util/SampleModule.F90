@@ -271,7 +271,13 @@ contains
       endif
    enddo
 !
-   allocate( TypeName(NumTypes), NumAtomsOfType(NumTypes) )
+   if (.not.allocated(TypeName)) then
+      allocate( TypeName(NumTypes))
+   endif
+   if (.not.allocated(NumAtomsOfType)) then
+      allocate( NumAtomsOfType(NumTypes) )
+   endif
+!
    do i = 1, NumTypes
       TypeName(i) = atn(i)
       NumAtomsOfType(i) = nt(i)*NumRepeatsA*NumRepeatsB*NumRepeatsC
@@ -316,7 +322,14 @@ contains
    endif
 !
    NumTypes = nt
-   allocate( TypeName(NumTypes), NumAtomsOfType(NumTypes) )
+!
+   if (.not.allocated(TypeName)) then
+      allocate( TypeName(NumTypes))
+   endif
+   if (.not.allocated(NumAtomsOfType)) then
+      allocate( NumAtomsOfType(NumTypes) )
+   endif
+!  
    do i = 1, NumTypes
       TypeName(i) = atn(i)
       NumAtomsOfType(i) = 0

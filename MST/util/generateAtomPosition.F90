@@ -51,6 +51,7 @@
    integer (kind=IntKind) :: ftype
    integer (kind=IntKind) :: nshell
    integer (kind=IntKind) :: add_eca, num_eca, eca_index(MaxECA), basis2eca(MaxBasis)
+   integer (kind=IntKind) :: inp_seed, yes
 !
    integer (kind=IntKind) :: NumMediumAtomsOfType(MaxAtomTypes)
    integer (kind=IntKind) :: NumClusterAtomsOfType(MaxAtomTypes)
@@ -86,7 +87,7 @@
 ! GDS   
    real (kind=RealKind) :: work(3)
 !
-   logical :: isDirect
+   logical :: isDirect, satisfied
 !
 !  data a0/3.8525, 3.8525, 3.7133/
 !  data cut/19.3/
@@ -618,7 +619,6 @@
       if (abs(bins(NumMediumAtomTypes+1)-ONE) > TEN2m6) then
          call ErrorHandler('main','The summation of the contents is not 1',bins(NumMediumAtomTypes+1))
       endif
-
 !
       nshell=-1
       if (ordered == 2) then   ! Random medium with short range order
@@ -633,16 +633,22 @@
 
          write(6,'(2x,a,i3)') 'nshell is:', nshell
 
-         write(6,'(/,2x,a,$)') 'For each shell please give the weight of SROs:'
-!        --------------------------------------------------------------------
-         ib=-1
-         read(5,'(a)')text
-         call initString(text)
-         ib = getNumTokens()
-!        -----------------------------------------------------------------
-         if (ib /= nshell) then
-            call ErrorHandler('main','Number of weight of SRO not correct, should be',nshell)
-         endif
+         satisfied = .false.
+         do while (.not.satisfied)
+            write(6,'(/,2x,a,$)') 'For each shell please give the weight of SROs (e.g., 0.60,0.25,0.10,0.05) :'
+!           -----------------------------------------------------------------
+            ib=-1
+            read(5,'(a)')text
+            call initString(text)
+            ib = getNumTokens()
+!           --------------------------------------------------------------
+            if (ib == nshell) then
+               satisfied = .true.
+            else
+               write(6,'(a,i5,a)')'The number of weights is expected to be',nshell,'. Try again!'
+               call endString()
+            endif
+         enddo
 
          do j = 1, nshell
            call readToken(j,anm,alen)
@@ -654,22 +660,29 @@
          write(6,'(2x,a,5f15.5)') 'The input weight is:',weight(1:nshell)
 
 !        ------------------------------------------------------------------------
-         write(6,'(/,2x,a,$)') 'For each shell please give N*(N-1)/2 SROs:'
+         write(6,'(/,2x,a)')'For each shell please give N*(N-1)/2 SROs (N = the number of species in the alloy)'
          do i = 1, nshell
             ib=-1
-            write(6,'(/,2x,a,i2,a,$)') 'shell',i,':  ' 
-!        --------------------------------------------------------------------
-            read(5,'(a)')text
-            call initString(text)
-            ib = getNumTokens()
-!        --------------------------------------------------------------------
-            if (ib /= NumMediumAtomTypes*(NumMediumAtomTypes-1)/2) then
-               call ErrorHandler('main','Number of SRO not correct, should be',NumMediumAtomTypes*(NumMediumAtomTypes-1)/2)
-            endif
+            satisfied = .false.
+            do while (.not.satisfied)
+               write(6,'(/,2x,a,i2,a,$)') 'shell',i,':  ' 
+!              --------------------------------------------------------------
+               read(5,'(a)')text
+               call initString(text)
+               ib = getNumTokens()
+!              --------------------------------------------------------------
+               if (ib == NumMediumAtomTypes*(NumMediumAtomTypes-1)/2) then
+                  satisfied = .true.
+               else
+                  write(6,'(a,i5)')'The number of SROs on the shell needs to be', &
+                                    NumMediumAtomTypes*(NumMediumAtomTypes-1)/2
+                  call endString()
+               endif
+            enddo
 
             do j = 1, NumMediumAtomTypes*(NumMediumAtomTypes-1)/2
-              call readToken(j,anm,alen)
-              read(anm,*)srop(j,i)
+               call readToken(j,anm,alen)
+               read(anm,*)srop(j,i)
             enddo 
             call endString()
          enddo
@@ -683,21 +696,75 @@
            write(6,'(a)')' '
          enddo 
 
-
-         write(6,'(/,2x,a,$)')'Enter the temperature (K) to start annealing: '
-         read(5,*)Tmax
-         write(6,'(f12.5)')Tmax
-         write(6,'(/,2x,a,$)')'Enter the temperature step (K) for cooling: '
-         read(5,*)Tstep
-         write(6,'(f12.5)')Tstep
-         write(6,'(a)')' '
-!        --------------------------------------------------------------------
-         call placeAtoms(NumMediumAtomTypes,Medium,MediumContent,weight,nshell,srop,Tmax,Tstep)
-!        --------------------------------------------------------------------
+         satisfied = .false.
+         do while (.not.satisfied)
+            write(6,'(/,2x,a,$)')'Enter the temperature (K) to start annealing: '
+            read(5,*)Tmax
+            write(6,'(f12.5)')Tmax
+            write(6,'(/,2x,a,$)')'Enter the temperature step (K) for cooling: '
+            read(5,*)Tstep
+            write(6,'(f12.5)')Tstep
+            write(6,'(a)')' '
+            write(6,'(/,2x,a,$)')     &
+             'Random seed in integer (0 for using the internal seed, >= 1 for using this given seed): '
+            read(5,*)inp_seed
+            write(6,'(1i8)')inp_seed
+            if (inp_seed == 0) then
+!              --------------------------------------------------------------
+               call placeAtoms(NumMediumAtomTypes,Medium,MediumContent,weight,nshell,srop,Tmax,Tstep)
+!              --------------------------------------------------------------
+            else
+!              --------------------------------------------------------------
+               call placeAtoms(NumMediumAtomTypes,Medium,MediumContent,weight,nshell,srop,Tmax,Tstep, &
+                               seed_in=inp_seed)
+!              --------------------------------------------------------------
+            endif
+            write(6,'(/,2x,a)')'Satisfied with the SRO parameters of this sample?'
+            yes = -1
+            do while (yes /= 0 .and. yes /= 1)
+               write(6,'(2x,a,$)')'---> Enter 0 for YES or 1 for NO: '
+               read(5,*)yes
+               if (yes == 0) then
+                  write(6,'(a)')'YES'
+                  satisfied = .true.
+               else if (yes == 1) then
+                  write(6,'(a)')'NO'
+               else
+                  write(6,'(a)')'The answer is not recognized!'
+               endif
+            enddo
+         enddo
       else
-!        --------------------------------------------------------------------
-         call placeAtoms(NumMediumAtomTypes,Medium,MediumContent)
-!        --------------------------------------------------------------------
+         satisfied = .false.
+         do while (.not.satisfied)
+            write(6,'(/,2x,a,$)')     &
+             'Random seed in integer (0 for using the internal seed, >= 1 for using this given seed): '
+            read(5,*)inp_seed
+            write(6,'(1i8)')inp_seed
+            if (inp_seed == 0) then
+!              --------------------------------------------------------------
+               call placeAtoms(NumMediumAtomTypes,Medium,MediumContent)
+!              --------------------------------------------------------------
+            else
+!              --------------------------------------------------------------
+               call placeAtoms(NumMediumAtomTypes,Medium,MediumContent,seed_in=inp_seed)
+!              --------------------------------------------------------------
+            endif
+            write(6,'(/,2x,a)')'Satisfied with the SRO parameters of this sample?'
+            yes = -1
+            do while (yes /= 0 .and. yes /= 1)
+               write(6,'(2x,a,$)')'---> Enter 0 for YES or 1 for NO: '
+               read(5,*)yes
+               if (yes == 0) then
+                  write(6,'(a)')'YES'
+                  satisfied = .true.
+               else if (yes == 1) then
+                  write(6,'(a)')'NO'
+               else
+                  write(6,'(a)')'The answer is not recognized!'
+               endif
+            enddo
+         enddo
       endif
    endif
 !
