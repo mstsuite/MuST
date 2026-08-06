@@ -690,9 +690,9 @@ void finalize_lsms_gpu_() {
       checkCudaErrors(cudaFreeAsync(workArray, stream));
    }
    // Ensure all frees complete before destroying stream
+   checkCusolverErrors(cusolverDnDestroy(cusolverHandle));
    checkCudaErrors(cudaStreamSynchronize(stream));
    checkCudaErrors(cudaStreamDestroy(stream));
-   checkCusolverErrors(cusolverDnDestroy(cusolverHandle));
 
    my_rank = -1;
    SJG_allocated = false;
@@ -923,14 +923,14 @@ void construct_bigmatrix_gpu_(double _Complex *kappa, int *numnb_max,
             //  }
                 cuDoubleComplex  *p_gij_d = gij_d + ja*mmat_size*kkrsz_ns + ia*kkrsz_ns;
                 cuDoubleComplex  *p_jinv_d = jinv_d + ia*kkrsz_ns*kkrsz_ns;
-                checkCublasErrors(cublasZgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N,
+                checkCublasErrors(cublasZgemm_v2(handle, CUBLAS_OP_N, CUBLAS_OP_N,
                                               kkrsz_ns, kkrsz_ns, kkrsz_ns, &one,
                                               p_jinv_d, kkrsz_ns,
                                               p_gij_d, mmat_size,
                                               &zero, jig_d, kkrsz_ns));
                 cuDoubleComplex  *p_sine_d = sine_d + ja*kkrsz_ns*kkrsz_ns;
                 cuDoubleComplex  *p_BigMat_d = BigMat_d + ja*mmat_size*kkrsz_ns + ia*kkrsz_ns;
-                checkCublasErrors(cublasZgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N,
+                checkCublasErrors(cublasZgemm_v2(handle, CUBLAS_OP_N, CUBLAS_OP_N,
                                               kkrsz_ns, kkrsz_ns, kkrsz_ns, &alpha,
                                               jig_d, kkrsz_ns,
                                               p_sine_d, kkrsz_ns,
@@ -941,14 +941,14 @@ void construct_bigmatrix_gpu_(double _Complex *kappa, int *numnb_max,
     }
     else {
        // Compute jig = jinv * gij
-       checkCublasErrors(cublasZgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N,
+       checkCublasErrors(cublasZgemm_v2(handle, CUBLAS_OP_N, CUBLAS_OP_N,
                                      mmat_size, mmat_size, mmat_size, &one,
                                      jinv_d, mmat_size,
                                      gij_d, mmat_size,
                                      &zero, jig_d, mmat_size));
 
        // Compute BigMat = 1 - jig * sine / kappa
-       checkCublasErrors(cublasZgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N,
+       checkCublasErrors(cublasZgemm_v2(handle, CUBLAS_OP_N, CUBLAS_OP_N,
                                      mmat_size, mmat_size, mmat_size, &alpha,
                                      jig_d, mmat_size,
                                      sine_d, mmat_size,
