@@ -52,3 +52,15 @@
    n = n + 1; Options(1,n)='-re';  Options(2,n)='--report-energy'; Options(3,n)='--report_energy'
               OptionKeys(n)='Report GPU Energy Consuption'
               OptionValues(n) = '-1'
+!
+   n = n + 1; Options(1,n)='-em';  Options(2,n)='--emul-scheme'; Options(3,n)='--emul_scheme'
+              OptionKeys(n)='Emulation Scheme'
+              OptionValues(n) = '0'  ! other possible values are: 1 for Ozaki 1, 2 for Ozaki 2
+!
+   n = n + 1; Options(1,n)='-emp';  Options(2,n)='--emul-param'; Options(3,n)='--emul_param'
+              OptionKeys(n)='Emulation Scheme Parameters'
+              OptionValues(n) = '12,14,16'
+!
+   n = n + 1; Options(1,n)='-cz';  Options(2,n)='--contour-zone'; Options(3,n)='--contour_zone'
+              OptionKeys(n)='Contour Zone Parameters'
+              OptionValues(n) = '0.000,0.010'

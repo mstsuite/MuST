@@ -6,6 +6,7 @@ module CmdLineOptionModule
 public :: initCmdLineOption,  &
           endCmdLineOption,   &
           getCmdLineOption,   &
+          printCmdLineOption, &
           getCmdLineOptionValue
 !
 interface getCmdLineOptionValue
@@ -16,13 +17,22 @@ interface getCmdLineOptionValue
 end interface
 !
 private
-   integer (kind=IntKind), parameter :: MaxOptions = 20
+   integer (kind=intKind), parameter :: MaxOptions = 50
 !
    integer (kind=intKind) :: NumOptions = 0
 !
+!  ===================================================================
+!  Options defined in CmdLineOptions.inc
+!  ===================================================================
    character (len=20) :: Options(3,MaxOptions)
    character (len=50) :: OptionKeys(MaxOptions)
    character (len=50) :: OptionValues(MaxOptions)
+!
+!  ===================================================================
+!  Options read from the command line
+!  ===================================================================
+   integer (kind=intKind) :: NumInputOptions = 0
+   integer (kind=IntKind) :: InputOptions(MaxOptions)
 !
 contains
 !
@@ -34,10 +44,12 @@ contains
    integer (kind=IntKind), intent(out) :: num_args
 !
    NumOptions = 0
+   NumInputOptions = 0
 !
 !  -------------------------------------------------------------------
-   call loadCmdLineOptions(num_args)
+   call loadCmdLineOptions()
 !  -------------------------------------------------------------------
+   num_args = NumInputOptions
 !
    end subroutine initCmdLineOption
 !  ===================================================================
@@ -48,6 +60,8 @@ contains
    implicit none
 !
    NumOptions = 0
+   NumInputOptions = 0
+   InputOptions = 0
 !
    end subroutine endCmdLineOption
 !  ===================================================================
@@ -532,13 +546,12 @@ contains
 !  ===================================================================
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine loadCmdLineOptions(num_args)
+   subroutine loadCmdLineOptions()
 !  ===================================================================
    implicit none
 !
    character (len=50) :: args
 !
-   integer (kind=IntKind), intent(out) :: num_args
    integer (kind=IntKind) :: i, j, n, m, ml, ieq
    integer (kind=IntKind) :: mj, mj_save
 !
@@ -562,22 +575,28 @@ contains
       end function nocaseCompare
    end interface
 !
-   n = 0; Options = ' '; OptionKeys = ' '; OptionValues = ' '
+   n = 0; Options = ' '; OptionKeys = ' '; OptionValues = ' '; InputOptions = 0
 !
    include '../src/CmdLineOptions.inc'
 !
-   if (n > MaxOptions) then
+   if (n < 1) then
+!     ----------------------------------------------------------------
+      call ErrorHandler('loadCmdLineOptions','Invalid include file with n < 1',n)
+!     ----------------------------------------------------------------
+   else if (n > MaxOptions) then
+!     ----------------------------------------------------------------
       call ErrorHandler('loadCmdLineOptions','n > MaxOptions',n,MaxOptions)
+!     ----------------------------------------------------------------
    endif
+!
    NumOptions = n
-!  print *,'NumOptions = ',NumOptions
 !
 !  ===================================================================
 !  Start processing the command line arguments...........
 !  -------------------------------------------------------------------
    n = command_argument_count()
 !  -------------------------------------------------------------------
-   num_args = 0
+   NumInputOptions = 0
    mj_save = 0
    if (n > 0) then
 !     cmdline_arguments = '&cla '
@@ -613,7 +632,8 @@ contains
             enddo LOOP_j1
          endif
          if (mj > 0) then
-            num_args = num_args + 1
+            NumInputOptions = NumInputOptions + 1
+            InputOptions(NumInputOptions) = mj
             mj_save = mj
             if (ieq == 0 .or. ieq == ml) then
 !              args = trim(OptName(j))//'='
@@ -662,5 +682,41 @@ contains
 !  ===================================================================
 !
    end subroutine loadCmdLineOptions
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine printCmdLineOption(n)
+!  ===================================================================
+   use ErrorHandlerModule, only : ErrorHandler
+   implicit none
+!
+   integer (kind=IntKind), intent(in), optional :: n
+   integer (kind=IntKind) :: i, idx
+!
+   if (present(n)) then
+      if (n < 1 .or. n > NumInputOptions) then
+         call ErrorHandler('printCmdLineOption','Option index is out of range',n)
+      else if (NumInputOptions == 0) then
+         return
+      else
+         idx = InputOptions(n)
+         write(6,'(a)')'-------------------------------------------'
+         write(6,'(a,a)')'Option expr:  ',trim(Options(2,idx))
+         write(6,'(a,a)')'Option key:   ',trim(OptionKeys(idx))
+         write(6,'(a,a)')'Option value: ',trim(OptionValues(idx))
+      endif
+   else
+      write(6,'(/)')
+      do i = 1, NumInputOptions
+         idx = InputOptions(i)
+         write(6,'(a)')'-------------------------------------------'
+         write(6,'(a,a)')'Option expr:  ',trim(Options(2,idx))
+         write(6,'(a,a)')'Option key:   ',trim(OptionKeys(idx))
+         write(6,'(a,a)')'Option value: ',trim(OptionValues(idx))
+      enddo
+      write(6,'(a,/)')'-------------------------------------------'
+   endif
+!
+   end subroutine printCmdLineOption
 !  ===================================================================
 end module CmdLineOptionModule
