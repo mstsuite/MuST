@@ -154,7 +154,8 @@ TEST_CASES = $(ODIR)/testStrConst \
              $(ODIR)/testExchCorr \
              $(ODIR)/testAdaptiveIntegration \
              $(ODIR)/testTokens \
-             $(ODIR)/testXMLData
+             $(ODIR)/testXMLData \
+             $(ODIR)/testCmdLineOption
 
 TEST_CASES_O = $(ODIR)/testStrConst.o \
                $(ODIR)/tst_SurfElements.o \
@@ -185,7 +186,8 @@ TEST_CASES_O = $(ODIR)/testStrConst.o \
                $(ODIR)/testSSSolver.o \
                $(ODIR)/testBlockInverse.o \
                $(ODIR)/testFEGreen.o \
-               $(ODIR)/testXMLData.o
+               $(ODIR)/testXMLData.o \
+               $(ODIR)/testCmdLineOption.o
 #
 # Unavailable or missing
 #             $(ODIR)/tst_ScreenTau
@@ -225,7 +227,7 @@ $(ODIR)/testIntegration: testIntegration.o
 	$(LD) -o $(ODIR)/testIntegration testIntegration.o $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/testString: testString.o $(ODIR)/StringModule.o $(ODIR)/breakLine.o
-	$(LD) -o $(ODIR)/testString testString.o $(ODIR)/StringModule.o $(MSTLIB) $(ADDLIBS)
+	$(LD) -o $(ODIR)/testString testString.o $(MSTLIB) $(ADDLIBS)
 
 $(ODIR)/tst_write: tst_write.o
 	$(LD) -o $(ODIR)/tst_write tst_write.o $(IOLIB) $(MPPLIB) $(MSTLIB) $(ADDLIBS)
@@ -372,3 +374,6 @@ $(ODIR)/testTokens: testTokens.o $(ODIR)/getNumTokens.o $(ODIR)/getToken.o
 
 $(ODIR)/testXMLData: testXMLData.o $(ODIR)/XMLDataModule.o
 	$(LD) -o $(ODIR)/testXMLData testXMLData.o $(ODIR)/XMLDataModule.o $(MSTLIB)
+
+$(ODIR)/testCmdLineOption: testCmdLineOption.o $(ODIR)/CmdLineOptionModule.o
+	$(LD) -o $(ODIR)/testCmdLineOption testCmdLineOption.o $(ODIR)/CmdLineOptionModule.o $(MSTLIB)

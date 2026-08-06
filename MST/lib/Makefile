@@ -104,7 +104,8 @@ AndersonLib.o \
 newtc.o \
 decompose3Index.o \
 breakLine.o \
-arrayTools.o
+arrayTools.o \
+setEnvVar.o
 
 ifdef ESSL_WORKAROUND
   LOBS += essl_workaround.o
