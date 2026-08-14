@@ -1,0 +1,34 @@
+***************************************************************************************
+*  Note:                                                                              *
+*     In the MuST version 1.8.2 and prior, the total energy value includes the zero-  *
+*     point lattice energy. Starting from version v1.8.3, the zero point lattice      *
+*     energy is removed from the total energy value and is explicitly printed out in  *
+*     one of the following lines. If needed, one will have to add the zero-point      *
+*     lattice energy to the total energy by hand.                                     *
+***************************************************************************************
+Source Code Version                  : v1.9.3.1                                          
+System Description                   : PdH, NaCl structure                               
+Number of Atoms in Unit Cell         : 2                                                 
+Number of Atomic Species             : 2                                                 
+Number of Atoms in Each Type         : 1(Pd), 1(H)                                       
+Unit Cell Volume (au^3)              : 0.11413325D+03                                    
+Average Atomic Volume (au^3)         : 57.06663                                          
+Zero Point Lattice Energy/Atom (Ryd) : 0.00129                                           
+Zero Point Lattice PV3/Atom (Ryd)    : 0.00882                                           
+Energy Offset                        : -5042                                             
+=======================================================================================
+    Iter    Energy      3PV     Efermi   Rms_rho    Rms_pot   Mix Alg   Alpha 
+---------------------------------------------------------------------------------------
+**     1  -0.790098  226.0186  0.64519  0.103E-03  0.282E-02  pot  B   0.10000
+       2  -0.790065  225.9439  0.64497  0.320E-04  0.225E-02  pot  B   0.10000
+       3  -0.789858  225.7730  0.65101  0.748E-04  0.933E-03  pot  B   0.10000
+       4  -0.789558  225.8189  0.65251  0.216E-04  0.161E-03  pot  B   0.10000
+       5  -0.789556  225.8392  0.65199  0.815E-05  0.731E-04  pot  B   0.10000
+       6  -0.789552  225.8387  0.65180  0.699E-05  0.384E-04  pot  B   0.10000
+       7  -0.789549  225.8326  0.65196  0.284E-05  0.742E-05  pot  B   0.10000
+       8  -0.789551  225.8363  0.65188  0.151E-05  0.125E-04  pot  B   0.10000
+       9  -0.789550  225.8347  0.65193  0.767E-06  0.201E-06  pot  B   0.10000
+      10  -0.789550  225.8348  0.65192  0.868E-07  0.160E-05  pot  B   0.10000
+      11  -0.789550  225.8346  0.65192  0.914E-07  0.149E-06  pot  B   0.10000
+      12  -0.789550  225.8346  0.65192  0.867E-08  0.129E-07  pot  B   0.10000
+      13  -0.789550  225.8346  0.65192  0.653E-09  0.541E-08  pot  B   0.10000
