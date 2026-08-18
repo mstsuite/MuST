@@ -53,14 +53,30 @@
               OptionKeys(n)='Report GPU Energy Consuption'
               OptionValues(n) = '-1'
 !
+!  ===================================================================
+!  Emulation precision parameter and contour zone parameters are defined as follows:
+!  (Assuming N = number of energy contour zones)
+!      precision param 1 is applied to energy contour zone 1, for which Re[energy] starts from the bottom
+!                           of the valence band up to energy contour zone param 1
+!      precision param 2 is applied to energy contour zone 2, which is right next to zone 1 and ends where
+!                           Im[energy] = energy contour zone param 2
+!      precision param 3 is applied to energy contour zone 3, which is right next to zone 2 and ends where
+!                           Im[energy] = energy contour zone param 3
+!      ...,...
+!      precision param N is applied to energy contour zone N, which is right next to zone N-1 and ends where
+!                           Im[energy] = energy contour zone param N = 0.0.
+!  The constrain: energy contour zone param 2 > energy contour zone param 3 > ... 
+!                                             > energy contour zone param N = 0.0
+!  ===================================================================
+
    n = n + 1; Options(1,n)='-em';  Options(2,n)='--emul-scheme'; Options(3,n)='--emul_scheme'
               OptionKeys(n)='Emulation Scheme'
               OptionValues(n) = '0'  ! other possible values are: 1 for Ozaki 1, 2 for Ozaki 2
 !
    n = n + 1; Options(1,n)='-emp';  Options(2,n)='--emul-param'; Options(3,n)='--emul_param'
-              OptionKeys(n)='Emulation Scheme Parameters'
+              OptionKeys(n)='Emulation Precision Parameters'
               OptionValues(n) = '12,14,16'
 !
    n = n + 1; Options(1,n)='-cz';  Options(2,n)='--contour-zone'; Options(3,n)='--contour_zone'
-              OptionKeys(n)='Contour Zone Parameters'
+              OptionKeys(n)='Energy Contour Zone Parameters'
               OptionValues(n) = '0.000,0.010'

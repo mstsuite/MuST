@@ -87,7 +87,8 @@ ConvergenceCheckModule.o \
 MixingModule.o \
 TestPotentialModule.o \
 BookKeepingModule.o \
-ForceModule.o
+ForceModule.o \
+EmulationModule.o
 
 #HDF5Module.o
 

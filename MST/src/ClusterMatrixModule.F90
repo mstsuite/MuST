@@ -162,6 +162,8 @@ contains
 !
    use TimerModule, only : getTime
 !
+   use EmulationModule, only : initEmulation
+!
 #ifdef ACCEL
    use IntegerFactorsModule, only : lofk
    use GauntFactorsModule, only : getK3
@@ -561,15 +563,17 @@ contains
 !     ----------------------------------------------------------------
       call init_lsms_gpu(n_spin_cant,dsize_max,isize_max,             &
                          NumCPUTasksPerGPU,ConstructionMode,MyPEinGroup)
+!     ----------------------------------------------------------------
       t0 = getTime()
+!     ----------------------------------------------------------------
       call allocate_bigmatrix_gpu()
+!     ----------------------------------------------------------------
       if (TimingLSMS) then
          if (node_print_level >= 0) then
             write(6,'(a,t64,''='',f8.3,a)') &
                      'Time for allocating KKR Matrix space on GPU',getTime()-t0,' sec'
          endif
       endif
-!     ----------------------------------------------------------------
       if (ComputeBigMatrixOnGPU) then
          t0 = getTime()
 !        -------------------------------------------------------------
@@ -635,6 +639,10 @@ contains
 !     ----------------------------------------------------------------
    endif
 !
+!  -------------------------------------------------------------------
+   call initEmulation(node_print_level)
+!  -------------------------------------------------------------------
+!
    allocate( ipvt(isize_max) )
    allocate( BlockMatrix(isize_max*isize_max) )
 !
@@ -661,6 +669,8 @@ contains
    use RSpaceStrConstModule, only : endRSpaceStrConst
 !
    use TimerModule, only : getTime
+!
+   use EmulationModule, only : endEmulation
 !
    implicit none
 !
@@ -741,6 +751,10 @@ contains
    ComputeBigMatrixonGPU = .false.
    ComputeGijMatrixonGPU = .false.
 #endif
+!
+!  -------------------------------------------------------------------
+   call endEmulation()
+!  -------------------------------------------------------------------
 !
    Initialized = .false.
 !
@@ -1254,7 +1268,7 @@ contains
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-   subroutine calClusterMatrix(energy,getSingleScatteringMatrix,tau_needed,kp)
+   subroutine calClusterMatrix(energy,getSingleScatteringMatrix,tau_needed)
 !  ===================================================================
    use TimerModule, only : getTime, checkinTiming
    use MPPModule, only : MyPE, NumPEsOnNode, syncAllPEs
@@ -1271,10 +1285,11 @@ contains
 !
    use CmdLineOptionModule, only : getCmdLineOption
 !
+   use EmulationModule, only : isEmulationEnabled, setEmulationPrec
+!
    implicit none
 !
    complex (kind=CmplxKind), intent(in) :: energy
-   complex (kind=CmplxKind), intent(in), optional :: kp
 !
    logical, intent(in), optional :: tau_needed
    logical :: zgemm1_print = .false.
@@ -1331,20 +1346,22 @@ contains
    end interface
 !
    if (.not.Initialized) then
-      call ErrorHandler('calTauMatrix','Module not initialized')
+      call ErrorHandler('calClusterMatrix','Module not initialized')
    endif
 !
 !  -------------------------------------------------------------------
    call exchangeSSSMatrix(getSingleScatteringMatrix)
 !  -------------------------------------------------------------------
 !
-   if (present(kp)) then
-     kappa = kp
-   else
-     kappa = sqrt(energy)
-   endif
+   kappa = sqrt(energy)
    kmax_max_ns = kmax_max*n_spin_cant
    tsize = kmax_max*kmax_max*n_spin_cant*n_spin_cant
+!
+   if (isEmulationEnabled) then
+!     ----------------------------------------------------------------
+      call setEmulationPrec(energy)
+!     ----------------------------------------------------------------
+   endif
 !
    do my_atom = 1, LocalNumAtoms
       Neighbor => getNeighbor(my_atom)

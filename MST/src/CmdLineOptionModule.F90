@@ -7,6 +7,7 @@ public :: initCmdLineOption,  &
           endCmdLineOption,   &
           getCmdLineOption,   &
           printCmdLineOption, &
+          isOptionDefined,    &
           getCmdLineOptionValue
 !
 interface getCmdLineOptionValue
@@ -32,7 +33,7 @@ private
 !  Options read from the command line
 !  ===================================================================
    integer (kind=intKind) :: NumInputOptions = 0
-   integer (kind=IntKind) :: InputOptions(MaxOptions)
+   integer (kind=IntKind) :: InputOption(MaxOptions)
 !
 contains
 !
@@ -61,7 +62,7 @@ contains
 !
    NumOptions = 0
    NumInputOptions = 0
-   InputOptions = 0
+   InputOption = 0
 !
    end subroutine endCmdLineOption
 !  ===================================================================
@@ -575,7 +576,7 @@ contains
       end function nocaseCompare
    end interface
 !
-   n = 0; Options = ' '; OptionKeys = ' '; OptionValues = ' '; InputOptions = 0
+   n = 0; Options = ' '; OptionKeys = ' '; OptionValues = ' '; InputOption = 0
 !
    include '../src/CmdLineOptions.inc'
 !
@@ -633,7 +634,7 @@ contains
          endif
          if (mj > 0) then
             NumInputOptions = NumInputOptions + 1
-            InputOptions(NumInputOptions) = mj
+            InputOption(NumInputOptions) = mj
             mj_save = mj
             if (ieq == 0 .or. ieq == ml) then
 !              args = trim(OptName(j))//'='
@@ -699,7 +700,7 @@ contains
       else if (NumInputOptions == 0) then
          return
       else
-         idx = InputOptions(n)
+         idx = InputOption(n)
          write(6,'(a)')'-------------------------------------------'
          write(6,'(a,a)')'Option expr:  ',trim(Options(2,idx))
          write(6,'(a,a)')'Option key:   ',trim(OptionKeys(idx))
@@ -708,7 +709,7 @@ contains
    else
       write(6,'(/)')
       do i = 1, NumInputOptions
-         idx = InputOptions(i)
+         idx = InputOption(i)
          write(6,'(a)')'-------------------------------------------'
          write(6,'(a,a)')'Option expr:  ',trim(Options(2,idx))
          write(6,'(a,a)')'Option key:   ',trim(OptionKeys(idx))
@@ -718,5 +719,36 @@ contains
    endif
 !
    end subroutine printCmdLineOption
+!  ===================================================================
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function isOptionDefined(key) result(found)
+!  ===================================================================
+   implicit none
+!
+   character (len=*), intent(in) :: key
+!
+   integer (kind=IntKind) :: i, idx
+!
+   logical :: found
+!
+   interface
+      function nocaseCompare(s1,s2) result(t)
+         character (len=*), intent(in) :: s1
+         character (len=*), intent(in) :: s2
+         logical :: t
+      end function nocaseCompare
+   end interface
+!
+   found = .false.
+   LOOP_i: do i = 1, NumInputOptions
+      idx = InputOption(i)
+      if (nocaseCompare(key,OptionKeys(idx))) then
+         found = .true.
+         exit LOOP_i
+      endif
+   enddo LOOP_i
+!
+   end function isOptionDefined
 !  ===================================================================
 end module CmdLineOptionModule

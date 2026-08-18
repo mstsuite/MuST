@@ -1,0 +1,10 @@
+n = n + 1; SchemeName(n)   ='Cublas-1'
+           PrecEnvVar(n)   ='CUBLAS_FIXEDPOINT_EMULATION_MANTISSA_BIT_COUNT'; PrecEnvVarValue(n)='8'
+           ExtraEnvVar(1,n)='CUBLAS_EMULATE_DOUBLE_PRECISION';                ExtraEnvVarValue(1,n)='1'
+           ExtraEnvVar(2,n)='CUBLAS_EMULATE_SINGLE_PRECISION';                ExtraEnvVarValue(2,n)='1'
+           ExtraEnvVar(3,n)='CUBLAS_EMULATION_STRATEGY';                      ExtraEnvVarValue(3,n)='eager'
+
+n = n + 1; SchemeName(n)   ='GEMMul8'
+           PrecEnvVar(n)   ='GEMMUL8_NUM_MOD_Z_GEMM';   PrecEnvVarValue(n)='8'
+           ExtraEnvVar(1,n)='GEMMUL8_BACKEND_GEMM';     ExtraEnvVarValue(1,n)='INT8'
+           ExtraEnvVar(2,n)='GEMMUL8_FASTMODE_Z_GEMM';  ExtraEnvVarValue(2,n)='1'

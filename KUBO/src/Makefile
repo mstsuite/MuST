@@ -86,7 +86,8 @@ $(MST_ODIR)/ConvergenceCheckModule.o \
 $(MST_ODIR)/MixingModule.o \
 $(MST_ODIR)/TestPotentialModule.o \
 $(MST_ODIR)/BookKeepingModule.o \
-$(MST_ODIR)/ForceModule.o 
+$(MST_ODIR)/ForceModule.o \
+$(MST_ODIR)/EmulationModule.o
 
 #HDF5Module.o
 
