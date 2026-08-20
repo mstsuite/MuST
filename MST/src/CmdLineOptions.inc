@@ -53,6 +53,10 @@
               OptionKeys(n)='Report GPU Energy Consuption'
               OptionValues(n) = '-1'
 !
+   n = n + 1; Options(1,n)='-ptm';  Options(2,n)='--print-tau'; Options(3,n)='--print_tau'
+              OptionKeys(n)='Print the Tau Matrix'
+              OptionValues(n) = '0'
+!
 !  ===================================================================
 !  Emulation precision parameter and contour zone parameters are defined as follows:
 !  (Assuming N = number of energy contour zones)

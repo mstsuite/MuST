@@ -823,6 +823,7 @@ contains
    use SSSolverModule, only : getGreenFunctionDerivative
 !
    use ClusterMatrixModule, only : getClusterKau => getKau
+   use ClusterMatrixModule, only : getClusterTau => getTau
 !
    use CrystalMatrixModule, only : getCrystalKau => getKau
    use CrystalMatrixModule, only : getCrystalTau => getTau
@@ -834,6 +835,8 @@ contains
    use SROModule, only : getKauFromTau
 !
    use IBZRotationModule, only : symmetrizeMatrix, checkMatrixSymmetry
+!
+   use CmdLineOptionModule, only : getCmdLineOption
 !
    implicit none
 !
@@ -850,6 +853,7 @@ contains
 !
    complex (kind=CmplxKind), pointer :: tfac(:,:), gfs(:,:)
    complex (kind=CmplxKind), pointer :: PhiLr_right(:,:,:), PhiLr_left(:,:,:), kau00(:,:,:)
+   complex (kind=CmplxKind), pointer :: tau00(:,:,:)
    complex (kind=CmplxKind), pointer :: der_PhiLr_right(:,:,:), der_PhiLr_left(:,:,:)
    complex (kind=CmplxKind), pointer :: gf(:,:), pp(:,:), ppr(:,:), ppg(:,:,:)
    complex (kind=CmplxKind), pointer :: dgf(:,:), dpp(:,:), dppr(:,:), dppg(:,:,:)
@@ -930,9 +934,28 @@ contains
       enddo
    endif
 !
-!  -------------------------------------------------------------------
-   call computeMSTMatrix(is,e)
-!  -------------------------------------------------------------------
+   if (getCmdLineOption('Print the Tau Matrix') == 0) then
+!     ----------------------------------------------------------------
+      call computeMSTMatrix(is,e,tau_needed=.true.)
+!     ----------------------------------------------------------------
+      do id = 1, LocalNumAtoms
+         if (print_instruction(id) >= 0) then
+            kmaxk = kmax_kkr(id)
+            do ia = 1, getLocalNumSpecies(id)
+               if (isLSMS()) then
+                  tau00 => getClusterTau(local_id=id)
+               else
+                  tau00 => getCrystalTau(local_id=id)
+               endif
+               call writeMatrix('Tau',tau00(:,:,1),kmaxk,kmaxk,TEN2m6)
+            enddo
+         endif
+      enddo
+   else
+!     ----------------------------------------------------------------
+      call computeMSTMatrix(is,e)
+!     ----------------------------------------------------------------
+   endif
 !
 #ifdef TIMING
    if (MaxPrintLevel >= 0) then
