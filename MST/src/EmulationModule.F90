@@ -332,7 +332,7 @@ contains
          call ErrorHandler('getExtraEnvVarValue',               &
                            'The environment variable index is out of range',id_var)
       else
-         eval = ExtraEnvVarValue(id_var)
+         eval = ExtraEnvVarValue(id_var,SchemeIndex)
       endif
    else
       eval = ' '
