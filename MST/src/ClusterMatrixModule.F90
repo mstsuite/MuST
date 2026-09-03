@@ -1357,7 +1357,7 @@ contains
    kmax_max_ns = kmax_max*n_spin_cant
    tsize = kmax_max*kmax_max*n_spin_cant*n_spin_cant
 !
-   if (isEmulationEnabled) then
+   if (isEmulationEnabled()) then
 !     ----------------------------------------------------------------
       call setEmulationPrec(energy)
 !     ----------------------------------------------------------------
