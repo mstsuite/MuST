@@ -10,8 +10,9 @@ if (USE_ACCELERATOR_CUDA_C)
               accmath.hpp  
               util_mat.cu
               LSMS_Accel.cu
-              cusolver_KKR_c.cu  
-              invertMatrixKKR_CUDA.F90 
+              DensityInterp_Accel.cu
+              cusolver_KKR_c.cu
+              invertMatrixKKR_CUDA.F90
               )
               
 endif()

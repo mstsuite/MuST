@@ -78,6 +78,7 @@ $(MST_ODIR)/ParallelFFTModule.o \
 $(MST_ODIR)/ConstrainLocalMomentModule.o \
 $(MST_ODIR)/ValenceDensityModule.o \
 $(MST_ODIR)/ChargeDensityModule.o \
+$(MST_ODIR)/DensityOnGridModule.o \
 $(MST_ODIR)/ChargeDistributionModule.o \
 $(MST_ODIR)/ChargeScreeningModule.o \
 $(MST_ODIR)/PotentialGenerationModule.o \

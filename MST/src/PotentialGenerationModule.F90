@@ -253,6 +253,8 @@ contains
 !
    use AngularIntegrationModule, only : initAngularIntegration
 !
+   use DensityOnGridModule, only : initDensityOnGrid
+!
    implicit none
 !
    character (len=*), intent(in) :: istop
@@ -725,6 +727,14 @@ contains
 !     ----------------------------------------------------------------
       call initAngularIntegration(50,80,lmax_max,jend_max,n_spin_pola+1)
 !     ----------------------------------------------------------------
+!     =================================================================
+!     Batched (radial x angular) density evaluator used by calExchangeJl.
+!     It must be initialised after initAngularIntegration, because it
+!     caches that module's Ylm table.
+!     -----------------------------------------------------------------
+      call initDensityOnGrid(jend_max, jmax_max, lmax_max, MyPEinGroup,  &
+                             node_print_level, needGrad=gga_functional)
+!     -----------------------------------------------------------------
    endif
 !
    end subroutine initPotentialGeneration
@@ -746,6 +756,8 @@ contains
    use ScfDataModule, only : isChargeCorr  
 !
    use AngularIntegrationModule, only : endAngularIntegration
+!
+   use DensityOnGridModule, only : endDensityOnGrid
 !
    implicit none
 !
@@ -806,6 +818,7 @@ contains
 !  -------------------------------------------------------------------
    if ( isFullPot ) then
 !     ----------------------------------------------------------------
+      call endDensityOnGrid()
       call endAngularIntegration()
       call endParallelFFT()
 !     ----------------------------------------------------------------
@@ -4007,6 +4020,13 @@ contains
                                         calAngularIntegration,      &
                                         retrieveSphHarmExpanData
 !
+   use DensityOnGridModule, only : calDensityOnAngularGrid,         &
+                                   calDensityGradOnAngularGrid,     &
+                                   isDensityOnGridGPU,              &
+                                   isDensityGradAvailable,          &
+                                   FIELD_CHARGE, FIELD_MOMENT,      &
+                                   FIELD_DER_CHARGE, FIELD_DER_MOMENT
+!
    implicit none
 !
    integer (kind=IntKind), intent(in) :: id, ia, lmax_in
@@ -4036,6 +4056,19 @@ contains
    integer (kind=IntKind), parameter :: nq = 5
    integer (kind=IntKind) :: idx_posi(3)
    real (kind=RealKind) :: uv(3)
+!
+!  ===================================================================
+!  Batched density evaluation (replaces the per-point calls to
+!  getChargeDensityAtPoint / getMomentDensityAtPoint).  den_grid and
+!  mom_grid hold rho(r_i,u_g) and m(r_i,u_g) for all radial nodes and
+!  all angular directions of the fixed spherical grid.
+!  ===================================================================
+   integer (kind=IntKind) :: jmax_den, nr_den
+   logical :: use_batched
+   real (kind=RealKind), allocatable :: den_grid(:,:), mom_grid(:,:)
+   real (kind=RealKind), allocatable :: dgrad_grid(:,:), mgrad_grid(:,:)
+   complex (kind=CmplxKind), pointer :: p_den_l(:,:), p_mom_l(:,:)
+   complex (kind=CmplxKind), pointer :: p_der_den_l(:,:), p_der_mom_l(:,:)
 !
 !  -------------------------------------------------------------------
 !  generate points on the sphere to be integrated
@@ -4169,25 +4202,126 @@ contains
    angular_data => getSphericalGridData()
    size_d1 = size(angular_data,1)
    angular_data = ZERO
+!
+!  ===================================================================
+!  Batched evaluation of the density on the (radial node) x (angular
+!  direction) grid.
+!
+!  The evaluation points below are posi = r_mesh(ir)*uv, i.e. they lie
+!  exactly on radial mesh nodes, and the angular directions uv are the
+!  fixed spherical-grid directions.  The old code called
+!  getChargeDensityAtPoint once per (ing,ir) pair; each such call
+!  repeated a bisection search over the radial mesh and an n_inter-point
+!  Neville interpolation for every jl component -- ngl*jend calls per
+!  (atom,species).  calDensityOnAngularGrid performs the identical
+!  interpolation for all points in one pass (two GEMMs), on the GPU when
+!  the accelerator is enabled.
+!
+!  For GGA the density GRADIENT is needed as well.  It factorizes the
+!  same way, because grad_ylm carries the radius only as an overall 1/r:
+!     grad(rho) = [sum_jl fa2*Re(d(rho_jl)/dr * Y_jl)] * u_g
+!               + (1/r) [sum_jl fa2*Re(rho_jl * G_jl)]
+!  so calDensityGradOnAngularGrid returns value and gradient together.
+!  ===================================================================
+   use_batched = (.not.gga_functional) .or. isDensityGradAvailable()
+!
+   if (use_batched) then
+      p_den_l => getChargeDensity("TotalNew",id,ia)
+      nr_den   = min(jend, size(p_den_l,1))
+      jmax_den = size(p_den_l,2)
+      allocate( den_grid(jend,ngl) )
+      den_grid = ZERO
+      if ( gga_functional ) then
+         allocate( dgrad_grid(jend,ngl*3) )
+         dgrad_grid = ZERO
+         p_den_l => getChargeDensity("TotalNew",id,ia,p_der_den_l)
+!        -------------------------------------------------------------
+         call calDensityGradOnAngularGrid( p_den_l, p_der_den_l,          &
+                                           size(p_den_l,1), r_mesh,        &
+                                           nr_den, jmax_den,               &
+                                           FIELD_CHARGE, FIELD_DER_CHARGE, &
+                                           den_grid, dgrad_grid, jend,     &
+                                           mesh_id=id )
+!        -------------------------------------------------------------
+      else
+!        -------------------------------------------------------------
+         call calDensityOnAngularGrid( p_den_l, size(p_den_l,1), r_mesh, &
+                                       nr_den, jmax_den, FIELD_CHARGE,   &
+                                       den_grid, jend, mesh_id=id )
+!        -------------------------------------------------------------
+      endif
+      if ( n_spin_pola == 2 ) then
+         p_mom_l => getMomentDensity("TotalNew",id,ia)
+         allocate( mom_grid(jend,ngl) )
+         mom_grid = ZERO
+         if ( gga_functional ) then
+            allocate( mgrad_grid(jend,ngl*3) )
+            mgrad_grid = ZERO
+            p_mom_l => getMomentDensity("TotalNew",id,ia,p_der_mom_l)
+!           ----------------------------------------------------------
+            call calDensityGradOnAngularGrid( p_mom_l, p_der_mom_l,        &
+                                    size(p_mom_l,1), r_mesh, nr_den,        &
+                                    min(jmax_den,size(p_mom_l,2)),          &
+                                    FIELD_MOMENT, FIELD_DER_MOMENT,         &
+                                    mom_grid, mgrad_grid, jend, mesh_id=id )
+!           ----------------------------------------------------------
+         else
+!           ----------------------------------------------------------
+            call calDensityOnAngularGrid( p_mom_l, size(p_mom_l,1), r_mesh, &
+                                          nr_den, min(jmax_den,size(p_mom_l,2)), &
+                                          FIELD_MOMENT, mom_grid, jend,     &
+                                          mesh_id=id )
+!           ----------------------------------------------------------
+         endif
+      endif
+   endif
+!
    do ing = 1, ngl
       uv = getUnitVec(ing)
       LOOP_ir: do ir = MyPEinEKGroup+1, jend, NumPEsInEKGroup
          posi(1:3) = r_mesh(ir)*uv(1:3)
 
          t2 = getTime()
-         if (gga_functional) then
+         if (use_batched) then
+            rho = den_grid(ir,ing)
+            if ( gga_functional ) then
+!              ==========================================================
+!              dgrad_grid(:, (c-1)*ngl+ing) holds the c-th Cartesian
+!              component of grad(rho) on the (ir,ing) angular-radial grid
+!              ==========================================================
+               grad_rho(1) = dgrad_grid(ir,        ing)
+               grad_rho(2) = dgrad_grid(ir,  ngl + ing)
+               grad_rho(3) = dgrad_grid(ir,2*ngl + ing)
+            else
+               grad_rho = ZERO
+            endif
+         else if (gga_functional) then
             rho = getChargeDensityAtPoint( 'TotalNew', id, ia, posi, TEN2m8, grad=grad_rho, truncated=.false. )
          else
             rho = getChargeDensityAtPoint( 'TotalNew', id, ia, posi, TEN2m8, truncated=.false. )
             grad_rho = ZERO
          endif
-         tc1 = tc1 + (getTime()-t2)  ! cummulating time on getChargeDensityAtPoint
+         tc1 = tc1 + (getTime()-t2)  ! cummulating time on the density evaluation
          if ( rho <= ZERO ) then
             cycle Loop_ir
          endif
          t2 = getTime()
          if ( n_spin_pola==2 ) then
-            if (gga_functional) then
+            if (use_batched) then
+               mom = mom_grid(ir,ing)
+               if ( gga_functional ) then
+                  grad_mom(1) = mgrad_grid(ir,        ing)
+                  grad_mom(2) = mgrad_grid(ir,  ngl + ing)
+                  grad_mom(3) = mgrad_grid(ir,2*ngl + ing)
+!                 ----------------------------------------------------
+                  call calExchangeCorrelation(rho,grad_rho,mom,grad_mom)
+!                 ----------------------------------------------------
+               else
+!                 ----------------------------------------------------
+                  call calExchangeCorrelation(rho,mag_den=mom)
+!                 ----------------------------------------------------
+               endif
+            else if (gga_functional) then
                mom = getMomentDensityAtPoint( 'TotalNew', id, ia, posi, TEN2m8, grad=grad_mom, truncated=.false. )
 !              -------------------------------------------------------
                call calExchangeCorrelation(rho,grad_rho,mom,grad_mom)
@@ -4217,6 +4351,21 @@ contains
          angular_data(n0+n_spin_pola+1,ing) = getExchCorrEnDen()
       enddo LOOP_ir
    enddo
+!
+   if (use_batched) then
+      deallocate( den_grid )
+      if ( gga_functional ) then
+         deallocate( dgrad_grid )
+      endif
+      if ( n_spin_pola == 2 ) then
+         deallocate( mom_grid )
+         if ( gga_functional ) then
+            deallocate( mgrad_grid )
+         endif
+      endif
+      nullify( p_den_l, p_mom_l )
+      nullify( p_der_den_l, p_der_mom_l )
+   endif
    t3 = getTime()
    if (NumPEsInEKGroup > 1) then
 !     ----------------------------------------------------------------

@@ -79,6 +79,7 @@ ParallelFFTModule.o \
 ConstrainLocalMomentModule.o \
 ValenceDensityModule.o \
 ChargeDensityModule.o \
+DensityOnGridModule.o \
 ChargeDistributionModule.o \
 ChargeScreeningModule.o \
 PotentialGenerationModule.o \
