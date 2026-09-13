@@ -245,6 +245,26 @@ private
    integer (kind=IntKind), allocatable, target   :: flags_jl(:)
    integer (kind=IntKind), allocatable, target   :: flags_trunc_jl(:)
 !
+!  ===================================================================
+!  Hoisted Gaunt contraction of the potential (see buildVTables).
+!
+!     gaunt_pot(klpp,klp) = V(klpp,klp,ir) + delta(klpp,klp)*shift
+!
+!  V depends on (site, spin, radial point) only; the whole angular-
+!  momentum and energy dependence of gaunt_pot is the scalar shift.
+!  V_in covers the inner march (pot_jl, N0 = 0, irmn0 = ir); V_out
+!  covers the outer march (pot_trunc_jl, N0 = numrs_mt-1,
+!  irmn0 = ir-numrs_mt+1).  Both are indexed by irmn0, i.e. by the same
+!  index solveSCr uses to address pot_l, so that the two regions cannot
+!  be confused.
+!  ===================================================================
+   integer (kind=IntKind) :: ldV_gaunt  = 0
+   integer (kind=IntKind) :: nrV_in_max = 0
+   integer (kind=IntKind) :: nrV_out_max = 0
+   logical :: L0GauntChecked = .false.
+   complex (kind=CmplxKind), allocatable, target :: V_in(:,:,:)
+   complex (kind=CmplxKind), allocatable, target :: V_out(:,:,:)
+!
    real (kind=RealKind), allocatable, target :: wks_PS(:)
 !
    complex (kind=CmplxKind), allocatable, target :: wks_sinmat(:)
@@ -326,6 +346,8 @@ contains
                             istop, iprint, derivative )
 !  ===================================================================
    use MPPModule, only : MyPE, syncAllPEs
+!
+   use SSMarchModule, only : initSSMarch
 !
    use IntegerFactorsModule, only : initIntegerFactors, pushIntegerFactorsToAccel
 !
@@ -840,6 +862,45 @@ contains
          allocate( flags_trunc_jl(jmax_trunc_max) )
       endif
 !
+!     ================================================================
+!     Storage for the hoisted Gaunt contraction of the potential.
+!     Sized from the actual per-site parameters, not from constants:
+!     it scales as kmax_phi^2 * numrs, so an lmax_phi = 6 case is 4x
+!     an lmax_phi = 4 one.
+!     ================================================================
+      ldV_gaunt   = kmax_max_phi
+      nrV_in_max  = 1
+      nrV_out_max = 1
+      do ia = 1, LocalNumSites
+!        V_in must span the whole pot_jl range, not just the muffin-tin
+!        one: for SSSMethod /= 2 the OUTER march is issued with N0 = 0
+!        (calPhiLr, the else branch of the SSSMethod==2 test) and so
+!        addresses pot_jl -- and therefore V_in -- out to numrs_cs.
+         nrV_in_max  = max(nrV_in_max, Scatter(ia)%numrs_cs)
+         nrV_out_max = max(nrV_out_max, Scatter(ia)%numrs_trunc)
+      enddo
+      allocate( V_in(ldV_gaunt,ldV_gaunt,nrV_in_max) )
+      if ( SSSMethod > 0 ) then
+         allocate( V_out(ldV_gaunt,ldV_gaunt,nrV_out_max) )
+      else
+         allocate( V_out(1,1,1) )
+      endif
+!
+!     ================================================================
+!     Offer the radial march to the device.  initSSMarch probes for a
+!     GPU and leaves the CPU march selected if there is not one, so
+!     this is safe on a CPU-only node.  nlj comes from the allocated
+!     shape of bjl rather than from lmax_phi, which is per-site here.
+!     ----------------------------------------------------------------
+      if (MyPE == 0) then
+         call initSSMarch(iend_max, kmax_max_phi, size(bjl,2),          &
+                          ldV_gaunt, nrV_in_max, nrV_out_max, MyPE, 0)
+      else
+         call initSSMarch(iend_max, kmax_max_phi, size(bjl,2),          &
+                          ldV_gaunt, nrV_in_max, nrV_out_max, MyPE, -1)
+      endif
+!     ----------------------------------------------------------------
+!
    endif
 !  ===================================================================
 !  -------------------------------------------------------------------
@@ -972,6 +1033,7 @@ contains
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine endSSSolver()
 !  ===================================================================
+   use SSMarchModule, only : endSSMarch
 use MPPModule, only : MyPE, syncAllPEs
    use IntegerFactorsModule, only : endIntegerFactors, deleteIntegerFactorsOnAccel
    use GauntFactorsModule, only: deleteGauntFactorsOnAccel
@@ -1089,6 +1151,12 @@ use MPPModule, only : MyPE, syncAllPEs
       if (SSSMethod == 0 .or. SSSMethod == 1) then
          deallocate( wks_scvphi )
       endif
+      if (allocated(V_in))  deallocate( V_in )
+      if (allocated(V_out)) deallocate( V_out )
+      L0GauntChecked = .false.
+!     ----------------------------------------------------------------
+      call endSSMarch()
+!     ----------------------------------------------------------------
    endif
    deallocate( v0r, cm0 )
    deallocate( v0r_save )
@@ -1333,6 +1401,9 @@ use MPPModule, only : MyPE, syncAllPEs
 !
    use ScfDataModule, only : CurrentScfIteration
 !
+   use SSMarchModule, only : isSSMarchGPU, pushSSMarchVTable,          &
+                             pushSSMarchEnergy
+!
    implicit none
 !
    character (len=22), parameter :: sname='solveSingleScattering'
@@ -1340,6 +1411,7 @@ use MPPModule, only : MyPE, syncAllPEs
 !
    logical, optional, intent(in) :: isSphSolver, isCheckWronsk
    logical :: isPotSpherical
+   logical :: VTablePushed
 !
    integer (kind=IntKind), intent(in) :: spin
    integer (kind=IntKind), intent(in) :: site
@@ -1769,6 +1841,34 @@ use MPPModule, only : MyPE, syncAllPEs
          TmpSpace = CZERO
          fmem => aliasArray2_c(TmpSpace,iend,5)
          t0 = getTime()
+!
+!        =============================================================
+!        Build the energy-independent Gaunt contraction of the
+!        potential once for this (site,spin).  Every march below then
+!        reads it instead of rebuilding it at each of its ~1,032
+!        radial steps.
+!        -------------------------------------------------------------
+         call buildVTables()
+!        -------------------------------------------------------------
+         if ( isSSMarchGPU() ) then
+!           ==========================================================
+!           V is 10.4 MB and depends on the potential alone, so it is
+!           uploaded against a (site, atom, spin, SCF iteration) key.
+!           The real-axis path holds one (site,spin) across hundreds of
+!           energies, so this collapses thousands of uploads into one;
+!           pushing per march would move more data than the offload
+!           saves.  The per-energy tables are ~0.5 MB, so they are
+!           pushed unconditionally.
+!           ----------------------------------------------------------
+            call pushSSMarchVTable(site, ia, spin, CurrentScfIteration, &
+                                   V_in, V_out, ldV_gaunt, numrs_cs,    &
+                                   numrs_trunc,                         &
+                                   (SSSMethod==1 .or. SSSMethod==2),    &
+                                   VTablePushed)
+            call pushSSMarchEnergy(Grid%r_mesh, bjl, bnl, cm0, lofk,    &
+                                   iend, size(bjl,2), kmax_phi)
+!           ----------------------------------------------------------
+         endif
 !
 !        =============================================================
 !        calculate sum [gaunt_factor * pot * step_function]
@@ -3468,8 +3568,191 @@ use MPPModule, only : MyPE, syncAllPEs
 !  *******************************************************************
 !
 !  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine checkL0Gaunt()
+!  ===================================================================
+!  The hoist performed by buildVTables rests on one identity: the
+!  L1 = (0,0) Gaunt coefficient is Y0 on the diagonal and zero off it,
+!
+!     sum_{i1 : kj3(i1,klpp,klp) == 1} cgnt(i1,klpp,klp)
+!                                            = Y0 * delta(klpp,klp)
+!
+!  so that the (0,0) component of the potential -- the only one that
+!  carries the l- and energy-dependent shift -- reaches gaunt_pot
+!  through its diagonal alone.  Verify it once rather than assume it.
+!  If it does not hold, the diagonal shift applied in solveSCr is
+!  wrong, and the symptom would be a plausible-looking wrong potential
+!  rather than a crash.
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind) :: klp, klpp, i1, nj3_i3
+!
+   real (kind=RealKind) :: s, dev, devmax
+!
+   devmax = ZERO
+   do klp = 1, kmax_phi
+      do klpp = 1, kmax_phi
+         s = ZERO
+         nj3_i3 = nj3(klpp,klp)
+         do i1 = 1, nj3_i3
+            if (kj3(i1,klpp,klp) == 1) then
+               s = s + cgnt(i1,klpp,klp)
+            endif
+         enddo
+         if (klpp == klp) then
+            dev = abs(s - Y0)
+         else
+            dev = abs(s)
+         endif
+         devmax = max(devmax,dev)
+      enddo
+   enddo
+!
+   if (devmax > TEN2m6) then
+!     ----------------------------------------------------------------
+      call ErrorHandler('checkL0Gaunt',                                &
+              'L1=(0,0) Gaunt matrix is not Y0*I, so the diagonal-shift &
+&hoist in solveSCr is invalid',devmax)
+!     ----------------------------------------------------------------
+   endif
+   L0GauntChecked = .true.
+!
+   end subroutine checkL0Gaunt
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   subroutine buildVTables()
+!  ===================================================================
+!  Build the energy- and angular-momentum-independent part of the
+!  gaunt_pot matrix that solveSCr used to rebuild at every radial step.
+!
+!  solveSCr formed, at each radial point,
+!
+!     gaunt_pot(klpp,klp) = sum_i1 cgnt(i1,klpp,klp) * potmp(jl1(i1))
+!
+!  with potmp(jl1) = pot_l(irmn0,jl1), except for jl1 = 1 which also
+!  carried  llp1*(1-cm0)/(Y0 r^2) + (e^2*c2inv + PotShift)/Y0 .  Only
+!  that one term depends on kl (through llp1) or on the energy, and by
+!  checkL0Gaunt it enters gaunt_pot on the diagonal only.  Hence
+!
+!     gaunt_pot(klpp,klp) = V(klpp,klp,irmn0)
+!                         + delta(klpp,klp)*( llp1*(1-cm0(ir))/r(ir)^2
+!                                             + e^2*c2inv + PotShift )
+!
+!  V is built here once per solveSingleScattering and reused by all
+!  kmax_kkr marches of that solve, over all their radial steps and all
+!  five corrector iterations -- roughly 25,800 rebuilds replaced by
+!  numrs_cs.  The scalar shift is applied to vpsum in solveSCr, so the
+!  matrix itself is never materialised there either.
+!
+!  It is deliberately NOT cached across calls.  The rebuild costs about
+!  1 % of the solve it serves, whereas a cross-call cache would need a
+!  potential-version key that could go stale silently and produce a
+!  wrong potential rather than a crash.
+!
+!  CAUTION.  The two regions use different potentials AND different
+!  index conventions, and V is indexed by irmn0 -- the same index
+!  solveSCr uses to address pot_l -- precisely so that they cannot be
+!  confused.  Getting this wrong is invisible inside the muffin-tin
+!  sphere and shows up only in the interstitial.
+!  ===================================================================
+   implicit none
+!
+   integer (kind=IntKind) :: ir, klp, klpp, i1, kl1, m1, jl1, nj3_i3
+   integer (kind=IntKind), pointer :: kj3_i3(:)
+!
+   real (kind=RealKind), pointer :: cgnt_i3(:)
+!
+   complex (kind=CmplxKind) :: potmp(jmax_potmp)
+   complex (kind=CmplxKind) :: g
+!
+   if (.not.L0GauntChecked) then
+!     ----------------------------------------------------------------
+      call checkL0Gaunt()
+!     ----------------------------------------------------------------
+   endif
+!
+!  ===================================================================
+!  N0 = 0 region: pot_jl, addressed by solveSCr as irmn0 = ir.  This
+!  runs to numrs_cs, not numrs_mt: the inner march stops at numrs_mt,
+!  but for SSSMethod /= 2 calPhiLr also issues the OUTER march with
+!  N0 = 0, which addresses pot_jl out to numrs_cs.
+!  ===================================================================
+   do ir = 1, numrs_cs
+      potmp = CZERO
+      do jl1 = 1, jmax_pot
+         if (flags_jl(jl1) /= 0) then
+            potmp(jl1) = pot_jl(ir,jl1)
+         endif
+      enddo
+      do klp = 1, kmax_phi
+         do klpp = 1, kmax_phi
+            g = CZERO
+            nj3_i3 = nj3(klpp,klp)
+            kj3_i3 => kj3(1:nj3_i3,klpp,klp)
+            cgnt_i3 => cgnt(1:nj3_i3,klpp,klp)
+            do i1 = 1, nj3_i3
+               kl1 = kj3_i3(i1)
+               m1 = mofk(kl1); jl1 = jofk(kl1)
+               if (m1 >= 0) then
+                  g = g + cgnt_i3(i1)*potmp(jl1)
+               else
+                  g = g + cgnt_i3(i1)*m1m(m1)*conjg(potmp(jl1))
+               endif
+            enddo
+            V_in(klpp,klp,ir) = g
+         enddo
+      enddo
+   enddo
+!
+!  ===================================================================
+!  Outer region: pot_trunc_jl, which solveSCr addresses with
+!  N0 = numrs_mt-1, so irmn0 = ir-numrs_mt+1 and the table runs
+!  1..numrs_trunc.
+!  ===================================================================
+   if ( SSSMethod == 1 .or. SSSMethod == 2 ) then
+      do ir = 1, numrs_trunc
+         potmp = CZERO
+         do jl1 = 1, jmax_trunc
+            if (flags_trunc_jl(jl1) /= 0) then
+               potmp(jl1) = pot_trunc_jl(ir,jl1)
+            endif
+         enddo
+         do klp = 1, kmax_phi
+            do klpp = 1, kmax_phi
+               g = CZERO
+               nj3_i3 = nj3(klpp,klp)
+               kj3_i3 => kj3(1:nj3_i3,klpp,klp)
+               cgnt_i3 => cgnt(1:nj3_i3,klpp,klp)
+               do i1 = 1, nj3_i3
+                  kl1 = kj3_i3(i1)
+                  m1 = mofk(kl1); jl1 = jofk(kl1)
+                  if (m1 >= 0) then
+                     g = g + cgnt_i3(i1)*potmp(jl1)
+                  else
+                     g = g + cgnt_i3(i1)*m1m(m1)*conjg(potmp(jl1))
+                  endif
+               enddo
+               V_out(klpp,klp,ir) = g
+            enddo
+         enddo
+      enddo
+   endif
+!
+   nullify(kj3_i3, cgnt_i3)
+!
+   end subroutine buildVTables
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
    subroutine solveSCr(kl,N1,N2,h,sx,cx,dsx,dcx,N0,jmax_pot_loc,pot_l,flags)
 !  ===================================================================
+   use SSMarchModule, only : marchSCrGPU, addSSMarchCpuTime
+   use TimerModule, only : getTime
 !
 ! *===================================================================
 ! *                                                                  *
@@ -3562,11 +3845,13 @@ use MPPModule, only : MyPE, syncAllPEs
    complex (kind=CmplxKind), intent(in) :: pot_l(:,:)
 !
    complex (kind=CmplxKind) :: cfac, e2oc2
-   complex (kind=CmplxKind) :: gaunt_pot(kmax_phi,kmax_phi)
    complex (kind=CmplxKind) :: vpsum(kmax_phi), pwave(kmax_phi)
    complex (kind=CmplxKind) :: sxir(kmax_phi), cxir(kmax_phi)
    complex (kind=CmplxKind) :: sxirm1(kmax_phi), cxirm1(kmax_phi)
-   complex (kind=CmplxKind) :: potmp(jmax_potmp)
+   complex (kind=CmplxKind) :: vshift
+   complex (kind=CmplxKind), pointer :: p_V(:,:)
+!
+   real (kind=RealKind) :: t0_cpu
 !
    e2oc2=energy*energy*c2inv
 !
@@ -3588,6 +3873,28 @@ use MPPModule, only : MyPE, syncAllPEs
 !  ===================================================================
 !  Solve the rest of the points using Adams-Bashforth 4-step method
 !  ===================================================================
+!  ===================================================================
+!  Offer the march to the device.  marchSCrGPU returns .false. having
+!  touched nothing when the GPU path is unavailable or the march is too
+!  short to be worth a launch, in which case the CPU reference below
+!  runs exactly as it always did.  It is deliberately the LAST thing
+!  before the loop, so that everything the device needs -- hfac, llp1,
+!  nstep, e2oc2 -- has already been derived by the same code the CPU
+!  path uses.
+!  -------------------------------------------------------------------
+   if ( marchSCrGPU(N1, N2, N0, nstep, icmax, iend, kmax_phi,          &
+                    size(bjl,2), llp1, flags(1) /= 0, hfac,            &
+                    kappa, e2oc2, PotShift, sx, cx, dsx, dcx) ) then
+      return
+   endif
+!
+!  ===================================================================
+!  The device declined, so this is the CPU reference march.  Time it,
+!  so that one run reports what both paths cost.
+!  ===================================================================
+   t0_cpu = getTime()
+!  -------------------------------------------------------------------
+!
    j=4; jm1 = 3; jm2 = 2; jm3 = 1
    do klp=1,kmax_phi
       sxirm1(klp) = sx(N1-nstep,klp)
@@ -3610,34 +3917,24 @@ use MPPModule, only : MyPE, syncAllPEs
                                      -Nine   *dcx(klp,jm3) )
       enddo
 !     ================================================================
-      potmp = CZERO
-      do jl1 = 1, jmax_pot_loc
-         if (flags(jl1) /= 0) then
-            if (jl1 == 1) then
-               potmp(jl1) = llp1*(CONE-cm0(ir))/(Y0*r_mesh(ir)**2)+pot_l(irmn0,jl1)+(e2oc2+PotShift)/Y0
-            else
-               potmp(jl1) = pot_l(irmn0,jl1)
-            endif
-         endif
-      enddo
-!
-      do klp=1,kmax_phi
-         do klpp=1,kmax_phi
-            gaunt_pot(klpp,klp) = CZERO
-            nj3_i3 = nj3(klpp,klp)
-            kj3_i3 => kj3(1:nj3_i3,klpp,klp)
-            cgnt_i3 => cgnt(1:nj3_i3,klpp,klp)
-            do i1=1,nj3_i3
-               kl1 = kj3_i3(i1)
-               m1 = mofk(kl1); jl1 = jofk(kl1)
-               if (m1 >= 0) then
-                  gaunt_pot(klpp,klp) = gaunt_pot(klpp,klp) + cgnt_i3(i1)*potmp(jl1)
-               else
-                  gaunt_pot(klpp,klp) = gaunt_pot(klpp,klp) + cgnt_i3(i1)*m1m(m1)*conjg(potmp(jl1))
-               endif
-            enddo
-         enddo
-      enddo
+!     ================================================================
+!     gaunt_pot is  V(:,:,irmn0) + vshift on the diagonal.  V was built
+!     once for this (site,spin) by buildVTables; vshift carries every
+!     bit of the kl and energy dependence and is applied to vpsum
+!     below, so the kmax_phi x kmax_phi matrix is neither rebuilt nor
+!     even copied here.  N0 selects the region exactly as it selects
+!     pot_l in the caller.
+!     ================================================================
+      if (N0 == 0) then
+         p_V => V_in(:,:,irmn0)
+      else
+         p_V => V_out(:,:,irmn0)
+      endif
+      if (flags(1) /= 0) then
+         vshift = llp1*(CONE-cm0(ir))/r_mesh(ir)**2 + e2oc2 + PotShift
+      else
+         vshift = CZERO
+      endif
 !
 !     ================================================================
 !     evaluate corrector using Adams-Moulton formular of order 4...
@@ -3653,7 +3950,10 @@ use MPPModule, only : MyPE, syncAllPEs
             lpp=lofk(klpp)
             pwave(klpp) = (sxir(klpp)*bnl(ir,lpp)-cxir(klpp)*bjl(ir,lpp))/kappa
          enddo
-         call zgemv('t',kmax_phi,kmax_phi,CONE,gaunt_pot,kmax_phi,pwave,1,CZERO,vpsum,1)
+         call zgemv('t',kmax_phi,kmax_phi,CONE,p_V,ldV_gaunt,pwave,1,CZERO,vpsum,1)
+         do klp=1,kmax_phi
+            vpsum(klp) = vpsum(klp) + vshift*pwave(klp)
+         enddo
          do klp=1,kmax_phi
             lp=lofk(klp)
 !           ==========================================================
@@ -3685,6 +3985,10 @@ use MPPModule, only : MyPE, syncAllPEs
       sxirm1 = sxir
       cxirm1 = cxir
    enddo
+!
+!  -------------------------------------------------------------------
+   call addSSMarchCpuTime(getTime() - t0_cpu)
+!  -------------------------------------------------------------------
 !
    nullify(kj3_i3, cgnt_i3, r_mesh)
 !
