@@ -154,6 +154,16 @@ private
    complex (kind=CmplxKind), allocatable, target :: dwspace(:), dgspace(:)
    complex (kind=CmplxKind), allocatable, target :: gspacep(:)
 !
+!  ===================================================================
+!  Workspace and reshaped Gaunt table for the reassociated Green-
+!  function contraction in computeMSGreenFunction (see there).
+!  wgfspace holds W(ir, klp1 + kmax_phi_max*(klp2-1)); gauntW is the
+!  same gaunt array flattened to (klp1,klp2) x klg so the second stage
+!  is a single ZGEMM.
+!  ===================================================================
+   complex (kind=CmplxKind), allocatable, target :: wgfspace(:), dwgfspace(:)
+   complex (kind=CmplxKind), allocatable, target :: gauntW(:,:)
+!
    complex (kind=CmplxKind), pointer :: gaunt(:,:,:)
    complex (kind=CmplxKind), allocatable :: store_space(:)
 !
@@ -341,6 +351,17 @@ contains
             enddo
          enddo
       enddo
+!     ================================================================
+!     Flattened copy used by the reassociated contraction: row index
+!     is the (klp1,klp2) pair, column index is klg.
+!     ================================================================
+      do klp2 = 1, kmax_phi_max
+         do klg = 1, kmax_green_max
+            do klp1 = 1, kmax_phi_max
+               gauntW(klp1+kmax_phi_max*(klp2-1),klg) = gaunt(klp1,klg,klp2)
+            enddo
+         enddo
+      enddo
    else  ! Store gaunt differently to help speeding up the data access...
       do klp1 = 1, kmax_phi_max
          do klg = 1, kmax_green_max
@@ -399,7 +420,7 @@ contains
    integer (kind=IntKind), intent(in) :: cant
    integer (kind=IntKind), intent(in) :: rel
    integer (kind=IntKind), intent(in) :: iprint(num_atoms)
-   integer (kind=LongIntKind) :: wspace_size, gspace_size
+   integer (kind=LongIntKind) :: wspace_size, gspace_size, wgf_size
 !
    character (len=*), intent(in) :: istop
 !
@@ -494,6 +515,19 @@ contains
       allocate( dgspace(gspace_size), dwspace(wspace_size) )
    endif
 !
+!  ===================================================================
+!  W is sized independently of gspace: gspace scales with
+!  kmax_green_max, which is 1 in the muffin-tin case, whereas W scales
+!  with kmax_phi_max^2 and would overflow it there.
+!  ===================================================================
+   wgf_size = int(iend_max,kind=LongIntKind)*kmax_phi_max*kmax_phi_max
+   allocate( wgfspace(wgf_size) )
+   if (rad_deriv) then
+      allocate( dwgfspace(wgf_size) )
+   endif
+   allocate( gauntW(kmax_phi_max*kmax_phi_max,kmax_green_max) )
+   gauntW = CZERO
+!
    end subroutine initParameters
 !  ===================================================================
 !
@@ -537,6 +571,9 @@ contains
       endif
    enddo
    deallocate( mst, wspace, wspacep, gspace, gspacep )
+   if (allocated(wgfspace))  deallocate( wgfspace )
+   if (allocated(dwgfspace)) deallocate( dwgfspace )
+   if (allocated(gauntW))    deallocate( gauntW )
    if (rad_deriv) then
       deallocate( dwspace, dgspace )
    endif
@@ -849,6 +886,7 @@ contains
 !
    integer (kind=IntKind) :: n, info, id, js1, js2, ns, kmaxk, kmaxp, kmaxg, irmax
    integer (kind=IntKind) :: klg, kl1, kl2, klp1, klp2, ir, ir1, kl2c, m2, np, ia
+   integer (kind=IntKind) :: jw, iw, nrgf, kpm2
    integer (kind=IntKind), pointer :: green_flags(:)
 !
    complex (kind=CmplxKind), pointer :: tfac(:,:), gfs(:,:)
@@ -857,6 +895,7 @@ contains
    complex (kind=CmplxKind), pointer :: der_PhiLr_right(:,:,:), der_PhiLr_left(:,:,:)
    complex (kind=CmplxKind), pointer :: gf(:,:), pp(:,:), ppr(:,:), ppg(:,:,:)
    complex (kind=CmplxKind), pointer :: dgf(:,:), dpp(:,:), dppr(:,:), dppg(:,:,:)
+   complex (kind=CmplxKind), pointer :: pW(:,:), pWd(:,:)
    complex (kind=CmplxKind), pointer :: pau00(:,:), OmegaHat(:,:), p_kau00(:,:)
    complex (kind=CmplxKind) :: cfac, kappa
 !
@@ -1076,44 +1115,75 @@ contains
                                  irmax*kmaxp,p_kau00,kmaxk,CZERO,dppr,irmax*kmaxp)
 !                    -------------------------------------------------
                   endif
+!                 ====================================================
+!                 Reassociated contraction.  The original form built,
+!                 for every kl2 separately,
+!
+!                   ppg(ir,klg,klp2) = cfac * sum_klp1 ppr(ir,klp1,kl2c)
+!                                                  * gaunt(klp1,klg,klp2)
+!                   gf(ir,klg) += sum_klp2 ppg(...)*PhiLr_right(ir,klp2,kl2)
+!
+!                 costing kmaxk*irmax*kmaxg*kmaxp^2 complex FMA.  Doing
+!                 the kl2 sum FIRST,
+!
+!                   W(ir,klp1,klp2) = sum_kl2 cfac * ppr(ir,klp1,kl2c)
+!                                           * PhiLr_right(ir,klp2,kl2)
+!                   gf(ir,klg)      = sum_{klp1,klp2} W(ir,klp1,klp2)
+!                                           * gaunt(klp1,klg,klp2)
+!
+!                 is algebraically identical and costs
+!                 irmax*kmaxp^2*(kmaxk+kmaxg): 6.9e7 against 1.36e9 for
+!                 the Fe3Ni reference case, a 20x flop reduction.  It
+!                 also retires the irmax*kmaxg*kmaxp scratch ppg, which
+!                 was written and re-read once per kl2.
+!
+!                 The k-group distribution is preserved exactly.
+!                 gf = W.G is linear in W, so contracting each rank's
+!                 partial W and then summing gf gives the same result as
+!                 summing W; and the trailing kl2 remainder is still
+!                 applied on every rank AFTER the global sum, as before.
+!                 ====================================================
+                  nrgf = mst(id)%iend
+                  kpm2 = kmax_phi_max*kmax_phi_max
+                  pW => aliasArray2_c(wgfspace,irmax,kpm2)
+                  pW = CZERO
+                  if (rad_deriv) then
+                     pWd => aliasArray2_c(dwgfspace,irmax,kpm2)
+                     pWd = CZERO
+                  endif
                   np = mod(kmaxk,NumPEsInGroup)
                   do kl2 = MyPEinGroup+1, kmaxk-np, NumPEsInGroup
                      m2 = mofk(kl2)
                      kl2c = kl2 -2*m2
                      cfac = m1m(m2)
-!                    =================================================
-!                    ppg(ir,klg,klp2;kl2) = sum_klp1 (-1)^m2 * ppr(ir,klp1,kl2c) *
-!                                                    gaunt(klp1,klg,klp2)
-!                    -------------------------------------------------
-                     call zgemm('n','n',irmax,kmaxg*kmaxp,kmaxp,cfac,ppr(1,kl2c), &
-                                 irmax,gaunt,kmaxp,CZERO,ppg,irmax)
-!                    -------------------------------------------------
-                     if (rad_deriv) then
-!                       ----------------------------------------------
-                        call zgemm('n','n',irmax,kmaxg*kmaxp,kmaxp,cfac, &
-                                   dppr(1,kl2c),irmax,gaunt,kmaxp,CZERO,dppg,irmax)
-!                       ----------------------------------------------
-                     endif
-!
-!                    =================================================
-!                    gf(ir,klg) = sum_{kl2,klp2} ppg(ir,klg,klp2;kl2) * 
-!                                                PhiLr_right(ir,klp2,kl2)
-!                    =================================================
                      do klp2 = 1, kmaxp
-                        do klg = 1, kmaxg
-                           do ir = 1, mst(id)%iend
-                              gf(ir,klg) =  gf(ir,klg) + ppg(ir,klg,klp2)*PhiLr_right(ir,klp2,kl2)
+                        do klp1 = 1, kmaxp
+                           jw = klp1 + kmax_phi_max*(klp2-1)
+                           iw = irmax*(klp1-1)
+                           do ir = 1, nrgf
+                              pW(ir,jw) = pW(ir,jw)                          &
+                                 + cfac*ppr(iw+ir,kl2c)*PhiLr_right(ir,klp2,kl2)
                            enddo
                            if (rad_deriv) then
-                              do ir = 1, mst(id)%iend
-                                 dgf(ir,klg) =  dgf(ir,klg) + dppg(ir,klg,klp2)*PhiLr_right(ir,klp2,kl2)  &
-                                                            + ppg(ir,klg,klp2)*der_PhiLr_right(ir,klp2,kl2)
-                              
+                              do ir = 1, nrgf
+                                 pWd(ir,jw) = pWd(ir,jw) + cfac*              &
+                                    ( dppr(iw+ir,kl2c)*PhiLr_right(ir,klp2,kl2)&
+                                     + ppr(iw+ir,kl2c)*der_PhiLr_right(ir,klp2,kl2) )
                               enddo
                            endif
                         enddo
                      enddo
                   enddo ! kl2
+!                 ----------------------------------------------------
+                  call zgemm('n','n',nrgf,kmaxg,kpm2,CONE,pW,irmax,      &
+                             gauntW,kpm2,CONE,gf,nrgf)
+!                 ----------------------------------------------------
+                  if (rad_deriv) then
+!                    -------------------------------------------------
+                     call zgemm('n','n',nrgf,kmaxg,kpm2,CONE,pWd,irmax,  &
+                                gauntW,kpm2,CONE,dgf,nrgf)
+!                    -------------------------------------------------
+                  endif
                   if (NumPEsInGroup > 1) then
 !                    -------------------------------------------------
                      call GlobalSumInGroup(kGID,gf,mst(id)%iend,kmaxg)
@@ -1124,39 +1194,48 @@ contains
 !                       ----------------------------------------------
                      endif
                   endif
-                  do kl2 = kmaxk-np+1,kmaxk
-                     m2 = mofk(kl2)
-                     kl2c = kl2 -2*m2
-                     cfac = m1m(m2)
-!                    =================================================
-!                    ppg(ir,klg,klp2;kl2) = sum_klp1 (-1)^m2 * ppr(ir,klp1,kl2c) * gaunt(klp1,klg,klp2)
+!                 ====================================================
+!                 The kl2 remainder, applied on every rank after the
+!                 global sum, exactly as in the original.
+!                 ====================================================
+                  if (np > 0) then
+                     pW = CZERO
+                     if (rad_deriv) then
+                        pWd = CZERO
+                     endif
+                     do kl2 = kmaxk-np+1,kmaxk
+                        m2 = mofk(kl2)
+                        kl2c = kl2 -2*m2
+                        cfac = m1m(m2)
+                        do klp2 = 1, kmaxp
+                           do klp1 = 1, kmaxp
+                              jw = klp1 + kmax_phi_max*(klp2-1)
+                              iw = irmax*(klp1-1)
+                              do ir = 1, nrgf
+                                 pW(ir,jw) = pW(ir,jw)                       &
+                                    + cfac*ppr(iw+ir,kl2c)*PhiLr_right(ir,klp2,kl2)
+                              enddo
+                              if (rad_deriv) then
+                                 do ir = 1, nrgf
+                                    pWd(ir,jw) = pWd(ir,jw) + cfac*           &
+                                     ( dppr(iw+ir,kl2c)*PhiLr_right(ir,klp2,kl2)&
+                                      + ppr(iw+ir,kl2c)*der_PhiLr_right(ir,klp2,kl2) )
+                                 enddo
+                              endif
+                           enddo
+                        enddo
+                     enddo
 !                    -------------------------------------------------
-                     call zgemm('n','n',irmax,kmaxg*kmaxp,kmaxp,cfac,ppr(1,kl2c),irmax,gaunt,kmaxp,CZERO,ppg,irmax)
+                     call zgemm('n','n',nrgf,kmaxg,kpm2,CONE,pW,irmax,   &
+                                gauntW,kpm2,CONE,gf,nrgf)
 !                    -------------------------------------------------
                      if (rad_deriv) then
 !                       ----------------------------------------------
-                        call zgemm('n','n',irmax,kmaxg*kmaxp,kmaxp,cfac,dppr(1,kl2c),irmax,gaunt,kmaxp,CZERO, &
-                                   dppg,irmax)
+                        call zgemm('n','n',nrgf,kmaxg,kpm2,CONE,pWd,     &
+                                   irmax,gauntW,kpm2,CONE,dgf,nrgf)
 !                       ----------------------------------------------
                      endif
-!
-!                    =================================================
-!                    gf(ir,klg) = sum_{kl2,klp2} ppg(ir,klg,klp2;kl2) * PhiLr_right(ir,klp2,kl2)
-!                    =================================================
-                     do klp2 = 1, kmaxp
-                        do klg = 1, kmaxg
-                           do ir = 1, mst(id)%iend
-                              gf(ir,klg) =  gf(ir,klg) + ppg(ir,klg,klp2)*PhiLr_right(ir,klp2,kl2)
-                           enddo
-                           if (rad_deriv) then
-                              do ir = 1, mst(id)%iend
-                                 dgf(ir,klg) =  dgf(ir,klg) + dppg(ir,klg,klp2)*PhiLr_right(ir,klp2,kl2)  &
-                                                            + ppg(ir,klg,klp2)*der_PhiLr_right(ir,klp2,kl2)
-                              enddo
-                           endif
-                        enddo
-                     enddo
-                  enddo
+                  endif
                else if (method == 1) then
                   do kl1 = kmaxk,1,-1
                      do klp1 = kmaxp,1,-1
