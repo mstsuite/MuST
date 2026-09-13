@@ -357,6 +357,54 @@ static inline int di_blocks(int n, int tpb)
  *  init_density_interp_gpu(nr_max, jmax_max, ng, kmax, n_inter,
  *                          n_fields, my_pe)
  * =================================================================== */
+/* ===================================================================
+ *  query_density_interp_gpu(bytes_needed, ok)
+ *
+ *  Runtime gate.  This module previously had NONE: DensityOnGridModule
+ *  set useGPU from #ifdef ACCEL alone, so an ACCEL binary died at the
+ *  first cudaMalloc on a node with no usable GPU, and oversubscribing
+ *  one GPU with several ranks aborted instead of falling back.  The
+ *  host DGEMM path was always there; only the decision to take it was
+ *  missing.
+ *
+ *  ok = 1 only if a device exists, can be selected, and has
+ *  bytes_needed free.  Every failure clears the CUDA error state so a
+ *  failed probe cannot poison later CUDA use.  MUST_DENSITY_GPU=0
+ *  forces ok = 0 without touching the driver; the -cpu/--cpu-only
+ *  command-line flag takes precedence over that and is handled on the
+ *  Fortran side, which simply does not call this.
+ * =================================================================== */
+extern "C"
+void query_density_interp_gpu_(long *bytes_needed, int *ok)
+{
+   *ok = 0;
+
+   const char *env = getenv("MUST_DENSITY_GPU");
+   if (env != NULL && (env[0] == '0' || env[0] == 'n' || env[0] == 'N' ||
+                       env[0] == 'f' || env[0] == 'F')) {
+      return;
+   }
+
+   int ndev = 0;
+   if (cudaGetDeviceCount(&ndev) != cudaSuccess || ndev < 1) {
+      cudaGetLastError();  return;
+   }
+   int dev = 0;
+   if (cudaGetDevice(&dev) != cudaSuccess) { cudaGetLastError(); return; }
+   if (cudaSetDevice(dev) != cudaSuccess)  { cudaGetLastError(); return; }
+
+   size_t freeb = 0, totb = 0;
+   if (cudaMemGetInfo(&freeb, &totb) != cudaSuccess) {
+      cudaGetLastError();  return;
+   }
+   /*  Head room on top of this module's own buffers, for the cuBLAS
+    *  work space and context.                                        */
+   const long slack = 256L*1024L*1024L;
+   if (*bytes_needed > 0 && (size_t)(*bytes_needed + slack) > freeb) return;
+
+   *ok = 1;
+}
+
 extern "C"
 void init_density_interp_gpu_(int *nr_max, int *jmax_max, int *ng, int *kmax,
                               int *n_inter, int *n_fields, int *my_pe)

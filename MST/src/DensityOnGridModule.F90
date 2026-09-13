@@ -56,6 +56,7 @@ module DensityOnGridModule
    use MathParamModule, only : ZERO, ONE, TWO
    use IntegerFactorsModule, only : mofj, kofj
    use TimerModule, only : getTime
+   use CmdLineOptionModule, only : getCmdLineOption
 !
    implicit none
 !
@@ -148,8 +149,12 @@ contains
 !
    integer (kind=IntKind) :: jl, kl, g, c
    integer (kind=IntKind) :: nf, ni, ng_l, km_l, nr_l, jm_l, mp_l
+   integer (kind=IntKind) :: iok
+!
+   integer (kind=8) :: bytes_needed
 !
    logical :: want_grad
+   logical :: cpu_only
 !
    real (kind=RealKind), pointer :: p_upos(:,:)
 !
@@ -280,25 +285,68 @@ contains
       gradReady = .true.
    endif
 !
+   cpu_only = ( getCmdLineOption('Run on CPU without Acceleration') == 0 )
+!
    useGPU = .false.
 #ifdef ACCEL
 !  ===================================================================
-!  Initialise the device-side module and hand it the fixed angular data.
+!  Precedence, highest first:
+!     1. the -cpu / --cpu-only / --cpu_only command-line flag.  This is
+!        the project-wide switch honoured by ClusterMatrixModule, and it
+!        means "use no GPU at all".  It OVERRIDES the environment
+!        variable below, so a user who asks for a CPU run gets one even
+!        if a per-module override is set in their environment.
+!     2. the per-module environment variable, checked inside the device
+!        probe.  This exists for A/B measurement: --cpu-only is
+!        all-or-nothing, whereas comparing one offload at a time is how
+!        the radial march was found to be slower than the CPU.
+!     3. the device probe itself -- is there a usable GPU with room.
 !  ===================================================================
-   nr_l = nr_max; jm_l = jmax_max; ng_l = num_ang
-   km_l = kmax_max; ni = n_inter; nf = NumFields; mp_l = mype
-!  -------------------------------------------------------------------
-   call init_density_interp_gpu(nr_l, jm_l, ng_l, km_l, ni, nf, mp_l)
-!  -------------------------------------------------------------------
-   call push_angular_ylm_gpu(p_ylm, ng_l, km_l, kofj_tab, fa2, jm_l)
-!  -------------------------------------------------------------------
-   if ( gradReady ) then
+!  Until now this module had NONE of the three: it set useGPU = .true.
+!  from #ifdef ACCEL alone, with no flag, no environment override and no
+!  device query, so it ignored -cpu/--cpu-only and died at its first
+!  cudaMalloc on a node without a usable GPU instead of falling back.
+!  The CPU path below (host DGEMM) was already there and reachable; only
+!  the decision to take it was missing.
+!  ===================================================================
+   iok = 0
+   if (.not.cpu_only) then
+      bytes_needed = 16_8*int(nr_max,8)*int(jmax_max,8)                 &
+                   + 16_8*int(nr_max,8)*int(num_ang,8)*int(NumFields,8) &
+                   + 16_8*int(num_ang,8)*int(kmax_max,8)                &
+                   +  8_8*int(nr_max,8)*int(n_inter,8)
 !     ----------------------------------------------------------------
-      call push_angular_gradylm_gpu(grady_flat, upos_tab, ng_l, km_l,   &
-                                    kofj_tab, fa2, jm_l)
+      call query_density_interp_gpu(bytes_needed, iok)
 !     ----------------------------------------------------------------
    endif
-   useGPU = .true.
+   if (iok == 1) then
+      nr_l = nr_max; jm_l = jmax_max; ng_l = num_ang
+      km_l = kmax_max; ni = n_inter; nf = NumFields; mp_l = mype
+!     ----------------------------------------------------------------
+      call init_density_interp_gpu(nr_l, jm_l, ng_l, km_l, ni, nf, mp_l)
+!     ----------------------------------------------------------------
+      call push_angular_ylm_gpu(p_ylm, ng_l, km_l, kofj_tab, fa2, jm_l)
+!     ----------------------------------------------------------------
+      if ( gradReady ) then
+!        -------------------------------------------------------------
+         call push_angular_gradylm_gpu(grady_flat, upos_tab, ng_l, km_l,&
+                                       kofj_tab, fa2, jm_l)
+!        -------------------------------------------------------------
+      endif
+      useGPU = .true.
+   else if (print_level >= 0) then
+      if (cpu_only) then
+!        -------------------------------------------------------------
+         call WarningHandler('initDensityOnGrid',                       &
+                 '-cpu/--cpu-only given; the host DGEMM path is used')
+!        -------------------------------------------------------------
+      else
+!        -------------------------------------------------------------
+         call WarningHandler('initDensityOnGrid',                       &
+                 'GPU probe failed or was disabled; using host DGEMM')
+!        -------------------------------------------------------------
+      endif
+   endif
 #endif
 !
    if ( want_grad ) then

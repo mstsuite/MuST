@@ -9,6 +9,10 @@ Module PotentialGenerationModule
    use PublicTypeDefinitionsModule, only : GridStruct, UniformGridStruct
    use TimerModule, only : getTime
    use ChebyshevModule, only : ChebyshevStruct
+   use PseudoPotBackProjModule, only : initPseudoPotBackProj,          &
+                                       endPseudoPotBackProj,           &
+                                       isPseudoPotBackProjGPU,         &
+                                       calRadialInterpGPU
 !
    implicit none
 !
@@ -142,6 +146,14 @@ private
    integer (kind=IntKind), parameter :: nr_int_max = 3
    integer (kind=IntKind), parameter :: n_interp_max = 100
    integer (kind=IntKind), allocatable :: iparam(:,:)
+!
+!  ===================================================================
+!  Lazy probe flag for the GPU back-projection path.  The probe needs
+!  na, lmax and nnr, which are known only once calRadialInterpolation
+!  has built iparam, so the device is probed on the first call rather
+!  than in initPotentialGeneration.
+!  ===================================================================
+   logical :: PseudoPotBackProjProbed = .false.
 !
    complex(kind=CmplxKind), pointer :: fft_c(:)
    complex(kind=CmplxKind), allocatable :: Ylm(:)
@@ -806,6 +818,9 @@ contains
       deallocate( Ylm )
       deallocate( v_interp )
       deallocate( chebv_struct )
+!     ----------------------------------------------------------------
+      call endPseudoPotBackProj()
+!     ----------------------------------------------------------------
    endif
 !
 #ifdef POT_DEBUG
@@ -3687,6 +3702,12 @@ contains
    complex (kind=CmplxKind), pointer :: v_jl(:,:)
 !
    real (kind=RealKind) :: t0, t1, t2
+!  Sub-split of the BackProjection timer: t_ri is the k-space
+!  summation (calRadialInterpolation), t_rp the Chebyshev radial
+!  projection loop.  The two were previously lumped into one 66 s
+!  number, which made the >99 % / <1 % split an estimate rather than a
+!  measurement.
+   real (kind=RealKind) :: t_ri, t_rp, t_mark
 !
 !type (UniformGridStruct), pointer :: gp
 !
@@ -3810,8 +3831,11 @@ contains
 !#endif
 !
 !  -------------------------------------------------------------------
+   t_mark = getTime()
    call calRadialInterpolation(fft_c,-2,60,iparam,v_interp)
+   t_ri = getTime() - t_mark
 !  -------------------------------------------------------------------
+   t_rp = ZERO
    do id = 1,LocalNumAtoms
       lmax   = Potential(id)%lmax
       lmax_rho = getRhoLmax(id)
@@ -3831,7 +3855,9 @@ contains
       v_jl => Potential(id)%potL_Pseudo(1:nr,1:jmax)
       v_jl = CZERO
 !     ----------------------------------------------------------------
+      t_mark = getTime()
       call calRadialProjection(nr,r_mesh,iparam(:,id),v_interp(:,id),v_jl)
+      t_rp = t_rp + getTime() - t_mark
 !     ----------------------------------------------------------------
       do jl = 1,jmax
          if ( isChargeComponentZero(id,jl) .and. jl<=jmax_rho ) then
@@ -3867,12 +3893,15 @@ contains
       enddo
    enddo
 !
+!
    deallocate(p_den); nullify(p_den)
 !#ifdef TIMING
    t2 = getTime()
    t1 = t2 - t1
    if (node_print_level >= 0) then
       write(6,'(/,a,f10.5)') "calFFTPseudoPot:: Time in BackProjection: ",t1
+      write(6,'(a,f10.5)')   "calFFTPseudoPot::    of which k-summation: ",t_ri
+      write(6,'(a,f10.5)')   "calFFTPseudoPot::    of which projection : ",t_rp
 !     write(6,'(a,f10.5)') "calFFTPseudoPot:: Time : ",t2-t0
    endif
 !#endif
@@ -4202,6 +4231,8 @@ contains
    angular_data => getSphericalGridData()
    size_d1 = size(angular_data,1)
    angular_data = ZERO
+!  -------------------------------------------------------------------
+!  -------------------------------------------------------------------
 !
 !  ===================================================================
 !  Batched evaluation of the density on the (radial node) x (angular
@@ -4276,6 +4307,8 @@ contains
       endif
    endif
 !
+!  -------------------------------------------------------------------
+!  -------------------------------------------------------------------
    do ing = 1, ngl
       uv = getUnitVec(ing)
       LOOP_ir: do ir = MyPEinEKGroup+1, jend, NumPEsInEKGroup
@@ -4351,6 +4384,8 @@ contains
          angular_data(n0+n_spin_pola+1,ing) = getExchCorrEnDen()
       enddo LOOP_ir
    enddo
+!  -------------------------------------------------------------------
+!  -------------------------------------------------------------------
 !
    if (use_batched) then
       deallocate( den_grid )
@@ -4366,6 +4401,8 @@ contains
       nullify( p_den_l, p_mom_l )
       nullify( p_der_den_l, p_der_mom_l )
    endif
+!  -------------------------------------------------------------------
+!  -------------------------------------------------------------------
    t3 = getTime()
    if (NumPEsInEKGroup > 1) then
 !     ----------------------------------------------------------------
@@ -4384,6 +4421,7 @@ contains
 !  -------------------------------------------------------------------
    call retrieveSphHarmExpanData(jend,jmax,n_spin_pola+1,enL_Exch(:,:,1), &
                                  MyPEinEKGroup,NumPEsInEKGroup,ekGID)
+!  -------------------------------------------------------------------
 !  -------------------------------------------------------------------
 !
 !  ===================================================================
@@ -4951,6 +4989,7 @@ contains
    use Uniform3DGridModule, only : getGridOrigin
 !
    use MPPModule, only : GlobalSum, setCommunicator, resetCommunicator
+   use MPPModule, only : MyPE
    use GroupCommModule, only : getGroupID, GlobalSumInGroup
 !
    use SystemModule, only : getAtomPosition
@@ -4987,6 +5026,16 @@ contains
    integer (kind=IntKind) :: n_interp, n_interp_in, nr_int
    integer (kind=IntKind) :: d_ir(nr_int_max)
    integer (kind=IntKind) :: iparam_global(4+nr_int_max,GlobalNumAtoms)
+!
+!  ===================================================================
+!  Per-atom geometry, gathered as arrays for the batched (GPU)
+!  back-projection.  The CPU branch below still derives each of these
+!  inside its own atom loop, so it is left untouched.
+!  ===================================================================
+   integer (kind=IntKind) :: ld_rint_l, lmx_l, jmx_l
+   integer (kind=IntKind), allocatable :: lmax_a(:), nnr_a(:), jmax_a(:)
+   real (kind=RealKind), allocatable :: posi_a(:,:), r_interp_a(:,:)
+   logical :: useBackProjGPU
 !
    interface
       subroutine hunt(n,xx,x,jlo)
@@ -5123,6 +5172,75 @@ contains
 !     ----------------------------------------------------------------
    endif
 !
+!  ===================================================================
+!  Gather the per-atom geometry, then choose the evaluation path.
+!  ===================================================================
+   ld_rint_l = n_interp_max*nr_int_max
+   allocate( posi_a(3,na), lmax_a(na), nnr_a(na), jmax_a(na) )
+   allocate( r_interp_a(ld_rint_l,na) )
+   do ia = 1, na
+      if (n > 1) then
+         posi_a(1:3,ia) = getAtomPosition(ia) - getGridOrigin('FFT')
+         lmax_a(ia) = iparam_global(1,ia)
+         nnr_a(ia)  = iparam_global(2,ia)*iparam_global(4,ia)
+         r_interp_a(1:ld_rint_l,ia) = r_interp_global(1:ld_rint_l,ia)
+      else
+         posi_a(1:3,ia) = LocalAtomPosi(:,ia) - getGridOrigin('FFT')
+         lmax_a(ia) = iparam_out(1,ia)
+         nnr_a(ia)  = iparam_out(2,ia)*iparam_out(4,ia)
+         ig = GlobalIndex(ia)
+         r_interp_a(1:ld_rint_l,ia) = r_interp_global(1:ld_rint_l,ig)
+      endif
+      jmax_a(ia) = ((lmax_a(ia)+1)*(lmax_a(ia)+2))/2
+   enddo
+!
+   useBackProjGPU = .false.
+#ifdef ACCEL
+   if (.not.PseudoPotBackProjProbed) then
+      lmx_l = 0
+      jmx_l = 0
+      do ia = 1, na
+         lmx_l = max(lmx_l,lmax_a(ia))
+         jmx_l = max(jmx_l,jmax_a(ia))
+      enddo
+!     ----------------------------------------------------------------
+      call initPseudoPotBackProj(numk_local, lmx_l, ld_rint_l, jmx_l,  &
+                                 max(na,GlobalNumAtoms), MyPE,         &
+                                 node_print_level)
+!     ----------------------------------------------------------------
+      PseudoPotBackProjProbed = .true.
+   endif
+   useBackProjGPU = isPseudoPotBackProjGPU()
+#endif
+!
+   if ( useBackProjGPU ) then
+!     ================================================================
+!     Batched path: the k-sum becomes two real DGEMMs per l, on tiles
+!     of k, with the conjugated spherical harmonics built once per
+!     k-point on the host instead of once per (atom, k-point).
+!     ================================================================
+      if (n > 1) then
+!        -------------------------------------------------------------
+         call calRadialInterpGPU(p_fft_c, idk0+1, numk_local, kpow,    &
+                                 dummy, na, posi_a, lmax_a, nnr_a,     &
+                                 jmax_a, r_interp_a, ld_rint_l,        &
+                                 w_interp_global, nmax)
+!        -------------------------------------------------------------
+      else
+!        -------------------------------------------------------------
+         call calRadialInterpGPU(p_fft_c, idk0+1, numk_local, kpow,    &
+                                 dummy, na, posi_a, lmax_a, nnr_a,     &
+                                 jmax_a, r_interp_a, ld_rint_l,        &
+                                 w_interp, size(w_interp,1))
+!        -------------------------------------------------------------
+      endif
+   else
+!     ================================================================
+!     CPU reference path -- preserved verbatim.  It is the correctness
+!     reference for the batched path, it is what a CPU-architecture
+!     build runs, and it is what keeps the published baseline timing
+!     reproducible.  MUST_PSEUDOPOT_GPU=0 selects it at run time.
+!     ================================================================
    do ia = 1, na
 !     if (comm > -1) then
       if (n > 1) then
@@ -5217,6 +5335,9 @@ contains
          i2l = i2l*sqrtm1
       enddo
    enddo
+   endif
+!
+   deallocate( posi_a, lmax_a, nnr_a, jmax_a, r_interp_a )
    nullify(rmesh, r_interp, p_Bj_l, pv_interp)
 !
 !  ===================================================================
