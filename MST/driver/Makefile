@@ -87,6 +87,7 @@ $(ODIR)/ScfDataModule.o  \
 $(ODIR)/setupLizNeighbor.o \
 $(ODIR)/SpinRotationModule.o \
 $(ODIR)/StepFunctionModule.o  \
+$(ODIR)/SSMarchModule.o \
 $(ODIR)/SSSolverModule.o \
 $(ODIR)/RelSSSolverModule.o \
 $(ODIR)/StrConstModule.o  \

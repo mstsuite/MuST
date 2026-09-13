@@ -256,6 +256,7 @@ program mst2
 !
    use CmdLineOptionModule, only : getCmdLineOptionValue
 !
+!
    implicit none
 !
    logical :: ScfConverged = .false.
@@ -412,6 +413,7 @@ program mst2
 !
 !  -------------------------------------------------------------------
    call initTimer()
+!  -------------------------------------------------------------------
 !  -------------------------------------------------------------------
    t0 = getTime()
    t_inp = ZERO; t_outp = ZERO
@@ -1615,6 +1617,8 @@ program mst2
    endif
 !
    niter = 0
+!  -------------------------------------------------------------------
+!  -------------------------------------------------------------------
    SD_LOOP: do itstep = 1,ntstep
 !     ================================================================
 !     reset the Initialization for calculating charge density on uniform grids
@@ -1860,6 +1864,7 @@ program mst2
          endif
 !
 !        *************************************************************
+!
 !
 !        =============================================================
 !        setup the quantities for mixing.

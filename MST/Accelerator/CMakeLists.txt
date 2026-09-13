@@ -11,6 +11,8 @@ if (USE_ACCELERATOR_CUDA_C)
               util_mat.cu
               LSMS_Accel.cu
               DensityInterp_Accel.cu
+              PseudoPotBackProj_Accel.cu
+              SSMarch_Accel.cu
               cusolver_KKR_c.cu
               invertMatrixKKR_CUDA.F90
               )

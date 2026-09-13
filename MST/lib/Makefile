@@ -32,7 +32,8 @@ VectorModule.o \
 DataServiceCenter.o \
 LUdcmpModule.o \
 RelativityToolsModule.o \
-QuadraticMatrixModule.o
+QuadraticMatrixModule.o \
+NvtxModule.o
 
 LOBS = \
 copyRealArray.o \

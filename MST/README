@@ -183,6 +183,66 @@ Output files:
    * a plot showing the fitting results
    * a text file containing the fitting results
 
+Controlling GPU offloading (GPU builds)
+=======================================
+These apply to a build made with an ACCEL/CUDA architecture file; a CPU build
+ignores them.  There are four GPU offloads, and they are selected in this
+order of precedence, highest first:
+
+  1. the -cpu / --cpu-only / --cpu_only command-line flag.  This means
+     "use no GPU at all" and turns off ALL four offloads.  It overrides
+     everything below, so a user who asks for a CPU run gets one even if a
+     per-module environment variable is set.
+
+  2. a per-module environment variable, for turning one offload off (or on)
+     while leaving the others alone.  This is for A/B measurement -- the flag
+     is all-or-nothing, whereas comparing one offload at a time is how the
+     radial march was found to be slower than the CPU.
+
+  3. a runtime device probe -- is there a usable GPU with enough free memory.
+     A rank that fails the probe falls back to its CPU path rather than
+     aborting, so an ACCEL binary is safe on a CPU-only node and safe to
+     oversubscribe on a one-GPU-per-node machine.
+
+The offloads, and their environment variables:
+
+  MUST_DENSITY_GPU
+     The L-expanded density and gradient evaluation in calExchangeJl
+     (DensityOnGridModule).  ON by default; set to 0 for the host DGEMM path.
+     The largest single win in the full-potential path -- about 20x on the
+     Fe3Ni reference case.
+
+  MUST_PSEUDOPOT_GPU
+     The pseudo-potential back-projection in calFFTPseudoPot.  ON by default;
+     set to 0 for the CPU path.  About 23x on the same case.
+
+  MUST_SSMARCH_GPU
+     The single-site radial march (SSSolverModule::solveSCr).  OFF BY
+     DEFAULT -- set to 1 to enable.  It is off because it was measured
+     SLOWER than the CPU: on the Fe3Ni full-potential spin-canted case on a
+     GH200, 5.16 ms per march against 2.10 ms on one Grace core, making a
+     full SCF iteration 41 % slower.  A single march is a ~5,000-step
+     sequential dependency chain over only 25 angular components, and the
+     kernel is launched one block at a time, so it occupies one SM of 132.
+     Batching whole marches into one launch is NOT implemented; that, or
+     different hardware, could change the verdict, which is why the code is
+     kept.  Both paths print their march counts and costs at the end of a
+     run, so enabling it and comparing takes one run.
+
+  MUST_SSMARCH_MINSTEPS
+     Minimum radial steps for a march to go to the GPU when the above is
+     enabled (default 128).  The short outer march is well below this and
+     always stays on the CPU.
+
+The fourth offload, the KKR/LSMS matrix construction and inversion in
+ClusterMatrixModule, has no environment variable; it is controlled by the
+command-line flag and by its own device query.
+
+Note that in a MUFFIN-TIN calculation only that fourth offload runs at all:
+calExchangeJl, calFFTPseudoPot and the full-potential single-site solver are
+not called, so -cpu/--cpu-only has always given a fully CPU muffin-tin run.
+The other three matter only for full-potential.
+
 How to generate a starting potential
 ====================================
 The starting potentials for a set of elements are available under $(MuST_PATH)/Potential/. To generate a

@@ -63,6 +63,7 @@ $(MST_ODIR)/TriangleModule.o \
 $(MST_ODIR)/PolygonModule.o \
 $(MST_ODIR)/SurfElementsModule.o \
 $(MST_ODIR)/SpinRotationModule.o \
+$(MST_ODIR)/SSMarchModule.o \
 $(MST_ODIR)/SSSolverModule.o \
 $(MST_ODIR)/DiracSolverModule.o \
 $(MST_ODIR)/RelScattererModule.o \
@@ -79,6 +80,7 @@ $(MST_ODIR)/ConstrainLocalMomentModule.o \
 $(MST_ODIR)/ValenceDensityModule.o \
 $(MST_ODIR)/ChargeDensityModule.o \
 $(MST_ODIR)/DensityOnGridModule.o \
+$(MST_ODIR)/PseudoPotBackProjModule.o \
 $(MST_ODIR)/ChargeDistributionModule.o \
 $(MST_ODIR)/ChargeScreeningModule.o \
 $(MST_ODIR)/PotentialGenerationModule.o \
