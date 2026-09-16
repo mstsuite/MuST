@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mst_run>
+   <code_info>
+      <i name="program" type="string">MuST </i>
+      <i name="version" type="string">v1.9.4.2 </i>
+      <i name="date" type="string">02-10-2025 </i>
+      <i name="time" type="string">15:15:17 </i>
+   </code_info>
+   <scf_param>
+      <separator name="electronic exchange-correlation">
+         <i name="LDA" type="string"> </i>
+      </separator>
+   </scf_param>
+   <scf_results>
+      <energy>
+         <i name="energy_total">    -3146.86258996 </i>
+         <i name="energy_band">        0.00000000 </i>
+         <i name="energy_Hartree">        0.00000000 </i>
+         <i name="energy_xc">        0.00000000 </i>
+      </energy>
+   </scf_results>
+</mst_run>

@@ -1,0 +1,29 @@
+# Name of the system
+System: NbV
+
+# Different parameters used in calculations of the same system
+Variation: 
+
+# Elements in the system (separated by spaces)
+Elements: Nb V
+
+# Number of atoms in the unit cell corresponding to the elements (separated by spaces)
+Numbers: 0.1 0.9
+
+# Energy and volume per atom data (one data point per line)
+-2445.77377 62.5
+-2445.82157 70.30400000000002
+-2445.83767 74.43849999999999
+-2445.84909 78.73200000000001
+-2445.85626 83.1875
+-2445.85962 87.80799999999998
+-2445.85959 92.5965
+-2445.85659 97.556
+-2445.85099 102.68950000000001
+-2445.84318 108.0
+-2445.8334800000002 113.49049999999997
+-2445.82217 119.16400000000002
+-2445.80954 125.02349999999998
+-2445.79583 131.07200000000003
+-2445.7812599999997 137.3125
+-2445.766 143.748
