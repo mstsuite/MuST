@@ -71,51 +71,131 @@ Example input files are available under ``MST/sample/``.
 
 .. list-table::
    :header-rows: 1
+   :widths: 8 30 45 17
 
    * - Short Option
      - Long Option(s)
      - Description
      - Default Value
 
-   * - -wp
-     - --write-procs, --write_procs
+   * - ``-wp``
+     - ``--write-procs``, ``--write_procs``
      - Number of Writing Processes
-     - 0
+     - ``0``
 
-   * - -rp
-     - --read-procs, --read_procs
+   * - ``-rp``
+     - ``--read-procs``, ``--read_procs``
      - Number of Reading Processes
-     - 0
+     - ``0``
 
-   * - -app
-     - --atoms-per-proc, --atoms_per_proc
+   * - ``-app``
+     - ``--atoms-per-proc``, ``--atoms_per_proc``
      - Number of Atoms Per Process
-     - 0
+     - ``0``
 
-   * - -cpu
-     - --cpu-only, --cpu_only
+   * - ``-cpu``
+     - ``--cpu-only``, ``--cpu_only``
      - Run on CPU without Acceleration
-     - -1
+     - ``-1``
 
-   * - -abm
-     - --acc-bigmat, --acc_bigmat
+   * - ``-abm``
+     - ``--acc-bigmat``, ``--acc_bigmat``
      - Accelerate KKR Matrix Calculation
-     - -1
+     - ``-1``
 
-   * - -tl
-     - --timing-lsms, --timing_lsms
+   * - ``-cbm``
+     - ``--cpu-bigmat``, ``--cpu_bigmat``
+     - KKR Matrix Calculation on CPU
+     - ``-1``
+
+   * - ``-agm``
+     - ``--acc-gijmat``, ``--acc_gijmat``
+     - Accelerate Gij Matrix Calculation
+     - ``-1``
+
+   * - ``-cgm``
+     - ``--cpu-gijmat``, ``--cpu_gijmat``
+     - Gij Matrix Calculation on CPU
+     - ``-1``
+
+   * - ``-tl``
+     - ``--timing-lsms``, ``--timing_lsms``
      - Timing the LSMS Matrix Calculations
-     - -1
+     - ``-1``
 
-   * - -pb
-     - --print-blocking, --print_blocking
+   * - ``-nbc``
+     - ``--no-blocking-constr``, ``--no_blocking_constr``
+     - Constructing the LSMS Matrix without using blocks
+     - ``-1``
+
+   * - ``-pb``
+     - ``--print-blocking``, ``--print_blocking``
      - Print Blocking Details in LSMS Matrix Inverse
-     - -1
+     - ``-1``
 
-   * - -nb
-     - --no-blocking, --no_blocking
-     - Perform LSMS Matrix Inverse without Blocking
-     - -1
+   * - ``-nbi``
+     - ``--no-blocking-inverse``, ``--no_blocking_inverse``
+     - The LSMS Matrix Inverse is Performed without Blocking
+       (*reserved -- accepted but not yet implemented, see note below*)
+     - ``-1``
+
+   * - ``-re``
+     - ``--report-energy``, ``--report_energy``
+     - Report GPU Energy Consuption
+     - ``-1``
+
+   * - ``-ptm``
+     - ``--print-tau``, ``--print_tau``
+     - Print the Tau Matrix
+     - ``-1``
+
+   * - ``-em``
+     - ``--emul-scheme``, ``--emul_scheme``
+     - Emulation Scheme
+     - ``0``
+
+   * - ``-emp``
+     - ``--emul-param``, ``--emul_param``
+     - Emulation Precision Parameters
+     - ``12,14,16``
+
+   * - ``-cz``
+     - ``--contour-zone``, ``--contour_zone``
+     - Energy Contour Zone Parameters
+     - ``0.000,0.010``
+
+.. note::
+
+   The switch-style options above default to ``-1``, which is the sentinel for
+   *not supplied*: ``getCmdLineOption`` returns ``1`` for such a key and ``0``
+   once the switch is given, so a test of the form
+   ``getCmdLineOption('Run on CPU without Acceleration') == 0`` is true exactly
+   when the user passed ``-cpu``/``--cpu-only``. An option whose default is not
+   ``-1`` therefore reads as *always supplied*.
+
+   ``-wp``, ``-rp`` and ``-app`` take an integer argument; ``-em`` takes an
+   integer scheme selector (``0`` none, ``1`` Ozaki 1, ``2`` Ozaki 2); ``-emp``
+   and ``-cz`` take comma-separated lists. The remaining options are switches
+   that take no argument.
+
+   The acceleration options (``-cpu``, ``-abm``, ``-cbm``, ``-agm``, ``-cgm``,
+   ``-re``) have an effect only in a build configured with GPU support.
+   ``-cpu``/``--cpu-only`` takes precedence over the others and over the
+   ``MUST_*_GPU`` environment variables, disabling every accelerated path:
+   the KKR matrix (``ClusterMatrixModule``), the radial density interpolation
+   (``DensityOnGridModule``), the pseudo-potential back-projection
+   (``PseudoPotBackProjModule``) and the single-site radial march
+   (``SSMarchModule``).
+
+.. warning::
+
+   ``-nbi``/``--no-blocking-inverse`` is **reserved and currently has no
+   effect**. The option is parsed and stored, but no source file queries its key
+   (``'The LSMS Matrix Inverse is Performed without Blocking'``), so the CPU
+   inverse always takes the blocked path through ``invertMatrixBlock`` in
+   ``MST/src/MatrixBlockInversionModule.F90``. Supplying the flag is harmless
+   but does nothing. This is the counterpart of ``-nbc``, which *is* wired in
+   and does select a non-blocked construction of the KKR matrix.
 
 ---
 

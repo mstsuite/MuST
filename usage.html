@@ -501,6 +501,12 @@ system definition, atomic positions, and potential file names</p></li>
 </div>
 <p><strong>Command Line Options:</strong></p>
 <div class="pst-scrollable-table-container"><table class="table">
+<colgroup>
+<col style="width: 8.0%" />
+<col style="width: 30.0%" />
+<col style="width: 45.0%" />
+<col style="width: 17.0%" />
+</colgroup>
 <thead>
 <tr class="row-odd"><th class="head"><p>Short Option</p></th>
 <th class="head"><p>Long Option(s)</p></th>
@@ -509,48 +515,125 @@ system definition, atomic positions, and potential file names</p></li>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p>-wp</p></td>
-<td><p>–write-procs, –write_procs</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">-wp</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--write-procs</span></code>, <code class="docutils literal notranslate"><span class="pre">--write_procs</span></code></p></td>
 <td><p>Number of Writing Processes</p></td>
-<td><p>0</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p>-rp</p></td>
-<td><p>–read-procs, –read_procs</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">-rp</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--read-procs</span></code>, <code class="docutils literal notranslate"><span class="pre">--read_procs</span></code></p></td>
 <td><p>Number of Reading Processes</p></td>
-<td><p>0</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p>-app</p></td>
-<td><p>–atoms-per-proc, –atoms_per_proc</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">-app</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--atoms-per-proc</span></code>, <code class="docutils literal notranslate"><span class="pre">--atoms_per_proc</span></code></p></td>
 <td><p>Number of Atoms Per Process</p></td>
-<td><p>0</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p>-cpu</p></td>
-<td><p>–cpu-only, –cpu_only</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">-cpu</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--cpu-only</span></code>, <code class="docutils literal notranslate"><span class="pre">--cpu_only</span></code></p></td>
 <td><p>Run on CPU without Acceleration</p></td>
-<td><p>-1</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">-1</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p>-abm</p></td>
-<td><p>–acc-bigmat, –acc_bigmat</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">-abm</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--acc-bigmat</span></code>, <code class="docutils literal notranslate"><span class="pre">--acc_bigmat</span></code></p></td>
 <td><p>Accelerate KKR Matrix Calculation</p></td>
-<td><p>-1</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">-1</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p>-tl</p></td>
-<td><p>–timing-lsms, –timing_lsms</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">-cbm</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--cpu-bigmat</span></code>, <code class="docutils literal notranslate"><span class="pre">--cpu_bigmat</span></code></p></td>
+<td><p>KKR Matrix Calculation on CPU</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">-1</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">-agm</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--acc-gijmat</span></code>, <code class="docutils literal notranslate"><span class="pre">--acc_gijmat</span></code></p></td>
+<td><p>Accelerate Gij Matrix Calculation</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">-1</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">-cgm</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--cpu-gijmat</span></code>, <code class="docutils literal notranslate"><span class="pre">--cpu_gijmat</span></code></p></td>
+<td><p>Gij Matrix Calculation on CPU</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">-1</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">-tl</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--timing-lsms</span></code>, <code class="docutils literal notranslate"><span class="pre">--timing_lsms</span></code></p></td>
 <td><p>Timing the LSMS Matrix Calculations</p></td>
-<td><p>-1</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">-1</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p>-pb</p></td>
-<td><p>–print-blocking, –print_blocking</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">-nbc</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--no-blocking-constr</span></code>, <code class="docutils literal notranslate"><span class="pre">--no_blocking_constr</span></code></p></td>
+<td><p>Constructing the LSMS Matrix without using blocks</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">-1</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">-pb</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--print-blocking</span></code>, <code class="docutils literal notranslate"><span class="pre">--print_blocking</span></code></p></td>
 <td><p>Print Blocking Details in LSMS Matrix Inverse</p></td>
-<td><p>-1</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">-1</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p>-nb</p></td>
-<td><p>–no-blocking, –no_blocking</p></td>
-<td><p>Perform LSMS Matrix Inverse without Blocking</p></td>
-<td><p>-1</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">-nbi</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--no-blocking-inverse</span></code>, <code class="docutils literal notranslate"><span class="pre">--no_blocking_inverse</span></code></p></td>
+<td><p>The LSMS Matrix Inverse is Performed without Blocking
+(<em>reserved – accepted but not yet implemented, see note below</em>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">-1</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">-re</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--report-energy</span></code>, <code class="docutils literal notranslate"><span class="pre">--report_energy</span></code></p></td>
+<td><p>Report GPU Energy Consuption</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">-1</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">-ptm</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--print-tau</span></code>, <code class="docutils literal notranslate"><span class="pre">--print_tau</span></code></p></td>
+<td><p>Print the Tau Matrix</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">-1</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">-em</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--emul-scheme</span></code>, <code class="docutils literal notranslate"><span class="pre">--emul_scheme</span></code></p></td>
+<td><p>Emulation Scheme</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">-emp</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--emul-param</span></code>, <code class="docutils literal notranslate"><span class="pre">--emul_param</span></code></p></td>
+<td><p>Emulation Precision Parameters</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">12,14,16</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">-cz</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--contour-zone</span></code>, <code class="docutils literal notranslate"><span class="pre">--contour_zone</span></code></p></td>
+<td><p>Energy Contour Zone Parameters</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.000,0.010</span></code></p></td>
 </tr>
 </tbody>
 </table>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The switch-style options above default to <code class="docutils literal notranslate"><span class="pre">-1</span></code>, which is the sentinel for
+<em>not supplied</em>: <code class="docutils literal notranslate"><span class="pre">getCmdLineOption</span></code> returns <code class="docutils literal notranslate"><span class="pre">1</span></code> for such a key and <code class="docutils literal notranslate"><span class="pre">0</span></code>
+once the switch is given, so a test of the form
+<code class="docutils literal notranslate"><span class="pre">getCmdLineOption('Run</span> <span class="pre">on</span> <span class="pre">CPU</span> <span class="pre">without</span> <span class="pre">Acceleration')</span> <span class="pre">==</span> <span class="pre">0</span></code> is true exactly
+when the user passed <code class="docutils literal notranslate"><span class="pre">-cpu</span></code>/<code class="docutils literal notranslate"><span class="pre">--cpu-only</span></code>. An option whose default is not
+<code class="docutils literal notranslate"><span class="pre">-1</span></code> therefore reads as <em>always supplied</em>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">-wp</span></code>, <code class="docutils literal notranslate"><span class="pre">-rp</span></code> and <code class="docutils literal notranslate"><span class="pre">-app</span></code> take an integer argument; <code class="docutils literal notranslate"><span class="pre">-em</span></code> takes an
+integer scheme selector (<code class="docutils literal notranslate"><span class="pre">0</span></code> none, <code class="docutils literal notranslate"><span class="pre">1</span></code> Ozaki 1, <code class="docutils literal notranslate"><span class="pre">2</span></code> Ozaki 2); <code class="docutils literal notranslate"><span class="pre">-emp</span></code>
+and <code class="docutils literal notranslate"><span class="pre">-cz</span></code> take comma-separated lists. The remaining options are switches
+that take no argument.</p>
+<p>The acceleration options (<code class="docutils literal notranslate"><span class="pre">-cpu</span></code>, <code class="docutils literal notranslate"><span class="pre">-abm</span></code>, <code class="docutils literal notranslate"><span class="pre">-cbm</span></code>, <code class="docutils literal notranslate"><span class="pre">-agm</span></code>, <code class="docutils literal notranslate"><span class="pre">-cgm</span></code>,
+<code class="docutils literal notranslate"><span class="pre">-re</span></code>) have an effect only in a build configured with GPU support.
+<code class="docutils literal notranslate"><span class="pre">-cpu</span></code>/<code class="docutils literal notranslate"><span class="pre">--cpu-only</span></code> takes precedence over the others and over the
+<code class="docutils literal notranslate"><span class="pre">MUST_*_GPU</span></code> environment variables, disabling every accelerated path:
+the KKR matrix (<code class="docutils literal notranslate"><span class="pre">ClusterMatrixModule</span></code>), the radial density interpolation
+(<code class="docutils literal notranslate"><span class="pre">DensityOnGridModule</span></code>), the pseudo-potential back-projection
+(<code class="docutils literal notranslate"><span class="pre">PseudoPotBackProjModule</span></code>) and the single-site radial march
+(<code class="docutils literal notranslate"><span class="pre">SSMarchModule</span></code>).</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p><code class="docutils literal notranslate"><span class="pre">-nbi</span></code>/<code class="docutils literal notranslate"><span class="pre">--no-blocking-inverse</span></code> is <strong>reserved and currently has no
+effect</strong>. The option is parsed and stored, but no source file queries its key
+(<code class="docutils literal notranslate"><span class="pre">'The</span> <span class="pre">LSMS</span> <span class="pre">Matrix</span> <span class="pre">Inverse</span> <span class="pre">is</span> <span class="pre">Performed</span> <span class="pre">without</span> <span class="pre">Blocking'</span></code>), so the CPU
+inverse always takes the blocked path through <code class="docutils literal notranslate"><span class="pre">invertMatrixBlock</span></code> in
+<code class="docutils literal notranslate"><span class="pre">MST/src/MatrixBlockInversionModule.F90</span></code>. Supplying the flag is harmless
+but does nothing. This is the counterpart of <code class="docutils literal notranslate"><span class="pre">-nbc</span></code>, which <em>is</em> wired in
+and does select a non-blocked construction of the KKR matrix.</p>
 </div>
 <p>—</p>
 </section>
