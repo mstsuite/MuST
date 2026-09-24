@@ -46,7 +46,7 @@ MATH_PATH   =
 #LIBS       += -L$(COMPILER_LIBS) -lblas -llapack
 #LIBS       += -L$(COMPILER_LIBS) -lnvpl_blas_lp64_gomp -lnvpl_lapack_lp64_gomp  
 LIBS       += -Mnvpl -Mscalapack \
-              -L$(ACCEL_PATH)/lib64 -lcudart \
+              -L$(ACCEL_PATH)/lib64 -lcudart -lnvtx3interop \
               -L$(ACCEL_LIBS)/lib64 -lcublas -lstdc++ -lcusolver -L$(NVHPC_ROOT)/cuda/13.1/lib64/stubs -lnvidia-ml
 #=====================================================================
 # Compiler tools
@@ -56,7 +56,7 @@ CXX         = mpicxx
 F77         = mpif90
 FC          = mpif90
 MPICC       = mpicc
-ACCEL_CXX   = nvcc -arch=sm_90a
+ACCEL_CXX   = nvcc -arch=sm_90a -lineinfo
 ARCHV       = ar -r
 
 #=====================================================================

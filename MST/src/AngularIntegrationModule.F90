@@ -32,6 +32,8 @@ public :: initAngularIntegration,    &
           getTheta,                  &
           getPhi,                    &
           getUnitVec,                &
+          getYlmTable,               &
+          getUnitVecTable,           &
           calAngularIntegration,     &
           retrieveSphHarmExpanData
 !
@@ -60,10 +62,11 @@ private
    integer (kind=IntKind), allocatable :: ing2ip(:), ing2it(:)
 !
    real (kind=RealKind), allocatable :: theta(:), phi(:), wght_theta(:), wght_phi(:)
-   real (kind=RealKind), allocatable :: upos(:,:), fact(:)
+   real (kind=RealKind), allocatable :: fact(:)
+   real (kind=RealKind), allocatable, target :: upos(:,:)
    real (kind=RealKind), allocatable, target :: angular_data(:,:)
 !
-   complex (kind=CmplxKind), allocatable :: ylm(:,:)
+   complex (kind=CmplxKind), allocatable, target :: ylm(:,:)
    complex (kind=CmplxKind), allocatable :: expansion_data(:,:)
 !
    logical :: Initialized = .false.
@@ -199,6 +202,52 @@ contains
    n = num_angles
 !
    end function  getNumSphericalGridPoints
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getYlmTable() result(p_ylm)
+!  ===================================================================
+!  Returns the table of spherical harmonics evaluated on the (fixed)
+!  spherical grid:  ylm(ing,kl), ing = 1..num_angles, kl = 1..kmax_max.
+!  The table is built once by setAngularData and never changes, so a
+!  caller may cache or upload it (see DensityOnGridModule).
+!  ===================================================================
+   implicit none
+!
+   complex (kind=CmplxKind), pointer :: p_ylm(:,:)
+!
+   if (.not.Initialized) then
+      call ErrorHandler('getYlmTable',                                &
+                        'AngularIntegrationModule is not initialized')
+   endif
+!
+   p_ylm => ylm(1:num_angles,1:kmax_max)
+!
+   end function getYlmTable
+!  ===================================================================
+!
+!  *******************************************************************
+!
+!  ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+   function getUnitVecTable() result(p_upos)
+!  ===================================================================
+!  Returns the table of unit vectors of the spherical grid:
+!  upos(1:3,ing), ing = 1..num_angles.  Fixed for the whole run.
+!  ===================================================================
+   implicit none
+!
+   real (kind=RealKind), pointer :: p_upos(:,:)
+!
+   if (.not.Initialized) then
+      call ErrorHandler('getUnitVecTable',                            &
+                        'AngularIntegrationModule is not initialized')
+   endif
+!
+   p_upos => upos(1:3,1:num_angles)
+!
+   end function getUnitVecTable
 !  ===================================================================
 !
 !  *******************************************************************

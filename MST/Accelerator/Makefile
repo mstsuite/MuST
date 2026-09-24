@@ -60,6 +60,9 @@ OBJ0 = \
 acclib.o \
 util_mat.o \
 LSMS_Accel.o \
+DensityInterp_Accel.o \
+PseudoPotBackProj_Accel.o \
+SSMarch_Accel.o \
 cusolver_KKR_c.o \
 invertMatrixKKR_CUDA.o
 

@@ -64,6 +64,7 @@ TriangleModule.o \
 PolygonModule.o \
 SurfElementsModule.o \
 SpinRotationModule.o \
+SSMarchModule.o \
 SSSolverModule.o \
 DiracSolverModule.o \
 RelScattererModule.o \
@@ -79,6 +80,8 @@ ParallelFFTModule.o \
 ConstrainLocalMomentModule.o \
 ValenceDensityModule.o \
 ChargeDensityModule.o \
+DensityOnGridModule.o \
+PseudoPotBackProjModule.o \
 ChargeDistributionModule.o \
 ChargeScreeningModule.o \
 PotentialGenerationModule.o \

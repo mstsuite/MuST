@@ -70,6 +70,7 @@ target_sources(mst_lib
               SCPolesModule.F90
               SMatrixPolesModule.F90
               SROModule.F90
+              SSMarchModule.F90
               SSSolverModule.F90
               ScfDataModule.F90
               #ScreenStrConstModule.F90

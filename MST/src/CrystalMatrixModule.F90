@@ -200,6 +200,9 @@ private
 #endif
    integer (kind=IntKind) :: INFO
    integer (kind=IntKind), allocatable :: IPVT(:)
+#ifdef ACCEL
+   logical :: GPU_Offloading = .true. ! Set to .false. by -cpu/--cpu-only
+#endif
 !  ===================================================================
 !
 contains
@@ -220,6 +223,7 @@ contains
    use NeighborModule, only : getNumNeighbors
    use MediumHostModule, only : getNumSpecies
    use ScfDataModule, only : isManualNeighborChoice, getManualNumNeighbor
+   use CmdLineOptionModule, only : getCmdLineOption
 !
    implicit none
 !
@@ -551,6 +555,26 @@ contains
 !
 !  sould be dimension of the local matrix+blocksize
    allocate( IPVT(1:KKRMatrixSizeCant+BandSizeCant) )
+!
+#ifdef ACCEL
+!  ===================================================================
+!  Decide once, here, whether the KKR matrix inverse is offloaded to the
+!  GPU. Note that getCmdLineOption returns 0 when the option IS present
+!  on the command line.
+!  ===================================================================
+   if (getCmdLineOption('Run on CPU without Acceleration') == 0) then
+      GPU_Offloading = .false.
+      if (max_print_level >= 0 .and. MyPE == 0) then
+         write(6,'(/)')
+         write(6,'(80(''*''))')
+         write(6,'(a)')'!!!    GPU offloading is disabled: -cpu or --cpu-only is in command line     !!!'
+         write(6,'(80(''*''))')
+         write(6,'(/)')
+      endif
+   else
+      GPU_Offloading = .true.
+   endif
+#endif
 !
    if (NumPEsInGroup == 1) then  ! ScaLapack will not be used for 1 process case
       return
@@ -2388,11 +2412,13 @@ contains
    if (NumPEsInGroup == 1) then  ! In this case, the atoms are not distributed, so that BandSizeCant = KKRMatrixSizeCant
 !     ***************************************************************
 #ifdef ACCEL
+   if (GPU_Offloading) then
       !no atom parallelism, just invert the p_MatrixBand on process 0
 !     ---------------------------------------------------------------
       call invertMatrixKKR_CUDA(p_MatrixBand, KKRMatrixSizeCant)
 !     ---------------------------------------------------------------
-#else
+   else
+#endif
       if(do_sro) then
 !        -------------------------------------------------------------
          call ZGETRF(OKKRMatrixSizeCant, OKKRMatrixSizeCant,         &
@@ -2427,8 +2453,10 @@ contains
          call ErrorHandler('calCrystalMatrix','Failed in ZGETRS',INFO)
 !        -------------------------------------------------------------
       endif
-
+#ifdef ACCEL
+   endif
 #endif
+
    else ! In this case, the atoms are distributed
 !     ***************************************************************
 #ifdef USE_SCALAPACK
@@ -2502,11 +2530,13 @@ contains
       if (MyPEinGroup == 0) then 
 #ifdef ACCEL
 !%%%%%%%%%%% ifdef ACCEL
+         if (GPU_Offloading) then
 !        -------------------------------------------------------------
          call invertMatrixKKR_CUDA(KKR_matrix, KKRMatrixSizeCant)
 !        -------------------------------------------------------------
-#else
-!%%%%%%%%%%% else ifdef ACCEL
+         else
+#endif
+!%%%%%%%%%%% CPU path, also used when -cpu/--cpu-only is given
          if (do_sro) then
             call ZGETRF(OKKRMatrixSizeCant, OKKRMatrixSizeCant,         &
                         KKR_matrix, OKKRMatrixSizeCant, IPVT, INFO)
@@ -2532,6 +2562,8 @@ contains
 !           ----------------------------------------------------------
             call ErrorHandler('calCrystalMatrix','Failed in ZGETRS',INFO)
 !           ----------------------------------------------------------
+         endif
+#ifdef ACCEL
          endif
 !%%%%%%%%%%% end ifdef ACCEL
 #endif

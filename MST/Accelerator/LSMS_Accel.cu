@@ -352,6 +352,7 @@ int mmat_size = 0; // includes a factor of n_spin_cant
 int num_cpu_tasks = 0;
 int my_rank = -1;
 
+// Sine and inverse-Jost matrices store contiguous tau_size x tau_size atom blocks.
 double _Complex  *sine_h;  // mat_id = 1
 double _Complex  *jinv_h;  // mat_id = 2
 double _Complex  *gij_h;   // mat_id = 3
@@ -359,7 +360,7 @@ double _Complex  *gij_h;   // mat_id = 3
 cuDoubleComplex  *sine_d = nullptr;
 cuDoubleComplex  *jinv_d = nullptr;
 cuDoubleComplex  *BigMat_d = nullptr;
-cuDoubleComplex  *BigMatInv_d = nullptr;
+cuDoubleComplex  *BigMatInv_d = nullptr; // first tau_size columns of the inverse
 cuDoubleComplex  *block_d = nullptr;
 cuDoubleComplex  *workArray = nullptr;
 int *pivotArray;
@@ -382,6 +383,7 @@ cuDoubleComplex *jig_d = nullptr;
 
 cudaStream_t stream;
 cusolverDnHandle_t cusolverHandle;
+static cublasHandle_t cublasHandle = nullptr;
 
 void runYlmOverLIZ(int na, int liz_max, int l_max) {
 
@@ -474,8 +476,8 @@ void init_lsms_gpu_(int *cant, int *dsize, int *block_size, int *ntasks, int *cm
          fprintf(stderr,"\nError: mmat_size <= 1, %d\n",mmat_size);
          exit(EXIT_FAILURE);
       }
-      else if (tau_size > mmat_size) {
-         fprintf(stderr,"\nError: tau_size > mmat_size, %d,%d\n",tau_size,mmat_size);
+      else if (tau_size <= 0 || tau_size > mmat_size) {
+         fprintf(stderr,"\nError: invalid tau_size, %d,%d\n",tau_size,mmat_size);
          exit(EXIT_FAILURE);
       }
       else if (num_cpu_tasks < 1) {
@@ -506,6 +508,10 @@ void init_lsms_gpu_(int *cant, int *dsize, int *block_size, int *ntasks, int *cm
       checkCusolverErrors(cusolverDnCreate(&cusolverHandle));
       checkCusolverErrors(cusolverDnSetStream(cusolverHandle, stream));
 
+      // Reuse one cuBLAS handle for all assemblies on this rank's stream.
+      checkCublasErrors(cublasCreate(&cublasHandle));
+      checkCublasErrors(cublasSetStream(cublasHandle, stream));
+
       initialized = true;
    }
 }
@@ -527,7 +533,11 @@ void allocate_bigmatrix_gpu_() {
 
    checkCudaErrors(cudaMallocAsync((void**)&infoArray, sizeof(int), stream));
 
-   checkCudaErrors(cudaMallocAsync((void**)&BigMatInv_d, size_bigmat, stream));
+   // Block-by-block assembly aliases this buffer as the full Gij matrix.
+   // Otherwise, only the inverse columns needed for the returned block are stored.
+   const size_t size_inverse = lsms_construction_mode == 0 ? size_bigmat
+      : static_cast<size_t>(mmat_size) * tau_size * sizeof(cuDoubleComplex);
+   checkCudaErrors(cudaMallocAsync((void**)&BigMatInv_d, size_inverse, stream));
 
    checkCudaErrors(cudaMallocAsync((void**)&block_d, size_block, stream));
 
@@ -542,24 +552,18 @@ void allocate_bigmatrix_gpu_() {
 extern "C"
 void allocate_sjgmatrix_gpu_() {
    if (initialized) {
-      size_t size_bigmat;
       // Note: both mmat_size and tau_size contain a factor of n_spin_cant
-      if (lsms_construction_mode == 0) {
-         size_bigmat = mmat_size * tau_size  * sizeof(cuDoubleComplex);
-      }
-      else {
-         size_bigmat = mmat_size * mmat_size * sizeof(cuDoubleComplex);
-      }
+      const size_t size_sj = static_cast<size_t>(mmat_size) * tau_size * sizeof(cuDoubleComplex);
 
-      checkCudaErrors(cudaMallocAsync((void**)&sine_d, size_bigmat,stream));
+      checkCudaErrors(cudaMallocAsync((void**)&sine_d, size_sj,stream));
 
-      checkCudaErrors(cudaMallocAsync((void**)&jinv_d, size_bigmat,stream));
+      checkCudaErrors(cudaMallocAsync((void**)&jinv_d, size_sj,stream));
 
-      sine_h = (double _Complex *) malloc(size_bigmat);
-      memset(sine_h, 0, size_bigmat);    // set the host array to 0
+      sine_h = (double _Complex *) malloc(size_sj);
+      memset(sine_h, 0, size_sj);    // set the host array to 0
 
-      jinv_h = (double _Complex *) malloc(size_bigmat);
-      memset(jinv_h, 0, size_bigmat);    // set the host array to 0
+      jinv_h = (double _Complex *) malloc(size_sj);
+      memset(jinv_h, 0, size_sj);    // set the host array to 0
 
       if (lsms_construction_mode == 0) {
       // int bsize = tau_size / n_spin_cant;
@@ -575,6 +579,7 @@ void allocate_sjgmatrix_gpu_() {
          checkCudaErrors(cudaMemsetAsync(jig_d, 0, size_block, stream)); // set the device array to 0
       }
       else {
+         const size_t size_bigmat = static_cast<size_t>(mmat_size) * mmat_size * sizeof(cuDoubleComplex);
          gij_h = (double _Complex *) malloc(size_bigmat);
          memset(gij_h, 0, size_bigmat);     // set the host array to 0
 
@@ -690,6 +695,8 @@ void finalize_lsms_gpu_() {
       checkCudaErrors(cudaFreeAsync(workArray, stream));
    }
    // Ensure all frees complete before destroying stream
+   checkCublasErrors(cublasDestroy(cublasHandle));
+   cublasHandle = nullptr;
    checkCusolverErrors(cusolverDnDestroy(cusolverHandle));
    checkCudaErrors(cudaStreamSynchronize(stream));
    checkCudaErrors(cudaStreamDestroy(stream));
@@ -747,15 +754,15 @@ void push_submatrix_gpu_(int *mat_id, int *row, int *col, double _Complex *mat, 
       fprintf(stderr,"\nError: msize <> tau_size, %d,%d\n",*msize,tau_size);
       exit(EXIT_FAILURE);
    }
+   else if ((*mat_id == 1 || *mat_id == 2) &&
+            (*row != *col || *row < 0 || *row >= mmat_size / tau_size)) {
+      fprintf(stderr,"\nError: invalid sine/Jost diagonal block, %d,%d\n",*row,*col);
+      exit(EXIT_FAILURE);
+   }
    else if (*mat_id == 1) {
       if (SJG_allocated) {
-         if (lsms_construction_mode == 0) {
-            double _Complex *p_sine_h = sine_h + tau_size*tau_size * *row;
-            cblas_zcopy(tau_size*tau_size, mat, 1, p_sine_h, 1);
-         }
-         else {
-            copySubBlockToMatrix(mat,msize,row,col,sine_h,&mmat_size);
-         }
+         double _Complex *p_sine_h = sine_h + static_cast<size_t>(tau_size)*tau_size * *row;
+         cblas_zcopy(tau_size*tau_size, mat, 1, p_sine_h, 1);
       }
       else {
          fprintf(stderr,"\nError: sine matrix is not allocated on CPU/GPU\n");
@@ -764,13 +771,8 @@ void push_submatrix_gpu_(int *mat_id, int *row, int *col, double _Complex *mat, 
    }
    else if (*mat_id == 2) {
       if (SJG_allocated) {
-         if (lsms_construction_mode == 0) {
-            double _Complex *p_jinv_h = jinv_h + tau_size*tau_size * *row;
-            cblas_zcopy(tau_size*tau_size, mat, 1, p_jinv_h, 1);
-         }
-         else {
-            copySubBlockToMatrix(mat,msize,row,col,jinv_h,&mmat_size);
-         }
+         double _Complex *p_jinv_h = jinv_h + static_cast<size_t>(tau_size)*tau_size * *row;
+         cblas_zcopy(tau_size*tau_size, mat, 1, p_jinv_h, 1);
       }
       else {
          fprintf(stderr,"\nError: jost matrix is not allocated on CPU/GPU\n");
@@ -828,17 +830,11 @@ void push_bigmatrix_gpu_(double _Complex *bm, int *b_size) {
 extern "C"
 void commit_to_gpu_(int *mat_id) {
    size_t size = sizeof(cuDoubleComplex)*mmat_size*mmat_size;
-   size_t size_b;
-   if (lsms_construction_mode == 0) {
-      size_b = sizeof(cuDoubleComplex)*mmat_size*tau_size;
-   }
-   else {
-      size_b = size;
-   }
+   const size_t size_sj = sizeof(cuDoubleComplex)*mmat_size*tau_size;
    
    if (*mat_id == 1) {
       if (SJG_allocated) {
-         checkCudaErrors(cudaMemcpyAsync(sine_d, sine_h, size_b, cudaMemcpyHostToDevice, stream));
+         checkCudaErrors(cudaMemcpyAsync(sine_d, sine_h, size_sj, cudaMemcpyHostToDevice, stream));
       }
       else {
          fprintf(stderr,"\nError: sine matrix is not allocated on CPU/GPU\n");
@@ -847,7 +843,7 @@ void commit_to_gpu_(int *mat_id) {
    }
    else if (*mat_id == 2) {
       if (SJG_allocated) {
-         checkCudaErrors(cudaMemcpyAsync(jinv_d, jinv_h, size_b, cudaMemcpyHostToDevice, stream));
+         checkCudaErrors(cudaMemcpyAsync(jinv_d, jinv_h, size_sj, cudaMemcpyHostToDevice, stream));
       }
       else {
          fprintf(stderr,"\nError: jost matrix is not allocated on CPU/GPU\n");
@@ -872,15 +868,11 @@ void commit_to_gpu_(int *mat_id) {
 extern "C"
 void construct_bigmatrix_gpu_(double _Complex *kappa, int *numnb_max, 
                               int *ia, int *num_nbs, int *lmax_kkr) {
+
     const cuDoubleComplex one = make_cuDoubleComplex(1.0, 0.0);
     const cuDoubleComplex zero = make_cuDoubleComplex(0.0, 0.0);
     double _Complex neg_kappa_inv = -1.0/(*kappa);
     cuDoubleComplex alpha = make_cuDoubleComplex(creal(neg_kappa_inv),cimag(neg_kappa_inv));
-
-    // Create cuBLAS handle
-    cublasHandle_t handle;
-    checkCublasErrors(cublasCreate(&handle));
-    checkCublasErrors(cublasSetStream(handle, stream));  // assign rank-specific CUDA stream
 
     if (lsms_construction_mode == 0) {
        int liz_size = *num_nbs+1;
@@ -914,7 +906,7 @@ void construct_bigmatrix_gpu_(double _Complex *kappa, int *numnb_max,
             //     for (int is=0; is<n_spin_cant; is++) {
             //        cuDoubleComplex  *p_jinv_d = jinv_d + ia*kkrsz_ns*kkrsz_ns + js*kkrsz_ns*kkrsz+is*kkrsz;
             //        cuDoubleComplex  *p_jig_d = jig_d + js*kkrsz_ns*kkrsz+is*kkrsz;
-            //        checkCublasErrors(cublasZgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N,
+            //        checkCublasErrors(cublasZgemm(cublasHandle, CUBLAS_OP_N, CUBLAS_OP_N,
             //                                      kkrsz, kkrsz, kkrsz, &one,
             //                                      p_jinv_d, kkrsz_ns,
             //                                      gij_d, kkrsz,
@@ -923,14 +915,14 @@ void construct_bigmatrix_gpu_(double _Complex *kappa, int *numnb_max,
             //  }
                 cuDoubleComplex  *p_gij_d = gij_d + ja*mmat_size*kkrsz_ns + ia*kkrsz_ns;
                 cuDoubleComplex  *p_jinv_d = jinv_d + ia*kkrsz_ns*kkrsz_ns;
-                checkCublasErrors(cublasZgemm_v2(handle, CUBLAS_OP_N, CUBLAS_OP_N,
+                checkCublasErrors(cublasZgemm_v2(cublasHandle, CUBLAS_OP_N, CUBLAS_OP_N,
                                               kkrsz_ns, kkrsz_ns, kkrsz_ns, &one,
                                               p_jinv_d, kkrsz_ns,
                                               p_gij_d, mmat_size,
                                               &zero, jig_d, kkrsz_ns));
                 cuDoubleComplex  *p_sine_d = sine_d + ja*kkrsz_ns*kkrsz_ns;
                 cuDoubleComplex  *p_BigMat_d = BigMat_d + ja*mmat_size*kkrsz_ns + ia*kkrsz_ns;
-                checkCublasErrors(cublasZgemm_v2(handle, CUBLAS_OP_N, CUBLAS_OP_N,
+                checkCublasErrors(cublasZgemm_v2(cublasHandle, CUBLAS_OP_N, CUBLAS_OP_N,
                                               kkrsz_ns, kkrsz_ns, kkrsz_ns, &alpha,
                                               jig_d, kkrsz_ns,
                                               p_sine_d, kkrsz_ns,
@@ -940,94 +932,81 @@ void construct_bigmatrix_gpu_(double _Complex *kappa, int *numnb_max,
        }
     }
     else {
-       // Compute jig = jinv * gij
-       checkCublasErrors(cublasZgemm_v2(handle, CUBLAS_OP_N, CUBLAS_OP_N,
-                                     mmat_size, mmat_size, mmat_size, &one,
-                                     jinv_d, mmat_size,
-                                     gij_d, mmat_size,
-                                     &zero, jig_d, mmat_size));
+       if (tau_size <= 0 || mmat_size % tau_size != 0) {
+          fprintf(stderr,"\nError: invalid block size for batched assembly, %d,%d\n",
+                          tau_size,mmat_size);
+          exit(EXIT_FAILURE);
+       }
+       const int num_atom_blocks = mmat_size / tau_size;
+       const long long column_stride = static_cast<long long>(tau_size) * mmat_size;
+       const long long block_stride = static_cast<long long>(tau_size) * tau_size;
 
-       // Compute BigMat = 1 - jig * sine / kappa
-       checkCublasErrors(cublasZgemm_v2(handle, CUBLAS_OP_N, CUBLAS_OP_N,
-                                     mmat_size, mmat_size, mmat_size, &alpha,
-                                     jig_d, mmat_size,
-                                     sine_d, mmat_size,
-                                     &one, BigMat_d, mmat_size));
+       // jinv and sine contain packed diagonal blocks, with tau_size including spin.
+       // Batch over block rows: jig(i,:) = jinv(i,i) * gij(i,:).
+       // Dense Gij, jig and BigMat retain the full column-major leading dimension.
+       // Row batches write disjoint rows, with a stride of tau_size elements.
+       checkCublasErrors(cublasZgemmStridedBatched(cublasHandle, CUBLAS_OP_N, CUBLAS_OP_N,
+                                     tau_size, mmat_size, tau_size, &one,
+                                     jinv_d, tau_size, block_stride,
+                                     gij_d, mmat_size, tau_size,
+                                     &zero, jig_d, mmat_size, tau_size,
+                                     num_atom_blocks));
+
+       // Batch over block columns: BigMat(:,j) -= jig(:,j) * sine(j,j) / kappa.
+       // beta = 1 preserves the identity initialized in BigMat_d.
+       // Both products cost O(mmat_size^2 * tau_size), instead of O(mmat_size^3).
+       checkCublasErrors(cublasZgemmStridedBatched(cublasHandle, CUBLAS_OP_N, CUBLAS_OP_N,
+                                     mmat_size, tau_size, tau_size, &alpha,
+                                     jig_d, mmat_size, column_stride,
+                                     sine_d, tau_size, block_stride,
+                                     &one, BigMat_d, mmat_size, column_stride,
+                                     num_atom_blocks));
     }
-    // checkCudaErrors(cudaStreamSynchronize(stream));
+}
 
-    // Cleanup
-    checkCublasErrors(cublasDestroy(handle));
-    // checkCudaErrors(cudaStreamDestroy(stream));
+// Initialize the first nrhs columns of the identity in column-major storage.
+__global__ void createInverseRHSKernel(cuDoubleComplex *rhs, int n, int nrhs) {
+   const size_t count = static_cast<size_t>(n) * nrhs;
+   for (size_t idx = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+        idx < count; idx += static_cast<size_t>(blockDim.x) * gridDim.x) {
+      rhs[idx] = make_cuDoubleComplex(idx % n == idx / n ? 1.0 : 0.0, 0.0);
+   }
 }
 
 extern "C"
 void invert_bigmatrix_gpu_(double _Complex *block, int *block_size) {
-   // static int Lwork;
-
    if (tau_size != *block_size) {
       fprintf(stderr,"\nError: tau_size <> block_size, %d,%d\n",tau_size,*block_size);
       exit(EXIT_FAILURE);
    }
 
-   // clock_t t0;
-   // double cpu_time;
-
-   // Define kernel launch parameters and create a unit matrix on device
-   // ========================================
-   // t0 = clock();
-   int threads_per_block = 512;
-   int num_blocks = max(1,min((mmat_size*mmat_size + threads_per_block - 1)
-                        /threads_per_block/num_cpu_tasks,1024));
-   createUnitMatrixKernel<<<num_blocks, threads_per_block, 0, stream>>>(BigMatInv_d, mmat_size);
-   checkCudaErrors(cudaPeekAtLastError());
-
-   // checkCudaErrors(cudaStreamSynchronize(stream));
-   // cpu_time = ((double)(clock()-t0))/CLOCKS_PER_SEC;
-   // if (my_rank == -1) {
-   //    fprintf(stdout,"\ncpu time for setting up unit matrix = %f sec\n",cpu_time);
-   // }
-
-   // Create a working array on the device
-   // ========================================
-   // t0 = clock();
-
-   // Perform matrix inverse on the device
-   // ============================================
+   // Factor the full matrix; all rows contribute to the requested inverse block.
    checkCusolverErrors(cusolverDnZgetrf(cusolverHandle, mmat_size, mmat_size, BigMat_d, mmat_size, 
                                         workArray, pivotArray, infoArray));
-   checkCusolverErrors(cusolverDnZgetrs(cusolverHandle, CUBLAS_OP_N, mmat_size, mmat_size, BigMat_d, 
-                                        mmat_size, pivotArray, BigMatInv_d, mmat_size, infoArray)); 
+   checkCudaErrors(cudaStreamSynchronize(stream));
 
-   // cpu_time = ((double)(clock()-t0))/CLOCKS_PER_SEC;
-   // if (my_rank == -1) {
-   //    fprintf(stdout,"\ncpu time for performing inverse = %f sec\n",cpu_time);
-   // }
+   // Solve A * X = I(:, 0:tau_size-1), producing only the needed inverse columns.
+   // The solve costs O(mmat_size^2 * tau_size), instead of O(mmat_size^3).
+   const size_t rhs_elements = static_cast<size_t>(mmat_size) * tau_size;
+   const int threads_per_block = 512;
+   int num_blocks = static_cast<int>(min((rhs_elements + threads_per_block - 1)
+                        / threads_per_block / num_cpu_tasks, static_cast<size_t>(1024)));
+   num_blocks = max(1, num_blocks);
+   createInverseRHSKernel<<<num_blocks, threads_per_block, 0, stream>>>
+                        (BigMatInv_d, mmat_size, tau_size);
+   checkCudaErrors(cudaPeekAtLastError());
+   checkCusolverErrors(cusolverDnZgetrs(cusolverHandle, CUBLAS_OP_N, mmat_size, tau_size, BigMat_d,
+                                        mmat_size, pivotArray, BigMatInv_d, mmat_size, infoArray));
 
-   // --------------------------------------------
-   // Aggregate the data into block_d array and then make one cudaMemcpy call
-   // --------------------------------------------
-   // Define grid and block dimensions for the kernel
-   // t0 = clock();
-   dim3 threadsPerBlock(32, 32); // Using a 32x32 block
-// dim3 blocksPerGrid(min((tau_size + threadsPerBlock.x - 1)/threadsPerBlock.x/num_cpu_tasks,32),
-//                    min((tau_size + threadsPerBlock.y - 1)/threadsPerBlock.y/num_cpu_tasks,32));
+   // Pack the leading tau_size rows of these columns for one host transfer.
+   dim3 threadsPerBlock(32, 32);
    dim3 blocksPerGrid(1,1);
 
-   // Launch the kernel
-   // ============================================
    copyBlockKernel<<<blocksPerGrid, threadsPerBlock,0,stream>>>(BigMatInv_d, mmat_size, block_d, 
                                                                 tau_size);
    checkCudaErrors(cudaPeekAtLastError());
    checkCudaErrors(cudaMemcpyAsync(block, block_d, sizeof(cuDoubleComplex)*tau_size*tau_size, 
                                    cudaMemcpyDeviceToHost,stream));
 
-   // clean up
-   // ============================================
    checkCudaErrors(cudaStreamSynchronize(stream));
-
-   // cpu_time = ((double)(clock()-t0))/CLOCKS_PER_SEC;
-   // if (my_rank == -1) {
-   //    fprintf(stdout,"cpu time for copying matrix block back to cpu = %f sec\n",cpu_time);
-   // }
 }
