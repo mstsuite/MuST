@@ -1,0 +1,21 @@
+#!/bin/bash
+#SBATCH -N 1
+#SBATCH -p RM
+#SBATCH --ntasks-per-node=64
+#SBATCH --job-name=aengel
+#SBATCH -t 05:00:00
+#SBATCH -o aengel.out
+#SBATCH -e aengel.err
+
+echo Start `date` > RunAt
+echo Job-ID $SLURM_JOB_ID >> RunAt
+echo `hostname` >> RunAt
+echo running in `pwd` >> RunAt
+ulimit -s unlimited
+
+module load intelmpi/2021.3.0-intel2021.3.0
+module load intel-oneapi
+mpirun -n 64 /opt/packages/MuST/bin/mst2 < i_mst
+wait
+
+echo End `date` >> RunAt

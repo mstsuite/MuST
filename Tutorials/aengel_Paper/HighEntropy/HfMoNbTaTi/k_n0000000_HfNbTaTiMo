@@ -1,0 +1,22 @@
+***************************************************************************************
+*  Note:                                                                              *
+*     In the MuST version 1.8.2 and prior, the total energy value includes the zero-  *
+*     point lattice energy. Starting from version v1.8.3, the zero point lattice      *
+*     energy is removed from the total energy value and is explicitly printed out in  *
+*     one of the following lines. If needed, one will have to add the zero-point      *
+*     lattice energy to the total energy by hand.                                     *
+***************************************************************************************
+Source Code Version                  : v1.9.3.1                                          
+System Description                   : HfNbTaTiMo high entropy alloy, bcc structure      
+Number of Atoms in Unit Cell         : 1                                                 
+Number of Atomic Species             : 1                                                 
+Number of Atoms in Each Type         : 1(CPA)                                            
+Unit Cell Volume (au^3)              : 0.13794723D+03                                    
+Average Atomic Volume (au^3)         : 137.94723                                         
+Zero Point Lattice Energy/Atom (Ryd) : 0.00122                                           
+Zero Point Lattice PV3/Atom (Ryd)    : 0.00520                                           
+Energy Offset                        : -15074                                            
+=======================================================================================
+    Iter    Energy      3PV     Efermi   Rms_rho    Rms_pot   Mix Alg   Alpha    Mom  
+---------------------------------------------------------------------------------------
+**     1  -0.224624  -0.51959  0.54711  0.116E-08  0.190E-07  pot  B   0.10000  0.0000
