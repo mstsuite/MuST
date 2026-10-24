@@ -466,6 +466,7 @@ contains
       call ErrorHandler('calRadialInterpGPU','the GPU path is not available')
    endif
 !
+#ifdef ACCEL
    nk_total = k_last - k_first + 1
    if (nk_total < 1) then
       return
@@ -634,6 +635,7 @@ contains
          ', k-points = ',nk_total,', tiles = ',(nk_total+KT-1)/KT
    endif
 !
+#endif
    end subroutine calRadialInterpGPU
 !  ===================================================================
 !
