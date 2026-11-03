@@ -1,0 +1,97 @@
+This u56_LSMS_MT contains input data and testing run on Vista GH node
+
+1.> u56_LSMS_CPU
+This folder has original input data for running mst2 CPU version
+
+2.> reference_run_1
+This folder has the input copied from u56_LSMS_MT, revise the i_mst, replace the 
+
+No. Energy Grids           ::  32
+
+by
+
+No. Energy Grids           ::  1
+
+This will run this case with 1 energy point. The outputs are
+CoCrFeMnNi_mt_w
+Evec_input.dat_out
+k_n0000000_CoCrFeMnNi
+mstrun.xml
+o_n0000000_CoCrFeMnNi
+
+The o_n0000000_CoCrFeMnNi has timing and accuracy information
+
+
+staff.vista(1063)$ grep Time o_n0000000_CoCrFeMnNi 
+Time:: initMadelung:    0.00800
+Time:: Start-up         :     1.94400Sec
+invertBlockMatrix     :: Using  LU: Block size =   2233,  Time =   19.038 Sec
+ie =   1 , Time:     20.44200
+invertBlockMatrix     :: Using  LU: Block size =   1675,  Time =   19.054 Sec
+Time:: calValenceStates :    41.12500Sec
+Time:: computeNewPotential:    0.00200
+Time:: Iteration      1 :    41.13800Sec
+Time:: Cummulative      :    43.10200Sec
+invertBlockMatrix     :: Using  LU: Block size =   2233,  Time =   18.970 Sec
+ie =   1 , Time:     20.36800
+invertBlockMatrix     :: Using  LU: Block size =   1675,  Time =   19.019 Sec
+Time:: calValenceStates :    41.07400Sec
+Time:: computeNewPotential:    0.00100
+Time:: Iteration      2 :    41.10500Sec
+Time:: Cummulative      :    84.22500Sec
+invertBlockMatrix     :: Using  LU: Block size =   2233,  Time =   19.134 Sec
+ie =   1 , Time:     20.49900
+invertBlockMatrix     :: Using  LU: Block size =   1675,  Time =   19.012 Sec
+Time:: calValenceStates :    41.18300Sec
+Time:: computeNewPotential:    0.00100
+Time:: Iteration      3 :    41.19400Sec
+Time:: Cummulative      :   125.43700Sec
+Time:: Job total including IO :     125.479 Sec
+
+Each line with invertBlockMatrix has the timing for the LU invertion, as good measure of math performance, and it is the target for GPU acceleration.
+
+The physics numbers used to check numerical consistency can be extracted by
+
+staff.vista(1064)$ ./numerical_accuracy.sh o_n0000000_CoCrFeMnNi 
+
+=================== ITERATION 01 ===================
+  Fermi Energy DOS per Site           =   21.805050732917
+  Fermi Energy (Ryd)                  =   0.89061985808
+  Integrated Electron Density in VP   =   4.46435848429
+  Integrated Moment Density in VP     =   0.52788257917     0.07912921423     0.00869277077
+  Fermi Energy (Ryd)                  =   0.89061985808
+  Interstitial rho0                   =   0.20626634454733
+  Total Energy Per Atom               =   -2538.10700445
+
+=================== ITERATION 02 ===================
+  Fermi Energy DOS per Site           =   7.040679231683
+  Fermi Energy (Ryd)                  =   1.46050814767
+  Integrated Electron Density in VP   =   5.45028611072
+  Integrated Moment Density in VP     =   -1.17236732630    -0.01409982091    -0.01535701845
+  Fermi Energy (Ryd)                  =   1.46050814767
+  Interstitial rho0                   =   0.21872627905754
+  Total Energy Per Atom               =   -2513.18023225
+
+=================== ITERATION 03 ===================
+  Fermi Energy DOS per Site           =   4.554765222320
+  Fermi Energy (Ryd)                  =   2.34193154293
+  Integrated Electron Density in VP   =   3.49004413610
+  Integrated Moment Density in VP     =   0.05183653598     0.00314622493     0.00020379609
+  Fermi Energy (Ryd)                  =   2.34193154293
+  Interstitial rho0                   =   0.23939322321009
+  Total Energy Per Atom               =   -2528.47348277
+
+If all numbers are matched, the numerical accuracy is validated.
+
+3.> reference_run_6
+This folder is the same as that of reference_run_1, but revise the i_mst, replace the
+
+No. Energy Grids           ::  32
+
+by
+
+No. Energy Grids           ::  6
+
+It will run a bit longer.
+ 
+

@@ -1,0 +1,15 @@
+#!/bin/bash
+#SBATCH -A A-ccsc
+#SBATCH -N 1
+#SBATCH -p gh
+#SBATCH -n 56
+#SBATCH -J CoCrFeMnNi
+#SBATCH -t 2:00:00
+#SBATCH -o CoCrFeMnNi.out
+#SBATCH -e CoCrFeMnNi.err
+
+export OMPI_MCA_coll="^hcoll"
+export NO_STOP_MESSAGE=1
+export UCX_WARN_UNUSED_ENV_VARS=n
+
+mpirun -np 56 /scratch/01032/hliu/works/MuST_NV_agent/MuST/bin/mst2 < i_mst
