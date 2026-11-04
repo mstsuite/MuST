@@ -45,7 +45,7 @@ MATH_PATH   =
 #LIBS       += -L/scratch/projects/compilers/nvhpc_22.1/Linux_x86_64/22.1/compilers/lib/ -lblas -llapack -L/scratch/projects/compilers/nvhpc_22.1/Linux_x86_64/22.1//comm_libs/mpi/lib/ -lscalapack
 #LIBS       += -L$(COMPILER_LIBS) -lblas -llapack
 #LIBS       += -L$(COMPILER_LIBS) -lnvpl_blas_lp64_gomp -lnvpl_lapack_lp64_gomp  
-LIBS       += -Mnvpl -Mscalapack
+LIBS       += -Mnvpl 
 #              -L$(COMM_LIBS) -lscalapack
 #=====================================================================
 # Compiler tools
@@ -66,7 +66,7 @@ ARCHV       = ar -r
 FPPDEFS     = -cpp -DNVHPC
 CPPDEFS     = -cpp
 #FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK
-FPPFLAGS    = -DMPI -DMaxOutProcs=1 -DUSE_SCALAPACK
+FPPFLAGS    = -DMPI -DMaxOutProcs=1 
 OPT_OPENMP  = -mp
 CFLAGS      = -O3 $(OPT_OPENMP)
 CXXFLAGS    = -O3 -std=c++14 $(OPT_OPENMP) 
