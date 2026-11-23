@@ -829,7 +829,8 @@ contains
       do i=1,3
          do j=1,3
 !           Rotation(n,j,i) = Rotation(ib(n),j,i)
-            Rotation(j,i,n) = Rotation(j,i,ib(n))
+!           Rotation(j,i,n) = Rotation(j,i,ib(n))
+            Rotation(j,i,n) = r(j,i,ib(n))
          enddo
       enddo
    enddo
