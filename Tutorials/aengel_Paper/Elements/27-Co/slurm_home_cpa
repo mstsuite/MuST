@@ -1,0 +1,15 @@
+#!/bin/bash
+#SBATCH -p WholeNode
+
+
+echo Start `date` > RunAt
+echo Job-ID $SLURM_JOB_ID >> RunAt
+echo `hostname` >> RunAt
+echo running in `pwd` >> RunAt
+ulimit -s unlimited
+
+
+mpirun ~/MuST/bin/mst2 < i_mst
+wait
+
+echo End `date` >> RunAt
