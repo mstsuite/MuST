@@ -1032,7 +1032,7 @@ contains
 !                 if ( abs(Potential(id)%potL(nr,jl,is)) > ten2m10) then
                   if ( abs(Potential(id)%potL(nr,jl,is,ia)) > pot_tol) then
                      flag(jl) = 1
-                     cycle LOOP_NR
+                     exit LOOP_NR
                   endif
                enddo LOOP_NR
             enddo
@@ -1269,6 +1269,7 @@ contains
 !
    logical, optional :: isMT
    logical :: isMTon = .false.
+   logical :: Zero_Re, Zero_Im
 !
    integer (kind=IntKind) :: id, ia, ig, ip, is, jl, jmt, ir, nRpts, jend, l, lig
    integer (kind=IntKind) :: jmax, lmax, kmax, gsize, nsize, ekGID
@@ -1664,19 +1665,63 @@ contains
                enddo
             endif
          else
-            flag_jl(1) = 1
+!           ==========================================================
+!           All species occupying the same atomic site should have same 
+!           geometric symmetry of charge density and potential.
+!           The following lines of the code determine if the potential 
+!           of a particular jl channel is 0, pure real, pure imaginary,
+!           or complex. Variable flag_jl is used to tag the jl channel:
+!           flag_jl = 0: the potential in the jl channel is zero
+!                   = 1: the potential in the jl channel is purely real
+!                   = 2: the potential in the jl channel is purely imaginary
+!                   = 3: none of above
+!           ==========================================================
+!           flag_jl(1) = 1
+            flag_jl(1) = 1; flag_jl(2:jmax) = 0
             do ia = 1, Potential(id)%NumSpecies
                do is = 1,n_spin_pola
                   do jl = 2,jmax
-                     flag_jl(jl) = 0
-                     l = lofj(jl)
-                     LOOP_nr0: do ir = 1,nRpts
-                        if ( abs(Potential(id)%potL(ir,jl,is,ia)) > ONE/(10.0d0**(l+4)) ) then
-!                       if ( abs(Potential(id)%potL(ir,jl,is,ia)) > pot_tol ) then
+!                    flag_jl(jl) = 0
+                     if (flag_jl(jl) == 0) then
+                        l = lofj(jl)
+                        LOOP_nr0: do ir = 1,nRpts
+                           if ( abs(Potential(id)%potL(ir,jl,is,ia)) > ONE/(10.0d0**(l+4)) ) then
+!                          if ( abs(Potential(id)%potL(ir,jl,is,ia)) > pot_tol ) then
+                              if (mofj(jl) == 0) then
+                                 flag_jl(jl) = 1
+                              else
+                                 flag_jl(jl) = 3
+                              endif
+                              exit LOOP_nr0
+                           endif
+                        enddo LOOP_nr0
+                     endif
+                     if (flag_jl(jl) == 3) then
+                        Zero_Re = .false.; Zero_Im = .false.
+                        do ir = 1,nRpts
+                           pot_r = real(Potential(id)%potL(ir,jl,is,ia),kind=RealKind)
+                           pot_i = real(cfact*Potential(id)%potL(ir,jl,is,ia),kind=RealKind)
+                           if ( abs(pot_r) /= ZERO  .and. abs(pot_i)/abs(pot_r)<TEN2m7 ) then
+                              Zero_Im = .true.
+                              flag_jl(jl) = 1
+                           else if ( abs(pot_i)/=ZERO .and. abs(pot_r)/abs(pot_i)< TEN2m7 ) then
+                              Zero_Re = .true.
+                              flag_jl(jl) = 2
+                           endif
+                        enddo
+                        Zero_Im = .not.Zero_Re .and. Zero_Im
+                        Zero_Re = Zero_Re .and. .not.Zero_Im
+                        if (Zero_Re .and. Zero_Im) then
+!                          -----------------------------------------------------
+                           call ErrorHandler('computeNewPotential',             &
+                                             'The potential value in this jl channel is zero',jl)
+!                          -----------------------------------------------------
+                        else if (Zero_Im) then
                            flag_jl(jl) = 1
-                           exit LOOP_nr0
+                        else if (Zero_Re) then
+                           flag_jl(jl) = 2
                         endif
-                     enddo LOOP_nr0
+                     endif
                   enddo
                enddo
             enddo
@@ -1687,7 +1732,7 @@ contains
                         Potential(id)%potL(1:nRpts,jl,is,ia) = CZERO
                         Potential(id)%potL_Exch(1:nRpts,jl,is,ia)  = CZERO
                         Potential(id)%enL_Exch(1:nRpts,jl,is,ia)   = CZERO
-                     else if (mofj(jl) == 0) then
+                     else if (flag_jl(jl) == 1) then
                         do ir = 1,nRpts
                            pot_r = real(Potential(id)%potL(ir,jl,is,ia),kind=RealKind)
                            Potential(id)%potL(ir,jl,is,ia) = cmplx(pot_r,ZERO,kind=CmplxKind)
@@ -1696,27 +1741,14 @@ contains
                            pot_r = real(Potential(id)%enL_Exch(ir,jl,is,ia),kind=RealKind)
                            Potential(id)%enL_Exch(ir,jl,is,ia)  = cmplx(pot_r,ZERO,kind=CmplxKind)
                         enddo
-                     else
+                     else if (flag_jl(jl) == 2) then
                         do ir = 1,nRpts
-                           pot_r = real(Potential(id)%potL(ir,jl,is,ia),kind=RealKind)
                            pot_i = real(cfact*Potential(id)%potL(ir,jl,is,ia),kind=RealKind)
-                           if ( abs(pot_r) /= ZERO  .and. abs(pot_i)/abs(pot_r)<TEN2m7 ) then
-                              flag_jl(jl) = 1
-                              Potential(id)%potL(ir,jl,is,ia) = cmplx(pot_r,ZERO,kind=CmplxKind)
-                              pot_r = real(Potential(id)%potL_Exch(ir,jl,is,ia),kind=RealKind)
-                              Potential(id)%potL_Exch(ir,jl,is,ia) = cmplx(pot_r,ZERO,kind=CmplxKind)
-                              pot_r = real(Potential(id)%enL_Exch(ir,jl,is,ia),kind=RealKind)
-                              Potential(id)%enL_Exch(ir,jl,is,ia)  = cmplx(pot_r,ZERO,kind=CmplxKind)
-                           else if ( abs(pot_i)/=ZERO .and. abs(pot_r)/abs(pot_i)< TEN2m7 ) then
-                              Potential(id)%potL(ir,jl,is,ia) = cmplx(ZERO,pot_i,kind=CmplxKind)
-                              flag_jl(jl) = 2
-                              pot_r = real(cfact*Potential(id)%potL_Exch(ir,jl,is,ia),kind=RealKind )
-                              Potential(id)%potL_Exch(ir,jl,is,ia) = cmplx(ZERO,pot_r,kind=CmplxKind)
-                              pot_r = real(cfact*Potential(id)%enL_Exch(ir,jl,is,ia),kind=RealKind )
-                              Potential(id)%enL_Exch(ir,jl,is,ia)  = cmplx(ZERO,pot_r,kind=CmplxKind)
-                           else
-                              flag_jl(jl) = 3
-                           endif
+                           Potential(id)%potL(ir,jl,is,ia) = cmplx(ZERO,pot_i,kind=CmplxKind)
+                           pot_i = real(cfact*Potential(id)%potL_Exch(ir,jl,is,ia),kind=RealKind )
+                           Potential(id)%potL_Exch(ir,jl,is,ia) = cmplx(ZERO,pot_i,kind=CmplxKind)
+                           pot_i = real(cfact*Potential(id)%enL_Exch(ir,jl,is,ia),kind=RealKind )
+                           Potential(id)%enL_Exch(ir,jl,is,ia)  = cmplx(ZERO,pot_i,kind=CmplxKind)
                         enddo
                      endif
 #ifdef UNCOMMENT
@@ -3409,7 +3441,7 @@ contains
                enddo
                call calIntegration( nRpts_ps+1, sqrt_r(0:nRpts_ps),       &
                                     rho_tmp_r(0:nRpts_ps), V2_r(0:nRpts_ps), 1 )
-               call calIntegration( nRpts+1, sqrt_r(0:nRpts_ps),          &
+               call calIntegration( nRpts_ps+1, sqrt_r(0:nRpts_ps),          &
                                     rho_tmp_i(0:nRpts_ps), V2_i(0:nRpts_ps), 1 )
             endif
 !
